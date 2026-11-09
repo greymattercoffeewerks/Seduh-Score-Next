@@ -27,7 +27,14 @@ export const DEMO_TEAM_NAMES = [
 ];
 export const DEMO_JUDGE_NAMES = ['Judge 1', 'Judge 2', 'Judge 3', 'Judge 4', 'Judge 5'];
 
-export const demoTeams = DEMO_TEAM_NAMES.map((name, i) => ({ id: `t${i + 1}`, name }));
+// Countries for the rehearsal, so the audience screens show pairs from one country, a mix, and one team with none.
+// (load_btc_demo itself stays country-less; this is the preview/test payload only.)
+const DEMO_TEAM_COUNTRIES = ['BN', 'BN', 'SG', 'SG', 'MY', 'MY', 'ID', null];
+export const demoTeams = DEMO_TEAM_NAMES.map((name, i) => ({
+  id: `t${i + 1}`,
+  name,
+  country_code: DEMO_TEAM_COUNTRIES[i] ?? null,
+}));
 const demoJudges = DEMO_JUDGE_NAMES.map((name, i) => ({ id: `j${i + 1}`, name }));
 export const teamId = (index) => `t${index + 1}`;
 

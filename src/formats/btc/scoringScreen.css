@@ -140,3 +140,31 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* Finish-time boxes (Build D). The message under a box is a live region that is always in the page: empty, it
+   takes no room (the same clipped recipe as the shared .screen-feedback:empty), so a valid box shifts nothing;
+   with text it is one line under the box. An invalid box gets a danger border as well as the words, so the
+   state is never carried by colour alone. */
+.btc-time-message:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.btc-scoring-screen .field-input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.btc-scoring-screen .field-input[aria-invalid='true'] ~ .btc-time-message {
+  color: var(--color-danger);
+}
+
+/* Two finish-time fields stack: room for the message under the first before the second label. */
+.btc-scoring-screen .form-field + .form-field {
+  margin-top: var(--space-3);
+}

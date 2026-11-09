@@ -9,6 +9,7 @@ import {
 } from './projectorScreens.js';
 import { btcBand, matchLine, KNOCKOUT_PLACES } from './words.js';
 import { preliminaryPayload, knockoutPayload } from './demoLivePayload.js';
+import { readFileSync } from 'node:fs';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -145,6 +146,24 @@ describe('small shared pieces', () => {
     ).toBeNull();
   });
 
+  it('renderSide puts a country on its own line above the name, and none when there is no country', () => {
+    const side = renderSide({ name: 'Team Kopi', country: { code: 'BN', name: 'Brunei' } });
+    expect(side.querySelector('.btc-stage-side-country').textContent).toBe('Brunei');
+    expect(side.querySelector('.btc-stage-side-name').textContent).toBe('Team Kopi');
+    // the country line comes first, so it reads (and sits) above the name
+    expect(
+      side
+        .querySelector('.btc-stage-side-country')
+        .compareDocumentPosition(side.querySelector('.btc-stage-side-name')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      renderSide({ name: 'Team Kopi', country: null }).querySelector('.btc-stage-side-country'),
+    ).toBeNull();
+    const hostile = renderSide({ name: 'n', country: { code: 'BN', name: '<b>x</b>' } });
+    expect(hostile.querySelector('b')).toBeNull();
+  });
+
   it('renderSide shows every string as text, never markup', () => {
     const side = renderSide({ label: '<b>l</b>', name: '<i>n</i>', chips: [{ text: '<u>c</u>' }] });
     expect(side.querySelector('b, i, u')).toBeNull();
@@ -170,10 +189,38 @@ describe('idle loop: the pages', () => {
     expect(text(host, '.stage-kicker')).toBe('Up next · Preliminary');
     expect(text(host, '.stage-title')).toBe('Preliminary');
     expect(all(host, '.btc-stage-side-name')).toEqual(['Pour Decisions', 'Steam Team']);
+    // Pour Decisions is from Brunei; Steam Team has no country, so only one country line is drawn
+    const sides = [...host.querySelectorAll('.btc-stage-side')];
+    expect(sides[0].querySelector('.btc-stage-side-country').textContent).toBe('Brunei');
+    expect(sides[1].querySelector('.btc-stage-side-country')).toBeNull();
     // in the preliminary round a place is only "so far", so no seed is claimed
     expect(host.querySelector('.btc-stage-side-label')).toBeNull();
     expect(text(host, '.btc-stage-judges')).toBe('Judges: Judge 1 · Judge 2 · Judge 3');
     handle.destroy();
+  });
+
+  it('draws a country on BOTH sides of the up-next card when both teams have one', () => {
+    vi.useFakeTimers();
+    const payload = preliminaryPayload({ playedCount: 12 });
+    payload.upNext.teams[1].country = { code: 'ID', name: 'Indonesia' };
+    const { host, handle } = mountFor(payload);
+    expect(all(host, '.btc-stage-side-country')).toEqual(['Brunei', 'Indonesia']);
+    handle.destroy();
+  });
+
+  // A flex gap is reserved even for an item shrunk to nothing, so it would push a name that fills its slot against
+  // the wrapper's clip and cut its last letter. The separator therefore lives inside the country, with no gap.
+  it('a bracket slot reserves no gap beside the country: the separator is inside it', () => {
+    const slotCss = readFileSync('src/formats/btc/projectorScreens.css', 'utf8');
+    // the declaration block of one rule, found by its exact selector text
+    const block = (selector) => {
+      const start = slotCss.indexOf(`${selector} {`);
+      return start < 0 ? '' : slotCss.slice(start, slotCss.indexOf('}', start));
+    };
+    const wrapper = block('.btc-stage-slot-team > span:first-child');
+    expect(wrapper).not.toBe('');
+    expect(wrapper).not.toContain('gap');
+    expect(block('.btc-stage-slot-country::after')).toContain("content: '\\00a0·\\00a0'");
   });
 
   it('calls a knockout match by the seeds the bracket gave its teams', () => {
@@ -254,7 +301,7 @@ describe('idle loop: the pages', () => {
     expect(rows).toHaveLength(8);
     const first = rows[0];
     expect(text(first, '.stage-standing-pos')).toBe('1');
-    expect(text(first, '.stage-name-text')).toBe('Bean Scene');
+    expect(text(first, '.stage-name-text')).toBe('Brunei · Bean Scene');
     expect(all(first, '.stage-standing-cell')).toEqual(['7 wins', '259 pts']);
     vi.advanceTimersByTime(PAGE_DWELL_MS);
     expect(text(host, '.stage-title')).toBe('Preliminary'); // back to up next
@@ -594,7 +641,11 @@ describe('idle loop: the bracket page', () => {
   const slotsOf = (host) =>
     [...host.querySelectorAll('.btc-stage-slot')].map((slot) =>
       [...slot.querySelectorAll('.btc-stage-slot-team')].map((team) => ({
-        text: [team.firstChild.textContent, team.lastChild.textContent].join('|'),
+        text: [
+          team.querySelector('.btc-stage-slot-name').textContent,
+          team.lastChild.textContent,
+        ].join('|'),
+        country: team.querySelector('.btc-stage-slot-country')?.textContent ?? null,
         mark: team.querySelector('.btc-stage-slot-mark')?.textContent ?? null,
         markKind: team.querySelector('.btc-stage-slot-mark')?.getAttribute('data-kind') ?? null,
         winner: team.getAttribute('data-winner'),
@@ -631,6 +682,9 @@ describe('idle loop: the bracket page', () => {
     const slots = slotsOf(host);
     expect(slots[0][0]).toMatchObject({ winner: 'true', tbd: false });
     expect(slots[0][0].text).toMatch(/^Bean Scene\|\d+$/);
+    // the country sits on its own line, never inside the name; a team with none (Steam Team) and a TBD seat have none
+    expect(slots[0].map((team) => team.country)).toEqual(['Brunei', null]);
+    expect(slots[4][1].country).toBeNull();
     expect(slots[0][1]).toMatchObject({ winner: 'false', tbd: false });
     // an unplayed quarterfinal has both teams and no totals
     expect(slots[1][0].text).toBe('Drip Society|');
@@ -746,14 +800,16 @@ describe('champion screen', () => {
     const final = payload.bracket.rounds.find((round) => round.round === 'final');
     final.slots[0].teams[1].total = null;
     const { host } = mountFor(payload);
-    expect(text(host, '.stage-champion-name')).toBe(payload.podium.places[0].teamName);
+    expect(text(host, '.stage-champion-name')).toBe(
+      `Brunei · ${payload.podium.places[0].teamName}`,
+    );
     expect(host.querySelector('.stage-champion-score')).toBeNull();
   });
 
   it('shows the champion full screen, with the final score and the podium', () => {
     const payload = knockoutPayload({ results: FULL_RESULTS });
     const { host } = mountFor(payload);
-    const name = payload.podium.places[0].teamName;
+    const name = `Brunei · ${payload.podium.places[0].teamName}`;
     expect(text(host, '.stage-champion-label')).toBe('Champion');
     expect(text(host, '.stage-champion-name')).toBe(name);
     const score = text(host, '.stage-champion-score');
@@ -763,8 +819,12 @@ describe('champion screen', () => {
     const spoken = host.querySelector('.stage-champion-score .btc-score-line');
     expect(spoken.getAttribute('aria-label')).toBe(`Final ${match[1]} to ${match[2]}`);
     const podium = text(host, '.stage-podium');
-    expect(podium).toContain(`1st runner-up ${payload.podium.places[1].teamName}`);
-    expect(podium).toContain(`3rd place ${payload.podium.places[2].teamName}`);
+    expect(podium).toContain(
+      `1st runner-up ${payload.podium.places[1].country.name} · ${payload.podium.places[1].teamName}`,
+    );
+    expect(podium).toContain(
+      `3rd place ${payload.podium.places[2].country.name} · ${payload.podium.places[2].teamName}`,
+    );
     expect(podium).toContain('   ·   ');
     expect(text(host, '.stage-footer-start')).toBe('Congratulations to all 8 teams');
     expect(text(host, '.stage-footer-end')).toBe('Results stay on screen');
@@ -801,7 +861,9 @@ describe('champion screen', () => {
       podium: { complete: false, places: [payload.podium.places[0]] },
     };
     const { host } = mountFor(bare);
-    expect(text(host, '.stage-champion-name')).toBe(payload.podium.places[0].teamName);
+    expect(text(host, '.stage-champion-name')).toBe(
+      `Brunei · ${payload.podium.places[0].teamName}`,
+    );
     expect(host.querySelector('.stage-champion-score')).toBeNull();
     expect(host.querySelector('.stage-podium')).toBeNull();
   });
@@ -821,7 +883,7 @@ describe('champion screen', () => {
       },
     };
     handle.update(next);
-    expect(text(host, '.stage-champion-name')).toBe('Someone Else');
+    expect(text(host, '.stage-champion-name')).toBe('Brunei · Someone Else');
     expect(vi.getTimerCount()).toBe(0);
     handle.destroy();
   });

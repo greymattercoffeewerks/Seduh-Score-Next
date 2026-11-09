@@ -3,6 +3,7 @@ import {
   KNOCKOUT_PLACES,
   matchLine,
   teamLabel,
+  withCountry,
   winsText,
   qualifyingNote,
   winnerPhrase,
@@ -359,5 +360,13 @@ describe('teamLabel', () => {
     expect(teamLabel({ name: 'Team Kopi', country_code: 'ZZ' })).toMatch(
       /^(ZZ|Unknown Region) · Team Kopi$/,
     );
+  });
+});
+
+describe('withCountry', () => {
+  it('writes the audience-side label, and just the name for no country', () => {
+    expect(withCountry('Team Kopi', { code: 'BN', name: 'Brunei' })).toBe('Brunei · Team Kopi');
+    expect(withCountry('Team Kopi', null)).toBe('Team Kopi');
+    expect(withCountry('Team Kopi', undefined)).toBe('Team Kopi');
   });
 });

@@ -77,6 +77,18 @@ describe('detectBtcMoments: what counts as news', () => {
     expect(moments[0].payload.moment.result.matchId).toBe('new');
   });
 
+  it('plays the result with each side’s country on its own line, and none for a team without one', () => {
+    const previous = withResults(preliminaryPayload());
+    const countried = result({ matchId: 'c1' });
+    countried.teams[0].country = { code: 'SG', name: 'Singapore' };
+    countried.teams[1].country = null;
+    const moments = detectBtcMoments(previous, withResults(preliminaryPayload(), countried));
+    const { host } = play(moments[0]);
+    const sides = [...host.querySelectorAll('.btc-stage-side')];
+    expect(sides[0].querySelector('.btc-stage-side-country').textContent).toBe('Singapore');
+    expect(sides[1].querySelector('.btc-stage-side-country')).toBeNull();
+  });
+
   it('announces a match again when it was re-scored or decided by tie-break (same match, new confirmedAt)', () => {
     const previous = withResults(
       knockoutPayload(),

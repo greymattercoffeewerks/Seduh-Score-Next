@@ -17,7 +17,7 @@ import { sharedPositions } from '../../core/rankMovement.js';
 import {
   btcBand,
   hasBtcPublicContent,
-  matchLine,
+  matchHeadline,
   matchesPlayedLine,
   upNextKicker,
   knockoutMeeting,
@@ -36,6 +36,7 @@ import {
   decidedPodiumPlaces,
   TO_BE_DECIDED,
   podiumPlace as placeOf,
+  withCountry,
 } from './words.js';
 import { roundHeading } from './roundNames.js';
 
@@ -74,7 +75,10 @@ function renderChampion(payload) {
         el('h2', { className: 'btc-phone-champion-title' }, [
           el('span', { className: 'btc-phone-champion-label', text: 'Champion' }),
           document.createTextNode(' '),
-          el('span', { className: 'btc-phone-champion-name', text: champion.teamName }),
+          el('span', {
+            className: 'btc-phone-champion-name',
+            text: withCountry(champion.teamName, champion.country),
+          }),
         ]),
         score ? el('p', { className: 'stage-meta' }, [renderScoreLine(score)]) : null,
       ].filter(Boolean),
@@ -87,7 +91,7 @@ function renderChampion(payload) {
             { className: 'btc-phone-podium' },
             [champion, ...decided].flatMap((place) => [
               el('dt', { text: place.label }),
-              el('dd', { text: place.teamName }),
+              el('dd', { text: withCountry(place.teamName, place.country) }),
             ]),
           ),
         ])
@@ -123,7 +127,7 @@ function renderUpNext(upNext, thenNext) {
   const meeting = knockoutMeeting(upNext);
   return card(
     [
-      titledHeading(upNextKicker(upNext.roundLabel), matchLine(upNext)),
+      titledHeading(upNextKicker(upNext.roundLabel), matchHeadline(upNext)),
       meeting ? meta(meeting) : null,
       judges ? meta(judges) : null,
       thenNext ? meta(thenLine(thenNext)) : null,
@@ -142,19 +146,29 @@ function renderStandings(payload, { isShowingAll, onToggle }) {
     const tr = el('tr', {}, [
       el('td', { text: String(row.position) }),
       // Words, never colour alone: a tie among teams with results is written in the row.
-      // The name is cut with an ellipsis, the "(tied)" beside it never is.
-      el('th', { className: 'btc-phone-name-cell', attrs: { scope: 'row', title: row.teamName } }, [
-        el(
-          'div',
-          { className: 'btc-phone-name-row' },
-          [
-            el('span', { className: 'btc-phone-name-text', text: row.teamName }),
-            tiedSuffix(row, shared)
-              ? el('span', { className: 'btc-phone-name-suffix', text: tiedSuffix(row, shared) })
-              : null,
-          ].filter(Boolean),
-        ),
-      ]),
+      // The name (with its country) is cut with an ellipsis, the "(tied)" beside it never is.
+      el(
+        'th',
+        {
+          className: 'btc-phone-name-cell',
+          attrs: { scope: 'row', title: withCountry(row.teamName, row.country) },
+        },
+        [
+          el(
+            'div',
+            { className: 'btc-phone-name-row' },
+            [
+              el('span', {
+                className: 'btc-phone-name-text',
+                text: withCountry(row.teamName, row.country),
+              }),
+              tiedSuffix(row, shared)
+                ? el('span', { className: 'btc-phone-name-suffix', text: tiedSuffix(row, shared) })
+                : null,
+            ].filter(Boolean),
+          ),
+        ],
+      ),
       el('td', { text: winsText(row.wins) }),
       el('td', { text: String(row.points) }),
     ]);
@@ -221,7 +235,8 @@ function renderBracket(bracket) {
         { className: 'btc-phone-list' },
         round.slots.map((slot) => {
           const [a, b] = slot.teams;
-          const nameOf = (team) => team.name ?? TO_BE_DECIDED;
+          const nameOf = (team) =>
+            team.name ? withCountry(team.name, team.country) : TO_BE_DECIDED;
           const scored = slot.status === 'confirmed' && a.total != null && b.total != null;
           const score = scored
             ? scoreLine({
@@ -264,10 +279,10 @@ function renderRecent(results) {
       results.map((result) => {
         const [a, b] = result.teams;
         const score = scoreLine({
-          prefix: `${a.name} `,
+          prefix: `${withCountry(a.name, a.country)} `,
           first: a.total,
           second: b.total,
-          suffix: ` ${b.name}`,
+          suffix: ` ${withCountry(b.name, b.country)}`,
         });
         return el('li', {}, [
           el('span', { className: 'btc-phone-line' }, [renderScoreLine(score)]),

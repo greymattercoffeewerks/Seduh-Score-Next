@@ -17,6 +17,10 @@ export function teamLabel({ name, country_code: countryCode }) {
   return country ? `${country} · ${name}` : name;
 }
 
+// A team as the audience reads it: "Brunei · Team Kopi", or just the name when the payload carries no country
+// ({ code, name } or null; liveSession.js). The audience-side twin of teamLabel above, which reads a database row.
+export const withCountry = (name, country) => (country ? `${country.name} · ${name}` : name);
+
 export const matchLine = (match) => `${match.teams[0].name} vs ${match.teams[1].name}`;
 
 export function winsText(wins) {
@@ -185,3 +189,7 @@ export function knockoutMeeting(match) {
   if (a.place && b.place) return `${ordinalLabel(a.place)} meets ${ordinalLabel(b.place)}`;
   return null;
 }
+
+// The headline of the up-next card, where there is room: each team with its country.
+export const matchHeadline = (match) =>
+  `${withCountry(match.teams[0].name, match.teams[0].country)} vs ${withCountry(match.teams[1].name, match.teams[1].country)}`;
