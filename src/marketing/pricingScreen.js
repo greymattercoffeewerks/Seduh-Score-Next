@@ -12,15 +12,16 @@ const GLYPHS = { yes: '✓', no: '—', soon: '○' };
 function buildHero() {
   return el(
     'section',
-    { className: 'pricing-hero', attrs: { 'aria-labelledby': 'pricing-title' } },
+    { className: 'pricing-hero page-hero', attrs: { 'aria-labelledby': 'pricing-title' } },
     [
-      el('p', { className: 'pricing-kicker', text: 'Seduh Score / Pricing' }),
+      el('div', { className: 'page-hero-grid', attrs: { 'aria-hidden': 'true' } }),
+      el('p', { className: 'page-hero-kicker', text: 'Seduh Score / Pricing' }),
       el('h1', { id: 'pricing-title' }, [
         document.createTextNode('Pricing, stated '),
         el('span', { text: 'plainly.' }),
       ]),
       el('p', {
-        className: 'pricing-hero-intro',
+        className: 'page-hero-intro',
         text: 'Three tiers. Start free, pay once for a single competition, or take the year. Every price is in Brunei dollars.',
       }),
     ],
