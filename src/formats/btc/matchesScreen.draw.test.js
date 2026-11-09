@@ -801,5 +801,33 @@ describe('Draw a round panel', () => {
       choose('draw-mode-random');
       expect(q('[data-field="draw-seed"]').value).toBe('half-typed');
     });
+
+    it('announces a create error once, not again on every later redraw', async () => {
+      await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }), {
+        roundError: { code: 'P0001', message: 'x', hint: 'btc_round_matches_invalid' },
+      });
+      click(createButton());
+      await flush();
+      expect(q('[role="alert"]').textContent).toContain('not valid');
+      click(q('[data-focus-key="swap-0-1"]')); // any later redraw
+      expect(q('[role="alert"]')).toBeNull();
+      expect(q('#btc-draw-error').textContent).toContain('not valid'); // still there, and still described
+    });
+
+    it('republishes the display when a create that timed out turns out to have landed', async () => {
+      const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES });
+      await mount(db, {
+        roundError: Object.assign(new Error('timed out'), { timedOut: true }),
+        beforeError: (d) => {
+          d.btc_matches.push(
+            match('o1', 1, 'pending', 't01', 't02'),
+            match('o2', 1, 'pending', 't03', 't04'),
+          );
+        },
+      });
+      click(createButton());
+      await flush();
+      expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    });
   });
 });

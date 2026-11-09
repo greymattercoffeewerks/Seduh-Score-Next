@@ -74,6 +74,7 @@ export async function mountMatchesScreen(
     swapPick: null,
     drawStatus: '',
     drawError: null,
+    drawErrorFresh: false, // the error has not been announced yet (drawPanel.js)
     draft: blankDraft(),
     formError: null,
     busy: false,
@@ -355,6 +356,11 @@ export async function mountMatchesScreen(
         state.drawStatus = '';
       }
       state.drawError = message;
+      state.drawErrorFresh = true;
+      // a create that timed out may still have landed: if the reload shows the round, the display must follow
+      if (err?.timedOut && state.matches.some((m) => roundOf(m.match) === draw.round)) {
+        requestLivePublish(false);
+      }
     }
     state.busy = false;
     if (toast) showToast(toast);
@@ -731,6 +737,7 @@ export async function mountMatchesScreen(
               swapPick: state.swapPick,
               status: state.drawStatus,
               error: state.drawError,
+              errorFresh: state.drawErrorFresh,
             },
             teams: state.teams,
             judges: state.judges,
@@ -757,6 +764,7 @@ export async function mountMatchesScreen(
       }
 
       root.appendChild(container);
+      state.drawErrorFresh = false; // announced by this render, if there was one
 
       if (state.pendingFocus === 'heading') {
         state.pendingFocus = null;

@@ -57,7 +57,9 @@ export function renderDrawPanel(ctx) {
         id: ERROR_ID,
         className: 'btc-field-error',
         text: state.error,
-        attrs: { role: 'alert' },
+        // role=alert only the first time it is drawn: every action rebuilds the page, and a rebuilt alert node is
+        // announced again, so a later swap or tick would repeat the same error
+        attrs: state.errorFresh ? { role: 'alert' } : {},
       })
     : null;
   const nodes = [roundGroup];
