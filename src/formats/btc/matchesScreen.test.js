@@ -480,7 +480,9 @@ describe('mountMatchesScreen', () => {
       // the warning is a polite status tied to the judge fieldset
       const region = root.querySelector('.btc-country-warnings');
       expect(region.getAttribute('role')).toBe('status');
-      expect(root.querySelector('fieldset').getAttribute('aria-describedby')).toBe(region.id);
+      expect(root.querySelector('.btc-judge-fieldset').getAttribute('aria-describedby')).toBe(
+        region.id,
+      );
     });
 
     it('lists one line for each team of the judge country', async () => {
