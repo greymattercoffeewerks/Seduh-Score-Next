@@ -1,0 +1,1755 @@
+<!doctype html>
+<html lang="en" data-surface="stage">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Behind the Seduh — Seduh Score Next</title>
+    <meta
+      name="description"
+      content="How Seduh Score Next was built, one phase at a time: what shipped and what it felt like."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/marketing/bts.css" />
+    <!--
+      Behind the Seduh. Rebuilt 2026-11-09 (v4.0.0): this page used to live in public/bts/ as a standalone file with
+      its own copy of the Petrol palette and fonts, and its build log was one long accordion that grew with every
+      release. It is now a normal Vite entry (like /tour/) that links the real token files, so the drift guard
+      (src/ui/tokens/tokenDrift.test.js) covers its stylesheet, src/marketing/bts.css.
+
+      The content stays static HTML on purpose: it reads in full with no script (every chapter, stacked).
+      src/marketing/btsMain.js turns it into the reader: the cycle rail becomes tabs, one chapter shows at a time,
+      with a chapter list, older/newer buttons, search and topic filters. Each chapter's id is its link
+      (#ms-kiarong-btc), so keep ids stable once published.
+
+      Adding to it: a new chapter is a <section class="bts-chapter"> at the TOP of its cycle's .bts-cycle-group
+      (newest first). A new place is a new .bts-rail-item after "Next" plus a new .bts-cycle-group; move
+      data-current and the Current tag to it. btsPage.test.js fails when the current place or its major version
+      disagrees with src/core/version.js (NAMEPLATE, package.json), which is how the Gadong-to-Kiarong miss was found.
+      Facts follow CHANGELOG.md. No competitor is named; BTC and Throwdown have not run at a live event, and the copy
+      says so. History of earlier edits: CHANGELOG.md and docs/archive/changelog/.
+    -->
+  </head>
+  <body class="bts" data-surface="stage">
+    <div class="bts-wrap">
+      <main>
+        <header class="bts-hero">
+          <div class="bts-hero-text">
+            <a class="bts-crumb" href="/">&larr; Seduh Score Next</a>
+            <h1 class="bts-title">Same brand. A different build — told one phase at a time.</h1>
+            <p class="bts-lede">
+              This is the rebuild, not the pitch.
+              <b
+                >Seduh Score Next is what happens when the guy who built the original Seduh Score
+                decides the receipt-and-group-chat problem deserved a second draft</b
+              >
+              — offline-first this time, a real database instead of Firebase shortcuts, and a fixed
+              advancement bug the old app never quite trusted itself with.
+            </p>
+            <p class="bts-lede">
+              One phase at a time — and on 4 October 2026 it ran a real competition, the first live
+              Cup Taster event. Alongside it, a public shelf for the smaller things a coffee
+              community actually uses between events.
+            </p>
+          </div>
+          <aside class="bts-board panel" aria-label="Where the build stands">
+            <p class="bts-eyebrow">Behind the Seduh</p>
+            <p class="bts-board-now">
+              <span class="bts-board-place" data-bts-place>Kiarong</span>
+              <span class="bts-board-ver" data-bts-version>v4.0.0</span>
+              <span class="tag bts-current"><span class="status-live-dot"></span>Current</span>
+            </p>
+            <dl class="bts-stats">
+              <div>
+                <dt>cycles</dt>
+                <dd>4</dd>
+              </div>
+              <div>
+                <dt>formats</dt>
+                <dd>3 / 4</dd>
+              </div>
+              <div>
+                <dt>live event</dt>
+                <dd>1</dd>
+              </div>
+              <div>
+                <dt>organisations in production</dt>
+                <dd>2</dd>
+              </div>
+              <div>
+                <dt>community tools</dt>
+                <dd>4</dd>
+              </div>
+              <div>
+                <dt>log entries</dt>
+                <dd>39</dd>
+              </div>
+            </dl>
+            <p class="bts-board-latest">
+              Latest chapter:
+              <a href="#ms-kiarong-btc">BTC, built for a bigger draw</a> — countries on teams and
+              judges, round numbers and finish times, and the draw under the floor.
+            </p>
+          </aside>
+        </header>
+
+        <section class="bts-moment" aria-labelledby="bts-live-h">
+          <div class="bts-moment-card panel">
+            <div class="bts-moment-head">
+              <div>
+                <p class="bts-eyebrow bts-gold">4 October 2026</p>
+                <h2 class="bts-h2" id="bts-live-h">The first live run.</h2>
+                <p class="bts-moment-sub">
+                  Grey Matter Cup Taster Competition 2026 — Sports Hub, Bandar Seri Begawan. Not a
+                  rehearsal and not a demo: a real competition, scored from the first heat to the
+                  champion on this platform.
+                </p>
+              </div>
+              <p
+                class="bts-funnel"
+                role="img"
+                aria-label="17 competitors, narrowed to 8, then 4, then one champion"
+              >
+                <span><b>17</b> competitors</span><span aria-hidden="true">→</span>
+                <span><b>8</b> to the semis</span><span aria-hidden="true">→</span>
+                <span><b>4</b> to the final</span><span aria-hidden="true">→</span>
+                <span><b>1</b> champion</span>
+              </p>
+            </div>
+            <dl class="bts-facts">
+              <div>
+                <dt>How it ran</dt>
+                <dd>
+                  Three rounds — five prelim heats, two semi-final heats and a final — eight heats
+                  in all, every one confirmed.
+                </dd>
+              </div>
+              <div>
+                <dt>The deciding moment</dt>
+                <dd>
+                  The final ended in a three-way tie on correct cups, separated by time — exactly
+                  the kind of result the platform's tie handling exists to get right.
+                </dd>
+              </div>
+              <div>
+                <dt>On the record</dt>
+                <dd>
+                  323 entries in the append-only change log by the end of the night, and the result
+                  published to the public archive at <a href="/results/">/results/</a> — podium
+                  first, at the organiser's choice.
+                </dd>
+              </div>
+              <div>
+                <dt>What it taught us</dt>
+                <dd>
+                  It wasn't flawless, which is why it's worth writing down: a tablet timekeeper
+                  missed the beat on Stop, a misspelt name couldn't be fixed from the roster, the
+                  printed report ran off the page, and the event never marked itself concluded. All
+                  four are fixed — see <a href="#ms-gadong-live">the build log below</a>.
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="bts-build" id="bts-build" aria-labelledby="bts-build-h">
+          <div class="bts-build-head">
+            <p class="bts-eyebrow">The build, phase by phase</p>
+            <h2 class="bts-h2" id="bts-build-h">What shipped — and what it felt like.</h2>
+            <p class="bts-build-sub">
+              Pick a place, then a chapter. One chapter on the table at a time, newest first, so
+              this page stops getting longer every time something ships.
+            </p>
+          </div>
+
+          <ol class="bts-rail" aria-label="Version cycles, newest first">
+            <li class="bts-rail-item">
+              <div class="bts-cycle panel is-next">
+                <span class="bts-cycle-top"
+                  ><span class="bts-cycle-place">Next</span
+                  ><span class="tag tag-dashed">TBD</span></span
+                >
+                <span class="bts-cycle-ver">—</span>
+                <span class="bts-cycle-note"
+                  >Still TBD — Liga Seduh is still coming. This row&#x27;s already called the order
+                  wrong once, so it&#x27;s not calling it again.</span
+                >
+              </div>
+            </li>
+            <li class="bts-rail-item">
+              <a class="bts-cycle panel" href="#ms-kiarong-btc" data-cycle="kiarong" data-current>
+                <span class="bts-cycle-top"
+                  ><span class="bts-cycle-place">Kiarong</span
+                  ><span class="tag bts-current"
+                    ><span class="status-live-dot"></span>Current</span
+                  ></span
+                >
+                <span class="bts-cycle-ver">v4.x · 3 chapters</span>
+                <span class="bts-cycle-note"
+                  >Throwdown, the third format, opened it, six days before the version number
+                  noticed. Then one look across every screen, and BTC readied for a bigger draw:
+                  countries on teams and judges, numbered preliminary rounds, finish times that
+                  check themselves, and a draw engine waiting for its screen.</span
+                >
+              </a>
+            </li>
+            <li class="bts-rail-item">
+              <a class="bts-cycle panel" href="#ms-gadong-switches" data-cycle="gadong">
+                <span class="bts-cycle-top"
+                  ><span class="bts-cycle-place">Gadong</span><span class="tag">Shipped</span></span
+                >
+                <span class="bts-cycle-ver">v3.x · 7 chapters</span>
+                <span class="bts-cycle-note"
+                  >BTC (Barista Team Championship), the second real competition format, then a trust
+                  pass, the first live Cup Taster event on 4 October 2026 and the fixes it prompted,
+                  BTC&#x27;s own projector and phone screens, the platform&#x27;s first
+                  multi-organisation release, an operator&#x27;s console, password recovery, a
+                  private identity record for people, and the first limits switched on.</span
+                >
+              </a>
+            </li>
+            <li class="bts-rail-item">
+              <a class="bts-cycle panel" href="#ms-berakas" data-cycle="berakas">
+                <span class="bts-cycle-top"
+                  ><span class="bts-cycle-place">Berakas</span
+                  ><span class="tag">Shipped</span></span
+                >
+                <span class="bts-cycle-ver">v2.x · 1 chapter</span>
+                <span class="bts-cycle-note"
+                  >The public front door, the Community shelf, the Guess the Bean port, and a real
+                  public results archive.</span
+                >
+              </a>
+            </li>
+            <li class="bts-rail-item">
+              <a class="bts-cycle panel" href="#ms-kiulap" data-cycle="kiulap">
+                <span class="bts-cycle-top"
+                  ><span class="bts-cycle-place">Kiulap</span><span class="tag">Shipped</span></span
+                >
+                <span class="bts-cycle-ver">v1.x · 1 chapter</span>
+                <span class="bts-cycle-note"
+                  >Cup Taster plus the Phase 6 hardening pass, done.</span
+                >
+              </a>
+            </li>
+          </ol>
+          <details class="bts-why">
+            <summary>Why the place names?</summary>
+            <p>
+              The legacy site named its versions after Bruneian places, spreading out from the
+              capital — Kiulap through Seria, v1.0 through v5.x (<a
+                href="https://seduhscore.com/bts/"
+                >seduhscore.com/bts/</a
+              >). This build keeps that same place order and direction — deliberately — without
+              continuing that run itself. The place only moves on a major version, and a major
+              version is for a new format shipping or a relaunch of the whole thing. Read left to
+              right, most recent first, same as any standings table.
+            </p>
+          </details>
+
+          <div class="bts-reader" data-bts-reader>
+            <div class="bts-pane" data-bts-pane>
+              <div class="bts-cycle-group" data-cycle="kiarong">
+                <h3 class="bts-cycle-heading">Kiarong</h3>
+                <p class="bts-cycle-intro">
+                  Now <strong>Kiarong</strong>: a third format, the version number catching up with
+                  it, one look across every screen, and BTC readied for a bigger draw.
+                </p>
+                <section class="bts-chapter" id="ms-kiarong-btc" aria-labelledby="ms-kiarong-btc-h">
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Kiarong</span><span>8 to 9 November 2026</span
+                      ><span>v3.6.4 to v4.0.0</span><span>3 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-kiarong-btc-h">
+                      BTC, built for a bigger draw
+                    </h4>
+                    <p class="bts-chapter-sum">
+                      Countries on teams and judges · Round numbers and finish times · The draw,
+                      under the floor
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Formats|In the room" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Countries on teams and judges</h5>
+                        <span class="bts-entry-ver">v3.6.4 to v3.6.5</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >making “don&#x27;t judge your own country” something the screen
+                          remembers, so the organiser doesn&#x27;t have to.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          A BTC team can now say which country it represents, and so can a judge.
+                          The matches screen warns the organiser when a judge they have ticked
+                          shares a country with one of the teams. It warns and never blocks, because
+                          the organiser knows the room and the screen does not. The projector and
+                          the phone view show each team&#x27;s country next to its name, and a long
+                          country name is cut before the team name ever is. A judge&#x27;s country
+                          is never published anywhere. Fitting a country onto the bracket took four
+                          rounds of review before the longest country on the list sat next to the
+                          fourth quarter-final without pushing it off a 1080p screen.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Formats|In the room" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Round numbers and finish times</h5>
+                        <span class="bts-entry-ver">v3.6.6</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >a stopwatch that won&#x27;t accept “about nine-ish”.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Two preliminary rounds can now be told apart in the database, so a
+                          competition can run more than one. A finish time is checked where it is
+                          typed: minutes and seconds, nothing longer than the round&#x27;s limit,
+                          and never 0:00. A preliminary match needs both teams&#x27; times before it
+                          can be confirmed. The dashboard counts any preliminary match that is still
+                          missing one. The limits live in one place, because the rules they come
+                          from are not final yet.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Formats">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">The draw, under the floor</h5>
+                        <span class="bts-entry-ver">v4.0.0</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >building the hat before anyone gets to pull a name out of it.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The engine for drawing a BTC round: a random first round, and a second
+                          round drawn either at random without repeats or from the first
+                          round&#x27;s results, strongest against weakest. Every draw keeps its
+                          seed, so the same seed and the same teams give the same draw again. It
+                          tries to keep a judge away from their own country&#x27;s teams, and when
+                          it can&#x27;t, it says so. The database keeps a record of how each round
+                          was drawn. There is no screen for it yet, so no organiser can press Draw.
+                          The panel is the next piece.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section
+                  class="bts-chapter"
+                  id="ms-kiarong-petrol"
+                  aria-labelledby="ms-kiarong-petrol-h"
+                >
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Kiarong</span><span>6 to 9 November 2026</span
+                      ><span>v3.6.2 to v4.0.0</span><span>3 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-kiarong-petrol-h">One look, everywhere</h4>
+                    <p class="bts-chapter-sum">
+                      Petrol V2 · The front door, reworded · This page, rebuilt
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article
+                      class="bts-entry panel"
+                      data-tags="Groundwork|Public &amp; community"
+                      data-live
+                    >
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Petrol V2</h5>
+                        <span class="bts-entry-ver">v3.6.6</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >repainting the whole house in one colour, then hiring a guard to stop
+                          anyone touching up a wall in a slightly different one.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          One design layer for the whole product. Corners went from hard cuts to
+                          three sizes of soft corner, and the main buttons got a bevel that keeps
+                          its focus ring. There is one set of durations and easing, and the edges of
+                          input boxes went from barely there (about 2:1 contrast) to properly
+                          visible (4:1). On the projector and phone views, standings rows slide to
+                          their new place and changed numbers tick over, with no motion for anyone
+                          who asked their device for less. A screen that is still connecting shows
+                          the outline of the board instead of nothing. The public pages now take
+                          their tags, cards and buttons from the same parts as the console. A test
+                          now fails any stylesheet that makes up its own colour, corner or timing.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Groundwork</li>
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Public &amp; community" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">The front door, reworded</h5>
+                        <span class="bts-entry-ver">v3.6.2 to v3.6.3</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >a test panel reading your headline back to you, and you agreeing with
+                          them.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The landing page, the Tour, Pricing and About now say three formats are
+                          live, with Throwdown listed as live next to Cup Taster and BTC. A test
+                          panel found the old headline confusing and not about coffee, so it was
+                          replaced: “Every cup brewed. Every score counted. Every result trusted.”
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Public &amp; community" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">This page, rebuilt</h5>
+                        <span class="bts-entry-ver">v4.0.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >tidying the trophy cabinet so there&#x27;s room for more trophies.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Behind the Seduh used to open every milestone into one long scroll, and
+                          every release made it longer. Now it shows one chapter at a time, picked
+                          from a list, with search and topic filters across every entry. The version
+                          standings and the build log used to tell the same history twice; they are
+                          one thing now. The page also stopped carrying its own copy of the design
+                          and draws on the same token files as the rest of the product, so the drift
+                          guard watches it too. A test now checks that the place and major version
+                          on this page match the app&#x27;s own.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section
+                  class="bts-chapter"
+                  id="ms-kiarong-throwdown"
+                  aria-labelledby="ms-kiarong-throwdown-h"
+                >
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Kiarong</span><span>3 to 9 November 2026</span
+                      ><span>v3.6.0 to v4.0.0</span><span>2 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-kiarong-throwdown-h">
+                      A third format, and a new place
+                    </h4>
+                    <p class="bts-chapter-sum">Throwdown · The number catches up</p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Formats" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Throwdown</h5>
+                        <span class="bts-entry-ver">v3.6.0 to v3.6.1</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >two names, one winner, and a bracket that can show its working.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The third competition format: a one-on-one knockout. Competitors are
+                          seeded or drawn at random, and the draw stores its shuffle seed so it can
+                          be explained afterwards. Each match is decided by the judges&#x27; votes;
+                          the organiser confirms the winner, and confirming asks which winner they
+                          expect, so a stale screen can&#x27;t confirm the wrong one. Byes and
+                          walkovers are handled, and the third-place match is still played when a
+                          semi-final ended in a walkover, as long as both losers are still in. It
+                          comes with an organiser console, its own projector and phone screens, a
+                          printable results page and a full eight-competitor test event. Scoring
+                          advancement lives in the format itself, because the shared ranking code
+                          takes one ranked list and a cut-off, which a knockout isn&#x27;t; the only
+                          shared piece added was the seeded shuffle. Built with reviews that found
+                          two real offline-sync problems (a queued decision now closes voting) and
+                          nine test gaps, all fixed. Throwdown has not yet been run at a live event.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Groundwork" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">The number catches up</h5>
+                        <span class="bts-entry-ver">v4.0.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >noticing you walked past your own exit, and taking it on the way
+                          back.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          This project&#x27;s own rule says the place name only moves on a major
+                          version, and a major version is for a new format shipping or a relaunch of
+                          the whole thing. Throwdown was the third format. It shipped as v3.6.0
+                          anyway, and the footer said Gadong for six more days while patches piled
+                          up behind it. On 9 November the number caught up: v4.0.0, Kiarong, the
+                          next stop on the same road the legacy site took. The bump changes no
+                          feature. A test now fails if this page and the app disagree about the
+                          place or the major version.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Groundwork</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+              </div>
+              <div class="bts-cycle-group" data-cycle="gadong">
+                <h3 class="bts-cycle-heading">Gadong</h3>
+                <p class="bts-cycle-intro">
+                  <strong>Gadong</strong>: a second competition format, the first live event run on
+                  the platform, BTC's own screens for the room, and room for more than one
+                  organiser, the tools to run it as a platform, and a private record that knows a
+                  person is the same person.
+                </p>
+                <section
+                  class="bts-chapter"
+                  id="ms-gadong-switches"
+                  aria-labelledby="ms-gadong-switches-h"
+                >
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Gadong</span><span>2 to 4 November 2026</span
+                      ><span>v3.5.0 to v3.6.1</span><span>2 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-gadong-switches-h">The first switches</h4>
+                    <p class="bts-chapter-sum">
+                      The first limits switched on · The Seduh ID feed, armed and waiting
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Platform" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">The first limits switched on</h5>
+                        <span class="bts-entry-ver">v3.5.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >putting up the first fence posts and walking the line to see that nobody
+                          is standing in the wrong place.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          On 2 November the owner turned on the first three of the switches built in
+                          October, one at a time, each after a preview of who it would affect: the
+                          cap on participants in a Community event, the one-open-event rule, and the
+                          results archive. The preview counted nobody who would lose anything real.
+                          The archive only looks at events that end after the moment of the last
+                          flip, so the history was never published. It has not published anything
+                          yet; the first proof is the first Community event to end after that
+                          moment. The other eight switches are still off. The same day the version
+                          moved to 3.5.0, which also covers everything since 3.4.1, because the
+                          number had not been bumped for ten days.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Platform</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Trust &amp; security" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">The Seduh ID feed, armed and waiting</h5>
+                        <span class="bts-entry-ver">v3.5.1 to v3.6.1</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >a door with a person standing at it before anyone is let through.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The next step for the private identity record: when an event&#x27;s podium
+                          is published, the people on it can be turned into identities. It runs in a
+                          review-queue mode, so nothing is created until the owner has looked, and
+                          the fully automatic mode is built and off. It has queued nothing so far. A
+                          review also stopped a republish from resetting its daily caps. The Privacy
+                          page now has the sentence for it, and promises that an opt-out is
+                          acknowledged within 10 days and completed within 30. The public contact
+                          address became a proper one on the Seduh Score domain.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section
+                  class="bts-chapter"
+                  id="ms-gadong-identity"
+                  aria-labelledby="ms-gadong-identity-h"
+                >
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Gadong</span><span>28 October to 2 November 2026</span
+                      ><span>v3.5.0</span><span>3 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-gadong-identity-h">
+                      One person, one record
+                    </h4>
+                    <p class="bts-chapter-sum">
+                      Seduh ID, the private record · Stronger passwords · A results archive, built
+                      and then switched on
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Trust &amp; security" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Seduh ID, the private record</h5>
+                        <span class="bts-entry-ver">v3.5.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >laying the pipes before anyone asks for water: nothing new on the
+                          scoreboard, but a person can finally be the same person twice.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The same barista turns up in many events under slightly different
+                          spellings, and the only thing that really identifies them is a phone
+                          number. So phone numbers are now checked to one international format
+                          everywhere they are typed in, and the database refuses anything else.
+                          Behind that sits a private identity record, one per phone number, that no
+                          browser can read; only the database can link a person in an
+                          organiser&#x27;s roster to it. The organiser gets a People screen and a
+                          staff and affiliate roster for the people around an event who are not
+                          competing. The existing published results were linked by the owner in one
+                          run: 17 people, 17 links. For the operator there is a counts-only view. A
+                          review caught one leak on the way, where a clever insert could reveal that
+                          a row id existed in another organisation, and it was closed with a
+                          column-level grant. A wider sweep of the other tables is still open.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Trust &amp; security" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Stronger passwords</h5>
+                        <span class="bts-entry-ver">v3.5.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >a setting flipped in one place that had to be answered in three.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          On 29 October the live project began requiring twelve characters and the
+                          current password for any change. That would have left every new login
+                          stuck on its first password screen with only a vague &quot;try
+                          again&quot;, so the screens were changed to ask for the one-time or
+                          current password and to say plainly when it is wrong. The operator&#x27;s
+                          console also gained its own Change password panel.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Platform" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">A results archive</h5>
+                        <span class="bts-entry-ver">v3.5.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >writing the rule down before the first result is published under
+                          it.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          A pipeline that publishes an event&#x27;s podium to a public archive has
+                          been built end to end: the organiser&#x27;s browser stages the snapshot,
+                          there is a tick box and a take-down, the operator can see counts, and it
+                          has been proved over real HTTP and in a browser at phone width. It shipped
+                          switched off, and was turned on on 2 November (see the next milestone).
+                          The Privacy, Terms and pricing pages carry the wording for it, so the rule
+                          and the feature arrived together.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Platform</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section
+                  class="bts-chapter"
+                  id="ms-gadong-operator"
+                  aria-labelledby="ms-gadong-operator-h"
+                >
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Gadong</span><span>14 to 28 October 2026</span
+                      ><span>v3.4.0 to v3.4.1</span><span>4 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-gadong-operator-h">
+                      Running it as a platform
+                    </h4>
+                    <p class="bts-chapter-sum">
+                      The operator&#x27;s console · Password recovery · Plans and limits, built dark
+                      · Random Selector
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article
+                      class="bts-entry panel"
+                      data-tags="Platform|Trust &amp; security"
+                      data-live
+                    >
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">The operator&#x27;s console</h5>
+                        <span class="bts-entry-ver">v3.4.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >making the person who can add an organisation provable, not just
+                          trusted.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Setting up a new organisation used to be hand-written database commands.
+                          There is now a separate console for the person who runs the platform: it
+                          creates an organisation, attaches its owner (a new login or an existing
+                          one), adds members and changes roles. It is deliberately narrow. It shows
+                          organisation names, members and dates, never an event, a score or a
+                          competitor, and there is no &quot;sign in as&quot; button. Every change is
+                          written to an append-only audit log, and the database itself, not the
+                          page, checks that the person is an administrator and has proved a second
+                          factor in the last hour. An organiser signed in on the same browser gets
+                          nothing from it. Built over 15 and 16 October with an adversarial test
+                          pass against the database functions behind it, and rolled out on 17
+                          October as v3.4.0. Every action it offers has since been run against the
+                          real project.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Platform</li>
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Trust &amp; security" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Password recovery</h5>
+                        <span class="bts-entry-ver">v3.4.x</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >a locked door finally having a bell next to it.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          On 22 October a recovery link sent from the dashboard worked once, landed
+                          on the public home page where nothing was listening, and the second click
+                          said &quot;expired&quot;. The product had no forgot-password screen and no
+                          change-password screen at all. Now the sign-in page has &quot;Forgot
+                          password?&quot;, the emailed link opens a screen that asks for a new
+                          password, and a signed-in organiser can change theirs from the account
+                          area. The form answers the same way whether or not the address exists, so
+                          it can&#x27;t be used to test who has an account, and a new password signs
+                          the other devices out. A login protected by an authenticator app is not
+                          let in by an emailed link; it is sent to the operator.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Platform">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Plans and limits, built dark</h5>
+                        <span class="bts-entry-ver">v3.4.1</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >building the fence before telling anyone where it goes, so that putting
+                          it up is a switch and not a surprise.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Between 23 and 27 October the database learned what a plan is. An
+                          organisation can be given one, the operator can record a payment and see
+                          what each organisation may do, and the checks (how many events can be open
+                          at once, how large an event can be, when a paid event&#x27;s window
+                          closes) live in the database, where a browser can&#x27;t skip them. Every
+                          check shipped off, and each one is turned on separately, after the
+                          operator has seen who it would affect. The first three were switched on on
+                          2 November (see the next milestone up). Alongside it: organisers get a
+                          &quot;Finish event&quot; button, with a confirmation, so a finished event
+                          stops counting as open.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Platform</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Public &amp; community" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Random Selector</h5>
+                        <span class="bts-entry-ver">v3.3.x</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >the raffle board at the end of the night, but one nobody can argue
+                          with.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          A fourth free tool on the Community shelf, for running orders, prizes and
+                          lucky draws: a split-flap board that picks one entry from a list. It takes
+                          weights, imports and exports a list as CSV, makes a share link, has a
+                          full-screen Present mode and keeps a draw history. No account, and nothing
+                          leaves the browser.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section
+                  class="bts-chapter"
+                  id="ms-gadong-tenancy"
+                  aria-labelledby="ms-gadong-tenancy-h"
+                >
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Gadong</span><span>10 to 14 October 2026</span
+                      ><span>v3.2.0 to v3.3.0</span><span>3 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-gadong-tenancy-h">
+                      Room for more than one organiser
+                    </h4>
+                    <p class="bts-chapter-sum">
+                      Level teams, ordered by people · More than one organiser, safely · Pointing
+                      the app at the right event
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Formats" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Level teams, ordered by people</h5>
+                        <span class="bts-entry-ver">v3.2.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >a tie being a decision somebody makes and signs, not something the
+                          software quietly settles.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          A BTC bracket is seeded from the standings, and seeds decide who plays
+                          whom — first meets eighth. When teams were level on points and wins across
+                          the cut-off, the bracket simply refused to generate, and teams level
+                          anywhere else were seeded in an arbitrary order. Now a &quot;Teams level
+                          in the standings&quot; card on the bracket screen lets the organiser put
+                          them in order and say why, and the order and the reason are recorded.
+                          Minor release v3.2.0.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                      </ul>
+                    </article>
+                    <article
+                      class="bts-entry panel"
+                      data-tags="Platform|Trust &amp; security"
+                      data-live
+                    >
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">More than one organiser, safely</h5>
+                        <span class="bts-entry-ver">v3.3.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >turning &quot;this is our scoring app&quot; into &quot;this is a
+                          platform&quot; — and proving it with two real organisations before anyone
+                          else is asked to trust it.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Until now the platform worked for exactly one organisation, fixed into the
+                          build. It now works for many. The console asks the database which
+                          organisations the signed-in person belongs to, shows the one they are
+                          working in, and lets them switch; the Team screen, the Events list and the
+                          live-event guards all follow. Every audience link names the organiser, so
+                          a phone, projector or splash screen can only ever show that
+                          organiser&#x27;s event, and the phone view has a QR code to join. The
+                          public results archive says whose event each result is. A shared tablet is
+                          safe: unsynced scoring queued by one account can no longer be lost when
+                          another signs in, and signing out warns first. A link into another
+                          organisation&#x27;s event moves the console there and says so. On the
+                          database side the old anonymous doors on events and live sessions were
+                          closed, every table that holds an organisation&#x27;s data is frozen to
+                          its parent, and a cross-organisation test matrix fails the build if any
+                          table or function is added without proof that one organisation cannot read
+                          or change another&#x27;s. A security and performance pass followed. On 14
+                          October the owner checked it on the real site with a second organisation:
+                          separate event lists, separate live events on the splash, projector and
+                          phone, and a console link that switched organisation. 3,989 unit tests and
+                          1,930 database assertions at close-out. Minor release v3.3.0.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Platform</li>
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="In the room" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Pointing the app at the right event</h5>
+                        <span class="bts-entry-ver">v3.3.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >one more place where the app asks a person before it does something they
+                          can not undo mid-event.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          With several events and rehearsals in preparation, &quot;which event is
+                          live?&quot; needed an answer. The splash screen now names the live event
+                          first, then the newest real event, instead of whichever test was created
+                          last. Starting a heat, or confirming a BTC match, now asks before it would
+                          replace another live event, and the warning is announced to screen readers
+                          and is part of the button it guards.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section class="bts-chapter" id="ms-gadong-btc" aria-labelledby="ms-gadong-btc-h">
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Gadong</span><span>9 to 10 October 2026</span><span>v3.1.0</span
+                      ><span>2 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-gadong-btc-h">BTC takes the stage</h4>
+                    <p class="bts-chapter-sum">BTC, decided in the room · BTC on the big screen</p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Formats|In the room">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">BTC, decided in the room</h5>
+                        <span class="bts-entry-ver">v3.0.x</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >leaving the one judgement call that belongs to people with the people —
+                          and making the rehearsal cheap enough to actually do.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Three things BTC needed before it could be trusted with a final. A level
+                          knockout match is decided by the organiser, who records which team goes
+                          through and a reason — the app does not score a tie-break cup, because the
+                          event&#x27;s own rules decide how a tie is broken at the venue. A podium,
+                          first to fourth, and a fix so that a knockout corrected into a tie no
+                          longer leaves its old winner sitting in the next round. And a one-click
+                          demo: load a test event with an eight-team roster and scored
+                          preliminaries, ready for the bracket, so a rehearsal no longer means
+                          scoring 28 matches by hand.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Formats|In the room" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">BTC on the big screen</h5>
+                        <span class="bts-entry-ver">v3.1.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >taking a format that already ran from a tablet and giving the room
+                          something to watch.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          BTC now has its own screens for the room. The projector and phone views
+                          serve whichever format is live, and BTC publishes its live state
+                          automatically as matches are scored, so the audience is never left on
+                          &quot;event not published yet&quot;. The venue display loops through what
+                          is up next (round, teams, judges), the bracket, and the standings with
+                          ties kept together — and breaks in after a result with two short moments:
+                          the result recorded (both totals, what each is made of, who goes through,
+                          the organiser&#x27;s tie-break reason in words) and, in the preliminaries,
+                          the rank impact. The phone gets one scrolling column: the champion once
+                          decided, where the event is up to, what is next, the top five with
+                          &quot;show all&quot;, the bracket by round and the latest results, with a
+                          TEST banner pinned whenever the data is not real. Both screens draw their
+                          wording from one shared set of phrases, so they cannot describe the same
+                          fact two ways. This is v3.1.0 — the first minor release, because a feature
+                          set is not a patch. Built and tested; not yet run at a live BTC event.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section class="bts-chapter" id="ms-gadong-live" aria-labelledby="ms-gadong-live-h">
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Gadong</span><span>4 to 9 October 2026</span><span>v3.0.x</span
+                      ><span>3 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-gadong-live-h">The first live event</h4>
+                    <p class="bts-chapter-sum">
+                      Lessons from the first live event · Brew Planner · Made for the next event
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="In the room" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Lessons from the first live event</h5>
+                        <span class="bts-entry-ver">v3.0.19</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >a real competition being the best test suite there is — and the first
+                          time a list of fixes started with &quot;found at the event&quot;.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          What 4 October asked for, built within days: a recorded heat time can be
+                          corrected from any signed-in device, with a required reason, until the
+                          heat is confirmed — and the correction lands in the change log. A
+                          registered cupper&#x27;s name, café, bib, phone and email can be edited
+                          from the roster. The printed report fits the page. Resolving the final now
+                          marks the event concluded, and the projector view fits the screen instead
+                          of scrolling. And a printable public results sheet — podium only by
+                          default, full standings only if the organiser opts in, never phone
+                          numbers, emails or set-by-set marks — with /results/ now linked from the
+                          site navigation.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Public &amp; community" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Brew Planner</h5>
+                        <span class="bts-entry-ver">v3.0.19</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >turning the back-room maths of running a real event into something anyone
+                          can pick up.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          A third free tool for the Community shelf, at /tools/brew-planner/: a
+                          five-step planner that works out how many batches each heat needs, which
+                          machine brews each one and when, so a heat&#x27;s coffee is pooled before
+                          its cups are poured — with paper-filter counts and Cambro sizing. No
+                          sign-in, no database, same family as the Competition Timer.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="In the room">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Made for the next event</h5>
+                        <span class="bts-entry-ver">v3.0.x</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >answering &quot;too much at once&quot; with one thing at a time.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Sign-in hardened against the iPad failure — the cause is unconfirmed, so
+                          the screen now shows or hides the password and copes with autofill. Each
+                          team member gets their own login, created by the owner with a one-time
+                          password, so the change log names a person rather than a shared login;
+                          removed members are listed and can be restored. The heats page puts the
+                          next heat first with an &quot;Up next&quot; button and folds the roster
+                          away. One shared logo-and-wordmark lockup, aligned to the baseline and set
+                          in the same typeface everywhere. The sync status shrinks to a one-line
+                          chip so the header stays one line. And the venue display was rebuilt as
+                          one screen per moment from reusable parts — a heat on stage with a very
+                          large countdown, paged standings and the champion, then &quot;Result
+                          recorded&quot; and &quot;Rank impact&quot; — so other formats can reuse
+                          the same pieces.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+                <section
+                  class="bts-chapter"
+                  id="ms-gadong-build"
+                  aria-labelledby="ms-gadong-build-h"
+                >
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Gadong</span><span>v3.0.0 to v3.0.x</span><span>3 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-gadong-build-h">
+                      The second format, then trust and hardening
+                    </h4>
+                    <p class="bts-chapter-sum">
+                      BTC · Trust, on the record · Hardened for the room
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Formats" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">BTC — the second format</h5>
+                        <span class="bts-entry-ver">v3.0.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >the platform&#x27;s own &quot;realising one format was never going to be
+                          enough&quot; moment, for real this time — and arriving before the format
+                          everyone had actually planned for.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          BTC (Barista Team Championship) — round-robin preliminaries, automatic
+                          bracket generation and advancement, per-judge scoring with bonuses, and
+                          five full organiser screens (setup, matches, standings, bracket, scoring),
+                          all routed into the console. The public site was updated the same day: no
+                          more &quot;coming soon&quot; — the landing page and Tour both call it
+                          live, right alongside Cup Taster. A real second format is a genuine
+                          capability-era boundary, so the nameplate moved with it — Berakas becomes
+                          a shipped cycle, and this build enters Gadong.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Trust &amp; security" data-live>
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Trust, on the record</h5>
+                        <span class="bts-entry-ver">v3.0.4</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >the unglamorous, necessary answer to &quot;what happens when someone
+                          questions a result&quot; — and being honest in the copy about what the log
+                          does not cover.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          An append-only score-change log, running since 24 September 2026, so a
+                          questioned result has a history to point to. From it: a public &quot;How
+                          this was scored&quot; disclosure on /results/ (the shape of any
+                          corrections — how many, when, by which role, the reason given — never the
+                          raw scores), and an organiser-only dispute pack: the exact record of an
+                          event, with every change and its old and new values, handed over on
+                          request rather than published. Alongside it, a privilege-hardening pass on
+                          the database and five public pages — About, Contact, Privacy, Terms and
+                          Neutrality — for a product that holds competitor data.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="In the room">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Hardened for the room</h5>
+                        <span class="bts-entry-ver">v3.0.x</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >assuming the wifi will lie, and building so that it can&#x27;t cost
+                          anyone a score.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          A run of pre-event reliability work for a venue where the wifi is somebody
+                          else&#x27;s problem. Writes that fail on a bad connection stay queued and
+                          retry every fifteen seconds instead of being dropped, and every request
+                          now gives up after thirty seconds rather than hanging. Failures are sorted
+                          into &quot;try again&quot; (timeouts, rate limits, gateway errors) and
+                          &quot;this will never work&quot; (a genuine stale-score conflict), so one
+                          bad write can&#x27;t block everything behind it — including a stale
+                          publish for a rehearsal event that has since been deleted. Two console
+                          tabs take turns on the queue instead of running the same write twice. When
+                          a write is genuinely lost, every one reaches the sync panel, the notice
+                          survives a reload, and deleting an event with unsynced writes warns first.
+                          Around it: a sync status that no longer grows the sticky header mid-heat;
+                          BTC event deletion fixed; audience views that switch cleanly inside one
+                          tab; and an organiser header that folds into a menu below tablet width.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+              </div>
+              <div class="bts-cycle-group" data-cycle="berakas">
+                <h3 class="bts-cycle-heading">Berakas</h3>
+                <p class="bts-cycle-intro">
+                  <strong>Berakas</strong>: a front door nobody had planned for, followed by a
+                  public shelf for the useful extras.
+                </p>
+                <section class="bts-chapter" id="ms-berakas" aria-labelledby="ms-berakas-h">
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Berakas</span><span>v2.x</span><span>4 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-berakas-h">The public front door</h4>
+                    <p class="bts-chapter-sum">
+                      Front door · Guess the Bean · Tour · Results archive
+                    </p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Public &amp; community">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">The public front door</h5>
+                        <span class="bts-entry-ver">v2.0.17</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >the moment this stopped being a private rebuild and got an actual public
+                          front door — then a shelf beside it for the tools people can simply pick
+                          up and use.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The public marketing landing page — out of the original handoff&#x27;s
+                          scope entirely, shipped because it was needed. The console moved to /app/
+                          to make room for it; the new /community/ shelf now links Competition Timer
+                          and Guess the Bean from the same public front door.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Public &amp; community">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Guess the Bean, rebuilt</h5>
+                        <span class="bts-entry-ver">v2.0.17</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >taking a good little booth game seriously enough to give it the same
+                          reliable foundations as the rest of the product — without making it feel
+                          heavyweight.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Guess the Bean moved off the legacy booth page into its own
+                          Supabase-backed flow: magic-link organiser setup, participant entry, a
+                          live stage display and post-reveal winner contact lookup. The Community
+                          shelf gives it a proper public home next to Competition Timer.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Public &amp; community">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">A real public tour</h5>
+                        <span class="bts-entry-ver">v2.0.17</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >tidying up the front door after enough people had already walked through
+                          it.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The legacy tour concept, rebuilt at /tour/ — Cup Taster shown as the one
+                          live format, with Throwdown, Liga Seduh and BTC clearly marked planned
+                          rather than pretending to work. Tour, Community and the landing page now
+                          share one header and footer; the organiser wordmark links home; and
+                          canonical URLs, sharing metadata and a sitemap mean the public site is
+                          finally something a search engine — and not just a direct link — can find.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Public &amp; community|Platform">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Results stop being disposable</h5>
+                        <span class="bts-entry-ver">v2.0.17</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >the moment a champion&#x27;s result stopped disappearing the day after
+                          the event.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          An organiser-controlled publish/unpublish pipeline for /results/ — the
+                          public archive, previously filled with fake preview data, can now show
+                          real, organiser-approved event results. A report-screen card handles the
+                          publish decision; the public page reads them back anonymously, with no
+                          assumption Cup Taster stays the only format that ever publishes here.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Public &amp; community</li>
+                        <li class="tag">Platform</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+              </div>
+              <div class="bts-cycle-group" data-cycle="kiulap">
+                <h3 class="bts-cycle-heading">Kiulap</h3>
+                <p class="bts-cycle-intro">
+                  <strong>Kiulap</strong>: seven phases per the project's frozen handoff spec, all
+                  shipped.
+                </p>
+                <section class="bts-chapter" id="ms-kiulap" aria-labelledby="ms-kiulap-h">
+                  <header class="bts-chapter-head">
+                    <p class="bts-chapter-meta">
+                      <span>Kiulap</span><span>v1.x</span><span>7 entries</span>
+                    </p>
+                    <h4 class="bts-chapter-title" id="ms-kiulap-h">The first format</h4>
+                    <p class="bts-chapter-sum">Phases 0–6, foundation to hardening</p>
+                  </header>
+                  <div class="bts-entries">
+                    <article class="bts-entry panel" data-tags="Groundwork">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Foundation</h5>
+                        <span class="bts-entry-ver">Phase 0</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >writing down the rules before writing any of the code they&#x27;d
+                          police.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          The scaffold, nine review subagents, four custom ESLint rules, a local
+                          Supabase stack wired into CI, and a protected main branch.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Groundwork</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Groundwork|Trust &amp; security">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Schema &amp; security</h5>
+                        <span class="bts-entry-ver">Phase 1</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >finding a live cross-org bug in review before it ever reached a real
+                          event.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Every core and Cup Taster table, row-level security across all thirteen of
+                          them, and a dedicated pgTAP gate proving every write policy carries a real
+                          WITH CHECK.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Groundwork</li>
+                        <li class="tag">Trust &amp; security</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Groundwork">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Core libraries</h5>
+                        <span class="bts-entry-ver">Phase 2</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >paying down the old app&#x27;s advancement bug before it could be reborn
+                          here.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Partitioning, ranking, advancement, countdown, time-clamping, and
+                          entitlements — pure logic, fuzz-tested against thousands of combinations
+                          before a single screen existed.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Groundwork</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Groundwork|In the room">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Registry &amp; offline</h5>
+                        <span class="bts-entry-ver">Phase 3</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >designing for the wifi at the venue, not the wifi in the office.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Person/entry registration with real dedup, an IndexedDB mirror, and a FIFO
+                          outbox queue with idempotency keys — the spine every later screen writes
+                          through.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Groundwork</li>
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Formats">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Cup Taster</h5>
+                        <span class="bts-entry-ver">Phase 4</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >&quot;correct is a count, never a column&quot; stopping being a rule on
+                          paper and becoming a real constraint.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Stage setup, roster, heat generation, live timing, the three-state scoring
+                          toggle, standings with a real tiebreak flow, a completion report, and
+                          export — the format&#x27;s full loop.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Formats</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="In the room">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Live surfaces</h5>
+                        <span class="bts-entry-ver">Phase 5</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >the point this stopped being an organiser tool and became something a
+                          whole room could watch at once.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          A publish path, a shared viewer shell over Supabase Realtime, and two real
+                          consumers — projector and phone — proven to agree on the same countdown,
+                          to the second.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                    <article class="bts-entry panel" data-tags="Groundwork|In the room">
+                      <header class="bts-entry-head">
+                        <h5 class="bts-entry-name">Hardening</h5>
+                        <span class="bts-entry-ver">Phase 6</span>
+                      </header>
+                      <p class="bts-felt">
+                        <span class="bts-k">Felt like</span>
+                        <span class="bts-felt-v"
+                          >the unglamorous work that decides whether October 4th actually goes well
+                          — closed out before the event ever started.</span
+                        >
+                      </p>
+                      <div class="bts-ship">
+                        <span class="bts-k">Shipped</span>
+                        <p class="bts-ship-v">
+                          Accessibility pass, offline soak testing, and a dry run against the real
+                          roster — local and production both green. The Cup Taster hardening pass
+                          closed before the event, leaving room for the public tools that followed.
+                        </p>
+                      </div>
+                      <ul class="bts-tags" aria-label="Topics">
+                        <li class="tag">Groundwork</li>
+                        <li class="tag">In the room</li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="bts-bio" aria-labelledby="bts-bio-h">
+          <div class="bts-bio-mark icon-frame" aria-hidden="true">
+            <svg
+              viewBox="22 16 56 48"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="50" cy="26" r="5.5" fill="currentColor" stroke="none"></circle>
+              <path d="M26 60 a24 24 0 0 1 48 0"></path>
+              <path d="M35 60 a15 15 0 0 1 30 0"></path>
+              <path d="M44 60 a6 6 0 0 1 12 0"></path>
+            </svg>
+          </div>
+          <div>
+            <p class="bts-eyebrow">The one guy</p>
+            <h2 class="bts-h2" id="bts-bio-h">Firdaus Omar</h2>
+            <p class="bts-bio-sub">
+              Grey Matter Coffee Werks &middot; Brunei — coffee first, code second, both stubborn.
+            </p>
+            <p class="bts-bio-line">
+              Founder &middot; Maker. Same person, same company, second rewrite.
+            </p>
+            <p class="bts-bio-body">
+              In the Brunei coffee scene since <b>2012</b>. Grey Matter Coffee Werks has carried the
+              torch from its predecessor, TwentyFive, for the last five years. A competitor at ABTC
+              since <b>2023</b> and a judge for Malaysia's national coffee competition in
+              <b>2019</b> — someone who has stood on both sides of the scoresheet this app produces.
+            </p>
+          </div>
+        </section>
+
+        <section class="bts-closer">
+          <div>
+            <p class="bts-eyebrow">Enough of the back room</p>
+            <h2 class="bts-h2">
+              That's the standings so far. No cliffhanger — just more tools and phases.
+            </h2>
+          </div>
+          <a class="action action-primary btn-bevel" href="/">&larr; Back to Seduh Score Next</a>
+        </section>
+      </main>
+
+      <footer class="bts-footer">
+        Seduh Score &middot; Grey Matter Coffee Werks &middot; Brunei Darussalam<br />
+        Behind the Seduh
+      </footer>
+    </div>
+    <script type="module" src="/src/marketing/btsMain.js"></script>
+  </body>
+</html>
