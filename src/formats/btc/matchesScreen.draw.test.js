@@ -170,6 +170,8 @@ describe('Draw a round panel', () => {
     [...card.querySelectorAll('.btc-draw-team .btc-match-teams')].map((n) => n.textContent);
   const preview = () => cards().map(cardTeams);
   const createButton = () => q('[data-focus-key="draw-create"]');
+  // Create is aria-disabled (not `disabled`) so its reason stays reachable by keyboard and screen reader
+  const createDisabled = () => createButton().getAttribute('aria-disabled') === 'true';
   const click = (node) => node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   function useSeed(text) {
     q('[data-field="draw-seed"]').value = text;
@@ -190,7 +192,7 @@ describe('Draw a round panel', () => {
     expect(names).toContain('Brunei · Team 1');
     expect(cards()[0].querySelectorAll('select')).toHaveLength(3);
     expect(createButton().textContent).toBe('Create 10 matches');
-    expect(createButton().disabled).toBe(false);
+    expect(createDisabled()).toBe(false);
   });
 
   it('gives the same preview for the same seed, and shows the seed it used', async () => {
@@ -285,7 +287,7 @@ describe('Draw a round panel', () => {
         }),
       );
       expect(root.textContent).toContain('1 rematch could not be avoided.');
-      expect(createButton().disabled).toBe(false); // a rematch is a warning, not a block
+      expect(createDisabled()).toBe(false); // a rematch is a warning, not a block
     });
 
     it('pairs strongest against weakest by results and records the mode, seed and round', async () => {
@@ -354,20 +356,20 @@ describe('Draw a round panel', () => {
       expect(card.getAttribute('data-state')).toBe('danger');
       expect(card.textContent).toContain('Judge j1 is from Brunei, the same country as Alpha.');
       expect(root.textContent).toContain("1 match has a judge from a team's own country");
-      expect(createButton().disabled).toBe(true);
+      expect(createDisabled()).toBe(true);
 
       const tick = q('[data-field="tick-0"]');
       tick.focus();
       tick.checked = true;
       tick.dispatchEvent(new Event('change', { bubbles: true }));
-      expect(createButton().disabled).toBe(false);
+      expect(createDisabled()).toBe(false);
       expect(cards()[0].getAttribute('data-state')).toBe('ok');
       expect(document.activeElement.getAttribute('data-field')).toBe('tick-0');
 
       // un-ticking blocks it again
       q('[data-field="tick-0"]').checked = false;
       q('[data-field="tick-0"]').dispatchEvent(new Event('change', { bubbles: true }));
-      expect(createButton().disabled).toBe(true);
+      expect(createDisabled()).toBe(true);
     });
 
     it('is cleared by changing the judge instead, and a changed judge drops an earlier tick', async () => {
@@ -376,32 +378,32 @@ describe('Draw a round panel', () => {
       await mount(db);
       // with a 4th judge the draw avoids the conflict, so make one by hand
       expect(cards()[0].getAttribute('data-state')).toBe('ok');
-      expect(createButton().disabled).toBe(false);
+      expect(createDisabled()).toBe(false);
       const slot = q('[data-field="judge-0-0"]');
       const original = slot.value;
       slot.value = 'j1';
       slot.dispatchEvent(new Event('change', { bubbles: true }));
       expect(cards()[0].getAttribute('data-state')).toBe('danger');
-      expect(createButton().disabled).toBe(true);
+      expect(createDisabled()).toBe(true);
 
       // accept it, then change another judge: the acceptance was for the arrangement the organiser looked at
       const tick = q('[data-field="tick-0"]');
       tick.checked = true;
       tick.dispatchEvent(new Event('change', { bubbles: true }));
-      expect(createButton().disabled).toBe(false);
+      expect(createDisabled()).toBe(false);
       const other = q('[data-field="judge-0-1"]');
       const otherWas = other.value;
       other.value = original; // the judge that j1 replaced is free again
       other.dispatchEvent(new Event('change', { bubbles: true }));
       expect(q('[data-field="tick-0"]').checked).toBe(false);
-      expect(createButton().disabled).toBe(true);
+      expect(createDisabled()).toBe(true);
 
       // changing the judge away from the conflict is the other way out
       const back = q('[data-field="judge-0-0"]');
       back.value = otherWas;
       back.dispatchEvent(new Event('change', { bubbles: true }));
       expect(cards()[0].getAttribute('data-state')).toBe('ok');
-      expect(createButton().disabled).toBe(false);
+      expect(createDisabled()).toBe(false);
     });
 
     it('blocks Create when a match repeats a judge', async () => {
@@ -411,7 +413,7 @@ describe('Draw a round panel', () => {
       second.value = first.value;
       second.dispatchEvent(new Event('change', { bubbles: true }));
       expect(cards()[0].textContent).toContain('Choose three different judges.');
-      expect(createButton().disabled).toBe(true);
+      expect(createDisabled()).toBe(true);
     });
 
     it('creates the round with the conflict accepted, sending the three judges as shown', async () => {
@@ -434,7 +436,7 @@ describe('Draw a round panel', () => {
       const first = q('[data-focus-key="swap-0-1"]');
       first.focus();
       click(first);
-      expect(q('[data-focus-key="swap-0-1"]').getAttribute('aria-pressed')).toBe('true');
+      expect(q('[data-focus-key="swap-0-1"]').textContent).toBe('Cancel swap');
       expect(root.textContent).toContain('Choose the team to swap with');
       const second = q('[data-focus-key="swap-1-2"]');
       second.focus();
@@ -665,6 +667,56 @@ describe('Draw a round panel', () => {
       click(createButton());
       await flush();
       expect(q('.btc-draw-status').textContent).toBe('');
+    });
+
+    it('keeps a blocked Create focusable and describing why, and a click on it writes nothing', async () => {
+      const client = await mount(
+        dbWith({
+          teams: [
+            { id: 'a', event_id: 'ev1', name: 'Alpha', country_code: 'BN' },
+            { id: 'b', event_id: 'ev1', name: 'Beta', country_code: 'SG' },
+          ],
+          judges: judgeRows([
+            ['j1', 'BN'],
+            ['j2', 'MY'],
+            ['j3', null],
+          ]),
+        }),
+      );
+      const button = createButton();
+      expect(button.disabled).toBe(false); // not natively disabled: it stays in the tab order
+      expect(createDisabled()).toBe(true);
+      expect(button.getAttribute('aria-describedby')).toBe('btc-draw-create-help');
+      expect(q('#btc-draw-create-help').textContent).toContain('changed or accepted');
+      expect(q('[data-field="judge-0-0"]').getAttribute('aria-describedby')).toBe(
+        'btc-draw-note-0',
+      );
+      button.focus();
+      click(button);
+      await flush();
+      expect(client.rpcCalls).toHaveLength(0);
+      expect(document.activeElement).toBe(createButton());
+    });
+
+    it('treats a create that never answers as unconfirmed, not as failed or done', async () => {
+      await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }), {
+        roundError: Object.assign(new Error('timed out'), { timedOut: true }),
+      });
+      click(createButton());
+      await flush();
+      expect(q('[role="alert"]').textContent).toContain(
+        'Check the matches list before trying again',
+      );
+      expect(createButton().textContent).toBe('Create 2 matches'); // not stuck on "Creating…"
+    });
+
+    it('knows up front that a round whose matches were removed is still refused by the database', async () => {
+      const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES });
+      db.btc_round_draws = [{ event_id: 'ev1', prelim_round: 1 }];
+      const client = await mount(db);
+      expect(root.textContent).toContain('its draw record is still in the database');
+      expect(createButton()).toBeNull();
+      expect(client.rpcCalls).toHaveLength(0);
     });
   });
 });

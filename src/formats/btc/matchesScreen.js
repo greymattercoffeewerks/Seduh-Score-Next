@@ -66,7 +66,7 @@ export async function mountMatchesScreen(
     round2Mode: 'random',
     seedInput: newSeed(),
     seedTyped: null, // text typed in the seed box and not yet used
-    deadRounds: new Set(), // rounds the database says exist although none of their matches are on screen
+    drawnRounds: new Set(), // rounds with a draw record in the database (create_btc_round refuses these)
     avoid: true,
     draw: null,
     refusal: null,
@@ -111,7 +111,7 @@ export async function mountMatchesScreen(
   }
 
   async function loadPersisted() {
-    const [event, teams, judges, matches, standings] = await Promise.all([
+    const [event, teams, judges, matches, standings, drawnRounds] = await Promise.all([
       findEvent(eventId, client),
       listTeams(eventId, client),
       listJudges(eventId, client),
@@ -120,8 +120,16 @@ export async function mountMatchesScreen(
       fetchPreliminaryStandings(eventId, client)
         .then((ranked) => ranked.map((row) => row.item)) // rank() wraps each row as { item, position }
         .catch(() => null),
+      // The draw record outlives its matches (Remove deletes only the match), so a round can be refused by the
+      // database with nothing on screen. A failed read just means that case is learned from the refusal instead.
+      client
+        .from('btc_round_draws')
+        .select('prelim_round')
+        .eq('event_id', eventId)
+        .then(({ data, error }) => (error ? [] : (data ?? []).map((row) => row.prelim_round)))
+        .catch(() => []),
     ]);
-    return { event, teams, judges, matches, standings };
+    return { event, teams, judges, matches, standings, drawnRounds: new Set(drawnRounds) };
   }
 
   async function attemptLoad() {
@@ -134,6 +142,7 @@ export async function mountMatchesScreen(
       state.judges = persisted.judges;
       state.matches = persisted.matches;
       state.standings = persisted.standings;
+      state.drawnRounds = persisted.drawnRounds;
       state.loadFailedMessage = null;
       state.round = defaultRound(state.matches);
       rebuildDraw();
@@ -149,6 +158,12 @@ export async function mountMatchesScreen(
 
   // ---- the Draw panel. Who plays whom comes from drawPlan.js (draw.js underneath); this only keeps the panel's state.
   const panelReady = () => state.teams.length >= 2 && state.judges.length >= 3;
+  // Rounds whose draw record is in the database although none of their matches are (removed by hand): the database
+  // refuses them for good, so the panel says so up front (drawPlan.js roundStatus) instead of offering a Create that fails.
+  const deadRounds = () =>
+    new Set(
+      [...state.drawnRounds].filter((r) => !state.matches.some((m) => roundOf(m.match) === r)),
+    );
   const drawCtx = () => ({ teams: state.teams, judges: state.judges, matches: state.matches });
 
   // Runs the draw for the chosen round with `seed` (the typed or new seed). A refusal (an odd team count, no results)
@@ -159,7 +174,7 @@ export async function mountMatchesScreen(
     state.swapPick = null;
     state.drawError = null;
     state.seedTyped = null;
-    if (!panelReady() || !roundStatus(state.round, state.matches, state.deadRounds).available) {
+    if (!panelReady() || !roundStatus(state.round, state.matches, deadRounds()).available) {
       return;
     }
     try {
@@ -267,17 +282,22 @@ export async function mountMatchesScreen(
     render();
     let toast = null;
     try {
-      await createRound(
-        {
-          orgId: state.event.org_id,
-          eventId,
-          prelimRound: draw.round,
-          mode: recordMode(draw),
-          seed: recordSeed(draw),
-          matches: roundMatchesFor(draw),
-          avoidRematches: draw.avoid,
-        },
-        client,
+      // Bounded like the page's own loads: a call that never answers must not leave "Creating…" for good. The call
+      // is not cancelled, so a timeout reloads the page's state and the organiser sees whether the round landed.
+      await raceTimeout(
+        createRound(
+          {
+            orgId: state.event.org_id,
+            eventId,
+            prelimRound: draw.round,
+            mode: recordMode(draw),
+            seed: recordSeed(draw),
+            matches: roundMatchesFor(draw),
+            avoidRematches: draw.avoid,
+          },
+          client,
+        ),
+        DEFAULT_LOAD_TIMEOUT_MS * 2,
       );
       // the round is written from here on: whatever happens next must not read as a failed create
       requestLivePublish(false);
@@ -292,8 +312,10 @@ export async function mountMatchesScreen(
       }
     } catch (err) {
       if (signal?.aborted) return;
-      const message = describeRoundError(err);
-      if (roundRefusal(err)?.reload) {
+      const message = err?.timedOut
+        ? 'This is taking too long to confirm. Check the matches list before trying again: if the round is there, it was created.'
+        : describeRoundError(err);
+      if (roundRefusal(err)?.reload || err?.timedOut) {
         // the page is out of date (round already drawn, event gone): refresh it, then say why
         try {
           const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
@@ -303,17 +325,14 @@ export async function mountMatchesScreen(
             judges: persisted.judges,
             matches: persisted.matches,
             standings: persisted.standings,
+            drawnRounds: persisted.drawnRounds,
           });
         } catch {
           // keep what is on screen; the message below still says what happened
         }
-        // The database also keeps a draw record per round. If it says the round exists but no match of it is on
-        // screen (its matches were removed), no draw can ever pass for that round from here: say so, not a loop.
-        if (
-          err?.hint === 'btc_round_exists' &&
-          !state.matches.some((m) => roundOf(m.match) === draw.round)
-        ) {
-          state.deadRounds = new Set([...state.deadRounds, draw.round]);
+        // the refusal itself proves this round has a draw record, whether or not the read above saw it
+        if (err?.hint === 'btc_round_exists') {
+          state.drawnRounds = new Set([...state.drawnRounds, draw.round]);
         }
         state.round = defaultRound(state.matches);
         rebuildDraw(newSeed());
@@ -696,7 +715,7 @@ export async function mountMatchesScreen(
             teams: state.teams,
             judges: state.judges,
             busy: state.busy,
-            statusOf: (round) => roundStatus(round, state.matches, state.deadRounds),
+            statusOf: (round) => roundStatus(round, state.matches, deadRounds()),
             on: drawHandlers,
           }),
         );

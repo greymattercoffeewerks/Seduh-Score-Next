@@ -227,7 +227,6 @@ export function renderDrawPanel(ctx) {
         attrs: {
           type: 'button',
           'aria-label': `${picked ? 'Cancel swap of' : 'Swap'} ${nameOf(teamId)}`,
-          'aria-pressed': picked ? 'true' : 'false',
           'data-focus-key': `swap-${m}-${slot}`,
         },
       });
@@ -260,6 +259,8 @@ export function renderDrawPanel(ctx) {
     if (issue.duplicate) {
       notes.push(el('p', { className: 'btc-field-error', text: 'Choose three different judges.' }));
     }
+    if (notes.length > 0)
+      for (const select of selects) select.setAttribute('aria-describedby', noteId);
     let tickRow = null;
     if (issue.conflicts.length > 0) {
       const tick = el('input', { attrs: { type: 'checkbox', 'data-field': `tick-${m}` } });
@@ -308,9 +309,12 @@ export function renderDrawPanel(ctx) {
           : {}),
     },
   });
-  if (!issues.valid) create.disabled = true;
-  setBusyDisabled(create, busy);
-  create.addEventListener('click', () => on.create());
+  // aria-disabled, not `disabled`: a disabled button leaves the tab order, so the reason (aria-describedby) could
+  // never be read. The click is refused instead; matchesScreen re-checks the same rule before it writes.
+  setBusyDisabled(create, busy || !issues.valid);
+  create.addEventListener('click', () => {
+    if (issues.valid) on.create();
+  });
   if (!issues.valid) {
     nodes.push(
       el('p', {
