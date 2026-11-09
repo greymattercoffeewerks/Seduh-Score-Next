@@ -4,7 +4,7 @@
 -- left exactly as it was; a later round blocks it; a round whose matches were removed by hand but whose draw record
 -- remains can be cleared; an unnumbered preliminary match counts as round 1; a bracket closes the rounds.
 begin;
-select plan(30);
+select plan(32);
 
 create function public.t076_u(n int) returns uuid language sql immutable as $$
   select ('76000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -111,6 +111,14 @@ select is((select count(*)::int from btc_round_draws where event_id = public.t07
 -- an unnumbered preliminary match counts as round 1; a bracket closes the rounds
 select is(public.t076_redraw(500, 1), '1', 'an unnumbered match is cleared as round 1');
 select is(public.t076_redraw(600, 1), 'btc_round_bracket_exists', 'a bracket closes the preliminary rounds');
+
+-- a delete that RLS silently turns into 0 rows (the window lock does this on a closed event) is refused, not reported as done
+select is(public.t076_create(700, 1, jsonb_build_array(public.t076_m(701, 702, 711, 712, 713), public.t076_m(703, 704, 711, 712, 713))), 'ok', 'event 700 round 1 created');
+reset role;
+create policy t076_no_delete on public.btc_matches as restrictive for delete to authenticated using (false);
+set local role authenticated;
+set local request.jwt.claim.sub = '76000000-0000-0000-0000-000000000001';
+select is(public.t076_redraw(700, 1), 'btc_redraw_blocked', 'a delete that removes nothing is refused, not counted as success');
 
 select * from finish();
 rollback;

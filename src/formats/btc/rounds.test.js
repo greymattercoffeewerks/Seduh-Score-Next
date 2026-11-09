@@ -137,6 +137,7 @@ describe('roundRefusal and describeRoundError', () => {
       'btc_redraw_nothing',
       'btc_redraw_later_round',
       'btc_redraw_scored',
+      'btc_redraw_blocked',
     ]) {
       expect(roundRefusal({ hint })?.message).toBeTruthy();
     }

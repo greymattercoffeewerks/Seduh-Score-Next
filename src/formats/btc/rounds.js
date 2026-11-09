@@ -96,6 +96,11 @@ const REFUSALS = {
     message: 'A later round has been drawn. Redraw that round first.',
     reload: true,
   },
+  btc_redraw_blocked: {
+    message:
+      'The round could not be cleared. The event may be closed to changes; nothing was removed.',
+    reload: false,
+  },
   btc_redraw_scored: {
     message:
       'A match in this round has been scored, so it cannot be redrawn. The page has been refreshed.',
