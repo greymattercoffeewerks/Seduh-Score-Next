@@ -62,28 +62,7 @@ body {
 .tour-footer a:hover {
   color: var(--color-accent);
 }
-.tour-hero {
-  position: relative;
-  padding-block: clamp(5rem, 11vw, 9rem) clamp(4.5rem, 9vw, 7.5rem);
-  isolation: isolate;
-}
-.tour-hero-grid {
-  position: absolute;
-  z-index: -1;
-  inset: 0 -12vw;
-  opacity: 0.55;
-  background-image:
-    linear-gradient(var(--color-border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
-  background-size: 3.5rem 3.5rem;
-  mask-image: linear-gradient(
-    90deg,
-    transparent,
-    var(--clr-black) 18%,
-    var(--clr-black) 82%,
-    transparent
-  );
-}
+/* The hero's spacing, headline, kicker, intro and grid are the shared .page-hero (tokens/base.css). */
 .tour-kicker,
 .tour-hero-status,
 .tour-section-label,
@@ -101,7 +80,6 @@ body {
   margin: 0 0 var(--space-4);
   color: var(--color-accent);
 }
-.tour-hero h1,
 .tour-cup h2,
 .tour-planned h2,
 .tour-community h2,
@@ -113,20 +91,6 @@ body {
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
   text-transform: uppercase;
-}
-.tour-hero h1 {
-  max-width: 58rem;
-  font-size: clamp(3.65rem, 9vw, 7.75rem);
-}
-.tour-hero h1 span {
-  color: var(--color-accent);
-}
-.tour-hero-intro {
-  max-width: 42rem;
-  margin: var(--space-6) 0 0;
-  color: var(--color-text-secondary);
-  font-size: clamp(var(--text-lg), 2vw, var(--text-xl));
-  line-height: var(--leading-relaxed);
 }
 .tour-hero-status,
 .tour-section-label {
@@ -418,10 +382,6 @@ body {
   .tour-nav a:nth-child(2) {
     display: none;
   }
-  .tour-hero h1 {
-    font-size: clamp(3.2rem, 17vw, 4.25rem);
-  }
-  .tour-hero-intro,
   .tour-copy,
   .tour-planned-intro > p,
   .tour-community-heading > p {

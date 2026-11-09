@@ -106,9 +106,9 @@ function toolCard({ number, title, eyebrow, body, href, meta, instrument, arrowT
 function buildHero() {
   return el(
     'section',
-    { className: 'community-hero', attrs: { 'aria-labelledby': 'community-title' } },
+    { className: 'community-hero page-hero', attrs: { 'aria-labelledby': 'community-title' } },
     [
-      el('div', { className: 'community-hero-grid', attrs: { 'aria-hidden': 'true' } }),
+      el('div', { className: 'page-hero-grid', attrs: { 'aria-hidden': 'true' } }),
       el('div', {
         className: 'community-hero-orbit community-hero-orbit-one',
         attrs: { 'aria-hidden': 'true' },
@@ -117,13 +117,13 @@ function buildHero() {
         className: 'community-hero-orbit community-hero-orbit-two',
         attrs: { 'aria-hidden': 'true' },
       }),
-      el('p', { className: 'community-kicker', text: 'Seduh Score / Community shelf' }),
+      el('p', { className: 'page-hero-kicker', text: 'Seduh Score / Community shelf' }),
       el('h1', { id: 'community-title' }, [
         document.createTextNode('Useful on the '),
         el('span', { text: 'day of.' }),
       ]),
       el('p', {
-        className: 'community-intro',
+        className: 'page-hero-intro',
         text: 'A growing collection of practical tools for coffee people running things, making things, and bringing a room together.',
       }),
       el('div', { className: 'community-hero-note' }, [
