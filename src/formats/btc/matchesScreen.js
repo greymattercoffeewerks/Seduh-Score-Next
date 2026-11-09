@@ -66,6 +66,7 @@ export async function mountMatchesScreen(
     round2Mode: 'random',
     seedInput: newSeed(),
     seedTyped: null, // text typed in the seed box and not yet used
+    scoredRounds: new Set(), // rounds the database refused to redraw because something in them is scored
     listStale: false, // a write succeeded but the matches could not be re-read
     drawnRounds: new Set(), // rounds with a draw record in the database (create_btc_round refuses these)
     avoid: true,
@@ -179,7 +180,10 @@ export async function mountMatchesScreen(
     state.refusal = null;
     state.swapPick = null;
     state.drawError = null;
-    if (!panelReady() || !roundStatus(state.round, state.matches, deadRounds()).available) {
+    if (
+      !panelReady() ||
+      !roundStatus(state.round, state.matches, deadRounds(), state.scoredRounds).available
+    ) {
       return;
     }
     try {
@@ -324,7 +328,10 @@ export async function mountMatchesScreen(
         DEFAULT_LOAD_TIMEOUT_MS * 2,
       );
       await reloadPersisted();
+      // the server cleared it, so the screen does too even when the re-read failed (it would keep the old matches)
+      state.matches = state.matches.filter((m) => roundOf(m.match) !== round);
       state.drawnRounds = new Set([...state.drawnRounds].filter((r) => r !== round));
+      state.scoredRounds = new Set([...state.scoredRounds].filter((r) => r !== round));
       requestLivePublish(false);
       state.round = round;
       state.seedTyped = null;
@@ -337,8 +344,15 @@ export async function mountMatchesScreen(
         ? 'This is taking too long to confirm. Check the matches list before trying again.'
         : describeRoundError(err);
       state.drawErrorFresh = true;
+      // the database knows about scores the screen cannot see (votes, bonuses, times): remember, so Redraw stops being offered
+      if (err?.hint === 'btc_redraw_scored')
+        state.scoredRounds = new Set([...state.scoredRounds, round]);
       if (roundRefusal(err)?.reload || err?.timedOut) {
         await reloadPersisted();
+        // a redraw that timed out may still have landed: the display must follow
+        if (err?.timedOut && !state.matches.some((m) => roundOf(m.match) === round)) {
+          requestLivePublish(false);
+        }
         state.round = round; // stay on the round the organiser was looking at
         const error = state.drawError;
         rebuildDraw(newSeed());
@@ -808,7 +822,8 @@ export async function mountMatchesScreen(
             teams: state.teams,
             judges: state.judges,
             busy: state.busy,
-            statusOf: (round) => roundStatus(round, state.matches, deadRounds()),
+            statusOf: (round) =>
+              roundStatus(round, state.matches, deadRounds(), state.scoredRounds),
             on: drawHandlers,
           }),
         );
