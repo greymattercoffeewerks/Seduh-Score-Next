@@ -38,6 +38,10 @@ const {
   isOperationQueued,
   describeConfirmError,
   roundLabel,
+  maxTimeSecsForRound,
+  checkFinishTime,
+  finishTimeMessage,
+  finishTimeProblems,
   JUDGES_PER_MATCH,
   TOKENS_PER_CUP,
 } = await import('./scoring.js');
@@ -242,7 +246,7 @@ describe('computeScores: pinned to the SQL btc_match_scores fixtures', () => {
 });
 
 describe('buildConfirmParams', () => {
-  it('builds the RPC arguments, mapping fastest and signature, keeping raw time text', () => {
+  it('builds the RPC arguments, mapping fastest and signature, sending the tidied time text', () => {
     const draft = {
       ...draftWith(20, 'split'),
       fastest: 'team2',
@@ -255,8 +259,8 @@ describe('buildConfirmParams', () => {
     expect(params.p_fastest_team_id).toBe(T2);
     expect(params.p_team1_signature).toBe(true);
     expect(params.p_team2_signature).toBe(false);
-    expect(params.p_team1_time_note).toBe(' 8:42 ');
-    expect(params.p_team2_time_note).toBe(' 9:10 ');
+    expect(params.p_team1_time_note).toBe('8:42');
+    expect(params.p_team2_time_note).toBe('9:10');
   });
 
   it('omits unscored cups rather than sending a placeholder, so the RPC can give its friendly missing-cups error', () => {
@@ -589,5 +593,108 @@ describe('describeConfirmError', () => {
     expect(describeConfirmError({ code: '42501' })).toBeNull();
     expect(describeConfirmError(new Error('boom'))).toBeNull();
     expect(describeConfirmError(undefined)).toBeNull();
+  });
+});
+
+describe('finish-time limit and check (Build D)', () => {
+  it('the limit is 10:00 for the preliminary round and 15:00 for every knockout round', () => {
+    expect(maxTimeSecsForRound('preliminary')).toBe(600);
+    for (const round of ['quarterfinal', 'semifinal', 'third_place', 'final']) {
+      expect(maxTimeSecsForRound(round)).toBe(900);
+    }
+  });
+
+  it('tidies 08:42 to 8:42 and keeps 12:05 as typed in a knockout round (within 15:00)', () => {
+    expect(checkFinishTime('08:42', 'preliminary')).toEqual({
+      status: 'ok',
+      text: '8:42',
+      secs: 522,
+    });
+    expect(checkFinishTime(' 8:42 ', 'preliminary').text).toBe('8:42');
+    expect(checkFinishTime('12:05', 'final')).toEqual({ status: 'ok', text: '12:05', secs: 725 });
+  });
+
+  it.each(['8.42', '8:60', '842', '8 min', '8:4', '1:2:03', '-8:42', '8:42pm', ':42'])(
+    'refuses %s as invalid, with the minutes-and-seconds message',
+    (text) => {
+      const result = checkFinishTime(text, 'preliminary');
+      expect(result.status).toBe('invalid');
+      expect(result.secs).toBeNull();
+      expect(finishTimeMessage(result, 'preliminary')).toBe('Use minutes and seconds, like 8:42');
+    },
+  );
+
+  it('caps 10:30 to 10:00 with the capped message, keeps 9:59 and 10:00, refuses 0:00', () => {
+    const over = checkFinishTime('10:30', 'preliminary');
+    expect(over).toEqual({ status: 'capped', text: '10:00', secs: 600 });
+    expect(finishTimeMessage(over, 'preliminary')).toBe('Capped at the 10:00 limit');
+    expect(checkFinishTime('9:59', 'preliminary')).toEqual({
+      status: 'ok',
+      text: '9:59',
+      secs: 599,
+    });
+    // Exactly the limit is a team that did not finish: kept, and not reported as capped.
+    expect(checkFinishTime('10:00', 'preliminary').status).toBe('ok');
+    expect(checkFinishTime('0:00', 'preliminary').status).toBe('zero');
+    expect(checkFinishTime('00:00', 'preliminary').status).toBe('zero');
+    expect(finishTimeMessage(checkFinishTime('0:00', 'preliminary'), 'preliminary')).toBe(
+      'Enter a time longer than 0:00',
+    );
+  });
+
+  it('the cap follows the round: 12:05 is kept in a knockout round and 15:01 is capped to 15:00', () => {
+    expect(checkFinishTime('15:01', 'semifinal')).toEqual({
+      status: 'capped',
+      text: '15:00',
+      secs: 900,
+    });
+    expect(finishTimeMessage(checkFinishTime('15:01', 'semifinal'), 'semifinal')).toBe(
+      'Capped at the 15:00 limit',
+    );
+  });
+
+  it('empty is a status of its own, with no message', () => {
+    expect(checkFinishTime('', 'final').status).toBe('empty');
+    expect(checkFinishTime('   ', 'final').status).toBe('empty');
+    expect(checkFinishTime(undefined, 'final').status).toBe('empty');
+    expect(finishTimeMessage(checkFinishTime('', 'final'), 'final')).toBeNull();
+  });
+
+  it('empty blocks a confirm only for a preliminary match', () => {
+    const draft = (team1, team2) => ({ ...blankDraft(), times: { team1, team2 } });
+    expect(finishTimeProblems(draft('', ''), 'preliminary').map((p) => p.which)).toEqual([
+      'team1',
+      'team2',
+    ]);
+    expect(finishTimeProblems(draft('8:42', ''), 'preliminary')).toEqual([
+      { which: 'team2', status: 'empty' },
+    ]);
+    expect(finishTimeProblems(draft('', ''), 'quarterfinal')).toEqual([]);
+    expect(finishTimeProblems(draft('8:42', '9:10'), 'preliminary')).toEqual([]);
+  });
+
+  it('an invalid or zero time blocks a confirm in every round, even where empty would not', () => {
+    const draft = (team1, team2) => ({ ...blankDraft(), times: { team1, team2 } });
+    expect(finishTimeProblems(draft('8.42', '9:10'), 'final')).toEqual([
+      { which: 'team1', status: 'invalid' },
+    ]);
+    expect(finishTimeProblems(draft('8:42', '0:00'), 'final')).toEqual([
+      { which: 'team2', status: 'zero' },
+    ]);
+    // An over-limit time is capped, not blocked.
+    expect(finishTimeProblems(draft('10:30', '9:10'), 'preliminary')).toEqual([]);
+  });
+
+  it('buildConfirmParams sends the tidied and capped text', () => {
+    const draft = { ...draftWith(15, 'split'), times: { team1: '08:42', team2: '10:30' } };
+    const params = buildConfirmParams(match, draft, 'preliminary');
+    expect(params.p_team1_time_note).toBe('8:42');
+    expect(params.p_team2_time_note).toBe('10:00');
+    const knockout = buildConfirmParams(
+      match,
+      { ...draftWith(20, 'split'), times: { team1: '', team2: '' } },
+      'final',
+    );
+    expect(knockout.p_team1_time_note).toBe('');
   });
 });

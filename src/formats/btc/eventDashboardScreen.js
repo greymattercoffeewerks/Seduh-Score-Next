@@ -17,6 +17,7 @@ import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { buildHomepageListingCard } from '../../core/homepageListingCard.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
+import { countPreliminaryMatchesWithoutTimes } from './matches.js';
 
 export async function mountBtcEventDashboardScreen(
   root,
@@ -25,6 +26,7 @@ export async function mountBtcEventDashboardScreen(
   let loadFailedMessage = null;
   let loading = false;
   let focusAfterRender = null;
+  let withoutTimes = 0;
 
   function renderLoading() {
     root.innerHTML = '';
@@ -68,9 +70,16 @@ export async function mountBtcEventDashboardScreen(
     loading = true;
     renderLoading();
     let event = null;
+    // Started beside the event read, not after it: an advisory line must not double the wait on a slow link.
+    const countRead = raceTimeout(
+      countPreliminaryMatchesWithoutTimes(eventId, client),
+      DEFAULT_LOAD_TIMEOUT_MS,
+    ).catch(() => 0);
     try {
       event = await raceTimeout(findEvent(eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
       loadFailedMessage = null;
+      // An advisory line: a failed or slow read never stops the dashboard from opening.
+      withoutTimes = await countRead;
       // Same Retry-only focus gap Cup Taster's own eventDashboardScreen.js closed —
       // the very first successful mount is already covered by router.js's own
       // generic heading fallback, but a Retry click doesn't go through the router.
@@ -132,6 +141,16 @@ export async function mountBtcEventDashboardScreen(
         }),
       ]),
     );
+
+    if (withoutTimes > 0) {
+      container.appendChild(
+        el('p', {
+          className: 'screen-feedback btc-checklist-line',
+          text: `${withoutTimes} preliminary ${withoutTimes === 1 ? 'match has' : 'matches have'} no times`,
+          attrs: { role: 'status' },
+        }),
+      );
+    }
 
     container.appendChild(buildHomepageListingCard(event, { client }));
 
