@@ -70,6 +70,9 @@
 }
 
 .bts-crumb {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
   font-size: var(--text-sm);
   text-decoration: none;
 }
@@ -283,7 +286,8 @@
   grid-auto-columns: minmax(12.5rem, 1fr);
   gap: var(--space-2);
   margin: 0;
-  padding: 0 0 var(--space-1);
+  /* room for the focus ring inside the scroll box, which clips anything outside it */
+  padding: var(--space-1);
   list-style: none;
   overflow-x: auto;
   scroll-snap-type: x proximity;
@@ -303,7 +307,8 @@
   width: 100%;
   min-width: 0;
   padding: var(--space-4);
-  border: var(--border-hairline) solid var(--color-border);
+  /* The edge comes from .panel in the markup; the radius is repeated (same token) because the drift guard reads
+     only this file. */
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
@@ -321,7 +326,7 @@ a.bts-cycle:hover {
   background: var(--color-surface-sunken);
 }
 
-.bts-cycle[aria-selected='true'] {
+.bts-cycle[aria-current='true'] {
   border-color: var(--color-accent);
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
@@ -342,7 +347,7 @@ a.bts-cycle:hover {
   line-height: var(--leading-tight);
 }
 
-.bts-cycle[aria-selected='true'] .bts-cycle-place {
+.bts-cycle[aria-current='true'] .bts-cycle-place {
   color: var(--color-accent);
 }
 
@@ -387,10 +392,12 @@ a.bts-cycle:hover {
 }
 
 .bts-why summary {
+  /* stays a list item so the disclosure triangle keeps showing; the line height makes the 44px target */
+  line-height: var(--tap-target-min);
   cursor: pointer;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .bts-why p {
@@ -426,7 +433,7 @@ a.bts-cycle:hover {
 }
 
 .bts-search input::placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .bts-chips {
@@ -470,7 +477,7 @@ a.bts-cycle:hover {
   font-size: var(--text-2xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .bts-toc-list {
@@ -478,7 +485,7 @@ a.bts-cycle:hover {
   gap: 2px;
   max-height: 70vh;
   margin: 0;
-  padding: 0;
+  padding: var(--space-1);
   overflow-y: auto;
   list-style: none;
 }
@@ -516,7 +523,7 @@ a.bts-cycle:hover {
   gap: var(--space-2);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -534,8 +541,9 @@ a.bts-cycle:hover {
   color: var(--color-accent);
 }
 
-.bts-toc.is-dim .bts-ch {
-  opacity: 0.5;
+/* Not colour alone: the chapter being read also carries a mark before its title. */
+.bts-ch[aria-current='true'] .bts-ch-title::before {
+  content: '▸ ';
 }
 
 /* pane */
@@ -706,7 +714,7 @@ a.bts-cycle:hover {
 }
 
 .bts-ship .bts-k {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .bts-ship-v {
@@ -790,7 +798,7 @@ a.bts-cycle:hover {
   font-size: var(--text-3xs);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .bts-pg span {
@@ -889,7 +897,7 @@ a.bts-cycle:hover {
   border-top: var(--border-hairline) solid var(--color-border);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 /* ---- narrow: 360px first ---- */
@@ -916,7 +924,7 @@ a.bts-cycle:hover {
     display: flex;
     gap: var(--space-2);
     max-height: none;
-    padding-bottom: var(--space-2);
+    padding: var(--space-1) var(--space-1) var(--space-2);
     overflow-x: auto;
     overflow-y: visible;
   }

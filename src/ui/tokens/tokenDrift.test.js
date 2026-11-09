@@ -307,6 +307,7 @@ describe('Petrol token drift guard', () => {
   it('scans the stylesheets (a vacuous scan would pass anything)', () => {
     expect(sources.filter((s) => s.file.endsWith('.css')).length).toBeGreaterThan(30);
     expect(htmlFiles).toContain('app/index.html');
+    expect(htmlFiles).toContain('bts/index.html');
     expect(htmlFiles.length).toBeGreaterThan(8);
     expect(sources.some((s) => s.file.startsWith(TOKENS_DIR))).toBe(false);
     // Behind the Seduh links the tokens since 2026-11-09, so its stylesheet is in scope like any other page's.

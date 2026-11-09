@@ -259,8 +259,8 @@ specific to Petrol:
   other page since 2026-11-09 (it used to keep a copy in `public/bts/`), so `src/marketing/bts.css` is drift-guarded.
 - **Motion exceptions** (named, deliberately not on the tokens): ambient loops (splash glow, Guess the Bean
   float/bob/spin, landing marquee, the live blip's 4s breathe), the Guess the Bean
-  celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), stepped animations (Random
-  Selector flip, timer blink) and bts's tactile `--ease-out-back`.
+  celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), and stepped animations (Random
+  Selector flip, timer blink).
 
 ## Public pages: shared primitives
 

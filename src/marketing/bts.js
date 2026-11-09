@@ -54,8 +54,13 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
   const filtering = () => Boolean(state.q || state.tag || state.live);
 
   root.classList.add('bts-js');
+  // Listeners on the page root and the window go through one signal, so destroy() can remove them (tests mount the
+  // reader many times on the same body).
+  const listening = new AbortController();
+  const { signal } = listening;
 
   // ---- folding the long Shipped text ----
+  let folds = 0;
   for (const entry of pane.querySelectorAll('.bts-entry')) {
     const tags = entry.querySelector('.bts-tags');
     const foot = make(doc, 'div', { className: 'bts-entry-foot' });
@@ -64,10 +69,13 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
     const text = entry.querySelector('.bts-ship-v');
     if (text.textContent.length > FOLD_AT) {
       text.classList.add('is-folded');
+      folds += 1;
+      text.id = text.id || `bts-ship-${folds}`;
       const toggle = make(doc, 'button', {
         type: 'button',
         className: 'bts-text-btn',
         'aria-expanded': 'false',
+        'aria-controls': text.id,
         text: 'Read the whole receipt',
       });
       toggle.addEventListener('click', () => {
@@ -79,12 +87,10 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
     }
   }
 
-  // ---- the rail becomes tabs ----
+  // ---- the rail picks a cycle (plain links marked aria-current, not an ARIA tab set: no arrow keys needed) ----
   const cycleLinks = [...root.querySelectorAll('a.bts-cycle[data-cycle]')];
   const rail = root.querySelector('.bts-rail');
-  if (rail) rail.setAttribute('role', 'tablist');
   for (const link of cycleLinks) {
-    link.setAttribute('role', 'tab');
     link.addEventListener('click', (event) => {
       event.preventDefault();
       const first = chapters.find((c) => cycleOf(c) === link.dataset.cycle);
@@ -170,9 +176,10 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
     const cycle = cycleOf(current);
 
     for (const link of cycleLinks) {
-      link.setAttribute('aria-selected', String(!filtering() && link.dataset.cycle === cycle));
+      if (!filtering() && link.dataset.cycle === cycle) link.setAttribute('aria-current', 'true');
+      else link.removeAttribute('aria-current');
     }
-    const selected = cycleLinks.find((l) => l.getAttribute('aria-selected') === 'true');
+    const selected = cycleLinks.find((l) => l.hasAttribute('aria-current'));
     if (selected && rail && rail.scrollWidth > rail.clientWidth) {
       const r = rail.getBoundingClientRect();
       const b = selected.getBoundingClientRect();
@@ -212,11 +219,10 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
             },
             [meta, make(doc, 'span', { className: 'bts-ch-title', text: titleOf(c) })],
           );
-          button.addEventListener('click', () => go(c.id, false));
+          button.addEventListener('click', () => go(c.id, false, 'toc'));
           return make(doc, 'li', {}, [button]);
         }),
     );
-    toc.classList.toggle('is-dim', filtering());
 
     if (filtering()) {
       let hits = 0;
@@ -257,7 +263,7 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
       });
       clear.addEventListener('click', () => {
         search.value = '';
-        go(state.chapter, false);
+        go(state.chapter, false, 'search');
       });
       result.replaceChildren(
         make(doc, 'span', {
@@ -267,14 +273,12 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
         }),
         clear,
       );
-      result.hidden = false;
       empty.hidden = hits > 0;
       pager.hidden = true;
       return;
     }
 
-    // One chapter.
-    result.hidden = true;
+    // One chapter. The status region stays in the tree (empty), so its next text is announced.
     result.replaceChildren();
     empty.hidden = true;
     for (const group of groups) {
@@ -296,7 +300,7 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
         { type: 'button', className: `bts-pg panel ${className}` },
         [make(doc, 'small', { text: label }), make(doc, 'span', { text: titleOf(target) })],
       );
-      button.addEventListener('click', () => go(target.id, true));
+      button.addEventListener('click', () => go(target.id, true, 'heading'));
       return button;
     };
     pager.replaceChildren(
@@ -306,7 +310,9 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
     pager.hidden = false;
   }
 
-  function go(id, scroll) {
+  // render() rebuilds the chapter list and the pager, so the control that was pressed is gone afterwards. `focus`
+  // says where keyboard focus lands instead: the same chapter in the list, the new chapter's heading, or search.
+  function go(id, scroll, focus) {
     const target = byId.get(ALIASES[id] || id);
     if (!target) return;
     state.chapter = target.id;
@@ -326,25 +332,39 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
     if (scroll && typeof build.scrollIntoView === 'function') {
       build.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
     }
+    if (focus === 'toc') {
+      const again = tocList.querySelector(`[data-chapter="${target.id}"]`);
+      if (again) again.focus({ preventScroll: true });
+    } else if (focus === 'heading') {
+      const heading = target.querySelector('.bts-chapter-title');
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: Boolean(scroll) });
+    } else if (focus === 'search') {
+      search.focus({ preventScroll: true });
+    }
   }
 
   // In-page links to a chapter (the live-run card, the scoreboard) open it in the reader.
-  root.addEventListener('click', (event) => {
-    const link = event.target.closest('a[href^="#"]');
-    if (!link || link.classList.contains('bts-cycle')) return;
-    const id = link.getAttribute('href').slice(1);
-    if (!byId.has(ALIASES[id] || id)) return;
-    event.preventDefault();
-    go(id, true);
-  });
+  root.addEventListener(
+    'click',
+    (event) => {
+      const link = event.target.closest('a[href^="#"]');
+      if (!link || link.classList.contains('bts-cycle')) return;
+      const id = link.getAttribute('href').slice(1);
+      if (!byId.has(ALIASES[id] || id)) return;
+      event.preventDefault();
+      go(id, true, 'heading');
+    },
+    { signal },
+  );
 
   const fromHash = () => {
     const id = win && win.location ? win.location.hash.slice(1) : '';
     if (byId.has(ALIASES[id] || id)) go(id, false);
     else render();
   };
-  if (win) win.addEventListener('hashchange', fromHash);
+  if (win) win.addEventListener('hashchange', fromHash, { signal });
   fromHash();
 
-  return { go, state, render };
+  return { go, state, render, destroy: () => listening.abort() };
 }
