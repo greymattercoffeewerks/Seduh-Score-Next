@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountLandingScreen } from './landingScreen.js';
 import { mountPricingScreen } from './pricingScreen.js';
+import { mountResultsScreen } from './resultsScreen.js';
+import { mountTourScreen } from './tourScreen.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
 
@@ -89,6 +91,69 @@ describe('public pages use the shared primitives', () => {
     }
     for (const word of root.querySelectorAll('.pricing-cell-soon .pricing-cell-word')) {
       expect(cls(word, 'tag') && cls(word, 'tag-dashed')).toBe(true);
+    }
+  });
+});
+
+// The pages that open on a headline share ONE hero (.page-hero in base.css): the same distance from the header,
+// headline size, kicker, intro and grid backdrop. Each used to carry its own copy and they drifted apart.
+describe('the headline pages open on the shared page hero', () => {
+  beforeEach(() => vi.stubGlobal('matchMedia', () => ({ matches: true })));
+
+  const expectSharedHero = (root, page) => {
+    const hero = root.querySelector('.page-hero');
+    expect(hero, `${page} hero`).not.toBeNull();
+    expect(hero.querySelector(':scope > .page-hero-grid')?.getAttribute('aria-hidden'), page).toBe(
+      'true',
+    );
+    expect(hero.querySelector(':scope > .page-hero-kicker'), `${page} kicker`).not.toBeNull();
+    expect(hero.querySelector(':scope > h1'), `${page} h1`).not.toBeNull();
+    expect(hero.querySelector(':scope > .page-hero-intro'), `${page} intro`).not.toBeNull();
+  };
+
+  it('tour, pricing, community hub and results', async () => {
+    expectSharedHero(mount(mountTourScreen), 'tour');
+    expectSharedHero(mount(mountPricingScreen), 'pricing');
+
+    const hub = document.createElement('div');
+    hub.id = 'app';
+    document.body.replaceChildren(hub);
+    await import('../community/communityHub.js');
+    expectSharedHero(hub, 'community');
+
+    const results = document.createElement('div');
+    const row = { event_id: 'ev1', payload: { eventName: 'E' }, published_at: '2026-09-14' };
+    const builder = {
+      select: () => builder,
+      order: () => builder,
+      then: (resolve) => resolve({ data: [row], error: null }),
+    };
+    await mountResultsScreen(results, { client: { from: () => builder } });
+    expectSharedHero(results, 'results');
+  });
+
+  const read = (path) => readFileSync(join(process.cwd(), path), 'utf8');
+
+  it('no page restates the hero headline or sizes an h1 of its own', () => {
+    for (const path of [
+      'src/marketing/tour.css',
+      'src/marketing/pricing.css',
+      'src/marketing/results.css',
+      'src/community/communityHub.css',
+    ]) {
+      const css = read(path);
+      expect(css, path).not.toMatch(/-hero\s*[>+~]?\s*h1\b/);
+      // any rule whose selector names an h1 must not set a font-size (the hero's size is base.css's)
+      for (const [, selector, body] of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+        if (/\bh1\b/.test(selector))
+          expect(body, `${path}: ${selector.trim()}`).not.toMatch(/font-size/);
+      }
+    }
+  });
+
+  it('each of the four pages loads the token layer that defines .page-hero', () => {
+    for (const page of ['tour', 'community', 'pricing', 'results']) {
+      expect(read(`${page}/index.html`), page).toMatch(/href="\/src\/ui\/tokens\/index\.css"/);
     }
   });
 });
