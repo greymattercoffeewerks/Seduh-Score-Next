@@ -1,11 +1,12 @@
 # Status — read this first
 
-_As of 2026-11-08, app version 3.6.4. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-09, app version 4.0.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
+- **Behind the Seduh** is rebuilt as a one-chapter reader (`/bts/`) in a PR into `dev` (branch `claude/bts-reader-kiarong`), not yet merged or released; v4.0.0 is the Throwdown major bump caught up (see `CHANGELOG.md`).
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built; the archive feed (1b) is in `queue` mode and
