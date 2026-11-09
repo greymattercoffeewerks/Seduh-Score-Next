@@ -23,6 +23,12 @@ function fakeClient(initialDb, { roundError, beforeError } = {}) {
         return builder;
       },
       order: () => builder,
+      delete: () => ({
+        eq: (col, val) => {
+          db[table] = (db[table] ?? []).filter((row) => row[col] !== val);
+          return Promise.resolve({ data: null, error: null });
+        },
+      }),
       single() {
         const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
         return Promise.resolve({ data: rows[0] ?? null, error: null });
@@ -762,6 +768,38 @@ describe('Draw a round panel', () => {
       expect(q('[data-field="draw-round-2"]').checked).toBe(true);
       expect(cards()).toHaveLength(2); // round 2 is now offered, from the refreshed matches
       expect(q('[role="alert"]').textContent).toContain('already been drawn');
+    });
+
+    it('refuses to offer a round again after its matches are all removed in the same visit', async () => {
+      const client = await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }));
+      click(createButton());
+      await flush();
+      expect(client.rpcCalls.filter(([n]) => n === 'create_btc_round')).toHaveLength(1);
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      for (let i = 0; i < 2; i += 1) {
+        click(root.querySelector('[data-focus-key^="remove-match-"]'));
+        await flush();
+      }
+      expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(0);
+      expect(root.textContent).toContain('its draw record is still in the database');
+      expect(createButton()).toBeNull();
+    });
+
+    it('keeps a typed but unused seed when the round, mode or repeat-opponent option changes', async () => {
+      const matches = [
+        match('r1a', 1, 'confirmed', 't01', 't02'),
+        match('r1b', 1, 'confirmed', 't03', 't04'),
+      ];
+      await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches }));
+      const box = q('[data-field="draw-seed"]');
+      box.value = 'half-typed';
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      const avoid = q('[data-field="draw-avoid"]');
+      avoid.checked = false;
+      avoid.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(q('[data-field="draw-seed"]').value).toBe('half-typed');
+      choose('draw-mode-random');
+      expect(q('[data-field="draw-seed"]').value).toBe('half-typed');
     });
   });
 });

@@ -302,16 +302,20 @@ export function renderDrawPanel(ctx) {
     attrs: {
       type: 'button',
       'data-focus-key': 'draw-create',
-      ...(state.error
-        ? { 'aria-describedby': ERROR_ID }
-        : !issues.valid
-          ? { 'aria-describedby': HELP_ID }
-          : {}),
+      ...(state.error || !issues.valid
+        ? {
+            'aria-describedby': [state.error ? ERROR_ID : null, issues.valid ? null : HELP_ID]
+              .filter(Boolean)
+              .join(' '),
+          }
+        : {}),
     },
   });
   // aria-disabled, not `disabled`: a disabled button leaves the tab order, so the reason (aria-describedby) could
   // never be read. The click is refused instead; matchesScreen re-checks the same rule before it writes.
-  setBusyDisabled(create, busy || !issues.valid);
+  setBusyDisabled(create, busy);
+  // blocked by the draw itself (not busy): aria-disabled only, aria-busy would say something is updating
+  if (!issues.valid) create.setAttribute('aria-disabled', 'true');
   create.addEventListener('click', () => {
     if (issues.valid) on.create();
   });
