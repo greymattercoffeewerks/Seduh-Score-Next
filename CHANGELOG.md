@@ -8,6 +8,88 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build C: ties on points only, finish times on the tie card · 2026-11-10
+
+**Task:** BTC March 2027 engine spec item C (`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` section 5, Option A). Branch `claude/btc-c-points-ties-8a4f2f`, PR into `dev`. **Not merged; migration `20261110100000` NOT in the cloud.** No version bump (the release PR decides).
+
+- **Rule:** a seeding tie is **equal points**; wins no longer define or order one. Migration `20261110100000_btc_seeding_points_only.sql` deletes every existing decision explicitly (the cloud table had zero rows on 2026-11-10), drops `btc_seeding_tiebreaks.wins` (the unique key is now `(event_id, total_points, tiebreak_rank)`), recreates `btc_seeding_order` (partition and order by points, then the recorded rank, then team id; `wins` stays in the output for display) and replaces `record_btc_seeding_tiebreak` and `generate_btc_bracket` (points only; hints, signatures, grants, lock and org checks unchanged). The rollback block restores the (points, wins) definitions as in force before (the view from `20261010100000`, the functions from `20261011140000`); run in a transaction, re-applied, schema fingerprint identical.
+- **New view `btc_prelim_times`** (`event_id`, `team_id`, `prelim_round`, `time_note`): confirmed preliminary matches only, one row per team per match from the side it played, a NULL round reads as 1, `security_invoker`, `authenticated` only.
+- **Client:** `seedingTieGroups` keys `points-<n>` (no `wins` on a group); `seeding.js` adds `fetchPrelimTimes`, `teamTimeEvidence`, `groupTimeEvidence` (round 1 and 2 as typed or "no time"; a sum of rounds 1 and 2 only when each has one time and both parse through `parseDuration`; "both at the limit" when both equal `maxTimeSecsForRound('preliminary')`; a group where every team is at the limit says the times cannot separate them). `seedingCard.js` shows them ("Sum 17:17 (for guidance, you decide)"). Times are read only when some team is level; a failed read shows "could not be loaded", never "no time". `standings.js` gives equal points one shared position (wins only sort rows within it).
+- **Tests:** new pgTAP `077` (all five 5.3 cases, `btc_prelim_times` reads, runs the migration's own rollback block inside the test); `029`, `040`, `042`, `056` updated for the dropped column; JS tests for grouping, the card wording, the sum, the limit, the failed read. Full `npm test` (one failure, the Windows-only `check-doc-budgets` brokenLinks path quirk), `npm run lint`, all 78 pgTAP files pass. Card checked at 360px (no overflow).
+- **Reviews:** `schema-guardian` no 🔴 (nit: rollback copy drops blank lines inside function bodies, harmless); `security-reviewer` clean; `scoring-auditor` no 🔴 (nit: an unordered tie that is not across the cut-off seeds by team id while the standings list the team with more wins first; kept, the card labels such seeds provisional; pre-existing: members can edit a rank directly); `ui-accessibility-reviewer` no 🔴 (nit: the derived sum could carry a spoken long form like `formatDurationLong`; not done, the typed round times cannot); `module-boundary-checker` clean (nit: the card shows an over-limit typed time as typed, not clamped; intended); `code-reviewer` no 🔴 (two nits fixed: the refusal path passes `times: []`, a comment); `test-auditor` 1 🔴 (the unresolved group's order could not tell wins-ascending from team-id order: fixed by re-indexing the 077 fixture so id, wins-ascending and wins-descending all differ; I confirmed it by reading before fixing, no separate checker run) and nits (screen test for equal points with different wins, no update or delete privilege on the view, anon on the restored view: all added; the forward DELETE is not exercised, accepted).
+- **Deviation:** none from the spec. `btc_prelim_times` reads NULL `prelim_round` as 1 (spec silent).
+- **Open follow-up:** after merge, push `20261110100000` to the cloud by hand (`apply_migration`) and compare `list_migrations`. Spec sections 5.1 and 5.3 still describe the pre-C state (historical), and `MARCH-2027-BOARD-PLAN.md` lines about "points and wins" are stale.
+
+---
+
+## Organiser UX S2: BTC event dashboard as a run sheet · 2026-11-10
+
+**Task:** Organiser UX stage S2 of five (mockup U1 and U4; S1 is the shared kit that S2 builds on). Branch `claude/organiser-ux-s2-btc-dashboard-6ca85a`, commits `bdea8a5` (build) and `524e89e` (review fixes), on top of `origin/dev`. **Version: not bumped in this PR** (the app stays 4.1.0). By `docs/versioning.md` the dashboard is a minor (a visible redesign); the owner or the release PR picks the number.
+
+- **Why:** the event dashboard was a list of links. The organiser needs to see where the event is in its run and what to do next. It is now a run sheet built on the S1 kit.
+- **New `src/formats/btc/runSheet.js`** (pure):
+  - `deriveBtcPhases`: Setup, Round 1, Round 2, The cut, Knockout, Podium.
+  - `deriveBtcWarnings` and `btcLinks`.
+  - `setupState`.
+  - **Blocked** means the organiser can fix it now, for example a team with no country (Q3). **Waiting** means it depends on an earlier phase.
+  - Round 2 holds every preliminary round numbered 2 or more. An unnumbered preliminary match counts as round 1, as `btc_prelim_round` does.
+  - No "stuck in scoring" timer (Q4). A scoring round that runs long is not flagged, because the time limit is a committee judgement that is not set yet.
+- **New `src/formats/btc/dashboardData.js`** (reads only). Required reads (event, teams, judges, matches, bracket) fail the screen. Advisory reads (times count, seeding order, bracket scores, queued confirms) return null, and the warning that needs them stays silent rather than wrong.
+- **`eventDashboardScreen.js` rebuilt on the S1 kit:** status band, heading and meta, next-step card, a phase grid with a 380px rail (Needs attention, Live now, Records). At 360px the links nav is 2x2.
+- **Live card take-over:** `publishBtcLive({event, takeOver: true}, allOutboxHandlers)`. The read-back of `live_sessions` must name THIS event, and the wait is bounded at 8s.
+- **Records card:** the JSON dispute pack only. The CSV waits on Q10 (committee scoresheet), so there is no dead button.
+- **`words.js` `teamLabelNode`:** flag and code, `aria-hidden`, with a full-name sr-only label. Used for teams in `setupScreen`. Judges stay plain text.
+- **`main.js`** passes the outbox handlers and `audienceLinks` to the BTC dashboard.
+- **Beta band:** `is_shadow` is not in the database or `findEvent` yet, so the beta band shows only once that column is selected.
+- **Checks:**
+  - `runSheet.test.js` 38, `eventDashboardScreen.test.js` 20 (rewritten), `words.test.js` 36 (2 new). 94 pass across the three files.
+  - ESLint and prettier clean on `src/formats/btc` and `src/main.js`.
+  - `vite build` succeeds. The app build now carries the flag chunks (61 SVGs and the `gb` chunk), which closes S1's build caveat.
+  - Not run in this session: the full suite. Two failures seen earlier are unrelated: `tools/check-doc-budgets.test.js` (a fake `/r/` path on Windows, the same as S1) and `src/core/countryFlag.test.js` "loads the real file", which timed out once under full-suite load and passes alone.
+- **Reviews** (one pass; fixes landed in `524e89e`):
+  - `module-boundary-checker`: clean.
+  - `offline-sync-auditor`: clean. 1 nit, not fixed: a second click after the kit's timeout queues a redundant idempotent intent.
+  - `ui-accessibility-reviewer` (360px first): no important. 1 nit, a slow take-over reported as a failure. Fixed by the 8s bound.
+  - `test-auditor`: 1 important, the take-over read-back did not prove it named THIS event. Fixed with an other-event test.
+  - `code-reviewer`: 2 nits, both fixed. The podium said "Not decided" on a failed scores read, and a stray non-UTF-8 byte sat in a comment.
+  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor` (no migration, RLS, RPC or scoring change).
+- **Open follow-ups:**
+  - **Not final:** the PR into `dev` is not open, and no reviewer re-run on `524e89e` is recorded beyond the passing tests.
+  - The cut phase's links (Settle ties, Generate bracket) go to the bracket screen via `btcLinks().cut` until S4 moves them to Standings.
+  - The judge-country warning cannot tell whether a conflict was ticked, so it cannot separate a ticked conflict from an unticked one.
+  - The Records CSV waits on Q10.
+  - `is_shadow` needs adding to the database and `findEvent` before the beta band can show.
+  - The Behind the Seduh page (`/bts/`) has no entry for the run sheet yet.
+  - The offline-sync nit above.
+
+## Organiser UX S1: core organiser kit · 2026-11-10
+
+**Task:** Organiser UX stage S1 of five (S1 the shared core kit; S2 to S5 build the organiser screens on it and wait for S1). Branch `claude/organiser-ux-s1-core-kit-1f2e99`, commits `41b544f`, `bb0e37a` (review fixes), `4f93e2b` (hardening). **PR into `dev` open, not merged.** No version bump: the owner's brief calls this groundwork, not a release (see the version note below). No migration, no `src/formats/`, no `main.js` change.
+
+- **Why:** the owner approved the BTC organiser mockup on 2026-11-10 as the build reference. The screens need one shared set of cards first (status, flags, run sheet, warnings, live and records cards), so each format's screens do not reinvent them. The kit is format-agnostic: nothing in `src/core/` knows BTC.
+- **New core modules** (`src/core/`):
+  - `statusBand`: test band unchanged; beta band for `is_shadow`; no flag means no band; TEST wins over beta; the caller may override the wording. The default wording is BTC-flavoured, kept per the owner's brief; the override is the fix for the boundary finding below.
+  - `countryFlag`: 243 self-hosted flag-icons 7.2.3 SVGs (MIT; licence in `src/core/flags/LICENSE`), loaded lazily through `import.meta.glob`, so no flag is in the bundle until a screen imports the module.
+  - `runSheet`, `eventWarnings`, `liveCard`, `recordsCard`: the cards themselves.
+  - `kitLink`: `safeHref` refuses the backslash and tab forms of a protocol-relative link; `kitId` gives each card unique ids.
+- **Also:** `.ok-*` styles in `src/ui/tokens/components.css`; `audienceLinksCard` now exports `loadQrFactory` and `qrSvg` so the kit reuses the existing QR path; a paragraph in `src/core/CLAUDE.md`; the `organiserKit.preview.html` harness (tablet landscape and phone at 360px), added to the pinned list in `components.test.js`.
+- **Checks:** ESLint and prettier clean; vitest green across 233 files except `tools/check-doc-budgets.test.js` (`brokenLinks`), a known Windows-only failure unrelated to this change.
+- **Build caveat:** the app-level Vite build tree-shakes the flags until S2 imports `countryFlag`, so the production flag chunks were verified only through a library build. **S2 must check the app build once it imports them.**
+- **Credits:** the Privacy/credits page lists no third-party libraries, so no credit line was added. The licence file travels with the flags. Whether the credits page should name flag-icons is the owner's call.
+- **Reviews** (findings and how each ended; all fixes landed in `bb0e37a` and `4f93e2b`):
+  - `module-boundary-checker`: 1 important, BTC wording baked into the `statusBand` default. Fixed by the caller override; default kept per the brief. 1 nit, the take-over timeout. Fixed.
+  - `ui-accessibility-reviewer` (360px first): 2 important, focus lost after "Show this event" and an untimed take-over. Both fixed. 3 nits, not-started edge contrast, a stale copy timer and next-step wrap. All fixed.
+  - `code-reviewer`: 0 important. 3 nits, a stale timer, duplicate ids and `liveLinks` missing `safeHref`. All fixed.
+  - `test-auditor`: 2 important, the retry path untested and `safeHref` backslash and tab forms untested. Both fixed. 4 nits: the literal colour check and flag-test independence fixed; one-primary-button states fixed; wall-clock waits left (see follow-ups).
+  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor`. No RLS, RPC, Storage, migration, scoring or outbox change.
+- **Open follow-ups:**
+  - **Re-review on the final diff is not recorded.** The reviewers that raised important findings (`module-boundary-checker`, `ui-accessibility-reviewer`, `test-auditor`) need a run on the fix commits before the PR merges. This entry is not final until that is recorded.
+  - Wall-clock waits in the kit's tests (test-auditor nit) are not yet in `docs/backlog/`.
+  - S2 to S5 wait for S1 to merge.
+- **Version note:** a build session that ships groundwork nobody can use yet would normally take a patch under `docs/versioning.md`. This task was held at no bump on the owner's explicit instruction. The owner or the release PR decides whether it rides a patch later.
+
+---
+
 ## Version rules moved to docs/versioning.md; minor defined · 2026-11-10
 
 **Task:** owner request 2026-11-10, not a roadmap item. Branch `docs/versioning-guide` in worktree `C:\Dev\seduh-score-next-ver`: commit `4bbdc88` plus the review fixes, committed together. **Committed, not pushed.** No version bump: docs, a PR template and a test comment only, and nothing the deployed app is built from changed (`docs/versioning.md`, "The CI gate").

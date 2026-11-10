@@ -3,6 +3,7 @@ import {
   KNOCKOUT_PLACES,
   matchLine,
   teamLabel,
+  teamLabelNode,
   withCountry,
   winsText,
   qualifyingNote,
@@ -368,5 +369,24 @@ describe('withCountry', () => {
     expect(withCountry('Team Kopi', { code: 'BN', name: 'Brunei' })).toBe('Brunei · Team Kopi');
     expect(withCountry('Team Kopi', null)).toBe('Team Kopi');
     expect(withCountry('Team Kopi', undefined)).toBe('Team Kopi');
+  });
+});
+
+describe('teamLabelNode', () => {
+  const noFlagFiles = { resolveUrl: () => Promise.resolve('/flag.svg') };
+
+  it('shows the flag and code beside the name, hidden from assistive tech, with the full label as hidden text', () => {
+    const node = teamLabelNode({ name: 'Team Kopi', country_code: 'BN' }, noFlagFiles);
+    const flag = node.querySelector('.ok-flag');
+    expect(flag.textContent).toBe('BN');
+    expect(flag.getAttribute('aria-hidden')).toBe('true');
+    expect(node.querySelector('.sr-only').textContent).toBe('Brunei · Team Kopi');
+    expect(node.textContent).toContain('Team Kopi');
+  });
+
+  it('is just the name when there is no country', () => {
+    const node = teamLabelNode({ name: 'Team Kopi', country_code: null });
+    expect(node.textContent).toBe('Team Kopi');
+    expect(node.querySelector('.ok-flag')).toBeNull();
   });
 });

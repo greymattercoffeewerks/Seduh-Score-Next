@@ -1,12 +1,16 @@
-// BTC seeding ties (T-BTC seeding tie rule). Teams level on points AND wins are seeded by the order the
-// organiser records (record_btc_seeding_tiebreak), because seeds decide who plays whom and, for the group
-// level across the 8th/9th places, who qualifies at all. The database owns the seed order
-// (btc_seeding_order, migration 20261010100000): this module reads it, finds the level groups, checks a draft
-// order and records it. It never ranks anyone itself.
+// BTC seeding ties (T-BTC seeding tie rule; points only since Build C, migration 20261110100000). Teams level
+// on POINTS are seeded by the order the organiser records (record_btc_seeding_tiebreak), because seeds decide
+// who plays whom and, for the group level across the 8th/9th places, who qualifies at all. Wins neither order
+// nor define a tie. The database owns the seed order (btc_seeding_order): this module reads it, finds the level
+// groups, checks a draft order and records it. It never ranks anyone itself. The committee's rule is points,
+// then the sum of each team's two preliminary finish times, decided by hand: this module also reads those
+// times (btc_prelim_times) so the card can show them, for guidance only.
 import { getSupabase } from '../../core/supabaseClient.js';
 import { describeError } from '../../core/errors.js';
 import { checkReason, REASON_MAX } from '../../core/reason.js';
+import { parseDuration } from '../../core/duration.js';
 import { KNOCKOUT_PLACES } from './words.js';
+import { maxTimeSecsForRound } from './scoring.js';
 
 export const SEEDING_REASON_MAX = REASON_MAX;
 
@@ -40,17 +44,31 @@ export async function fetchSeedingOrder(eventId, client = getSupabase()) {
     .sort((a, b) => a.seed - b.seed);
 }
 
-// The groups of teams that are level on (points, wins), in seed order. `decidesQualifying` marks the group
+// Each team's typed preliminary finish times, one row per team per confirmed preliminary match: { teamId,
+// round, note } (round: an unnumbered match is round 1, as the view says; note: the text as typed, or null).
+// Any failed read throws (including a view that does not exist yet): the caller maps that to "the times could
+// not be loaded", never to "no time".
+export async function fetchPrelimTimes(eventId, client = getSupabase()) {
+  const { data, error } = await client.from('btc_prelim_times').select('*').eq('event_id', eventId);
+  if (error) throw error;
+  return data.map((row) => ({
+    teamId: row.team_id,
+    round: Number(row.prelim_round),
+    note: row.time_note ?? null,
+  }));
+}
+
+// The groups of teams that are level on points, in seed order. `decidesQualifying` marks the group
 // level ACROSS the cut-off (it holds both the last qualifying seed and the first that misses out): only that
 // one blocks the bracket until it is ordered, but any group's order decides seeds. `resolved` is the
 // database's own word (every team in the group ranked, on the numbers that are tied now, in a group of the
 // size it is now). `reason` is the recorded one, and only for a resolved group: a partly ordered group has no
-// decision to quote. The key is "points-wins": digits and one hyphen, so it is safe in an attribute.
+// decision to quote. The key is "points-<n>": digits and one hyphen, so it is safe in an attribute.
 export function seedingTieGroups(rows) {
   const byKey = new Map();
   for (const row of rows) {
     if (row.tiedCount < 2) continue;
-    const key = `${row.totalPoints}-${row.wins}`;
+    const key = `points-${row.totalPoints}`;
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(row);
   }
@@ -61,7 +79,6 @@ export function seedingTieGroups(rows) {
       return {
         key,
         points: teams[0].totalPoints,
-        wins: teams[0].wins,
         teams,
         firstSeed: teams[0].seed,
         lastSeed: teams[teams.length - 1].seed,
@@ -72,6 +89,46 @@ export function seedingTieGroups(rows) {
       };
     })
     .sort((a, b) => a.firstSeed - b.firstSeed);
+}
+
+// What the tie card shows for one team: its typed time per preliminary round (round 1 and 2 always, any
+// other round that has a match too), a sum when rounds 1 and 2 each have exactly one time and both parse, and
+// whether it is at the preliminary limit in both. Pure. An old or demo row with no time is "no time" (an empty
+// `notes`), never an error; a time that does not parse is shown as typed and leaves the sum out. The sum is
+// for guidance only: the organiser decides.
+export const TIE_SUM_ROUNDS = [1, 2];
+
+export function teamTimeEvidence(teamId, times) {
+  const mine = times.filter((row) => row.teamId === teamId);
+  const rounds = [...new Set([...TIE_SUM_ROUNDS, ...mine.map((row) => row.round)])].sort(
+    (a, b) => a - b,
+  );
+  const perRound = rounds.map((round) => ({
+    round,
+    notes: mine
+      .filter((row) => row.round === round)
+      .map((row) => (row.note == null ? '' : String(row.note).trim()))
+      .filter((note) => note !== ''),
+  }));
+  const secsOf = (round) => {
+    const notes = perRound.find((entry) => entry.round === round)?.notes ?? [];
+    return notes.length === 1 ? parseDuration(notes[0]) : null;
+  };
+  const [first, second] = TIE_SUM_ROUNDS.map(secsOf);
+  const limit = maxTimeSecsForRound('preliminary');
+  return {
+    teamId,
+    rounds: perRound,
+    sumSecs: first !== null && second !== null ? first + second : null,
+    bothAtLimit: first === limit && second === limit,
+  };
+}
+
+// The evidence for every team of a group. `allAtLimit`: every team is at the limit in both rounds, so the times
+// cannot separate them (still the organiser's decision; what the committee wants then is open).
+export function groupTimeEvidence(group, times) {
+  const teams = group.teams.map((team) => teamTimeEvidence(team.teamId, times));
+  return { teams, allAtLimit: teams.length > 0 && teams.every((team) => team.bothAtLimit) };
 }
 
 // The groups that stop the bracket being generated: level across the cut-off and not yet ordered.

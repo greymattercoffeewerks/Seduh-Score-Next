@@ -34,14 +34,14 @@ const SURFACES = [
 
 // The QR library is only needed here, and only once the card is on screen: loaded on demand so it is not
 // part of every page load. A failure to load it leaves the link, which is the real thing, on screen.
-async function loadQrFactory() {
+export async function loadQrFactory() {
   const module = await import('qrcode-generator');
   return module.default;
 }
 
 // Renders the code for `url` as an SVG string, or null when it cannot be made (the library missing or the
 // text too long for any code size).
-function qrSvg(qrcode, url) {
+export function qrSvg(qrcode, url) {
   try {
     const code = qrcode(0, 'M');
     code.addData(url);

@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-09, app version 4.0.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-10, app version 4.1.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -28,15 +28,17 @@ picks the top 8 by points, ties by the sum of each team's two finish times, conf
 longer order the standings). Both round-2 methods (random without repeats, and by round-1 results) are to be built and
 selectable. Registration opens January 2027. Round 2's by-results method is strongest against weakest. Engine spec draft: [`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md`](docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md).
 
+**Organiser UX (five stages, reference: the approved BTC organiser mockup).** S1, the shared core kit, is a PR into `dev` from `claude/organiser-ux-s1-core-kit-1f2e99`, not merged. S2, the BTC event dashboard as a run sheet (a minor by docs/versioning.md; not bumped in the PR), is on `claude/organiser-ux-s2-btc-dashboard-6ca85a`; its PR into `dev` is not open yet. S3 to S5 wait.
+
 ## Handover (2026-11-08, cloud session to a local session)
 
 - **Branch `ccr-dd9e5a6c-bxhucc`, PR #427 into `dev` (open).** #426 (docs trim, STATUS.md, backlog triage, the first plan)
   is merged into `dev`. #427 is docs only: the plan and the engine spec follow the owner's answers. No code, migration or
   cloud change exists for BTC yet. Start with `git fetch origin && git checkout ccr-dd9e5a6c-bxhucc`, then `npm ci`.
 - **Next step:** the engine spec's tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
-  check, B draw and `create_btc_round`, C ties on points only. E, A and D are in `dev`; B part 1 (the draw engine: pure
+  check, B draw and `create_btc_round`, C ties on points only (built on `claude/btc-c-points-ties-8a4f2f`, PR into `dev`, migration `20261110100000` not in the cloud). E, A and D are in `dev`; B part 1 (the draw engine: pure
   functions, `btc_round_draws`, `create_btc_round`, no screen) shipped in release 3.6.7 (check `CHANGELOG.md` for whether its
-  migration `20261109100000` is in the cloud); B part 2 (the Draw panel on the matches screen, front end only) is built on `claude/btc-b2-draw-panel-9d6d63` with a PR into `dev`; B part 3 (redraw a round: migration `20261109110000`, not in the cloud) is on `claude/btc-b3-redraw-round-9d6d63`, PR stacked on part 2's; C remains. Each has its reviewers in section
+  migration `20261109100000` is in the cloud); B part 2 (the Draw panel on the matches screen, front end only) is built on `claude/btc-b2-draw-panel-9d6d63` with a PR into `dev`; B part 3 (redraw a round: migration `20261109110000`, not in the cloud) is on `claude/btc-b3-redraw-round-9d6d63`, PR stacked on part 2's. Each has its reviewers in section
   8 of the spec; the C migration and the draw are scoring and tenancy gates.
 - **Waiting on the committee (none blocks the first tasks):** the real team count and round-2 method; which round has the
   10-minute limit and which the 15 (the default is 10:00 preliminary, 15:00 knockout, one function to edit); odd team

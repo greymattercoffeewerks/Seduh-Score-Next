@@ -16,7 +16,7 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams, createTeam, updateTeam, removeTeam } from './teams.js';
 import { listJudges, createJudge, updateJudge, removeJudge } from './judges.js';
 import { countrySelect } from './countrySelect.js';
-import { teamLabel } from './words.js';
+import { teamLabel, teamLabelNode } from './words.js';
 import {
   DEMO_TEAM_COUNT,
   DEMO_JUDGE_COUNT,
@@ -631,7 +631,7 @@ export async function mountSetupScreen(
         'div',
         { className: 'btc-roster-info' },
         [
-          el('span', { text: teamLabel(item) }),
+          withRepresents ? teamLabelNode(item) : el('span', { text: teamLabel(item) }),
           withRepresents && item.represents
             ? el('span', { className: 'stage-meta', text: `Represents: ${item.represents}` })
             : null,

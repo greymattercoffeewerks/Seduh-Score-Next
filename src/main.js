@@ -563,7 +563,7 @@ function requireAuth(
 // accepted redundant read rather than restructuring that already-shipped, already-
 // reviewed screen to accept a pre-fetched event; same tradeoff requireAuth() below
 // already makes with its own extra getSession() hop.
-function mountEventHomeScreen(outlet, { eventId, client, signal }) {
+function mountEventHomeScreen(outlet, { eventId, client, signal, audienceLinks = null }) {
   async function attempt() {
     let event;
     try {
@@ -575,7 +575,14 @@ function mountEventHomeScreen(outlet, { eventId, client, signal }) {
     }
     if (signal?.aborted) return undefined;
     if (event.format === 'btc') {
-      return mountBtcEventDashboardScreen(outlet, { eventId, client, signal });
+      return mountBtcEventDashboardScreen(outlet, {
+        eventId,
+        client,
+        signal,
+        // The composed map, so "Show this event" flushes behind any other format's queued writes.
+        handlers: allOutboxHandlers(client),
+        audienceLinks,
+      });
     }
     if (event.format === 'throwdown') {
       return mountThrowdownEventScreen(outlet, {
@@ -882,8 +889,13 @@ export function buildRoutes({
     {
       pattern: '/events/:eventId',
       mount: requireAuth(
-        (outlet, { eventId, client, signal }) =>
-          mountEventHomeScreen(outlet, { eventId, client, signal }),
+        (outlet, { eventId, client, signal, orgSlug }) =>
+          mountEventHomeScreen(outlet, {
+            eventId,
+            client,
+            signal,
+            audienceLinks: audienceLinksFor(orgSlug),
+          }),
         auth,
       ),
     },

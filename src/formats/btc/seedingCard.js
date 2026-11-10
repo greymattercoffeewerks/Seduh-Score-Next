@@ -1,19 +1,20 @@
-// The "teams level in the standings" card of BTC's bracket screen: each group of teams level on points and
-// wins, whether the organiser has put them in order, and the form to do it. Pure rendering of the state the
+// The "teams level in the standings" card of BTC's bracket screen: each group of teams level on points (wins
+// do not define a tie), each team's preliminary finish times and their sum for guidance, whether the organiser has put them in order, and the form to do it. Pure rendering of the state the
 // screen passes in (bracketScreen.js owns the state, the saves, the focus and the announcements); the data and
 // the rules are seeding.js's. Meaning is in words, never colour alone: a group says "Not ordered yet" or
 // "Ordered", and the one that decides who qualifies says so.
 import { el, labeledField, setBusyDisabled } from '../../core/dom.js';
 import { ordinalLabel } from '../../core/ordinal.js';
-import { winsText } from './words.js';
-import { SEEDING_REASON_MAX, blockingGroups } from './seeding.js';
+import { formatDuration } from '../../core/duration.js';
+import { maxTimeSecsForRound } from './scoring.js';
+import { SEEDING_REASON_MAX, blockingGroups, groupTimeEvidence } from './seeding.js';
 
 function groupTitle(group) {
   const places =
     group.firstSeed === group.lastSeed
       ? ordinalLabel(group.firstSeed)
       : `${ordinalLabel(group.firstSeed)} to ${ordinalLabel(group.lastSeed)}`;
-  return `Level for ${places} · ${group.points} pts, ${winsText(group.wins)}`;
+  return `Level for ${places} · ${group.points} pts`;
 }
 
 // An end-of-list move button is inert but must stay focusable (a disabled button would drop keyboard focus
@@ -22,11 +23,37 @@ function markInert(button) {
   button.setAttribute('aria-disabled', 'true');
 }
 
+// One team's times as lines of text: "Round 1: 8:12 · Round 2: no time", and, when both parse, the sum with
+// its label. Times are shown as typed; a missing one says "no time".
+function timeLines(evidence) {
+  const rounds = evidence.rounds
+    .map(
+      ({ round, notes }) => `Round ${round}: ${notes.length > 0 ? notes.join(' and ') : 'no time'}`,
+    )
+    .join(' · ');
+  const lines = [rounds];
+  if (evidence.bothAtLimit) {
+    lines.push(`Both at the limit (${formatDuration(maxTimeSecsForRound('preliminary'))} each)`);
+  } else if (evidence.sumSecs !== null) {
+    lines.push(`Sum ${formatDuration(evidence.sumSecs)} (for guidance, you decide)`);
+  }
+  return lines;
+}
+
 // teamName(teamId) is the screen's own roster lookup.
+// times: the event's preliminary finish times (seeding.js fetchPrelimTimes), or null when they could not be read.
 // handlers: { onOpen(group), onMove(teamId, delta), onReasonInput(value), onSubmit(domEvent, group), onCancel(), onRetry() }
 // form: null | { groupKey, orderedTeamIds, reason, error: { field, message } | null }
 // readFailed: the last read of the seed order failed (what is shown, if anything, may be out of date).
-export function renderSeedingTies({ groups, form, busy, teamName, readFailed, handlers }) {
+export function renderSeedingTies({
+  groups,
+  form,
+  busy,
+  teamName,
+  readFailed,
+  times = [],
+  handlers,
+}) {
   if (groups.length === 0 && !readFailed) return null;
   const heading = el('h2', { text: 'Teams level in the standings' });
 
@@ -60,6 +87,7 @@ export function renderSeedingTies({ groups, form, busy, teamName, readFailed, ha
   // being changed each row shows the seed that team WOULD get. A group nobody has ordered shows the seeds it
   // has by default, and says they are provisional.
   function renderOrderList(group, teams, { editable, provisional }) {
+    const evidence = times ? groupTimeEvidence(group, times) : null;
     return el(
       'ol',
       {
@@ -75,6 +103,17 @@ export function renderSeedingTies({ groups, form, busy, teamName, readFailed, ha
           }),
           el('span', { className: 'btc-seeding-team', text: teamName(team.teamId) }),
         ];
+        // Right after the team name, before the buttons: the evidence is read with the team it is about, and a full-width row.
+        const mine = evidence?.teams.find((entry) => entry.teamId === team.teamId);
+        if (mine) {
+          children.push(
+            el(
+              'div',
+              { className: 'stage-meta btc-seeding-times' },
+              timeLines(mine).map((line) => el('p', { text: line })),
+            ),
+          );
+        }
         if (editable) {
           const name = teamName(team.teamId);
           const makeMove = (label, ariaLabel, key) =>
@@ -229,6 +268,17 @@ export function renderSeedingTies({ groups, form, busy, teamName, readFailed, ha
             })
           : null,
         el('p', { className: 'stage-meta', text: status }),
+        times === null
+          ? el('p', {
+              className: 'stage-meta',
+              text: 'The finish times could not be loaded just now, so none are shown here.',
+            })
+          : groupTimeEvidence(group, times).allAtLimit
+            ? el('p', {
+                className: 'stage-meta',
+                text: `Every team here is at the ${formatDuration(maxTimeSecsForRound('preliminary'))} limit in both rounds, so the times cannot separate them. You decide.`,
+              })
+            : null,
         editing
           ? renderForm(group)
           : renderOrderList(group, group.teams, { editable: false, provisional: !group.resolved }),
@@ -244,7 +294,7 @@ export function renderSeedingTies({ groups, form, busy, teamName, readFailed, ha
       heading,
       el('p', {
         className: 'stage-meta',
-        text: 'Seeds decide who plays whom. Where teams are level on points and wins, put them in the order you decided.',
+        text: 'Seeds decide who plays whom. Where teams are level on points, put them in the order you decided. The usual rule is the lower sum of the two finish times, shown below for guidance.',
       }),
       readFailed
         ? el('div', { className: 'btc-seeding-stale' }, [
