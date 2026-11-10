@@ -1,10 +1,31 @@
 /*
- * BTC event dashboard screen (app-wiring pass). Base screen-chrome shapes live in
- * shared.css, loaded alongside this file.
+ * BTC event dashboard (organiser run sheet). The cards themselves are the organiser kit's (`.ok-*`, in
+ * src/ui/tokens/components.css); this file holds only the page's own spacing and the row of screen links.
+ * Phone width first: the links are a 2-by-2 grid at the bottom, a single row from tablet width.
  */
 
-.btc-event-dashboard-actions {
+.btc-event-dashboard-screen {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.btc-event-dashboard-screen > h1 {
+  margin: 0;
+}
+
+.btc-event-meta {
+  margin: 0;
+}
+
+.btc-event-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+@media (min-width: 48rem) {
+  .btc-event-links {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }

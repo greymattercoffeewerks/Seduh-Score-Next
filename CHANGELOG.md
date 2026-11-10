@@ -22,6 +22,46 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Organiser UX S2: BTC event dashboard as a run sheet · 2026-11-10
+
+**Task:** Organiser UX stage S2 of five (mockup U1 and U4; S1 is the shared kit that S2 builds on). Branch `claude/organiser-ux-s2-btc-dashboard-6ca85a`, commits `bdea8a5` (build) and `524e89e` (review fixes), on top of `origin/dev`. **Version: not bumped in this PR** (the app stays 4.1.0). By `docs/versioning.md` the dashboard is a minor (a visible redesign); the owner or the release PR picks the number.
+
+- **Why:** the event dashboard was a list of links. The organiser needs to see where the event is in its run and what to do next. It is now a run sheet built on the S1 kit.
+- **New `src/formats/btc/runSheet.js`** (pure):
+  - `deriveBtcPhases`: Setup, Round 1, Round 2, The cut, Knockout, Podium.
+  - `deriveBtcWarnings` and `btcLinks`.
+  - `setupState`.
+  - **Blocked** means the organiser can fix it now, for example a team with no country (Q3). **Waiting** means it depends on an earlier phase.
+  - Round 2 holds every preliminary round numbered 2 or more. An unnumbered preliminary match counts as round 1, as `btc_prelim_round` does.
+  - No "stuck in scoring" timer (Q4). A scoring round that runs long is not flagged, because the time limit is a committee judgement that is not set yet.
+- **New `src/formats/btc/dashboardData.js`** (reads only). Required reads (event, teams, judges, matches, bracket) fail the screen. Advisory reads (times count, seeding order, bracket scores, queued confirms) return null, and the warning that needs them stays silent rather than wrong.
+- **`eventDashboardScreen.js` rebuilt on the S1 kit:** status band, heading and meta, next-step card, a phase grid with a 380px rail (Needs attention, Live now, Records). At 360px the links nav is 2x2.
+- **Live card take-over:** `publishBtcLive({event, takeOver: true}, allOutboxHandlers)`. The read-back of `live_sessions` must name THIS event, and the wait is bounded at 8s.
+- **Records card:** the JSON dispute pack only. The CSV waits on Q10 (committee scoresheet), so there is no dead button.
+- **`words.js` `teamLabelNode`:** flag and code, `aria-hidden`, with a full-name sr-only label. Used for teams in `setupScreen`. Judges stay plain text.
+- **`main.js`** passes the outbox handlers and `audienceLinks` to the BTC dashboard.
+- **Beta band:** `is_shadow` is not in the database or `findEvent` yet, so the beta band shows only once that column is selected.
+- **Checks:**
+  - `runSheet.test.js` 38, `eventDashboardScreen.test.js` 20 (rewritten), `words.test.js` 36 (2 new). 94 pass across the three files.
+  - ESLint and prettier clean on `src/formats/btc` and `src/main.js`.
+  - `vite build` succeeds. The app build now carries the flag chunks (61 SVGs and the `gb` chunk), which closes S1's build caveat.
+  - Not run in this session: the full suite. Two failures seen earlier are unrelated: `tools/check-doc-budgets.test.js` (a fake `/r/` path on Windows, the same as S1) and `src/core/countryFlag.test.js` "loads the real file", which timed out once under full-suite load and passes alone.
+- **Reviews** (one pass; fixes landed in `524e89e`):
+  - `module-boundary-checker`: clean.
+  - `offline-sync-auditor`: clean. 1 nit, not fixed: a second click after the kit's timeout queues a redundant idempotent intent.
+  - `ui-accessibility-reviewer` (360px first): no important. 1 nit, a slow take-over reported as a failure. Fixed by the 8s bound.
+  - `test-auditor`: 1 important, the take-over read-back did not prove it named THIS event. Fixed with an other-event test.
+  - `code-reviewer`: 2 nits, both fixed. The podium said "Not decided" on a failed scores read, and a stray non-UTF-8 byte sat in a comment.
+  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor` (no migration, RLS, RPC or scoring change).
+- **Open follow-ups:**
+  - **Not final:** the PR into `dev` is not open, and no reviewer re-run on `524e89e` is recorded beyond the passing tests.
+  - The cut phase's links (Settle ties, Generate bracket) go to the bracket screen via `btcLinks().cut` until S4 moves them to Standings.
+  - The judge-country warning cannot tell whether a conflict was ticked, so it cannot separate a ticked conflict from an unticked one.
+  - The Records CSV waits on Q10.
+  - `is_shadow` needs adding to the database and `findEvent` before the beta band can show.
+  - The Behind the Seduh page (`/bts/`) has no entry for the run sheet yet.
+  - The offline-sync nit above.
+
 ## Organiser UX S1: core organiser kit · 2026-11-10
 
 **Task:** Organiser UX stage S1 of five (S1 the shared core kit; S2 to S5 build the organiser screens on it and wait for S1). Branch `claude/organiser-ux-s1-core-kit-1f2e99`, commits `41b544f`, `bb0e37a` (review fixes), `4f93e2b` (hardening). **PR into `dev` open, not merged.** No version bump: the owner's brief calls this groundwork, not a release (see the version note below). No migration, no `src/formats/`, no `main.js` change.
