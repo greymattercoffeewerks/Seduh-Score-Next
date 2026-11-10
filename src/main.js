@@ -46,6 +46,7 @@ import { mountSetupScreen as mountBtcSetupScreen } from './formats/btc/setupScre
 import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/matchesScreen.js';
 import { mountStandingsScreen as mountBtcStandingsScreen } from './formats/btc/standingsScreen.js';
 import { mountBracketScreen as mountBtcBracketScreen } from './formats/btc/bracketScreen.js';
+import { mountSignOffScreen as mountBtcSignOffScreen } from './formats/btc/signOffScreen.js';
 import { mountScoringScreen as mountBtcScoringScreen } from './formats/btc/scoringScreen.js';
 import { flushOutbox, listPendingOperations, setOutboxOwner } from './core/outbox.js';
 import { btcOutboxHandlers, btcOperationLabels } from './formats/btc/outboxHandlers.js';
@@ -1007,7 +1008,20 @@ export function buildRoutes({
       pattern: '/events/:eventId/btc/standings',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
-          mountBtcStandingsScreen(outlet, { eventId, client, signal }),
+          mountBtcStandingsScreen(outlet, {
+            eventId,
+            client,
+            signal,
+            handlers: allOutboxHandlers(client),
+          }),
+        auth,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/btc/sign-off',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountBtcSignOffScreen(outlet, { eventId, client, signal }),
         auth,
       ),
     },

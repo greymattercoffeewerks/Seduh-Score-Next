@@ -170,6 +170,8 @@ The sync status in the header (T-HARDEN.header-sync-chip, 2026-10-08) is a short
 `/app/`, so this keeps an explicit exit route available even at sign-in; do not split the
 icon and name into separate destinations or leave either as a non-interactive faux brand.
 
+**Cut line, sign-off sheet and positions (Organiser UX S4, 2026-11-11)** — `cutLine.js` draws "the cut" for any ranked list: `describeCut({ ranked, qualifyCount, isLevel, isSettled })` is the pure wording (who is through, which level groups cross the line, whether a group is settled), `levelWords` says a level group in words, and `renderCutLine` is the DOM table with a line after place N, a rail slot for the cards beside it, and collapsible rows below the line. It never sorts or ranks: it draws the order it is handed, and says level and crossing in words, not colour alone. `signOffSheet.js` (`buildSignOff`, `renderSignOffSheet`) is a print-designed A4 page for any format's sign-off: title, status band, rows, notes of settled ties, a not-going-through list, signatories and generated-at. It decides nothing, and a `draft` status prints "NOT FINAL". Its CSS is one commented block at the end of `components.css` (`.ok-signoff*`, `@media print`). `ranking.positionsInOrder(items, isSame)` is the numbering half of `rank()` with no sort, for a caller that already has an order; a format must not copy `rank()`'s numbering instead.
+
 ## `main.js` (composition root)
 
 Not physically under `core/`, but its conventions live here since it's the wiring that

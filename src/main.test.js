@@ -94,6 +94,10 @@ const mountBtcBracketScreen = vi.fn();
 vi.mock('./formats/btc/bracketScreen.js', () => ({
   mountBracketScreen: (...args) => mountBtcBracketScreen(...args),
 }));
+const mountBtcSignOffScreen = vi.fn();
+vi.mock('./formats/btc/signOffScreen.js', () => ({
+  mountSignOffScreen: (...args) => mountBtcSignOffScreen(...args),
+}));
 const mountBtcScoringScreen = vi.fn();
 vi.mock('./formats/btc/scoringScreen.js', () => ({
   mountScoringScreen: (...args) => mountBtcScoringScreen(...args),
@@ -416,6 +420,25 @@ describe('mountApp routing', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.textContent).toContain('BTC_STANDINGS_SCREEN');
     expect(mountBtcStandingsScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 'ev1' }),
+    );
+    // Locking the top 8 generates the bracket and publishes to the live display, so it flushes with every format's
+    // handlers, as the bracket screen does.
+    expect(mountBtcStandingsScreen.mock.calls[0][1].handlers).toEqual({
+      ...cupTasterOutboxHandlers(),
+      ...btcOutboxHandlers(),
+    });
+  });
+
+  it('#/events/:eventId/btc/sign-off routes to the BTC sign-off page with the right param', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountBtcSignOffScreen, 'BTC_SIGN_OFF_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/btc/sign-off';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('BTC_SIGN_OFF_SCREEN');
+    expect(mountBtcSignOffScreen).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventId: 'ev1' }),
     );
@@ -3989,6 +4012,7 @@ describe('organisation context wiring (T-TEN.C2)', () => {
         '/btc/setup',
         '/btc/matches',
         '/btc/standings',
+        '/btc/sign-off',
         '/btc/bracket',
       ];
       for (const path of paths) {

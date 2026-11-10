@@ -29,8 +29,7 @@ const KNOCKOUT_SHORT = {
   third_place: 'Third',
 };
 
-// The routes the dashboard sends the organiser to. One table so a stage that moves a section (the cut moves to
-// Standings in stage S4) changes one line.
+// The routes the dashboard sends the organiser to. One table so a stage that moves a section changes one line.
 export function btcLinks(eventId) {
   const base = `#/events/${encodeURIComponent(eventId)}/btc`;
   return {
@@ -38,8 +37,9 @@ export function btcLinks(eventId) {
     matches: `${base}/matches`,
     standings: `${base}/standings`,
     bracket: `${base}/bracket`,
-    // The tie card and "Generate bracket" are on the bracket screen today.
-    cut: `${base}/bracket`,
+    // The cut (the tie card, "Lock the top 8" and the sign-off sheet) is a section of Standings since S4.
+    cut: `${base}/standings`,
+    signOff: `${base}/sign-off`,
     scoring: (matchId) => `${base}/matches/${encodeURIComponent(matchId)}/scoring`,
   };
 }
@@ -237,7 +237,7 @@ function cutPhase(data, links, r1, r2) {
       ...base,
       status: 'in_progress',
       count: 'Could not check ties',
-      nextAction: { label: 'Open the bracket', href: links.cut },
+      nextAction: { label: 'Open Standings', href: links.cut },
       blockedReason: null,
     };
   }
@@ -255,7 +255,7 @@ function cutPhase(data, links, r1, r2) {
     ...base,
     status: 'in_progress',
     count: 'Top 8 ready',
-    nextAction: { label: 'Generate bracket', href: links.cut },
+    nextAction: { label: 'Lock the top 8', href: links.cut },
     blockedReason: null,
   };
 }

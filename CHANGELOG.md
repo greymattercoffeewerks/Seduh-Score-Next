@@ -8,6 +8,22 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## v4.4.0: Organiser UX S4, the cut to the top 8 and its sign-off sheet · 2026-11-11
+
+**Task:** Organiser UX S4 (spec U3, mockup Q8). Branch `claude/organiser-ux-s4-the-cut-8e554b`, **PR into `dev`, not merged.** **Minor** (`npm version minor`, 4.3.0 to 4.4.0): a new screen and route an organiser can use. No migration, no cloud change.
+
+- **Standings holds the cut.** A cut table (place, team with flag and code, R1 pts, R2 pts, total, R1 time, R2 time, time sum) with a line after the 8th. The seeding card and `record_btc_seeding_tiebreak` moved here from the bracket screen through `seedingController.js` (extracted from `bracketScreen.js`, behaviour kept). "Lock the top 8" names the eight in a `window.confirm`, calls `generate_btc_bracket` and publishes live.
+- **Why the lock is refused up front:** the old Generate still went to the database when the last seed read had failed. Now the browser refuses it, with the reason (`cutData.js` `lockState`). A bracket is published live and a failed read looks the same as a real order, so the check belongs before the write. This is a behaviour change.
+- **Sign-off sheet** at `#/events/:id/btc/sign-off` (`signOffScreen.js`, `signOff.js`, `core/signOffSheet.js`): a print-designed A4 page for a committee to sign. Browser Print to PDF, no library. A draft always says NOT FINAL.
+- **Authoritative eight:** once a bracket exists, the sheet and table take the eight from the quarterfinal slots' `seed_1`/`seed_2`, and say so when the live standings differ. Why: a preliminary match can still be re-confirmed after the lock, so live standings can drift from what was locked.
+- **Scoring discipline:** rows are in the database's `btc_seeding_order`, never re-sorted. Qualifiers are seed 8 or less. The time sum is a display aid only; it never orders anyone.
+- **Core:** `core/cutLine.js` (pure `describeCut`/`levelWords`, DOM `renderCutLine`); `core/signOffSheet.js`; `core/ranking.js` gains `positionsInOrder` (the numbering half of `rank()`, no sort), so the cut table cannot fork `rank()`'s numbering.
+- **runSheet.js** links the cut phase to Standings ("Lock the top 8"). The bracket screen with no bracket says "Settle the cut in Standings". CSS in one commented block at the end of `components.css`.
+- **Also fixed:** `.btc-bracket-refresh-note[hidden]` drew an empty box (CSS `display` overrode `hidden`); toast focus restore on Standings.
+- **Checks:** about 6500 tests pass. `tools/check-doc-budgets.test.js` (brokenLinks) fails on Windows paths; not from this change.
+- **Reviews:** `scoring-auditor` 1 🔴 (post-lock sheet read the live view), fixed; nit (unsettled tie inside the eight says seed order is provisional), done. `module-boundary-checker` 1 🔴 (`rankCutRows` forked `rank()` numbering), fixed via `positionsInOrder`; nit (draft default text), fixed; 🟣 pre-existing (`statusBand` default title says ABTC, for when `is_shadow` lands), logged, not fixed. `ui-accessibility-reviewer` 3 🔴 fixed (print colour-adjust on the bands, dark-mode label contrast, toast focus); nits: `aria-expanded` dropped from the toggle, lock actions wrapped. `test-auditor` 2 🔴 (no screen-level test of the locked eight), fixed; nits fixed. `code-reviewer` the same 🔴 as scoring-auditor, fixed; nits: dead export removed, comment on the sign-off page's whole-page failure when the view is missing.
+- **Status: not final.** Outstanding (Definition of Done): a real-tablet check; the sign-off sheet is checked on screen only, not as a printed PDF; re-review of the 🔴 fixes on the final diff is not recorded (run `scoring-auditor` and `code-reviewer` on the diff before merge). Also: S3 (matches) runs in parallel. If it merges first, rebase onto `dev` (the `components.css` block is a pure append).
+
 ## v4.3.0: BTC matches grouped by round (Organiser UX S3, spec U2) · 2026-11-11
 
 **Task:** Organiser UX stage S3, the BTC matches screen (mockup U2; spec `docs/specs/ORGANISER-UX-SPEC-DRAFT.md`). Branch `claude/organiser-ux-s3-matches-9fa460`, PR into `dev`. **Not merged.** No migration, no outbox or IndexedDB change.
