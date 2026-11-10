@@ -5,6 +5,7 @@
 import { ordinalLabel } from '../../core/ordinal.js';
 import { el } from '../../core/dom.js';
 import { countryName } from '../../core/country.js';
+import { renderCountryFlag } from '../../core/countryFlag.js';
 
 // The preliminary round's top eight reach the quarterfinals (generate_btc_bracket seeds eight, and refuses to
 // until a tie across the cut-off is settled, so the surfaces say "qualify", never "go through", while it is open).
@@ -15,6 +16,22 @@ export const KNOCKOUT_PLACES = 8;
 export function teamLabel({ name, country_code: countryCode }) {
   const country = countryName(countryCode ?? null);
   return country ? `${country} · ${name}` : name;
+}
+
+// teamLabel as a DOM node, with the country's flag beside its code (core/countryFlag.js). The flag and code are
+// decoration for the eye (`aria-hidden`): a screen reader gets the same "Country � Name" teamLabel says, in a
+// visually hidden span, so nothing depends on seeing the picture. No country: just the name. Team flags may
+// reach audience surfaces; a JUDGE's flag stays organiser-only, so judges keep the plain-text teamLabel.
+export function teamLabelNode(team, options) {
+  const flag = renderCountryFlag(team.country_code ?? null, options);
+  if (!flag) return el('span', { className: 'btc-team-label', text: team.name });
+  flag.setAttribute('aria-hidden', 'true');
+  return el('span', { className: 'btc-team-label' }, [
+    flag,
+    document.createTextNode(' '),
+    el('span', { className: 'sr-only', text: teamLabel(team) }),
+    el('span', { attrs: { 'aria-hidden': 'true' }, text: team.name }),
+  ]);
 }
 
 // A team as the audience reads it: "Brunei · Team Kopi", or just the name when the payload carries no country

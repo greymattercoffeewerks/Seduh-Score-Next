@@ -1,169 +1,298 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+const publishBtcLive = vi.fn();
+vi.mock('./liveSession.js', () => ({ publishBtcLive: (...args) => publishBtcLive(...args) }));
+const getDisputePack = vi.fn();
+vi.mock('../../core/disputePack.js', () => ({ getDisputePack: (...a) => getDisputePack(...a) }));
+
+const downloadJson = vi.fn();
+vi.mock('../../core/export.js', async (original) => ({
+  ...(await original()),
+  downloadJson: (...a) => downloadJson(...a),
+}));
+
 import { mountBtcEventDashboardScreen } from './eventDashboardScreen.js';
 
-function fakeClient(tables = {}) {
-  const queues = {};
-  for (const [table, response] of Object.entries(tables)) {
-    queues[table] = Array.isArray(response) ? [...response] : [response];
-  }
+const EVENT = {
+  id: 'ev1',
+  org_id: 'org1',
+  name: 'Regional Bracket',
+  format: 'btc',
+  is_test: false,
+  event_date: '2027-03-14',
+  venue: 'Hall A',
+  city: 'Bandar',
+};
+
+// A fake PostgREST client: each table answers with its rows (or an `error`); filters are accepted and ignored.
+function fakeClient(tables) {
+  const answer = (table) => tables[table] ?? { data: [], error: null };
   return {
     from(table) {
-      const queue = queues[table] ?? [{ data: null, error: null }];
-      const resolve = () => (queue.length > 1 ? queue.shift() : queue[0]);
       const builder = {
         select: () => builder,
         eq: () => builder,
-        single: () => Promise.resolve(resolve()),
-        then: (onResolve, onReject) => Promise.resolve(resolve()).then(onResolve, onReject),
+        in: () => builder,
+        order: () => builder,
+        single: () => Promise.resolve(answer(table)),
+        maybeSingle: () => Promise.resolve(answer(table)),
+        then: (res, rej) => Promise.resolve(answer(table)).then(res, rej),
       };
       return builder;
     },
   };
 }
 
+const tablesFor = (over = {}) => ({
+  events: { data: EVENT, error: null },
+  btc_teams: { data: [], error: null },
+  btc_judges: { data: [], error: null },
+  btc_matches: { data: [], error: null },
+  btc_bracket_slots: { data: [], error: null },
+  live_sessions: { data: null, error: null },
+  ...over,
+});
+
+const mount = (root, over, options = {}) =>
+  mountBtcEventDashboardScreen(root, {
+    eventId: 'ev1',
+    client: fakeClient(tablesFor(over)),
+    listQueued: async () => [],
+    ...options,
+  });
+
+const team = (i, country = 'BN') => ({ id: `t${i}`, name: `Team ${i}`, country_code: country });
+
 describe('mountBtcEventDashboardScreen', () => {
   let root;
-
   beforeEach(() => {
     root = document.createElement('div');
     document.body.appendChild(root);
+    publishBtcLive.mockReset();
+    getDisputePack.mockReset();
+    downloadJson.mockReset();
   });
-
   afterEach(() => {
     root.remove();
-    vi.restoreAllMocks();
   });
 
-  it('shows the event name as the heading', async () => {
-    const client = fakeClient({
-      events: { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: false } },
-    });
-    await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
-    expect(root.querySelector('h1').textContent).toBe('Regional Bracket');
+  it('shows the event name as the heading, with a meta line, and focuses it', async () => {
+    await mount(root, {});
+    const h1 = root.querySelector('h1');
+    expect(h1.textContent).toBe('Regional Bracket');
+    expect(document.activeElement).toBe(h1);
+    const meta = root.querySelector('.btc-event-meta').textContent;
+    expect(meta).toContain('Hall A');
+    expect(meta).toContain('Bandar');
+    expect(meta).toContain('2027');
   });
 
-  it('links to Setup, Matches, Standings, and Bracket, scoped to this event', async () => {
-    const client = fakeClient({
-      events: { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: false } },
-    });
-    await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
+  it('draws the six phases in order and one next-step card', async () => {
+    await mount(root, {});
+    const titles = [...root.querySelectorAll('.ok-phase-title')].map((n) => n.textContent);
+    expect(titles).toEqual(['Setup', 'Round 1', 'Round 2', 'The cut', 'Knockout', 'Podium']);
+    expect(root.querySelectorAll('.ok-next')).toHaveLength(1);
+    expect(root.querySelector('.ok-next-action').textContent).toBe('Add teams');
+  });
 
-    const links = [...root.querySelectorAll('a')].map((a) => [
-      a.textContent,
-      a.getAttribute('href'),
-    ]);
-    expect(links).toEqual([
+  it('keeps the four screen links, scoped to this event, in a nav at the bottom', async () => {
+    await mount(root, {});
+    const nav = root.querySelector('.btc-event-links');
+    expect(
+      [...nav.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
+    ).toEqual([
       ['Setup', '#/events/ev1/btc/setup'],
       ['Matches', '#/events/ev1/btc/matches'],
       ['Standings', '#/events/ev1/btc/standings'],
       ['Bracket', '#/events/ev1/btc/bracket'],
     ]);
+    expect(nav.nextElementSibling).toBeNull();
   });
 
-  it('shows the is-test banner for a test event, not for a real one', async () => {
-    const client = fakeClient({
-      events: { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: true } },
+  it('blocks round 1 and says why when teams have no country', async () => {
+    const teams = [team(1), team(2, null), team(3, null), team(4)];
+    await mount(root, {
+      btc_teams: { data: teams, error: null },
+      btc_judges: { data: [{ id: 'j1' }, { id: 'j2' }, { id: 'j3' }], error: null },
     });
-    await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
+    const round1 = root.querySelector('[data-phase="round1"]');
+    expect(round1.dataset.status).toBe('blocked');
+    expect(round1.textContent).toContain('2 teams have no country: set them in Setup.');
+  });
+
+  it('shows the test band for a test event, none for a real one, and the beta band only for is_shadow', async () => {
+    await mount(root, { events: { data: { ...EVENT, is_test: true }, error: null } });
     expect(root.querySelector('.is-test-banner')).not.toBeNull();
+    expect(root.querySelector('.ok-beta-band')).toBeNull();
 
-    const root2 = document.createElement('div');
-    document.body.appendChild(root2);
-    const client2 = fakeClient({
-      events: { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: false } },
-    });
-    await mountBtcEventDashboardScreen(root2, { eventId: 'ev1', client: client2 });
-    expect(root2.querySelector('.is-test-banner')).toBeNull();
-    root2.remove();
+    await mount(root, {});
+    expect(root.querySelector('.is-test-banner')).toBeNull();
+    expect(root.querySelector('.ok-beta-band')).toBeNull();
+
+    await mount(root, { events: { data: { ...EVENT, is_shadow: true }, error: null } });
+    expect(root.querySelector('.ok-beta-band').textContent).toContain('Seduh Score ABTC Beta Test');
+    expect(root.querySelector('.is-test-banner')).toBeNull();
   });
 
-  it('moves focus to the heading once the initial load succeeds', async () => {
-    const client = fakeClient({
-      events: { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: false } },
+  it('lists the missing-times warning in Needs attention', async () => {
+    await mount(root, {
+      btc_matches: {
+        data: [
+          {
+            id: 'm1',
+            round: 'preliminary',
+            status: 'confirmed',
+            team1_time_note: '8:42',
+            team2_time_note: null,
+          },
+        ],
+        error: null,
+      },
     });
-    await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
-    expect(document.activeElement).toBe(root.querySelector('h1'));
+    expect(root.querySelector('.ok-warn').textContent).toContain('no finish times');
+  });
+
+  it('warns about confirms queued on this device for this event only', async () => {
+    await mount(
+      root,
+      {
+        btc_matches: {
+          data: [{ id: 'm1', round: 'preliminary', status: 'scoring', prelim_round: 1 }],
+          error: null,
+        },
+      },
+      {
+        listQueued: async () => [
+          { type: 'confirm_btc_match', payload: { p_match_id: 'm1' } },
+          { type: 'confirm_btc_match', payload: { p_match_id: 'other-event' } },
+          { type: 'publish_btc_live_session', payload: {} },
+        ],
+      },
+    );
+    expect(root.querySelector('.ok-warn').textContent).toContain(
+      '1 confirm is saved on this device',
+    );
+  });
+
+  it('opens even when the outbox cannot be read', async () => {
+    await mount(root, {}, { listQueued: async () => Promise.reject(new Error('idb')) });
+    expect(root.querySelector('h1').textContent).toBe('Regional Bracket');
+    expect(root.querySelector('.ok-warn').textContent).toContain('Nothing needs attention');
+  });
+
+  describe('live card', () => {
+    const links = {
+      phone: 'https://x.test/#/live/o/phone',
+      projector: 'https://x.test/#/live/o/projector',
+      splash: 'https://x.test/#/live/o/splash',
+    };
+
+    it('says Not showing and offers Show this event when nothing is live', async () => {
+      await mount(root, {}, { handlers: {}, audienceLinks: links });
+      const card = root.querySelector('.ok-live');
+      expect(card.textContent).toContain('Not showing');
+      expect(card.querySelector('.ok-live-show').hidden).toBe(false);
+      expect(card.querySelectorAll('.ok-live-link')).toHaveLength(3);
+    });
+
+    it('says Live now when this event is the live one', async () => {
+      await mount(
+        root,
+        { live_sessions: { data: { event_id: 'ev1' }, error: null } },
+        { handlers: {}, audienceLinks: links },
+      );
+      expect(root.querySelector('.ok-live').textContent).toContain('Live now on Projector / Phone');
+      expect(root.querySelector('.ok-live-show').hidden).toBe(true);
+    });
+
+    it('claims nothing when the live check fails', async () => {
+      await mount(root, { live_sessions: { data: null, error: { code: 'x' } } }, { handlers: {} });
+      expect(root.querySelector('.ok-live').textContent).toContain('Live status unavailable');
+    });
+
+    it('Show this event publishes with takeOver and the composed handlers, then reads back that it is live', async () => {
+      const handlers = { confirm_btc_match: () => {} };
+      const tables = tablesFor();
+      publishBtcLive.mockImplementation(async () => {
+        tables.live_sessions = { data: { event_id: 'ev1' }, error: null };
+      });
+      await mountBtcEventDashboardScreen(root, {
+        eventId: 'ev1',
+        client: fakeClient(tables),
+        handlers,
+        listQueued: async () => [],
+      });
+      root.querySelector('.ok-live-show').click();
+      await vi.waitFor(() => expect(root.querySelector('.ok-live').dataset.state).toBe('live'));
+      const [arg, passedHandlers] = publishBtcLive.mock.calls[0];
+      expect(arg.takeOver).toBe(true);
+      expect(arg.event.id).toBe('ev1');
+      expect(passedHandlers).toBe(handlers);
+    });
+
+    it('does not claim success when the publish only queued (offline)', async () => {
+      publishBtcLive.mockResolvedValue(undefined);
+      await mount(root, {}, { handlers: {} });
+      root.querySelector('.ok-live-show').click();
+      await vi.waitFor(() =>
+        expect(root.querySelector('.ok-live-status').textContent).toContain('saved on this device'),
+      );
+      expect(root.querySelector('.ok-live').dataset.state).toBe('not_showing');
+    });
+
+    it('offers no take-over control without a handler map', async () => {
+      await mount(root, {});
+      expect(root.querySelector('.ok-live-show').hidden).toBe(true);
+    });
+  });
+
+  describe('records card', () => {
+    it('offers the JSON record only: no CSV until the committee sheet fixes its columns (Q10)', async () => {
+      await mount(root, {});
+      const buttons = [...root.querySelectorAll('.ok-records button')];
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0].textContent).toContain('Download the record (JSON)');
+      expect(buttons[0].textContent).toContain('regional-bracket-record.json');
+      expect(root.querySelector('.ok-records').textContent).not.toMatch(/csv/i);
+    });
+
+    it('builds the record through get_dispute_pack for this event', async () => {
+      const calls = [];
+      getDisputePack.mockImplementation(async (...args) => {
+        calls.push(args);
+        return { ok: true };
+      });
+      await mount(root, {});
+      root.querySelector('.ok-records button').click();
+      await vi.waitFor(() => expect(calls).toHaveLength(1));
+      expect(calls[0].slice(0, 2)).toEqual(['org1', 'ev1']);
+      await vi.waitFor(() => expect(downloadJson).toHaveBeenCalledTimes(1));
+      expect(downloadJson.mock.calls[0]).toEqual(['regional-bracket-record.json', { ok: true }]);
+    });
   });
 
   it('shows a retry button and message when the initial load fails', async () => {
-    const client = fakeClient({ events: { data: null, error: { code: '42501' } } });
-    await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
-
+    await mount(root, { events: { data: null, error: { code: '42501' } } });
     expect(root.querySelector('button')?.textContent).toBe('Retry');
-    expect(document.activeElement).not.toBeNull();
+    expect(root.querySelector('[data-tone="error"]')).not.toBeNull();
+  });
+
+  it('a failed required read (the roster) fails the load rather than drawing a wrong sheet', async () => {
+    await mount(root, { btc_teams: { data: null, error: { code: '42501' } } });
+    expect(root.querySelector('button')?.textContent).toBe('Retry');
+    expect(root.querySelector('.ok-phase')).toBeNull();
   });
 
   it('retries after a failed load and shows the event once it succeeds', async () => {
-    const client = fakeClient({
-      events: [
-        { data: null, error: { code: '42501' } },
-        { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: false } },
-      ],
+    const tables = tablesFor({ events: { data: null, error: { code: '42501' } } });
+    await mountBtcEventDashboardScreen(root, {
+      eventId: 'ev1',
+      client: fakeClient(tables),
+      listQueued: async () => [],
     });
-    await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
-
-    root.querySelector('button').dispatchEvent(new Event('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(root.querySelector('h1').textContent).toBe('Regional Bracket');
+    tables.events = { data: EVENT, error: null };
+    root.querySelector('button').click();
+    await vi.waitFor(() => expect(root.querySelector('h1').textContent).toBe('Regional Bracket'));
     expect(document.activeElement).toBe(root.querySelector('h1'));
-  });
-
-  describe('the preliminary-times checklist line', () => {
-    const event = { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: false } };
-    const line = () => root.querySelector('.btc-checklist-line');
-
-    it('counts confirmed preliminary matches missing a usable time, singular and plural', async () => {
-      const client = fakeClient({
-        events: event,
-        btc_matches: {
-          data: [
-            { team1_time_note: '8:42', team2_time_note: '9:10' },
-            { team1_time_note: '8:42', team2_time_note: null },
-            { team1_time_note: '8.42', team2_time_note: '9:10' },
-          ],
-        },
-      });
-      await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
-      expect(line().textContent).toBe('2 preliminary matches have no times');
-
-      const root2 = document.createElement('div');
-      document.body.appendChild(root2);
-      await mountBtcEventDashboardScreen(root2, {
-        eventId: 'ev1',
-        client: fakeClient({
-          events: event,
-          btc_matches: { data: [{ team1_time_note: '', team2_time_note: '9:10' }] },
-        }),
-      });
-      expect(root2.querySelector('.btc-checklist-line').textContent).toBe(
-        '1 preliminary match has no times',
-      );
-      root2.remove();
-    });
-
-    it('shows nothing when every match has both times, or there are none', async () => {
-      const full = fakeClient({
-        events: event,
-        btc_matches: { data: [{ team1_time_note: '8:42', team2_time_note: '9:10' }] },
-      });
-      await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client: full });
-      expect(line()).toBeNull();
-      await mountBtcEventDashboardScreen(root, {
-        eventId: 'ev1',
-        client: fakeClient({ events: event, btc_matches: { data: [] } }),
-      });
-      expect(line()).toBeNull();
-    });
-
-    it('a failed read leaves the dashboard open without the line', async () => {
-      const client = fakeClient({
-        events: event,
-        btc_matches: { data: null, error: { code: '42501' } },
-      });
-      await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
-      expect(root.querySelector('h1').textContent).toBe('Regional Bracket');
-      expect(line()).toBeNull();
-    });
   });
 });
