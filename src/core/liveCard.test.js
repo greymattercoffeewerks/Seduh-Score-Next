@@ -46,8 +46,8 @@ describe('describeLive / liveLinks', () => {
 
   it('lists only the links supplied, phone first', () => {
     expect(liveLinks(URLS).map((l) => l.key)).toEqual(['phone', 'projector', 'splash']);
-    expect(liveLinks({ projector: 'x' }).map((l) => l.key)).toEqual(['projector']);
-    expect(liveLinks({ phone: '', splash: 5 })).toEqual([]);
+    expect(liveLinks({ projector: 'https://x.test/p' }).map((l) => l.key)).toEqual(['projector']);
+    expect(liveLinks({ phone: '', splash: 5, projector: 'javascript:alert(1)' })).toEqual([]);
     expect(liveLinks(undefined)).toEqual([]);
   });
 });
@@ -171,5 +171,45 @@ describe('buildLiveCard', () => {
     await settle();
     expect(element.querySelector('.ok-live-qr').hidden).toBe(true);
     expect(element.querySelector('.ok-live-url').textContent).toBe(URLS.phone);
+  });
+
+  it('keeps keyboard focus on the card when the take-over succeeds and the button hides', async () => {
+    const { element } = build({ isLive: false, takeOver: vi.fn().mockResolvedValue({ ok: true }) });
+    const button = element.querySelector('.ok-live-show');
+    button.focus();
+    button.click();
+    await settle();
+    await settle();
+    expect(button.hidden).toBe(true);
+    expect(document.activeElement).toBe(element.querySelector('.ok-live-headline'));
+  });
+
+  it('reports a take-over that never answers as a failure and offers the retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const { element } = build({ isLive: false, takeOver: () => new Promise(() => {}) });
+      element.querySelector('.ok-live-show').click();
+      await vi.advanceTimersByTimeAsync(10500);
+      expect(element.querySelector('.ok-live-status').dataset.tone).toBe('error');
+      expect(element.querySelector('.ok-live-show').hasAttribute('aria-busy')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let a stale copy timer erase a later message', async () => {
+    vi.useFakeTimers();
+    try {
+      const takeOver = vi.fn().mockResolvedValue({ ok: false, message: 'Another event is live.' });
+      const { element } = build({ isLive: false, takeOver });
+      element.querySelector('.ok-live-link-actions button').click();
+      await vi.advanceTimersByTimeAsync(10);
+      element.querySelector('.ok-live-show').click();
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(7000);
+      expect(element.querySelector('.ok-live-status').textContent).toBe('Another event is live.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

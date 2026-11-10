@@ -28,17 +28,24 @@ export function bandKind(event) {
 
 // Pure. What the band says: { kind, title, note } (`note` is null for the TEST band, which has one line), or
 // null when the event gets no band.
-export function describeBand(event) {
+export function describeBand(event, words = {}) {
   const kind = bandKind(event);
   if (kind === 'test') return { kind, title: TEST_BAND_TEXT, note: null };
-  if (kind === 'beta') return { kind, title: BETA_BAND_TITLE, note: BETA_BAND_NOTE };
+  if (kind === 'beta') {
+    // The default wording is the constants above; a format or caller may pass its own (`words.title`,
+    // `words.note`), so a second format never has to say "ABTC" or "the committee".
+    const title =
+      typeof words?.title === 'string' && words.title.trim() ? words.title : BETA_BAND_TITLE;
+    const note = typeof words?.note === 'string' && words.note.trim() ? words.note : BETA_BAND_NOTE;
+    return { kind, title, note };
+  }
   return null;
 }
 
 // DOM. The band element for an event, or null when it needs none. Persistent and not dismissible: the caller
 // puts it at the top of the page and redraws it with the event.
-export function renderStatusBand(event) {
-  const band = describeBand(event);
+export function renderStatusBand(event, words = {}) {
+  const band = describeBand(event, words);
   if (!band) return null;
   if (band.kind === 'test') {
     // Exactly the element every screen drew before this module existed.

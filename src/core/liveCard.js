@@ -13,7 +13,9 @@
 //
 // Styled in components.css (`.ok-live*`).
 import { el, setBusyDisabled } from './dom.js';
+import { kitId, safeHref } from './kitLink.js';
 import { copyText } from './clipboard.js';
+import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { loadQrFactory, qrSvg } from './audienceLinksCard.js';
 
 const LINKS = [
@@ -39,9 +41,10 @@ export function describeLive(isLive, surfaces = ['Projector', 'Phone']) {
 // Pure. The links to draw, in a fixed order: [{ key, label, url, qr }], leaving out any the caller did not
 // supply (or supplied as anything but a non-empty string).
 export function liveLinks(urls) {
-  return LINKS.filter((link) => typeof urls?.[link.key] === 'string' && urls[link.key] !== '').map(
-    (link) => ({ ...link, url: urls[link.key] }),
-  );
+  return LINKS.filter((link) => safeHref(urls?.[link.key]) !== null).map((link) => ({
+    ...link,
+    url: safeHref(urls[link.key]),
+  }));
 }
 
 /**
@@ -64,7 +67,7 @@ export function buildLiveCard(
     });
 
   let current = isLive;
-  const headline = el('p', { className: 'ok-live-headline' });
+  const headline = el('p', { className: 'ok-live-headline', attrs: { tabindex: '-1' } });
   const marker = el('span', { className: 'ok-live-marker', attrs: { 'aria-hidden': 'true' } });
   // One polite status line for copies and take-over results, kept in place.
   const status = el('p', {
@@ -89,11 +92,13 @@ export function buildLiveCard(
     setBusyDisabled(showButton, true);
     setStatus('Putting this event on the displays…');
     try {
-      const result = await takeOver();
+      const result = await raceTimeout(Promise.resolve().then(takeOver), DEFAULT_LOAD_TIMEOUT_MS);
       if (result && result.ok === false) {
         setStatus(result.message || 'Could not show this event. Try again.', 'error');
       } else {
         setLive(true);
+        // The button hides itself on success while it holds focus: keep the keyboard user's place.
+        headline.focus();
         setStatus(result?.message || 'This event is now on the displays.', 'success');
       }
     } catch {
@@ -114,10 +119,11 @@ export function buildLiveCard(
   }
 
   let copyTimer = null;
+  const headingId = kitId('ok-live-heading');
   const links = liveLinks(urls);
   let qrHost = null;
   const rows = links.map((link) => {
-    const labelId = `ok-live-link-${link.key}`;
+    const labelId = kitId(`ok-live-link-${link.key}`);
     const copyButton = el('button', {
       className: 'btn btn-outline tap-target',
       text: 'Copy',
@@ -131,7 +137,10 @@ export function buildLiveCard(
       } catch {
         setStatus('Could not copy the link. Select it and copy it by hand.', 'error');
       }
-      copyTimer = setTimeout(() => setStatus(''), 6000);
+      const said = status.textContent;
+      copyTimer = setTimeout(() => {
+        if (status.textContent === said) setStatus('');
+      }, 6000);
     });
     const open = el('a', {
       className: 'btn btn-outline tap-target',
@@ -174,9 +183,9 @@ export function buildLiveCard(
 
   const wrapper = el(
     'section',
-    { className: 'ok-card ok-live', attrs: { 'aria-labelledby': 'ok-live-heading' } },
+    { className: 'ok-card ok-live', attrs: { 'aria-labelledby': headingId } },
     [
-      el('h2', { className: 'ok-card-heading', id: 'ok-live-heading', text: heading }),
+      el('h2', { className: 'ok-card-heading', id: headingId, text: heading }),
       el('div', { className: 'ok-live-state' }, [marker, headline]),
       showButton,
       ...(rows.length

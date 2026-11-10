@@ -11,7 +11,7 @@
 // warning is about.
 // Styled in components.css (`.ok-warn*`).
 import { el } from './dom.js';
-import { safeHref } from './kitLink.js';
+import { kitId, safeHref } from './kitLink.js';
 
 export const SEVERITIES = ['error', 'warning', 'info'];
 
@@ -72,9 +72,10 @@ export function buildEventWarnings(
   { heading = 'Needs attention', emptyText = 'Nothing needs attention.' } = {},
 ) {
   const list = normaliseWarnings(warnings);
+  const headingId = kitId('ok-warn-heading');
   const headingNode = el('h2', {
     className: 'ok-card-heading',
-    id: 'ok-warn-heading',
+    id: headingId,
     text: heading,
   });
   if (list.length > 0) {
@@ -115,9 +116,8 @@ export function buildEventWarnings(
             );
           }),
         );
-  return el(
-    'section',
-    { className: 'ok-card ok-warn', attrs: { 'aria-labelledby': 'ok-warn-heading' } },
-    [headingNode, body],
-  );
+  return el('section', { className: 'ok-card ok-warn', attrs: { 'aria-labelledby': headingId } }, [
+    headingNode,
+    body,
+  ]);
 }

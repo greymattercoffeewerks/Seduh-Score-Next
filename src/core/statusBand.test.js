@@ -57,6 +57,20 @@ describe('bandKind / describeBand', () => {
   });
 });
 
+describe('caller wording', () => {
+  it('lets a format supply its own beta words and falls back to the default for blanks', () => {
+    const event = { ...cupTasterEvent, is_shadow: true };
+    expect(describeBand(event, { title: 'Cup Taster Beta', note: 'Paper sheets rule.' })).toEqual({
+      kind: 'beta',
+      title: 'Cup Taster Beta',
+      note: 'Paper sheets rule.',
+    });
+    expect(describeBand(event, { title: ' ', note: 5 }).title).toBe(BETA_BAND_TITLE);
+    const node = renderStatusBand(event, { title: 'Cup Taster Beta' });
+    expect(node.querySelector('.ok-beta-band-title').textContent).toBe('Cup Taster Beta');
+  });
+});
+
 describe('renderStatusBand', () => {
   it('draws the TEST band exactly as every screen drew it before (same class, same words)', () => {
     const node = renderStatusBand({ ...btcEvent, is_test: true });

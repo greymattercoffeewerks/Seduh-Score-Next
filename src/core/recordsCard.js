@@ -10,6 +10,7 @@
 // A file name with any other extension is not offered (the entry is dropped, see `usableRecords`).
 //
 // Styled in components.css (`.ok-records*`).
+import { kitId } from './kitLink.js';
 import { el, setBusyDisabled } from './dom.js';
 import { buildCsv, buildCsvForTables, downloadCsv, downloadJson } from './export.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
@@ -71,6 +72,7 @@ export function buildRecordsCard(records, options = {}) {
     save = DEFAULT_SAVE,
   } = options;
   const entries = usableRecords(records);
+  const headingId = kitId('ok-records-heading');
 
   // One polite status line for the whole card, kept in place (a live region that is replaced is not reliably
   // announced).
@@ -125,9 +127,9 @@ export function buildRecordsCard(records, options = {}) {
 
   return el(
     'section',
-    { className: 'ok-card ok-records', attrs: { 'aria-labelledby': 'ok-records-heading' } },
+    { className: 'ok-card ok-records', attrs: { 'aria-labelledby': headingId } },
     [
-      el('h2', { className: 'ok-card-heading', id: 'ok-records-heading', text: heading }),
+      el('h2', { className: 'ok-card-heading', id: headingId, text: heading }),
       ...(intro ? [el('p', { className: 'ok-card-intro', text: intro })] : []),
       body,
       status,

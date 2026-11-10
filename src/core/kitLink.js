@@ -13,3 +13,11 @@ export function safeHref(href) {
   if (/^https?:\/\//i.test(value)) return value;
   return null;
 }
+
+// A page-unique id for a kit card's heading or label, so two cards of one kind on a page never share an id
+// (aria-labelledby and aria-describedby would resolve to the first). Pure apart from the counter.
+let idCounter = 0;
+export function kitId(prefix) {
+  idCounter += 1;
+  return `${prefix}-${idCounter}`;
+}

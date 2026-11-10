@@ -524,6 +524,7 @@
 }
 
 .ok-next-title {
+  overflow-wrap: anywhere;
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-xl);
@@ -531,6 +532,7 @@
 }
 
 .ok-next-detail {
+  overflow-wrap: anywhere;
   margin: 0;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -588,7 +590,7 @@
 }
 
 .ok-phase[data-status='not_started'] {
-  border-color: var(--color-border);
+  border-color: var(--color-border-card);
   color: var(--color-text-secondary);
 }
 

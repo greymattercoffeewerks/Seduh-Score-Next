@@ -17,7 +17,7 @@
 // The next-step card is chosen by `deriveNextStep` (below). Every state is said in words as well as colour.
 // Styled in components.css (`.ok-run*`, `.ok-next*`, `.ok-phase*`).
 import { el } from './dom.js';
-import { safeHref } from './kitLink.js';
+import { kitId, safeHref } from './kitLink.js';
 
 export const PHASE_STATUSES = ['not_started', 'in_progress', 'done', 'blocked', 'waiting'];
 
@@ -121,9 +121,10 @@ function progressBar(progress) {
 }
 
 function nextStepCard(next) {
+  const nextId = kitId('ok-next-heading');
   const heading = el('h2', {
     className: 'ok-next-kicker',
-    id: 'ok-next-heading',
+    id: nextId,
     text: 'Next step',
   });
   const body = [];
@@ -155,7 +156,7 @@ function nextStepCard(next) {
   }
   return el(
     'section',
-    { className: 'ok-next', attrs: { 'aria-labelledby': 'ok-next-heading', 'data-kind': tone } },
+    { className: 'ok-next', attrs: { 'aria-labelledby': nextId, 'data-kind': tone } },
     [heading, ...body],
   );
 }
@@ -193,17 +194,14 @@ function phaseCard(phase, isNext) {
  * @returns {HTMLElement}
  */
 export function buildRunSheet(phases, { heading = 'Run sheet' } = {}) {
+  const runId = kitId('ok-run-heading');
   const list = normalisePhases(phases);
   const next = deriveNextStep(list);
   const nextId = next.kind === 'action' ? next.phase.id : null;
   const cards = list.map((phase) => phaseCard(phase, phase.id === nextId));
-  const section = el(
-    'section',
-    { className: 'ok-run', attrs: { 'aria-labelledby': 'ok-run-heading' } },
-    [
-      el('h2', { className: 'ok-run-heading', id: 'ok-run-heading', text: heading }),
-      el('ol', { className: 'ok-phases', attrs: { role: 'list' } }, cards),
-    ],
-  );
+  const section = el('section', { className: 'ok-run', attrs: { 'aria-labelledby': runId } }, [
+    el('h2', { className: 'ok-run-heading', id: runId, text: heading }),
+    el('ol', { className: 'ok-phases', attrs: { role: 'list' } }, cards),
+  ]);
   return el('div', { className: 'ok-run-sheet' }, [nextStepCard(next), section]);
 }
