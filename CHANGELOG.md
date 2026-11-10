@@ -8,6 +8,43 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## v4.3.0: BTC matches grouped by round (Organiser UX S3, spec U2) · 2026-11-11
+
+**Task:** Organiser UX stage S3, the BTC matches screen (mockup U2; spec `docs/specs/ORGANISER-UX-SPEC-DRAFT.md`). Branch `claude/organiser-ux-s3-matches-9fa460`, PR into `dev`. **Not merged.** No migration, no outbox or IndexedDB change.
+
+**Bump: minor** (4.2.1 to 4.3.0, `npm version minor --no-git-tag-version`). The matches screen is a visible redesign an organiser sees (rounds collapse, Draw summary card, Remove on pending rows), so it is a capability, not a patch.
+
+- **Why:** a flat list of about 20 matches across two rounds was hard to scan on a tablet mid-event. Each round is now its own group with a header ("Round 2", "6 of 10 confirmed"); a finished round collapses to that header ("Show N matches"), so the open round is what the organiser sees.
+- **Grouping:** by `prelim_round` (null counts as round 1). Numbering restarts per round.
+- **Draw summary card** (`drawSummary.js`): once rounds are drawn and nothing is drawable, the full Draw panel gives way to a compact card, with "Open the draw panel" / "Close the draw panel" to bring the panel back.
+- **Remove on a match** (`matchList.js` `canRemoveMatch`, Q7): shows only when the match is pending, no cup tokens are recorded and the scores could be read. This is a screen rule only. The database still accepts the delete; refusing it there is the separate P1 task.
+- **Scores read:** `matchesScreen.js` reads `btc_match_scores` as advisory (null on failure, so Remove is hidden, the list still renders) and `btc_round_draws` mode and seed.
+- **Hand entry moved** into a collapsed `<details>` "Add a match by hand (for corrections)", so the draw is the default path.
+- **Existing draw tests** adjusted to open the summary first.
+
+**Files:**
+
+- New: `src/core/groupedMatchList.js` (+ `.test.js`); `src/formats/btc/matchList.js` (+ `.test.js`); `src/formats/btc/drawSummary.js`.
+- Changed: `src/formats/btc/matchesScreen.js`, `matchesScreen.css`, `matchesScreen.test.js`, `matchesScreen.draw.test.js`; `src/ui/tokens/components.css` (S3 BLOCK at the end, marked `/* END S3 BLOCK */`); `package.json`, `package-lock.json` (version); `CHANGELOG.md`, `STATUS.md`, `src/core/CLAUDE.md`, `src/formats/btc/CLAUDE.md`.
+- `groupedMatchList.js` is format-agnostic: `groupItems`, `summarizeGroup`, `isGroupCollapsed` are pure; `renderGroupedMatchList` is the DOM part. The row contract is `{number, sides[], score, meta, status{label,tone}, actions}`, with any number of sides and a `sideJoiner` option (default "vs"). The optional `filter` slot is unused by BTC (about ten matches a round); it stays because the spec asks for it.
+
+**Reviews:**
+
+- `module-boundary-checker`: 1 important, fixed. The row contract was fixed to two sides; now any number of sides plus `sideJoiner`. Nit fixed: `drawSummary.js` now reuses `groupItems` rather than its own grouping.
+- `ui-accessibility-reviewer`: clean. Fixed: seed text overflow at 360px (`overflow-wrap`) and a stray `aria-expanded`. The toggle keeps its "Show/Hide" name because the visible text matches it.
+- `test-auditor`: 1 important, fixed. Visible team sides and ordering were not asserted; now they are. Per-round numbering and item-order tests added. Still open: the `panelOpen` reset after a round is created (`matchesScreen.js` line 427) has no test. See follow-up.
+- `code-reviewer`: clean. Three nits, two fixed; the `filter` slot kept (see above).
+- `offline-sync-auditor`: not run (no outbox or IndexedDB change).
+- Checked at 360px and 1024px landscape in the preview harness.
+
+**Checks:** full suite 6453 tests, one failure in `tools/check-doc-budgets.test.js` (`brokenLinks`), unrelated and not touched here.
+
+**Follow-ups:**
+
+- P1 (separate task): the database refusal of a match delete once it has scores or is not pending. Q7 is a screen rule until then.
+- Test for the `panelOpen` reset after create (`matchesScreen.js` line 427).
+- Organiser UX S4 (cut phase links to the bracket screen, still pointing there) and S5 wait.
+
 ## v4.2.1: Behind the Seduh brought up to 4.2.0 · 2026-11-10
 
 **Task:** owner asked for a BTS update (2026-11-10). Content only in `bts/index.html`; no code, style or migration change. **Patch** (`npm version patch`, 4.2.0 to 4.2.1) under `docs/versioning.md`: a page copy update.
