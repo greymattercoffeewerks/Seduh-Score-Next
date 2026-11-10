@@ -121,6 +121,13 @@ function buildWarnings(idPairs, forbidden, teamCountry, avoidRematches) {
   return { rematches, sameCountryPairs, warnings };
 }
 
+// The same warnings for pairs the organiser has edited by hand (the Draw panel recounts after every swap), so the
+// screen never re-implements what counts as a rematch or a same-country pairing. `pairs` is [{ team1Id, team2Id }].
+export function describePairs({ pairs, priorPairs = [], teamCountry, avoidRematches = true } = {}) {
+  const idPairs = (pairs ?? []).map((p) => [p.team1Id, p.team2Id]);
+  return buildWarnings(idPairs, priorPairKeys(priorPairs), teamCountry, avoidRematches);
+}
+
 // ---------------------------------------------------------------- rematch repair
 
 // Step 1 of a repair: swap partners with the NEAREST other pair so both new pairs are fresh. Changes two pairs at most

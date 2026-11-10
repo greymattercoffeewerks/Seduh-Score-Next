@@ -583,87 +583,11 @@ section only records the conventions a new screen or token needs to follow.
 
 ## Versioning
 
-**Semver started 2026-09-05** (D27's own condition — "once there's a first real shipped
-artifact to number" — was met once production went live on Cloudflare; see CLAUDE.md's
-Repo section). Before that, progress was tracked by **handoff phase** (Phase 0–6) alone;
-`ROADMAP.md`'s Current State table stays the source of truth for "what phase are we in"
-regardless.
-
-`package.json`'s `version` field is the single source; `src/core/version.js` re-exports
-it as `APP_VERSION` alongside `NAMEPLATE`, and `appShell.js` renders both in a footer on
-every organiser screen (`Seduh Score · <nameplate> · v<version>`) — quick, glance-based
-verification for bug reports, matching the legacy Seduh Score site's own footer
-(`seduhscore.com/bts/`: "seduhscore.com · v5.16.0").
-
-**Bumped automatically, not by hand** (2026-09-05) — `kb-sync`'s own end-of-task step
-runs `npm version patch --no-git-tag-version`, matching `CHANGELOG.md`'s own per-task
-granularity, so the footer always names the exact deployed commit without depending on
-anyone remembering to do it. This replaces an earlier "bump it yourself" convention that
-turned out not to be followed in practice — `package.json` sat at `1.0.0` through months
-of shipped, logged tasks before this was caught (found investigating the legacy Seduh
-Score repo's own footer-version mechanism, which has the identical manual-and-unenforced
-problem — see CHANGELOG.md's dated entry). The legacy repo's version is otherwise the
-same shape (a single hardcoded constant `index.html` reads on load), just without
-`package.json` as the source of truth, since that codebase predates any real build step.
-
-**The bump is owed at the close of every task, and it was missed (2026-11-02).** Build
-sessions that stop at a PR do not run `kb-sync`, so `package.json` sat at 3.4.1 from
-2026-10-23 through Seduh ID Layer 1 and the whole archive pipeline until T-ARC.Z took it to
-3.5.0. So the **closing (Z) task of a phase runs `npm version` itself** (`minor` for a
-feature release, `patch` otherwise, `--no-git-tag-version`), checks that `package-lock.json`
-followed, and says in its CHANGELOG entry what the number covers. A release PR (`dev` to
-`main`) must name the version it ships, so the footer is checked against the PR title.
-
-**The release gate (2026-11-02).** CI's `Version bump` job (`tools/check-version-bump.mjs`) runs only on
-pull requests whose base is `main`; PRs into `dev` are untouched. It fails when (1) any file the deployed app is built
-from changed (`src/**` except notes and `*.test.js`, `public/**`, any `*.html`, `supabase/migrations/**`,
-`supabase/functions/**`, `vite.config.js`, `wrangler.jsonc`) and `package.json`'s `version` is not strictly higher than
-`main`'s, or (2) `package-lock.json` disagrees with `package.json` (`npm version ... --no-git-tag-version` updates
-both). A docs-, test-, tooling- or CI-only release passes with no action. It cannot tell a comment-only change in
-`src/` from a real one, so for that (or any case where no bump is right) add the **`skip-version-check`** label to the
-PR and re-run the `Version bump` job (it reads the label live; the lock-agreement rule still applies). Locally:
-`node tools/check-version-bump.mjs --base origin/main`.
-
-**Nameplate**: each build cycle takes a place name spiralling outward from Kiulap — the
-same convention the legacy site used (Kiulap → Gadong → Kiarong → Menglait → Berakas →
-Jerudong → Seria, v1.0 → v5.x, see seduhscore.com/bts/). This is a **separate, fresh
-spiral** starting back at Kiulap, not a continuation of that site's already-completed
-run — user decision, 2026-09-05: this codebase is a from-scratch rewrite (Supabase,
-offline-first outbox, fixed advancement), not a patch on the same one, so it earns its
-own lineage rather than picking up mid-spiral. The nameplate only moves on a **major**
-bump (1.x → 2.0.0, etc.), reserved for a genuine capability-era boundary — a new format
-shipping, or a major cross-cutting relaunch — never on a fixed schedule. See ROADMAP.md's
-"Version cycle plan" for the planned future sequence; a cycle's name is picked (and this
-section updated) when that cycle actually starts, not before.
-
-**Current cycle: Kiarong, v4.0.0** (moved 2026-11-09, from Gadong/v3.x). Trigger: Throwdown shipped on
-2026-11-03 as the platform's third competition format, which is this rule's trigger, but it went out as a minor
-(v3.6.0) and patches followed to v3.6.6 before the miss was noticed, while redesigning the Behind the Seduh page. The
-v4.0.0 bump catches the number up and changes no feature. Lesson: a task that ships a new format must run
-`npm version major` and move `NAMEPLATE` itself; the Z-task rule above says `minor` for a feature release, and a new
-format is the one feature release that is `major`. `src/marketing/btsPage.test.js` now fails when the BTS page's
-current place or major version disagrees with `src/core/version.js`.
-
-**Previous cycle: Gadong, v3.0.0** (moved 2026-09-23, from Berakas/v2.x). Trigger: BTC
-(Barista Team Championship, renamed from BBTC at the start of Phase T-BTC.2, 2026-09-18)
-shipped as the platform's second real competition format — schema, bracket generation
-and advancement, five organiser screens, and the public marketing site (landing + Tour)
-all went live the same day. Matches legacy's own Gadong cycle almost exactly ("realising
-one format was never going to be enough"), even though the _specific_ format differs —
-ROADMAP.md's earlier plan had assumed Throwdown would ship second and reserved v3.0/Gadong
-for it. BTC beat Throwdown there, so the nameplate moved on ship ORDER, not on which named
-format arrived; see ROADMAP.md's "Version cycle plan" table for the corrected sequence
-(Kiarong/Menglait now track "whichever of Throwdown/Liga Seduh ships 3rd/4th", not fixed
-format assignments). Second time this exact reordering has happened — Berakas jumped
-queue ahead of the original Gadong/Throwdown slot in the same way.
-
-**Before that: Berakas, v2.0.0** (2026-09-07, from Kiulap/v1.x). Trigger: the public
-marketing landing page (`src/marketing/`) shipped, the site's first real front door — the
-console moved to `/app/`, matching legacy's own Berakas cycle almost exactly ("the front
-door — seduhscore.com, an organiser zone... Cup Taster as the fourth format"). Cloudflare
-deployment of the landing page itself was still pending at the moment of this bump — the
-version/nameplate move tracks the code shipping to the repo, not the separate deploy step
-(same distinction CLAUDE.md's Repo section already draws for migrations).
+**Moved to [`docs/versioning.md`](docs/versioning.md)** (2026-11-10): which part to bump (major for a new format or a
+relaunch, minor for a new usable capability, patch for everything else), who bumps and when, the CI gate, the place
+names, and what the Behind the Seduh page must match. In short: `package.json`'s `version` is the single source,
+`kb-sync` bumps patch by default, a task that adds a capability bumps minor, a new format stops and asks the owner
+before a major, and the release PR into `main` checks the choice.
 
 ---
 

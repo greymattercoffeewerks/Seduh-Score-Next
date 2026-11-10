@@ -5,6 +5,7 @@ import { enhanceBts, TOPICS } from './bts.js';
 
 // bts/index.html is static HTML (every chapter, readable with no script); bts.js turns it into a one-chapter
 // reader. These tests load the real page, so a content edit that breaks the reader's assumptions fails here.
+// If the version guard below fails, docs/versioning.md says what to change on the page when the place moves.
 const PAGE = readFileSync('bts/index.html', 'utf8');
 const CSS = readFileSync('src/marketing/bts.css', 'utf8');
 
@@ -111,7 +112,6 @@ describe('Behind the Seduh: the static content', () => {
   it('keeps the formats that have not run live honest', () => {
     const text = root.body.textContent.replace(/\s+/g, ' ');
     expect(text).toContain('Throwdown has not yet been run at a live event');
-    expect(text).toMatch(/no screen for it yet/);
   });
 });
 

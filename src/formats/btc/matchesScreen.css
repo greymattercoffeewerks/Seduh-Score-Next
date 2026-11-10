@@ -96,3 +96,142 @@
   border-inline-start: 3px solid var(--color-warning);
   padding-inline-start: var(--space-2);
 }
+
+/* ---- Draw a round panel (Build B part 2). A stacked card list at 360px, never a wide table. ---- */
+.btc-draw-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.btc-draw-group {
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin: 0;
+}
+
+.btc-draw-group legend {
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  padding: 0 var(--space-1);
+}
+
+.btc-draw-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.btc-draw-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+}
+
+.btc-draw-seed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.btc-draw-status:empty,
+.btc-draw-warnings:empty {
+  display: none;
+}
+
+.btc-draw-warning {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  border-inline-start: 3px solid var(--color-warning);
+  padding-inline-start: var(--space-2);
+}
+
+.btc-draw-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.btc-draw-match {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+/* A judge conflict: the whole card turns to the danger colour AND says so in words (never colour alone). */
+.btc-draw-match[data-state='danger'] {
+  border-color: var(--color-danger);
+  border-inline-start-width: 4px;
+}
+
+.btc-draw-match-title {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.btc-draw-team {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.btc-draw-team .btc-match-teams {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.btc-draw-judges {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.btc-draw-warnings {
+  display: flex;
+  flex-direction: column;
+}
+
+.btc-round-group h3 {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+@media (min-width: 640px) {
+  .btc-draw-choices {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  .btc-draw-seed {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .btc-draw-seed .form-field {
+    flex: 1 1 auto;
+  }
+
+  .btc-draw-judges {
+    flex-direction: row;
+  }
+
+  .btc-draw-judges select {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

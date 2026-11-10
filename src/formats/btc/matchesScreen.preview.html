@@ -11,42 +11,118 @@
   </head>
   <body>
     <!--
-      Demo-only harness for the BTC preliminary-matches screen — not part of
-      the shipped module graph, same role as setupScreen.preview.html. No
-      live Supabase connection: an in-memory fake client (below) stands in
-      for the real one, including a working create_btc_match RPC simulation.
-      Seeded with 4 teams and 3 judges. Try: creating a match (pick 2 teams +
-      all 3 judge checkboxes), and submitting with fewer than 3 judges
-      checked (shows the validation error).
+      Demo-only harness for the BTC matches screen and its Draw a round panel: not part of the shipped module graph.
+      No live Supabase connection: an in-memory fake client stands in, with working create_btc_round and
+      create_btc_match. Scenarios: round 1 to draw (20 fictional teams, 2 to 3 per country, 6 judges), round 1
+      confirmed so round 2 can be drawn (random or by results), 19 teams (the draw refuses), an unavoidable judge
+      conflict (try the tick), a roster too small, and a failed load. Try: New seed, Use this seed, Swap two teams,
+      Create. Add ?theme=stage to the address to see the stage surface.
     -->
     <p>
-      <button id="demo-normal">Mount (normal)</button>
-      <button id="demo-small-roster">Mount (roster too small)</button>
-      <button id="demo-failed">Mount (load fails)</button>
+      <button id="demo-normal">Round 1 to draw</button>
+      <button id="demo-round2">Round 2 ready</button>
+      <button id="demo-odd">19 teams</button>
+      <button id="demo-conflict">Judge conflict</button>
+      <button id="demo-small-roster">Roster too small</button>
+      <button id="demo-failed">Load fails</button>
     </p>
     <div id="app"></div>
     <script type="module">
       import { mountMatchesScreen } from './matchesScreen.js';
 
-      function createDemoClient({ smallRoster = false } = {}) {
+      // 20 fictional teams: Brunei, Malaysia, Singapore, Indonesia, Thailand, Philippines (3 each), Vietnam (2)
+      const PER_COUNTRY = [
+        ['BN', 3],
+        ['MY', 3],
+        ['SG', 3],
+        ['ID', 3],
+        ['TH', 3],
+        ['PH', 3],
+        ['VN', 2],
+      ];
+      const TEAM_NAMES = [
+        'Kopi Kilat',
+        'Teh Tarik Crew',
+        'Crema Club',
+        'Hawker Roast',
+        'Pandan Press',
+        'Kampung Brew',
+        'Mekong Mugs',
+        'Silk Road Cafe',
+        'Orchid Drip',
+        'Tidal Roasters',
+        'Lantern Lab',
+        'Rattan Beans',
+        'Monsoon Shot',
+        'Bamboo Pour',
+        'Saffron Steam',
+        'Jade Crema',
+        'Harbour Grind',
+        'Night Market Brew',
+        'Rainforest Roast',
+        'Temple Espresso',
+      ];
+      function teams(n) {
+        const countries = PER_COUNTRY.flatMap(([code, count]) => Array(count).fill(code));
+        return TEAM_NAMES.slice(0, n).map((name, i) => ({
+          id: `t${i + 1}`,
+          event_id: 'ev1',
+          name,
+          country_code: countries[i],
+        }));
+      }
+      const JUDGES = [
+        { id: 'j1', event_id: 'ev1', name: 'Alex Rivera', country_code: 'BN' },
+        { id: 'j2', event_id: 'ev1', name: 'Jordan Lee', country_code: 'MY' },
+        { id: 'j3', event_id: 'ev1', name: 'Casey Tan', country_code: 'SG' },
+        { id: 'j4', event_id: 'ev1', name: 'Sam Okafor', country_code: 'ID' },
+        { id: 'j5', event_id: 'ev1', name: 'Noor Hassan', country_code: null },
+        { id: 'j6', event_id: 'ev1', name: 'Mei Lin', country_code: null },
+      ];
+
+      function createDemoClient({ scenario = 'normal' } = {}) {
+        let teamRows = teams(20);
+        let judgeRows = JUDGES;
+        const matches = [];
+        const standings = [];
+        if (scenario === 'odd') teamRows = teams(19);
+        if (scenario === 'small') teamRows = teams(1);
+        if (scenario === 'conflict') {
+          teamRows = [teamRows[0], teamRows[9]]; // a Brunei team and an Indonesia team
+          judgeRows = JUDGES.filter((j) => ['j1', 'j4', 'j5'].includes(j.id)); // only j5 is neutral
+        }
+        if (scenario === 'round2') {
+          for (let i = 0; i < 20; i += 2) {
+            matches.push({
+              id: `r1-${i / 2}`,
+              event_id: 'ev1',
+              round: 'preliminary',
+              prelim_round: 1,
+              status: 'confirmed',
+              team1_id: `t${i + 1}`,
+              team2_id: `t${i + 2}`,
+            });
+          }
+          teamRows.forEach((t, i) =>
+            standings.push({
+              event_id: 'ev1',
+              team_id: t.id,
+              total_points: 60 - i * 2,
+              wins: 1,
+              played: 1,
+            }),
+          );
+        }
         const db = {
           events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
-          btc_teams: smallRoster
-            ? [{ id: 't1', event_id: 'ev1', name: 'Grey Matter', country_code: 'BN' }]
-            : [
-                { id: 't1', event_id: 'ev1', name: 'Grey Matter', country_code: 'BN' },
-                { id: 't2', event_id: 'ev1', name: 'Coffee Cartel', country_code: 'BN' },
-                { id: 't3', event_id: 'ev1', name: 'Kopi O Collective', country_code: 'SG' },
-                { id: 't4', event_id: 'ev1', name: 'Berakas Brew', country_code: null },
-              ],
-          // Alex Rivera is from Brunei: tick them with a Brunei team chosen to see the warning.
-          btc_judges: [
-            { id: 'j1', event_id: 'ev1', name: 'Alex Rivera', country_code: 'BN' },
-            { id: 'j2', event_id: 'ev1', name: 'Jordan Lee', country_code: 'MY' },
-            { id: 'j3', event_id: 'ev1', name: 'Casey Tan', country_code: null },
-          ],
-          btc_matches: [],
-          btc_match_judges: [],
+          btc_teams: teamRows,
+          btc_judges: judgeRows,
+          btc_matches: matches,
+          btc_match_judges: matches.flatMap((m) =>
+            ['j1', 'j2', 'j3'].map((judge_id) => ({ match_id: m.id, judge_id })),
+          ),
+          btc_standings: standings,
+          btc_round_draws: [],
         };
         let idCounter = 0;
 
@@ -79,28 +155,61 @@
           return builder;
         }
 
+        function add(args, t1, t2, judgeIds, prelimRound) {
+          idCounter += 1;
+          const row = {
+            id: `m${idCounter}`,
+            event_id: args.p_event_id,
+            round: 'preliminary',
+            prelim_round: prelimRound ?? null,
+            status: 'pending',
+            team1_id: t1,
+            team2_id: t2,
+          };
+          db.btc_matches.push(row);
+          for (const judge_id of judgeIds) db.btc_match_judges.push({ match_id: row.id, judge_id });
+          return row;
+        }
+
         return {
           from: (table) => makeBuilder(table),
           rpc: (name, args) => {
+            if (name === 'redraw_btc_round') {
+              const inRound = (m) => (m.prelim_round ?? 1) === args.p_prelim_round;
+              const removed = db.btc_matches.filter(inRound).length;
+              db.btc_matches = db.btc_matches.filter((m) => !inRound(m));
+              db.btc_round_draws = db.btc_round_draws.filter(
+                (d) => d.prelim_round !== args.p_prelim_round,
+              );
+              return Promise.resolve({ data: removed, error: null });
+            }
+            if (name === 'create_btc_round') {
+              const made = args.p_matches.map((m) =>
+                add(args, m.team1_id, m.team2_id, m.judge_ids, args.p_prelim_round),
+              );
+              db.btc_round_draws.push({ event_id: 'ev1', prelim_round: args.p_prelim_round });
+              console.log(
+                'create_btc_round',
+                JSON.stringify({ ...args, p_matches: `${made.length} matches` }),
+              );
+              return Promise.resolve({ data: made, error: null });
+            }
             if (args.p_team1_id === args.p_team2_id) {
               return Promise.resolve({
                 data: null,
                 error: { code: 'P0001', message: 'create_btc_match: a team cannot play itself' },
               });
             }
-            idCounter += 1;
-            const created = {
-              id: `m${idCounter}`,
-              event_id: args.p_event_id,
-              round: args.p_round,
-              team1_id: args.p_team1_id,
-              team2_id: args.p_team2_id,
-            };
-            db.btc_matches.push(created);
-            db.btc_match_judges.push(
-              ...args.p_judge_ids.map((judge_id) => ({ match_id: created.id, judge_id })),
-            );
-            return Promise.resolve({ data: created, error: null });
+            return Promise.resolve({
+              data: add(
+                args,
+                args.p_team1_id,
+                args.p_team2_id,
+                args.p_judge_ids,
+                args.p_prelim_round,
+              ),
+              error: null,
+            });
           },
         };
       }
@@ -114,16 +223,22 @@
         mountMatchesScreen(document.getElementById('app'), { eventId: 'ev1', client });
       }
 
-      document
-        .getElementById('demo-normal')
-        .addEventListener('click', () => mount(createDemoClient()));
-      document
-        .getElementById('demo-small-roster')
-        .addEventListener('click', () => mount(createDemoClient({ smallRoster: true })));
+      const wire = (id, scenario) =>
+        document
+          .getElementById(id)
+          .addEventListener('click', () => mount(createDemoClient({ scenario })));
+      wire('demo-normal', 'normal');
+      wire('demo-round2', 'round2');
+      wire('demo-odd', 'odd');
+      wire('demo-conflict', 'conflict');
+      wire('demo-small-roster', 'small');
       document
         .getElementById('demo-failed')
         .addEventListener('click', () => mount(failingClient()));
 
+      if (new URLSearchParams(location.search).get('theme') === 'stage') {
+        document.documentElement.setAttribute('data-surface', 'stage');
+      }
       mount(createDemoClient());
     </script>
   </body>
