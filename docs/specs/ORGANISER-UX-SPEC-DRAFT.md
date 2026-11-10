@@ -36,13 +36,13 @@ for access) is the approved design. **Build it exactly, or as close as the real 
 text disagree on looks, the canvas wins. Where they disagree on behaviour, this text wins, and the canvas gets fixed. It has
 five artboards, all with fictional data:
 
-| Artboard                    | Spec item | What to match                                                                                                                          |
-| --------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Artboard                    | Spec item | What to match                                                                                                                                                                |
+| --------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dashboard, tablet landscape | U1        | Next-step card on top (3px accent edge, cut-corner primary button); run sheet as a 2-column grid of phase cards; right rail of 380px with Needs attention, Live now, Records |
-| Dashboard, phone 360px      | U1        | The same content in one column; event links as a 2-by-2 grid at the bottom                                                             |
-| Matches by round            | U2        | Draw summary card; Round 1 collapsed with its count; Round 2 as rows (no., teams with flag and code, score, judges, status tag, actions) |
-| The cut                     | U3        | Points and times per round, the level teams tinted with a warning edge, a black "Cut line · top 8 go through" bar, the tie card and Lock card on the right |
-| Sign-off sheet (A4)         | U3        | Beta band boxed at the top, the eight in seed order, "Ties settled" box, "Not going through" in two columns, two signature blocks      |
+| Dashboard, phone 360px      | U1        | The same content in one column; event links as a 2-by-2 grid at the bottom                                                                                                   |
+| Matches by round            | U2        | Draw summary card; Round 1 collapsed with its count; Round 2 as rows (no., teams with flag and code, score, judges, status tag, actions)                                     |
+| The cut                     | U3        | Points and times per round, the level teams tinted with a warning edge, a black "Cut line · top 8 go through" bar, the tie card and Lock card on the right                   |
+| Sign-off sheet (A4)         | U3        | Beta band boxed at the top, the eight in seed order, "Ties settled" box, "Not going through" in two columns, two signature blocks                                            |
 
 Visual rules taken from the canvas, all on existing Petrol V2 tokens (no new palette):
 
@@ -84,14 +84,14 @@ event is in, what is left, or what to press next. Cup Taster's dashboard has a "
 **Proposal.** One card per phase, in order, each with a status and a count, and **one primary button: the next
 action**. The four existing links stay as secondary navigation.
 
-| Phase         | Done when                                                  | Count shown                         | Next action                    |
-| ------------- | ---------------------------------------------------------- | ----------------------------------- | ------------------------------ |
-| Setup         | an even number of teams, at least 3 judges, **every team has a country** (Q3) | "20 teams · 9 judges · 2 without a country" | Add teams / judges / Set countries |
-| Round 1       | every round-1 match confirmed                              | "7 of 10 confirmed"                 | Draw round 1 / Score next      |
-| Round 2       | every round-2 match confirmed                              | "0 of 10 confirmed"                 | Draw round 2                   |
-| The cut       | top 8 settled (ties recorded), bracket generated           | "2 ties to settle"                  | Settle ties / Generate bracket |
-| Knockout      | final and third place confirmed                            | "QF 4 of 4 · SF 1 of 2"             | Assign judges / Score next     |
-| Podium        | podium decided                                             | champion, runner-up, third          | Show the podium                |
+| Phase    | Done when                                                                     | Count shown                                 | Next action                        |
+| -------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------- |
+| Setup    | an even number of teams, at least 3 judges, **every team has a country** (Q3) | "20 teams · 9 judges · 2 without a country" | Add teams / judges / Set countries |
+| Round 1  | every round-1 match confirmed                                                 | "7 of 10 confirmed"                         | Draw round 1 / Score next          |
+| Round 2  | every round-2 match confirmed                                                 | "0 of 10 confirmed"                         | Draw round 2                       |
+| The cut  | top 8 settled (ties recorded), bracket generated                              | "2 ties to settle"                          | Settle ties / Generate bracket     |
+| Knockout | final and third place confirmed                                               | "QF 4 of 4 · SF 1 of 2"                     | Assign judges / Score next         |
+| Podium   | podium decided                                                                | champion, runner-up, third                  | Show the podium                    |
 
 - Each phase is **not started / in progress / done / blocked**, and a blocked phase says why in one sentence that
   names the fix ("Round 2 waits for round 1: 3 matches not confirmed").
@@ -126,17 +126,17 @@ podium) the dashboard shows the right phase, counts and next action; tests per s
 Rule: `core/` renders, orders and announces; the format decides what a phase, a round, a qualifier or a record
 **means**. No module below may import from `src/formats/`, name a format, or branch on `event.format`.
 
-| Core module (new unless noted)  | Renders                                                                  | The format supplies                                                                                                   | BTC now / later ports                                         |
-| ------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `core/runSheet.js`              | Ordered phase cards, status, count, one primary next action, blocked reason | `derivePhases(eventData) → [{ id, label, status, count, nextAction: { label, href }, blockedReason }]` (pure)         | BTC: setup, R1, R2, cut, knockout, podium. Cup Taster: stages. Throwdown: rounds |
-| `core/eventWarnings.js`         | One warnings list, each with a link to its fix                           | `deriveWarnings(eventData) → [{ id, severity, text, href }]` (pure)                                                   | BTC: missing times, judge-country ticks. Others: their own    |
-| `core/liveCard.js`              | Live now / not showing, audience links, copy + QR, "Show this event"     | the event, the org slug, a `takeOver()` callback (the format's publish)                                               | Cup Taster already has a badge; it moves onto this later      |
-| `core/recordsCard.js`           | Download JSON / CSV buttons, file names, busy and error states           | a list of `{ label, filename, build() }`; JSON uses existing `get_dispute_pack`, CSV rows via `core/export.js` (existing) | BTC: record + scores CSV. Cup Taster: replaces its dispute-pack card |
-| `core/groupedMatchList.js`      | A list grouped by a key with per-group "N of M confirmed", status labels, one action per row, optional filter | `groupKey(match)`, `groupLabel(key)`, `rowView(match) → { title, sides, status, action }`             | BTC: by `prelim_round`. Throwdown: by knockout round. Cup Taster: heats by stage |
-| `core/cutLine.js`               | A ranked table with a qualification line after place N, level groups across it highlighted, a slot for the tie card | ranked rows from `core/ranking.js` (existing), `qualifyCount`, columns, `isLevel(a, b)`              | BTC: top 8 by points. Cup Taster: advancement cut             |
-| `core/offlineMirror.js` (widens `core/db.js`) | "Ready offline · synced N min ago"; mirror on load, read when offline | `mirrorSpec: [{ store, load(client, eventId) }]`                                                                     | BTC: teams, judges, matches. Cup Taster already mirrors; moves onto this later |
-| `core/signOffSheet.js`          | A print-designed sign-off page (browser Save as PDF), signature lines    | title, rows, columns, notes (settled ties and reasons), signatories                                                  | BTC: top 8. Cup Taster: stage advancement. Throwdown: seeding |
-| `core/statusBand.js`            | The test band (exists today per screen) and the Unofficial band, one place | the event's `is_test` / `is_shadow`                                                                               | every format, every organiser and audience surface            |
+| Core module (new unless noted)                | Renders                                                                                                             | The format supplies                                                                                                       | BTC now / later ports                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `core/runSheet.js`                            | Ordered phase cards, status, count, one primary next action, blocked reason                                         | `derivePhases(eventData) → [{ id, label, status, count, nextAction: { label, href }, blockedReason }]` (pure)             | BTC: setup, R1, R2, cut, knockout, podium. Cup Taster: stages. Throwdown: rounds |
+| `core/eventWarnings.js`                       | One warnings list, each with a link to its fix                                                                      | `deriveWarnings(eventData) → [{ id, severity, text, href }]` (pure)                                                       | BTC: missing times, judge-country ticks. Others: their own                       |
+| `core/liveCard.js`                            | Live now / not showing, audience links, copy + QR, "Show this event"                                                | the event, the org slug, a `takeOver()` callback (the format's publish)                                                   | Cup Taster already has a badge; it moves onto this later                         |
+| `core/recordsCard.js`                         | Download JSON / CSV buttons, file names, busy and error states                                                      | a list of `{ label, filename, build() }`; JSON uses existing `get_dispute_pack`, CSV rows via `core/export.js` (existing) | BTC: record + scores CSV. Cup Taster: replaces its dispute-pack card             |
+| `core/groupedMatchList.js`                    | A list grouped by a key with per-group "N of M confirmed", status labels, one action per row, optional filter       | `groupKey(match)`, `groupLabel(key)`, `rowView(match) → { title, sides, status, action }`                                 | BTC: by `prelim_round`. Throwdown: by knockout round. Cup Taster: heats by stage |
+| `core/cutLine.js`                             | A ranked table with a qualification line after place N, level groups across it highlighted, a slot for the tie card | ranked rows from `core/ranking.js` (existing), `qualifyCount`, columns, `isLevel(a, b)`                                   | BTC: top 8 by points. Cup Taster: advancement cut                                |
+| `core/offlineMirror.js` (widens `core/db.js`) | "Ready offline · synced N min ago"; mirror on load, read when offline                                               | `mirrorSpec: [{ store, load(client, eventId) }]`                                                                          | BTC: teams, judges, matches. Cup Taster already mirrors; moves onto this later   |
+| `core/signOffSheet.js`                        | A print-designed sign-off page (browser Save as PDF), signature lines                                               | title, rows, columns, notes (settled ties and reasons), signatories                                                       | BTC: top 8. Cup Taster: stage advancement. Throwdown: seeding                    |
+| `core/statusBand.js`                          | The test band (exists today per screen) and the Unofficial band, one place                                          | the event's `is_test` / `is_shadow`                                                                                       | every format, every organiser and audience surface                               |
 
 Each module: a pure part (unit-tested with fixtures from two different formats, even if only BTC uses it in March, to
 prove it is not BTC-shaped) and a thin DOM part on `core/dom.js` with the repo's loading / error / retry / focus rules.
@@ -150,6 +150,7 @@ format-only change: write that format's `derivePhases`, `rowView` and so on, and
 across two rounds and a Draw panel on top (Build B part 2), it becomes a long scroll.
 
 **Proposal.**
+
 - Group the list **by round** (Round 1, Round 2), each with its own "7 of 10 confirmed" header; unnumbered matches show
   under Round 1 (as Build A reads them).
 - Each match row: number, "Country · Team" both sides (`words.js` `teamLabel`), judges, status (scheduled / scoring /
@@ -174,6 +175,7 @@ contested moment of the event and currently has no screen of its own.
 
 **Proposal.** A "The cut" section of the Standings screen (Q8), linked from the run sheet's cut phase; the bracket
 screen keeps only the bracket. The section contains:
+
 - Standings with columns **R1 pts, R2 pts, total, R1 time, R2 time, time sum** (sum labelled as a display aid when a
   note does not parse, per engine spec 5.2).
 - A **cut line after 8th**, with any group level on points across it highlighted and the tie card inline.
@@ -211,19 +213,19 @@ tablets arrive (Q2).
 
 ## 9. Owner decisions (2026-11-10)
 
-| #   | Question                         | Answer                                                                                                        | Where              |
-| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------ |
-| Q1  | Scope                            | BTC only; every piece a shared `core/` module other formats port to                                           | 1, 3a              |
-| Q2  | How many devices enter scores    | One organiser device in March; leave room for scorer tablets later                                            | 2                  |
-| Q3  | Country required before round 1  | **Required**: round 1 cannot be drawn until every team has a country (screen rule, not database)             | 3; engine spec 4.3 |
-| Q4  | Flag a match stuck in scoring    | No                                                                                                            | 3                  |
+| #   | Question                          | Answer                                                                                                       | Where              |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------ |
+| Q1  | Scope                             | BTC only; every piece a shared `core/` module other formats port to                                          | 1, 3a              |
+| Q2  | How many devices enter scores     | One organiser device in March; leave room for scorer tablets later                                           | 2                  |
+| Q3  | Country required before round 1   | **Required**: round 1 cannot be drawn until every team has a country (screen rule, not database)             | 3; engine spec 4.3 |
+| Q4  | Flag a match stuck in scoring     | No                                                                                                           | 3                  |
 | Q5  | Status filter on the matches list | No; group by round with counts                                                                               | 4                  |
-| Q6  | Main device                      | Tablet in landscape; phone as the backup                                                                      | 2                  |
-| Q7  | Remove after confirm             | Remove only before scoring starts; fix by re-scoring (logged); the database refuses it too (P1 policy split) | 4                  |
-| Q8  | Where the cut lives              | A section of Standings                                                                                        | 5                  |
-| Q9  | Sign-off for the top 8           | A PDF sign-off sheet (browser Save as PDF, no library)                                                        | 5, 3a              |
-| Q10 | The committee's paper scoresheet | **Pending**: the owner is getting a copy; the CSV columns follow it                                          | 6                  |
-| Q11 | Offline scoring load             | The offline track; this spec shows only its status line                                                       | 7                  |
+| Q6  | Main device                       | Tablet in landscape; phone as the backup                                                                     | 2                  |
+| Q7  | Remove after confirm              | Remove only before scoring starts; fix by re-scoring (logged); the database refuses it too (P1 policy split) | 4                  |
+| Q8  | Where the cut lives               | A section of Standings                                                                                       | 5                  |
+| Q9  | Sign-off for the top 8            | A PDF sign-off sheet (browser Save as PDF, no library)                                                       | 5, 3a              |
+| Q10 | The committee's paper scoresheet  | **Pending**: the owner is getting a copy; the CSV columns follow it                                          | 6                  |
+| Q11 | Offline scoring load              | The offline track; this spec shows only its status line                                                      | 7                  |
 | Q12 | Live controls during a shadow run | Shown, with the band "Seduh Score ABTC Beta Test" (replaces D4's recommendation)                             | 3                  |
 
 **Knock-on changes to other documents (not made here):** the engine spec's Draw panel (4.3) gains the country rule
@@ -232,14 +234,14 @@ delete of a match with scores" (Q7).
 
 ## 10. Order, reviewers, and what each needs
 
-| Item                  | Depends on                          | Reviewers                                                                                                                             |
-| --------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| U4 records card       | JSON now; CSV after Q10's sheet     | `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`, `module-boundary-checker`                                               |
-| U1 run sheet          | Build B part 2 for the round phases | same, plus `module-boundary-checker` blocking for `core/runSheet.js`                                                                  |
-| U2 matches by round   | Build B part 2                      | `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`                                                                          |
-| U2 Remove rule (DB)   | the P1 `btc_matches` policy split   | `security-reviewer`, `schema-guardian`, `test-auditor`                                                                                |
-| U3 cut + sign-off     | Build C                             | `scoring-auditor` (it shows who qualifies), `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`, `module-boundary-checker` |
-| U6 copy pass          | after U1 to U3                      | `code-reviewer`; owner approves wording                                                                                               |
+| Item                | Depends on                          | Reviewers                                                                                                                           |
+| ------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| U4 records card     | JSON now; CSV after Q10's sheet     | `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`, `module-boundary-checker`                                             |
+| U1 run sheet        | Build B part 2 for the round phases | same, plus `module-boundary-checker` blocking for `core/runSheet.js`                                                                |
+| U2 matches by round | Build B part 2                      | `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`                                                                        |
+| U2 Remove rule (DB) | the P1 `btc_matches` policy split   | `security-reviewer`, `schema-guardian`, `test-auditor`                                                                              |
+| U3 cut + sign-off   | Build C                             | `scoring-auditor` (it shows who qualifies), `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`, `module-boundary-checker` |
+| U6 copy pass        | after U1 to U3                      | `code-reviewer`; owner approves wording                                                                                             |
 
 All of it lands before rehearsal 1 (mid-January, plan P2). `kb-sync` at the end of each task.
 
@@ -248,13 +250,13 @@ All of it lands before rehearsal 1 (mid-January, plan P2). `kb-sync` at the end 
 Split so that no two sessions running at the same time touch the same files. `src/ui/tokens/components.css`,
 `matchesScreen.js` and `standingsScreen.js` are the shared hot spots, so each has exactly one owning stage at a time.
 
-| Stage | What                                                                                                                                         | Owns (files)                                                                                       | Can start                                   |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| S1    | **Core organiser kit**: `statusBand`, `countryFlag` with the SVG set, `recordsCard`, `liveCard`, `runSheet`, `eventWarnings` (renderers + pure parts, tested with two formats' fixtures, a `.preview.html` matching the canvas) | `src/core/` new files, `src/ui/tokens/components.css`, flag assets                                | Now                                         |
-| S2    | **U1 + U4 BTC dashboard**: `src/formats/btc/runSheet.js` (phases, warnings), the dashboard rebuilt on the kit, records card (JSON; CSV after Q10), `teamLabel` gains the flag | `src/formats/btc/eventDashboardScreen.*`, `src/formats/btc/runSheet.js`, `words.js`                | After S1 merges                             |
-| S3    | **U2 matches by round**: `core/groupedMatchList`, the round grouping, Remove only before scoring, the hand form collapsed                    | `src/formats/btc/matchesScreen.*`, `core/groupedMatchList.js`                                      | After S1 and engine Build B part 2 (Draw panel, same file) merge |
-| S4    | **U3 the cut**: `core/cutLine`, `core/signOffSheet`, the Standings cut section, Lock moves off the bracket screen                           | `src/formats/btc/standingsScreen.*`, `bracketScreen.js` (Lock only), the two core modules           | After S1 and engine Build C merge           |
-| S5    | **U6 copy pass** over every BTC organiser screen                                                                                             | wording only                                                                                       | After S2 to S4                              |
+| Stage | What                                                                                                                                                                                                                            | Owns (files)                                                                              | Can start                                                        |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| S1    | **Core organiser kit**: `statusBand`, `countryFlag` with the SVG set, `recordsCard`, `liveCard`, `runSheet`, `eventWarnings` (renderers + pure parts, tested with two formats' fixtures, a `.preview.html` matching the canvas) | `src/core/` new files, `src/ui/tokens/components.css`, flag assets                        | Now                                                              |
+| S2    | **U1 + U4 BTC dashboard**: `src/formats/btc/runSheet.js` (phases, warnings), the dashboard rebuilt on the kit, records card (JSON; CSV after Q10), `teamLabel` gains the flag                                                   | `src/formats/btc/eventDashboardScreen.*`, `src/formats/btc/runSheet.js`, `words.js`       | After S1 merges                                                  |
+| S3    | **U2 matches by round**: `core/groupedMatchList`, the round grouping, Remove only before scoring, the hand form collapsed                                                                                                       | `src/formats/btc/matchesScreen.*`, `core/groupedMatchList.js`                             | After S1 and engine Build B part 2 (Draw panel, same file) merge |
+| S4    | **U3 the cut**: `core/cutLine`, `core/signOffSheet`, the Standings cut section, Lock moves off the bracket screen                                                                                                               | `src/formats/btc/standingsScreen.*`, `bracketScreen.js` (Lock only), the two core modules | After S1 and engine Build C merge                                |
+| S5    | **U6 copy pass** over every BTC organiser screen                                                                                                                                                                                | wording only                                                                              | After S2 to S4                                                   |
 
 Database pieces stay with the Board plan's P1 tasks, not these stages: `is_shadow` (the band shows once it exists; S1
 reads the flag and shows nothing without it) and refusing to delete a scored match (Q7). Every stage is checked at
