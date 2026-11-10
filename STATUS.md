@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-10, app version 4.1.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-10, app version 4.2.1, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
