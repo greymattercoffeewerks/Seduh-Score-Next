@@ -89,24 +89,28 @@ function arrow() {
 }
 
 function buildHero() {
-  return el('section', { className: 'tour-hero', attrs: { 'aria-labelledby': 'tour-title' } }, [
-    el('div', { className: 'tour-hero-grid', attrs: { 'aria-hidden': 'true' } }),
-    el('p', { className: 'tour-kicker', text: 'Seduh Score / The tour' }),
-    el('h1', { id: 'tour-title' }, [
-      document.createTextNode('A better way to '),
-      el('span', { text: 'run the floor.' }),
-    ]),
-    el('p', {
-      className: 'tour-hero-intro',
-      text: 'Competition formats for the serious work, plus small Community tools for everything around it.',
-    }),
-    el('div', { className: 'tour-hero-status' }, [
-      el('span', { className: 'tour-status-mark icon-frame', text: '01' }),
-      el('span', {
-        text: 'Cup Taster, BTC and Throwdown are live now. More formats are on the way.',
+  return el(
+    'section',
+    { className: 'tour-hero page-hero', attrs: { 'aria-labelledby': 'tour-title' } },
+    [
+      el('div', { className: 'page-hero-grid', attrs: { 'aria-hidden': 'true' } }),
+      el('p', { className: 'page-hero-kicker', text: 'Seduh Score / The tour' }),
+      el('h1', { id: 'tour-title' }, [
+        document.createTextNode('A better way to '),
+        el('span', { text: 'run the floor.' }),
+      ]),
+      el('p', {
+        className: 'page-hero-intro',
+        text: 'Competition formats for the serious work, plus small Community tools for everything around it.',
       }),
-    ]),
-  ]);
+      el('div', { className: 'tour-hero-status' }, [
+        el('span', { className: 'tour-status-mark icon-frame', text: '01' }),
+        el('span', {
+          text: 'Cup Taster, BTC and Throwdown are live now. More formats are on the way.',
+        }),
+      ]),
+    ],
+  );
 }
 
 function setBoard() {

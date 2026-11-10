@@ -88,15 +88,16 @@ export function scoreCell(correct, total) {
 function buildHero(stats) {
   return el(
     'section',
-    { className: 'results-hero', attrs: { 'aria-labelledby': 'results-title' } },
+    { className: 'results-hero page-hero', attrs: { 'aria-labelledby': 'results-title' } },
     [
-      el('p', { className: 'results-kicker', text: 'Community archive' }),
+      el('div', { className: 'page-hero-grid', attrs: { 'aria-hidden': 'true' } }),
+      el('p', { className: 'page-hero-kicker', text: 'Seduh Score / Community archive' }),
       el('h1', { id: 'results-title' }, [
         document.createTextNode('Every table tells a '),
         el('span', { text: 'story.' }),
       ]),
       el('p', {
-        className: 'results-hero-intro',
+        className: 'page-hero-intro',
         text:
           'A living record of competition days run with Seduh Score — celebrating the ' +
           'people, places, and performances behind the results.',
@@ -318,15 +319,16 @@ function buildArchive(events, client) {
 function buildEmptyState() {
   return el(
     'section',
-    { className: 'results-hero', attrs: { 'aria-labelledby': 'results-title' } },
+    { className: 'results-hero page-hero', attrs: { 'aria-labelledby': 'results-title' } },
     [
-      el('p', { className: 'results-kicker', text: 'Community archive' }),
+      el('div', { className: 'page-hero-grid', attrs: { 'aria-hidden': 'true' } }),
+      el('p', { className: 'page-hero-kicker', text: 'Seduh Score / Community archive' }),
       el('h1', { id: 'results-title' }, [
         document.createTextNode('Every table tells a '),
         el('span', { text: 'story.' }),
       ]),
       el('p', {
-        className: 'results-hero-intro',
+        className: 'page-hero-intro',
         text: 'No results published yet — check back soon.',
       }),
     ],
@@ -334,7 +336,7 @@ function buildEmptyState() {
 }
 
 function buildLoadingState() {
-  return el('section', { className: 'results-hero' }, [
+  return el('section', { className: 'results-hero page-hero' }, [
     el('div', {
       className: 'screen-feedback',
       text: 'Loading results…',
@@ -344,7 +346,7 @@ function buildLoadingState() {
 }
 
 function buildErrorState(message) {
-  return el('section', { className: 'results-hero' }, [
+  return el('section', { className: 'results-hero page-hero' }, [
     el('div', {
       className: 'screen-feedback',
       text: message,

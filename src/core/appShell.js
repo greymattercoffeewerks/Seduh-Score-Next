@@ -390,7 +390,7 @@ export function mountAppShell(
   // — this text never changes after mount, so there's nothing to announce.
   //
   // The version number itself links to /bts/index.html (2026-09-05, same day
-  // the BTS page was migrated and wired in — public/bts/index.html) — same
+  // the BTS page was migrated and wired in; it is a Vite entry, bts/index.html, since 2026-11-09) — same
   // idea as the legacy site's own footer, which reads as a nameplate/credit
   // line pointing at exactly that page. The full `index.html` filename is
   // required, not just `/bts/` — verified live: this app's SPA fallback

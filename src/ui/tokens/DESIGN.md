@@ -255,12 +255,12 @@ specific to Petrol:
 - **Names:** long names in the phone standings (Cup Taster, BTC) and the projector table are cut with an ellipsis,
   the "(tied)" beside them never is; stage titles use `text-wrap: balance`.
 - **Colours:** `colors.css` gained `--clr-white`, `--clr-black` (paper and ink for print) and
-  `--clr-chart-1..8` (the categorical chart palette). `public/bts/index.html` cannot link the tokens, so it keeps
-  a copy of the palette and motion tokens, held equal by `btsPalette.test.js`.
+  `--clr-chart-1..8` (the categorical chart palette). Behind the Seduh (`bts/index.html`) links the tokens like any
+  other page since 2026-11-09 (it used to keep a copy in `public/bts/`), so `src/marketing/bts.css` is drift-guarded.
 - **Motion exceptions** (named, deliberately not on the tokens): ambient loops (splash glow, Guess the Bean
-  float/bob/spin, landing marquee, the live blip's 4s breathe, bts glow and pulse ring), the Guess the Bean
-  celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), stepped animations (Random
-  Selector flip, timer blink) and bts's tactile `--ease-out-back`.
+  float/bob/spin, landing marquee, the live blip's 4s breathe), the Guess the Bean
+  celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), and stepped animations (Random
+  Selector flip, timer blink).
 
 ## Public pages: shared primitives
 
@@ -284,6 +284,14 @@ their own `.form-field` and `.screen-feedback` names), and its `.btn` carries th
 equal, so a card and a pricing card cannot drift. A page adds only layout and, where it must, a variable
 (`--tag-edge: var(--color-success)`); it never restates the border, fill or corner.
 
+**One page hero (2026-11-09).** Tour, Community hub, Pricing and Results open on the same `.page-hero` (`base.css`):
+a 3.5rem to 6rem gap below the header, a 2.75rem to 6rem uppercase display headline with its accent words in a `span`,
+the mono kicker (`.page-hero-kicker`, "Seduh Score / …"), the intro (`.page-hero-intro`) and the faint grid backdrop
+(`.page-hero-grid`, `aria-hidden`). They had drifted to four sizes (3.5rem to 7.75rem), three gaps and a grid on two
+of four. A page keeps only its width and what it alone has (the hub's circles, the tour's status line, the results
+stats). Distinct on purpose, so not on it: the landing page's full-bleed photo hero and the trust pages' document
+title. `sharedPrimitives.test.js` fails if a page drops a hero part or restates `-hero h1`.
+
 **Stays square, on purpose:** full-bleed page bands and roots, the header bar and mobile menu panel, the landing ticker,
 live bar and edge-to-edge format rows, the printable results sheet, a flag glyph and decorative fills. A rounded
 corner on something that touches both screen edges reads as a bug, not a style. These are the `SQUARE_ALLOWLIST` in
@@ -300,7 +308,7 @@ things go in `SQUARE_ALLOWLIST` (file, selector chain, kind, reason; exact both 
 `src/marketing/sharedPrimitives.test.js` checks the markup really carries the shared classes.
 
 `src/ui/tokens/tokenDrift.test.js` fails CI when a stylesheet outside this folder (every `*.css` under `src/`, and
-the inline `<style>` of HTML pages; not `public/bts/index.html`, `design/`, or `*.preview.html` dev harnesses)
+the inline `<style>` of HTML pages; not `design/` or `*.preview.html` dev harnesses)
 writes a raw colour (hex, `rgb()`, `hsl()`), a `border-radius` length that is not `var(--radius-*)`,
 `var(--bevel-*)`, `0` or `inherit`, a time or easing literal in `transition`/`animation`, or a
 `clip-path: polygon()`. Known gaps: longhand `animation-delay`/`transition-delay` (stagger offsets), named and modern colours (`white`, `oklch()`), and values hidden behind a custom property are not checked. For a translucent token colour use `color-mix(in srgb, var(--clr-white) 8%, transparent)`.
