@@ -104,3 +104,5 @@ comment at the top of `bts/index.html`.
 - 2026-11-09: the Throwdown major was missed; the BTS consistency test is added.
 - 2026-11-10: the patch/minor/major table, "usable or not", the release-PR backstop and this file (moved out of
   `CONVENTIONS.md`).
+- 2026-11-10: first use. The BTC Draw panel and Redraw round reached `dev` as 4.0.1; being a new usable capability,
+  they were re-bumped to 4.1.0 before release, and the BTS draw entry was marked live.

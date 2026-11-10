@@ -21,6 +21,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
   - `code-reviewer` (owner's pass): no 🔴. Three nits fixed: two `ROADMAP.md` lines still citing `CONVENTIONS.md` for the nameplate rule (now point to `docs/versioning.md`); `kb-sync`'s capability list was missing "visible redesign" (added); the "say what the number covers" note restored for every bump (`docs/versioning.md`).
   - Not run: `module-boundary-checker` and `test-auditor`. The review protocol (CLAUDE.md, step 5) needs `code-reviewer` at most for a docs- or comment-only change; the only `src/` edits are `src/marketing/CLAUDE.md` and one comment in `btsPage.test.js`.
 - **Checks:** `npm run check:docs` OK (owner's run; re-run at close). `tools/check-doc-budgets.test.js` "brokenLinks" fails only on Windows (the known `/r/` path quirk, see the entry below).
+- **First use, same PR (owner-approved, 2026-11-10):** the BTC Draw panel and Redraw round (Build B parts 2 and 3) had reached `dev` as 4.0.1. They are a new usable capability, so `dev` is now **4.1.0** (`npm version minor`), and Behind the Seduh's "The draw, under the floor" entry became "Draw a round, and redraw it", marked live (the `btc_redraw_round` migration is in the cloud, checked 2026-11-10), with the chapter, scoreboard (v4.1.0) and Kiarong rail note updated. The page test no longer looks for the old "no screen for it yet" sentence.
 - **Open follow-up:** PR into `dev`, merged by the owner when CI is green. Behind the Seduh's current place and version are unchanged by this entry.
 
 ---

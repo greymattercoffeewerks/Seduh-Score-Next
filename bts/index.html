@@ -58,7 +58,7 @@
             <p class="bts-eyebrow">Behind the Seduh</p>
             <p class="bts-board-now">
               <span class="bts-board-place" data-bts-place>Kiarong</span>
-              <span class="bts-board-ver" data-bts-version>v4.0.0</span>
+              <span class="bts-board-ver" data-bts-version>v4.1.0</span>
               <span class="tag bts-current"><span class="status-live-dot"></span>Current</span>
             </p>
             <dl class="bts-stats">
@@ -90,7 +90,7 @@
             <p class="bts-board-latest">
               Latest chapter:
               <a href="#ms-kiarong-btc">BTC, built for a bigger draw</a> — countries on teams and
-              judges, round numbers and finish times, and the draw under the floor.
+              judges, round numbers and finish times, and drawing a round.
             </p>
           </aside>
         </header>
@@ -191,7 +191,7 @@
                   >Throwdown, the third format, opened it, six days before the version number
                   noticed. Then one look across every screen, and BTC readied for a bigger draw:
                   countries on teams and judges, numbered preliminary rounds, finish times that
-                  check themselves, and a draw engine waiting for its screen.</span
+                  check themselves, and a draw panel to run it.</span
                 >
               </a>
             </li>
@@ -260,15 +260,15 @@
                 <section class="bts-chapter" id="ms-kiarong-btc" aria-labelledby="ms-kiarong-btc-h">
                   <header class="bts-chapter-head">
                     <p class="bts-chapter-meta">
-                      <span>Kiarong</span><span>8 to 9 November 2026</span
-                      ><span>v3.6.4 to v4.0.0</span><span>3 entries</span>
+                      <span>Kiarong</span><span>8 to 10 November 2026</span
+                      ><span>v3.6.4 to v4.1.0</span><span>3 entries</span>
                     </p>
                     <h4 class="bts-chapter-title" id="ms-kiarong-btc-h">
                       BTC, built for a bigger draw
                     </h4>
                     <p class="bts-chapter-sum">
-                      Countries on teams and judges · Round numbers and finish times · The draw,
-                      under the floor
+                      Countries on teams and judges · Round numbers and finish times · Draw a round,
+                      and redraw it
                     </p>
                   </header>
                   <div class="bts-entries">
@@ -337,32 +337,41 @@
                         <li class="tag">In the room</li>
                       </ul>
                     </article>
-                    <article class="bts-entry panel" data-tags="Formats">
+                    <article class="bts-entry panel" data-tags="Formats|In the room" data-live>
                       <header class="bts-entry-head">
-                        <h5 class="bts-entry-name">The draw, under the floor</h5>
-                        <span class="bts-entry-ver">v4.0.0</span>
+                        <h5 class="bts-entry-name">Draw a round, and redraw it</h5>
+                        <span class="bts-entry-ver">v4.0.0 to v4.1.0</span
+                        ><span class="tag bts-live"
+                          ><span class="status-live-dot"></span>Live now</span
+                        >
                       </header>
                       <p class="bts-felt">
                         <span class="bts-k">Felt like</span>
                         <span class="bts-felt-v"
-                          >building the hat before anyone gets to pull a name out of it.</span
+                          >building the hat, then letting the organiser pull the names out of it,
+                          and put them back if the first pull was wrong.</span
                         >
                       </p>
                       <div class="bts-ship">
                         <span class="bts-k">Shipped</span>
                         <p class="bts-ship-v">
-                          The engine for drawing a BTC round: a random first round, and a second
-                          round drawn either at random without repeats or from the first
-                          round&#x27;s results, strongest against weakest. Every draw keeps its
-                          seed, so the same seed and the same teams give the same draw again. It
-                          tries to keep a judge away from their own country&#x27;s teams, and when
-                          it can&#x27;t, it says so. The database keeps a record of how each round
-                          was drawn. There is no screen for it yet, so no organiser can press Draw.
-                          The panel is the next piece.
+                          The organiser can now draw a BTC round from the matches screen. Round one
+                          is random; round two is drawn either at random without repeat opponents or
+                          from round one&#x27;s results, strongest against weakest. The seed is
+                          shown and can be typed back in, so the same seed and the same teams give
+                          the same draw again. Teams can be swapped by hand, which records the draw
+                          as manual. Judges are dealt away from their own country&#x27;s teams where
+                          possible, and a judge who shares a country with a team turns the match red
+                          and holds the round until the judge is changed or the organiser ticks that
+                          the conflict is allowed. The database keeps a record of how each round was
+                          drawn. A round can be redrawn, but only while nothing in it has been
+                          scored and no later round exists. The engine went in as groundwork in
+                          v4.0.0; the panel that makes it usable is v4.1.0.
                         </p>
                       </div>
                       <ul class="bts-tags" aria-label="Topics">
                         <li class="tag">Formats</li>
+                        <li class="tag">In the room</li>
                       </ul>
                     </article>
                   </div>

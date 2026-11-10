@@ -112,7 +112,6 @@ describe('Behind the Seduh: the static content', () => {
   it('keeps the formats that have not run live honest', () => {
     const text = root.body.textContent.replace(/\s+/g, ' ');
     expect(text).toContain('Throwdown has not yet been run at a live event');
-    expect(text).toMatch(/no screen for it yet/);
   });
 });
 
