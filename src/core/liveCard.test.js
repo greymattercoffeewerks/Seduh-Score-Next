@@ -212,4 +212,21 @@ describe('buildLiveCard', () => {
       vi.useRealTimers();
     }
   });
+
+  it('can be retried after a refusal and after a failure', async () => {
+    const takeOver = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, message: 'Another event is live.' })
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ ok: true });
+    const { element } = build({ isLive: false, takeOver });
+    const button = element.querySelector('.ok-live-show');
+    for (let i = 0; i < 3; i += 1) {
+      button.click();
+      await settle();
+      await settle();
+    }
+    expect(takeOver).toHaveBeenCalledTimes(3);
+    expect(element.dataset.state).toBe('live');
+  });
 });

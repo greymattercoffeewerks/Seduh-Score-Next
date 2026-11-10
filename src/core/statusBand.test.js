@@ -96,6 +96,8 @@ describe('renderStatusBand', () => {
     expect(rules.length).toBeGreaterThan(0);
     for (const rule of rules) {
       expect(rule).not.toMatch(/color-test|clr-test/);
+      // ...nor the violet written as a literal value.
+      expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
     }
     // The amber edge and the graphite fill are the intended ones.
     const band = rules.find((rule) => rule.startsWith('.ok-beta-band {'));

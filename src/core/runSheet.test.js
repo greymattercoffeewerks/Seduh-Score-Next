@@ -238,4 +238,10 @@ describe('buildRunSheet', () => {
     expect(sheet.querySelector('b, i')).toBeNull();
     expect(text(sheet, '.ok-next-title')).toBe('<img src=x onerror=alert(1)>');
   });
+
+  it('draws no primary button when there is nothing to press (waiting, complete, none)', () => {
+    for (const phases of [cupTasterStages, [{ id: 'a', label: 'A', status: 'done' }], []]) {
+      expect(buildRunSheet(phases).querySelectorAll('.btn-primary')).toHaveLength(0);
+    }
+  });
 });

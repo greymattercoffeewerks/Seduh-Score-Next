@@ -24,9 +24,14 @@ describe('normaliseCountryCode', () => {
 
 describe('the flag set', () => {
   it('has a flag for every code in core/country.js (the one list the app uses)', () => {
+    const onDisk = new Set(
+      readdirSync('src/core/flags')
+        .filter((name) => name.endsWith('.svg'))
+        .map((name) => name.slice(0, -4).toUpperCase()),
+    );
     const missing = countryOptions()
       .map((option) => option.iso)
-      .filter((iso) => !hasFlag(iso));
+      .filter((iso) => !onDisk.has(iso) || !hasFlag(iso));
     expect(missing).toEqual([]);
   });
 
