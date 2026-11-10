@@ -8,6 +8,32 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Organiser UX S1: core organiser kit · 2026-11-10
+
+**Task:** Organiser UX stage S1 of five (S1 the shared core kit; S2 to S5 build the organiser screens on it and wait for S1). Branch `claude/organiser-ux-s1-core-kit-1f2e99`, commits `41b544f`, `bb0e37a` (review fixes), `4f93e2b` (hardening). **PR into `dev` open, not merged.** No version bump: the owner's brief calls this groundwork, not a release (see the version note below). No migration, no `src/formats/`, no `main.js` change.
+
+- **Why:** the owner approved the BTC organiser mockup on 2026-11-10 as the build reference. The screens need one shared set of cards first (status, flags, run sheet, warnings, live and records cards), so each format's screens do not reinvent them. The kit is format-agnostic: nothing in `src/core/` knows BTC.
+- **New core modules** (`src/core/`):
+  - `statusBand`: test band unchanged; beta band for `is_shadow`; no flag means no band; TEST wins over beta; the caller may override the wording. The default wording is BTC-flavoured, kept per the owner's brief; the override is the fix for the boundary finding below.
+  - `countryFlag`: 243 self-hosted flag-icons 7.2.3 SVGs (MIT; licence in `src/core/flags/LICENSE`), loaded lazily through `import.meta.glob`, so no flag is in the bundle until a screen imports the module.
+  - `runSheet`, `eventWarnings`, `liveCard`, `recordsCard`: the cards themselves.
+  - `kitLink`: `safeHref` refuses the backslash and tab forms of a protocol-relative link; `kitId` gives each card unique ids.
+- **Also:** `.ok-*` styles in `src/ui/tokens/components.css`; `audienceLinksCard` now exports `loadQrFactory` and `qrSvg` so the kit reuses the existing QR path; a paragraph in `src/core/CLAUDE.md`; the `organiserKit.preview.html` harness (tablet landscape and phone at 360px), added to the pinned list in `components.test.js`.
+- **Checks:** ESLint and prettier clean; vitest green across 233 files except `tools/check-doc-budgets.test.js` (`brokenLinks`), a known Windows-only failure unrelated to this change.
+- **Build caveat:** the app-level Vite build tree-shakes the flags until S2 imports `countryFlag`, so the production flag chunks were verified only through a library build. **S2 must check the app build once it imports them.**
+- **Credits:** the Privacy/credits page lists no third-party libraries, so no credit line was added. The licence file travels with the flags. Whether the credits page should name flag-icons is the owner's call.
+- **Reviews** (findings and how each ended; all fixes landed in `bb0e37a` and `4f93e2b`):
+  - `module-boundary-checker`: 1 important, BTC wording baked into the `statusBand` default. Fixed by the caller override; default kept per the brief. 1 nit, the take-over timeout. Fixed.
+  - `ui-accessibility-reviewer` (360px first): 2 important, focus lost after "Show this event" and an untimed take-over. Both fixed. 3 nits, not-started edge contrast, a stale copy timer and next-step wrap. All fixed.
+  - `code-reviewer`: 0 important. 3 nits, a stale timer, duplicate ids and `liveLinks` missing `safeHref`. All fixed.
+  - `test-auditor`: 2 important, the retry path untested and `safeHref` backslash and tab forms untested. Both fixed. 4 nits: the literal colour check and flag-test independence fixed; one-primary-button states fixed; wall-clock waits left (see follow-ups).
+  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor`. No RLS, RPC, Storage, migration, scoring or outbox change.
+- **Open follow-ups:**
+  - **Re-review on the final diff is not recorded.** The reviewers that raised important findings (`module-boundary-checker`, `ui-accessibility-reviewer`, `test-auditor`) need a run on the fix commits before the PR merges. This entry is not final until that is recorded.
+  - Wall-clock waits in the kit's tests (test-auditor nit) are not yet in `docs/backlog/`.
+  - S2 to S5 wait for S1 to merge.
+- **Version note:** a build session that ships groundwork nobody can use yet would normally take a patch under `docs/versioning.md`. This task was held at no bump on the owner's explicit instruction. The owner or the release PR decides whether it rides a patch later.
+
 ## Version rules moved to docs/versioning.md; minor defined · 2026-11-10
 
 **Task:** owner request 2026-11-10, not a roadmap item. Branch `docs/versioning-guide` in worktree `C:\Dev\seduh-score-next-ver`: commit `4bbdc88` plus the review fixes, committed together. **Committed, not pushed.** No version bump: docs, a PR template and a test comment only, and nothing the deployed app is built from changed (`docs/versioning.md`, "The CI gate").
