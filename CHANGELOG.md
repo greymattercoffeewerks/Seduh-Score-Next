@@ -16,6 +16,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **"One look, everywhere"** gains "One hero for the public pages" (v3.6.7), which the page had missed.
 - Scoreboard v4.2.0 and 43 entries; Kiarong rail (4 chapters, note, link to the new chapter) and intro updated. No competitor named; nothing about March, the Board or the committee.
 - **Checks:** `btsPage.test.js` and `tokenDrift.test.js` pass (39).
+- **Reviews:** `code-reviewer`, no 🔴; 5 copy nits, all fixed (245 flags, not 243; flags appear in the Setup team list, not on the dashboard; step states are in progress, not live; the time-limit message needs both rounds at the limit; scoreboard set to v4.2.1). Pre-existing, logged not fixed: `src/core/flags/README.md` and the S1 entry above also say 243.
 
 ---
 
