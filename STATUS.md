@@ -57,6 +57,7 @@ selectable. Registration opens January 2027. Round 2's by-results method is stro
 | What shipped in the last two weeks            | [`CHANGELOG.md`](CHANGELOG.md)                                                         |
 | An older entry, by task id or title           | [`CHANGELOG-INDEX.md`](CHANGELOG-INDEX.md), then `docs/archive/changelog/`             |
 | The live programme and nameplate plan         | [`ROADMAP.md`](ROADMAP.md)                                                             |
+| Which version part to bump, place names       | [`docs/versioning.md`](docs/versioning.md)                                             |
 | Open items and deferred findings, by area     | [`docs/backlog/README.md`](docs/backlog/README.md)                                     |
 | Old status banners and Phases 1 to 5          | [`docs/archive/roadmap/`](docs/archive/roadmap/status-banners-and-finished-phases.md)  |
 | Admin operator runbooks and rollout record    | [`docs/runbooks/admin-console.md`](docs/runbooks/admin-console.md)                     |

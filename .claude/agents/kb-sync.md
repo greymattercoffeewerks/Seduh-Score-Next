@@ -53,8 +53,12 @@ For each task completed:
    orchestrating session pushed and watched CI fail, costing a whole extra round trip.
    Cheaper to run once here than to rediscover it per task.
 8. Bump the footer version: run `npm version patch --no-git-tag-version` (repo root).
+   Patch is the default. If the task added a capability someone can now use (a new screen or flow, a format
+   module, a community tool, a platform feature or a visible redesign), run `npm version minor --no-git-tag-version` instead and say so in the entry. If it shipped a
+   new competition format, do not bump: stop and tell the orchestrating session that a major and a place-name move
+   are owed (owner's call). The table is in `docs/versioning.md`.
    This is `package.json`'s `version` field — the single source `src/core/version.js`
-   re-exports as `APP_VERSION` (see CONVENTIONS.md's "Versioning" section) — bumped here
+   re-exports as `APP_VERSION` (see `docs/versioning.md`) — bumped here
    so the footer always names the exact deployed commit without relying on anyone
    remembering to do it by hand (that manual discipline was tried and silently skipped
    for months; this step replaces it, 2026-09-05). Uses `--no-git-tag-version` since this
