@@ -301,6 +301,10 @@ rejected (`GH006`), changes land via PR. This required making the GitHub repo pu
 handoff's own `LICENSE.md` already frames this repo as publicly viewable for
 transparency/portfolio purposes, so this aligns with that, not against it.
 
+Releases (`dev` into `main`): the PR title names the version, and the version follows
+[docs/versioning.md](docs/versioning.md) (a new format is a major and moves the place name; a new usable capability
+is at least a minor). Read it whenever a version, the place name or the Behind the Seduh page is in question.
+
 Migrations: local dev (`npm run db:reset`) first, then push to the linked cloud project
 once verified — see the Repo section below for the project details and how the first
 push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not

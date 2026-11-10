@@ -411,3 +411,11 @@ photo wording if more event photos go on public pages. `hero-cupping-bowls.jpg` 
 event photo from Kinetic's own proof section (Girls Got Drip Vol. 0) — kept under its
 original filename and reused for the proof section here specifically because it's
 genuine, unlike the handoff's own placeholder photo of the same subject.
+
+## Behind the Seduh (`/bts/`)
+
+`bts/index.html` (static, readable without script) with `src/marketing/bts.js` as the reader and `bts.css` on the
+Petrol V2 tokens. It tells the version history, so **any question about versions or place names goes to
+[`docs/versioning.md`](../../docs/versioning.md)** first, which also lists what to change on the page when the place
+moves. `btsPage.test.js` fails when the page's current place or major version disagrees with `src/core/version.js`.
+How to add a chapter is in the comment at the top of `bts/index.html`.
