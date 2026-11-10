@@ -875,3 +875,161 @@
     align-items: start;
   }
 }
+
+/* ==========================================================================================================
+ * S3 BLOCK: grouped match list (core/groupedMatchList.js). `.ok-groups`, `.ok-group*`, `.ok-row*`. Token-only,
+ * square corners, no shadows, mono figures. Phone width first: a row stacks (number + teams, then score and
+ * status, then actions); from 40rem the row is one line. Kept in one block so stage S4's additions merge cleanly.
+ * ======================================================================================================== */
+.ok-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ok-group {
+  border: var(--border-strong) solid var(--color-border-strong);
+  background: var(--color-surface);
+  min-inline-size: 0;
+}
+
+.ok-group[data-state='in_progress'] {
+  border-color: var(--color-accent);
+}
+
+.ok-group[data-state='not_started'] {
+  border-color: var(--color-border);
+}
+
+.ok-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+}
+
+.ok-group-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-inline-size: 0;
+}
+
+.ok-group-heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+}
+
+.ok-group-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.ok-group .btn {
+  border-radius: 0;
+}
+
+.ok-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.ok-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.ok-row:last-child {
+  border-bottom: 0;
+}
+
+.ok-row-number {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+  min-inline-size: 2ch;
+}
+
+.ok-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.ok-row-sides {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.ok-row-vs {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-secondary);
+}
+
+.ok-row-meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.ok-row-tail {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ok-row-score {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-bold);
+}
+
+.ok-row-actions {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ok-row-actions .btn {
+  border-radius: 0;
+  text-decoration: none;
+}
+
+.ok-groups-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (min-width: 40rem) {
+  .ok-row {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .ok-row-tail,
+  .ok-row-actions {
+    grid-column: auto;
+  }
+}
+/* END S3 BLOCK */
