@@ -1,7 +1,7 @@
 -- T-BTC seeding tie rule: record_btc_seeding_tiebreak, btc_seeding_order and the replaced
 -- generate_btc_bracket. See 20261010100000_btc_seeding_tiebreak.sql for the reasoning.
 begin;
-select plan(108);
+select plan(107);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -58,14 +58,16 @@ begin
   end loop;
 end $$;
 
--- Z: 35 points like T7/T8 but 0 wins (it lost both of its matches): level on points, NOT on wins.
+-- Z: 32 points and 0 wins (it lost both of its matches): near T7/T8 but level with nobody. (Before 20261110100000 Z had
+-- 35 points to pin 'level on points, not on wins is not a tie'; since then a tie is equal points only, so the
+-- equal-points-different-wins cases live in 077.)
 insert into btc_teams (id, event_id, name) values
   ('00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-0000000000e1', 'Z');
 do $$
 declare m uuid; c int; i int; tok int;
 begin
   for i in 1..2 loop
-    tok := case i when 1 then 22 else 11 end;
+    tok := case i when 1 then 22 else 8 end;
     insert into btc_matches (id, event_id, round, team1_id, team2_id, status)
     values (('00000000-0000-0000-0000-00000000020' || i)::uuid, '00000000-0000-0000-0000-0000000000e1', 'preliminary',
             '00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-00000000aaaa', 'confirmed')
@@ -114,9 +116,9 @@ select is((select seed from btc_seeding_order where team_id = '00000000-0000-000
 select is((select seed from btc_seeding_order where team_id = pg_temp.t(1)), 2, 'T1 is seed 2 (level with T2: the default tail is team id, ascending)');
 select is((select seed from btc_seeding_order where team_id = pg_temp.t(2)), 3, 'T2 is seed 3');
 select is((select tied_count from btc_seeding_order where team_id = '00000000-0000-0000-0000-00000000aa01'), 1,
-  'Z has the same points as T7 and T8 but fewer wins: level with nobody');
+  'Z has fewer points than T7 and T8: level with nobody');
 select is((select seed from btc_seeding_order where team_id = '00000000-0000-0000-0000-00000000aa01'), 10,
-  'and is seeded below them (wins break the tie in the standings)');
+  'and is seeded below them (points decide)');
 select is((select tied_count from btc_seeding_order where team_id = pg_temp.t(7)), 2,
   'T7 shares its numbers with one other team');
 select is((select group_resolved from btc_seeding_order where team_id = pg_temp.t(7)), false,
@@ -148,7 +150,7 @@ select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0
 select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1', array[pg_temp.t(1), pg_temp.t(3)], 'x') $$),
   'seeding_not_tied', 'teams that are not level are refused');
 select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1', array[pg_temp.t(7), '00000000-0000-0000-0000-00000000aa01'::uuid], 'x') $$),
-  'seeding_not_tied', 'level on points but not on wins is not a tie');
+  'seeding_not_tied', 'teams on different points are not a tie');
 select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1', '{}'::uuid[], 'x') $$),
   'seeding_group_invalid', 'an empty list is not a tie');
 select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1', array[pg_temp.t(9), pg_temp.t(10)], 'x') $$),
@@ -160,12 +162,12 @@ select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0
 select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1', array[pg_temp.t(7), pg_temp.t(8)], repeat('x', 121)) $$),
   'seeding_reason_too_long', 'a reason over 120 characters is refused');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, repeat('x', 121)) $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, repeat('x', 121)) $$,
   '23514', null, 'the table itself refuses a reason over 120 characters');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, 'x' || repeat(' ', 200)) $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, 'x' || repeat(' ', 200)) $$,
   '23514', null, 'padding does not get a long reason past the limit (the raw value is bounded too)');
 -- a preliminary match that is not confirmed yet: results can still move, so no tie can be ordered
 insert into btc_matches (id, event_id, round, team1_id, team2_id, status)
@@ -289,33 +291,33 @@ select is((select count(*)::int from btc_seeding_tiebreaks), 2, 'only the T7/T8 
 
 -- ---------- storage guards ----------
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-00000000bbbb', 1, 1, 2, 1, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-00000000bbbb', 1, 2, 1, 'x') $$,
   '23503', null, 'a team of another event cannot be given a decision (composite foreign key)');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 0, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 0, 'x') $$,
   '23514', null, 'a rank of zero is refused');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, '  ') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, '  ') $$,
   '23514', null, 'a blank reason is refused');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(1), 35, 1, 2, 1, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(1), 35, 2, 1, 'x') $$,
   '23505', null, 'two teams cannot hold the same rank in one tie');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 3, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 3, 'x') $$,
   '23514', null, 'a rank beyond the size of the group is refused');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 1, 1, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 1, 'x') $$,
   '23514', null, 'a group of one is not a tie (group_size at least 2)');
 -- the audit fields are the database's own: a member cannot supply or rewrite them
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason, recorded_by)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, 'x', '00000000-0000-0000-0000-000000000006') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason, recorded_by)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, 'x', '00000000-0000-0000-0000-000000000006') $$,
   '42501', null, 'recorded_by cannot be supplied on a direct insert');
 select throws_ok(
   $$ update btc_seeding_tiebreaks set recorded_by = null $$,
@@ -329,10 +331,9 @@ select throws_ok(
 select throws_ok($$ update btc_seeding_tiebreaks set team_id = pg_temp.t(3) $$, '42501', null, 'a decision cannot be moved to another team');
 select throws_ok($$ update btc_seeding_tiebreaks set event_id = '00000000-0000-0000-0000-0000000000e2' $$, '42501', null, 'nor to another event');
 select throws_ok($$ update btc_seeding_tiebreaks set total_points = 1 $$, '42501', null, 'the snapshot points cannot be rewritten');
-select throws_ok($$ update btc_seeding_tiebreaks set wins = 1 $$, '42501', null, 'the snapshot wins cannot be rewritten');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason, recorded_at)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, 'x', '2020-01-01') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason, recorded_at)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, 'x', '2020-01-01') $$,
   '42501', null, 'recorded_at cannot be supplied on a direct insert');
 
 -- ---------- a tie nobody ordered elsewhere never blocks generation ----------
@@ -346,8 +347,8 @@ select is((select seed_1 || '/' || seed_2 from btc_bracket_slots where slot_labe
 
 -- ---------- once the bracket exists the seeds are fixed, for direct writes too ----------
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, 'x') $$,
   '42501', null, 'a member cannot insert a decision once the bracket exists (row-level security)');
 select is(pg_temp.affected($$ update btc_seeding_tiebreaks set reason = 'changed' $$), 0,
   'a member updates no decision once the bracket exists');
@@ -365,8 +366,8 @@ select is(pg_temp.hint_of($$ select record_btc_seeding_tiebreak('00000000-0000-0
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000005';
 select is((select count(*)::int from btc_seeding_tiebreaks), 0, 'an outsider reads zero decisions');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, 'x') $$,
   '42501', null, 'an outsider cannot write a decision directly (row-level security)');
 select is(pg_temp.affected($$ update btc_seeding_tiebreaks set reason = 'changed' $$), 0,
   'an outsider updates no decision');
@@ -389,8 +390,8 @@ select throws_ok(
   $$ select generate_btc_bracket('00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-0000000000e1') $$,
   'P0001', 'generate_btc_bracket: event not found', 'nor generate with their own org id for this event');
 select throws_ok(
-  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason)
-     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 1, 2, 1, 'x') $$,
+  $$ insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason)
+     values ('00000000-0000-0000-0000-0000000000e1', pg_temp.t(3), 43, 2, 1, 'x') $$,
   '42501', null, 'a member of another org cannot write a decision directly (row-level security)');
 
 -- anon really is refused (not just "has no privilege on paper")

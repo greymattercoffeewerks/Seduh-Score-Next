@@ -168,8 +168,8 @@ begin
     insert into events (id, org_id, format, name) values (e1.u(t, 30), e1.u(t, 100), 'cup_taster', 'Seeding event ' || t);
     insert into btc_teams (id, event_id, name) values
       (e1.u(t, 31), e1.u(t, 30), 'Seed team one ' || t), (e1.u(t, 32), e1.u(t, 30), 'Seed team two ' || t);
-    insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason) values
-      (e1.u(t, 30), e1.u(t, 31), 10, 1, 2, 1, 'reason ' || t);
+    insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason) values
+      (e1.u(t, 30), e1.u(t, 31), 10, 2, 1, 'reason ' || t);
     -- one ACTIVE and one finished live session per organisation
     insert into events (id, org_id, format, name) values (e1.u(t, 40), e1.u(t, 100), 'cup_taster', 'Earlier event ' || t);
     insert into live_sessions (id, org_id, event_id, format, active) values
@@ -258,7 +258,7 @@ insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule
 update e1.spec set insert_cols = 'event_id, prelim_round, mode, seed, match_count, avoid_rematches, conflict_ticks'
  where tbl = 'btc_round_draws';
 
-update e1.spec set insert_cols = 'event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason'
+update e1.spec set insert_cols = 'event_id, team_id, total_points, group_size, tiebreak_rank, reason'
  where tbl = 'btc_seeding_tiebreaks';
 
 -- same for the roster (20261031120000): a caller may not name id, created_at or created_by, so the copy is built from the

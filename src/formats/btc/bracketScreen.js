@@ -29,6 +29,7 @@ import {
 import { derivePodium } from './podium.js';
 import {
   fetchSeedingOrder,
+  fetchPrelimTimes,
   isMissingSeedingView,
   seedingTieGroups,
   blockingGroups,
@@ -101,6 +102,8 @@ export async function mountBracketScreen(
     // has not landed: nothing to show), and a read that FAILS is shown as such (seedingReadFailed) with a
     // way to try again, never as "no ties". An earlier successful read is kept when a later one fails.
     seedingRows: [],
+    // each team's typed preliminary finish times (btc_prelim_times) for the tie card; null = could not be read
+    prelimTimes: [],
     seedingReadFailed: false,
     // Said once to a screen reader through the live region below, then cleared.
     announcement: '',
@@ -168,15 +171,27 @@ export async function mountBracketScreen(
     );
   }
 
-  // { rows, failed }. A view that does not exist yet is not a failure (the front end can ship before its
+  // { rows, times, failed }. `times` is null when the finish times could not be read: that never fails the seed
+  // order, the card just says so. A view that does not exist yet is not a failure (the front end can ship before its
   // migration reaches the cloud project: the 2026-09-05 incident); anything else is.
   async function readSeeding() {
     try {
-      return { rows: await fetchSeedingOrder(eventId, client), failed: false };
+      const rows = await fetchSeedingOrder(eventId, client);
+      let times = null;
+      if (rows.some((row) => row.tiedCount > 1)) {
+        try {
+          times = await fetchPrelimTimes(eventId, client);
+        } catch (err) {
+          console.warn('btc: the preliminary finish times could not be read', err);
+        }
+      } else {
+        times = [];
+      }
+      return { rows, times, failed: false };
     } catch (err) {
-      if (isMissingSeedingView(err)) return { rows: [], failed: false };
+      if (isMissingSeedingView(err)) return { rows: [], times: [], failed: false };
       console.warn('btc: the seed order could not be read', err);
-      return { rows: null, failed: true };
+      return { rows: null, times: null, failed: true };
     }
   }
 
@@ -189,9 +204,10 @@ export async function mountBracketScreen(
     }
     clearRefreshNote();
     state.seedingRows = read.rows;
+    state.prelimTimes = read.times;
     state.seedingReadFailed = false;
     if (state.seedingGroupKey) {
-      // The key is only "points-wins": who is in the group can change under the same numbers (one team
+      // The key is only "points-<n>": who is in the group can change under the same numbers (one team
       // leaves and another joins, or the group grows), and a draft of different members must not outlive it.
       const group = seedingTieGroups(state.seedingRows).find(
         (g) => g.key === state.seedingGroupKey,
@@ -228,7 +244,7 @@ export async function mountBracketScreen(
     // failed would be a lie, so a failed read fails the load and Retry covers it.
     const [scores, seeding] = await Promise.all([
       fetchBracketScores(bracketMatchIds(entries), client),
-      entries.length === 0 ? readSeeding() : { rows: [], failed: false },
+      entries.length === 0 ? readSeeding() : { rows: [], times: [], failed: false },
     ]);
     return { event, teams, judges, entries, scores, seeding };
   }
@@ -244,6 +260,8 @@ export async function mountBracketScreen(
       state.entries = persisted.entries;
       state.scores = persisted.scores;
       state.seedingRows = persisted.seeding.rows ?? [];
+      // null (the times could not be read) must stay null: the card says so rather than "no time"
+      state.prelimTimes = persisted.seeding.times === undefined ? [] : persisted.seeding.times;
       state.seedingReadFailed = persisted.seeding.failed;
       state.loadFailedMessage = null;
       clearRefreshNote();
@@ -1108,6 +1126,7 @@ export async function mountBracketScreen(
           busy: state.busy || state.generating,
           teamName,
           readFailed: state.seedingReadFailed,
+          times: state.prelimTimes,
           handlers: {
             onOpen: openSeedingForm,
             onMove: moveSeedingTeam,

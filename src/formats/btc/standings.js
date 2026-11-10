@@ -37,20 +37,25 @@ export async function fetchPreliminaryStandings(eventId, client = getSupabase())
     };
   });
 
-  // Points first (the actual competitive result), wins as the declared tiebreak. A
-  // genuine tie (equal on both) shares one position — this is DISPLAY ordering, not
-  // the seeding/advancement decision (that's the bracket step's own job, on the
-  // bonus-inclusive totals, with its own unresolved-tie rule), so an honest shared
-  // position is the right thing to show, not a manufactured ranking. No name
-  // comparator here: adding one would make rank() treat every team as distinct and
-  // never share a position at all. `items` is already alphabetical (`btc_teams` was
-  // queried ordered by name above) and Array#sort is a stable sort, so a genuine tie's
-  // display order still comes out alphabetical without name deciding the tie itself.
-  return rank(
-    items,
-    chainComparators(
-      (a, b) => b.totalPoints - a.totalPoints,
-      (a, b) => b.wins - a.wins,
-    ),
+  // Points decide the position (Build C, 2026-11: the committee's rule is points, then the sum of the two finish
+  // times, decided by hand): teams on equal points SHARE one position, whatever their wins, so this table never
+  // says one of two level teams is ahead (the tie card on the bracket screen is where the organiser orders
+  // them). Wins only sort the rows within a shared position, for display, so a team with more wins is listed
+  // first; they are never a tie-break. No name comparator: it would make every team distinct. `items` is
+  // already alphabetical (`btc_teams` was queried ordered by name above) and Array#sort is stable, so equal rows
+  // still come out alphabetical.
+  const positions = new Map(
+    rank(items, (a, b) => b.totalPoints - a.totalPoints).map(({ item, position }) => [
+      item.teamId,
+      position,
+    ]),
   );
+  return [...items]
+    .sort(
+      chainComparators(
+        (a, b) => b.totalPoints - a.totalPoints,
+        (a, b) => b.wins - a.wins,
+      ),
+    )
+    .map((item) => ({ item, position: positions.get(item.teamId) }));
 }

@@ -199,6 +199,16 @@
   overflow-wrap: anywhere;
 }
 
+.btc-seeding-times {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.btc-seeding-times p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .btc-seeding-moves {
   display: flex;
   gap: var(--space-2);

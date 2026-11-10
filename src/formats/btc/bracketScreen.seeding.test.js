@@ -80,6 +80,9 @@ function fakeClient(
             reject,
           );
         }
+        if (table === 'btc_prelim_times' && control.failTimesRead) {
+          return Promise.resolve({ data: null, error: new Error('times') }).then(resolve, reject);
+        }
         const rows = (db[table] ?? [])
           .filter((r) => filters.every(([c, v]) => r[c] === v))
           .map((r) => ({ ...r }));
@@ -181,10 +184,10 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(text(card().querySelector('h2'))).toBe('Teams level in the standings');
     const groups = root.querySelectorAll('.btc-seeding-group');
     expect(groups).toHaveLength(2);
-    expect(text(group(0).querySelector('h3'))).toBe('Level for 2nd to 3rd · 60 pts, 2 wins');
+    expect(text(group(0).querySelector('h3'))).toBe('Level for 2nd to 3rd · 60 pts');
     expect(names(group(0))).toEqual(['Team 2', 'Team 3']);
     expect(group(0).textContent).not.toContain('decides who qualifies');
-    expect(text(group(1).querySelector('h3'))).toBe('Level for 8th to 9th · 35 pts, 1 win');
+    expect(text(group(1).querySelector('h3'))).toBe('Level for 8th to 9th · 35 pts');
     expect(group(1).textContent).toContain('their order decides who qualifies');
     expect(group(0).textContent).toContain('Not ordered yet');
     expect(group(1).textContent).toContain('Not ordered yet');
@@ -944,10 +947,10 @@ describe('the seeding ties card on the bracket screen', () => {
   it('names each open button by its group, and the move buttons so that their label contains what is on screen', async () => {
     await mount(fakeClient(nineTeamsWithTies()));
     expect(openButtonOf(group(0)).getAttribute('aria-label')).toBe(
-      'Order these teams: Level for 2nd to 3rd · 60 pts, 2 wins',
+      'Order these teams: Level for 2nd to 3rd · 60 pts',
     );
     expect(openButtonOf(group(1)).getAttribute('aria-label')).toBe(
-      'Order these teams: Level for 8th to 9th · 35 pts, 1 win',
+      'Order these teams: Level for 8th to 9th · 35 pts',
     );
     openButtonOf(group(1)).click();
     const down = byKey('seeding-down-t8');
@@ -1190,6 +1193,114 @@ describe('the seeding ties card on the bracket screen', () => {
     await flush();
     expect(root.querySelector('.btc-seeding-card')).toBeNull();
     expect(root.querySelector('.btc-seeding-form')).toBeNull();
+  });
+
+  describe('the finish times on the card (Build C)', () => {
+    const time = (teamId, round, note) => ({
+      event_id: 'ev1',
+      team_id: teamId,
+      prelim_round: round,
+      time_note: note,
+    });
+    const withTimes = (times, order = nineTeamsWithTies()) => {
+      const client = fakeClient(order);
+      client.db.btc_prelim_times = times;
+      return client;
+    };
+    // each team's time lines, one string per line
+    const lines = (g, teamNumber) =>
+      [
+        ...[...g.querySelectorAll('.btc-seeding-order li')]
+          .find((li) => li.querySelector('.btc-seeding-team').textContent === `Team ${teamNumber}`)
+          .querySelectorAll('.btc-seeding-times p'),
+      ].map((p) => p.textContent);
+
+    it('lists each team round 1 and round 2 time as typed, and the sum for guidance', async () => {
+      await mount(
+        withTimes([
+          time('t2', 1, '8:12'),
+          time('t2', 2, '9:05'),
+          time('t3', 1, '7:59'),
+          time('t3', 2, '9:30'),
+        ]),
+      );
+      expect(lines(group(0), 2)).toEqual([
+        'Round 1: 8:12 · Round 2: 9:05',
+        'Sum 17:17 (for guidance, you decide)',
+      ]);
+      expect(lines(group(0), 3)).toEqual([
+        'Round 1: 7:59 · Round 2: 9:30',
+        'Sum 17:29 (for guidance, you decide)',
+      ]);
+    });
+
+    it('says "no time" for a missing time and leaves the sum out; nothing throws', async () => {
+      await mount(withTimes([time('t2', 1, '8:12'), time('t3', 1, null)]));
+      expect(lines(group(0), 2)).toEqual(['Round 1: 8:12 · Round 2: no time']);
+      expect(lines(group(0), 3)).toEqual(['Round 1: no time · Round 2: no time']);
+      expect(group(0).textContent).not.toContain('Sum');
+    });
+
+    it('shows an unparseable time as typed and leaves the sum out', async () => {
+      await mount(withTimes([time('t2', 1, '8.12'), time('t2', 2, '9:05')]));
+      expect(lines(group(0), 2)).toEqual(['Round 1: 8.12 · Round 2: 9:05']);
+    });
+
+    it('says "both at the limit" for a team at the limit in both rounds, and for a group of such teams', async () => {
+      await mount(
+        withTimes([
+          time('t8', 1, '10:00'),
+          time('t8', 2, '10:00'),
+          time('t9', 1, '10:00'),
+          time('t9', 2, '10:00'),
+        ]),
+      );
+      expect(lines(group(1), 8)).toEqual([
+        'Round 1: 10:00 · Round 2: 10:00',
+        'Both at the limit (10:00 each)',
+      ]);
+      expect(group(1).textContent).toContain(
+        'Every team here is at the 10:00 limit in both rounds, so the times cannot separate them',
+      );
+      // the other group is not at the limit
+      expect(group(0).textContent).not.toContain('at the 10:00 limit');
+    });
+
+    it('does not claim the group is at the limit when only some of its teams are', async () => {
+      await mount(
+        withTimes([
+          time('t8', 1, '10:00'),
+          time('t8', 2, '10:00'),
+          time('t9', 1, '9:59'),
+          time('t9', 2, '10:00'),
+        ]),
+      );
+      expect(lines(group(1), 8)).toContain('Both at the limit (10:00 each)');
+      expect(group(1).textContent).not.toContain('Every team here is at');
+      expect(lines(group(1), 9)).toContain('Sum 19:59 (for guidance, you decide)');
+    });
+
+    it('says the times could not be loaded, and still shows the groups, when that read fails', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const client = withTimes([]);
+      client.control.failTimesRead = true;
+      await mount(client);
+      expect(group(0).textContent).toContain('The finish times could not be loaded');
+      expect(group(0).textContent).not.toContain('no time');
+      expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(2);
+    });
+
+    it('does not read the times at all when no teams are level', async () => {
+      const client = withTimes([], [row('t1', 1, 90, 3), row('t2', 2, 60, 2)]);
+      await mount(client);
+      expect(client.fromCalls).not.toContain('btc_prelim_times');
+    });
+
+    it('keeps the times beside each team while the order form is open', async () => {
+      await mount(withTimes([time('t2', 1, '8:12'), time('t2', 2, '9:05')]));
+      openButtonOf(group(0)).click();
+      expect(lines(group(0), 2)).toContain('Sum 17:17 (for guidance, you decide)');
+    });
   });
 
   it('does not tell the organiser to look "above" for a card that is not there', async () => {

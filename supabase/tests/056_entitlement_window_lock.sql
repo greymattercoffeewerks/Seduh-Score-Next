@@ -140,7 +140,7 @@ begin
   insert into btc_match_judges (match_id, judge_id) values (t056.u(b + 11), t056.u(b + 10));
   insert into btc_cup_votes (id, match_id, cup_number, team1_tokens) values (t056.u(b + 12), t056.u(b + 11), 1, 1);
   insert into btc_match_bonuses (match_id) values (t056.u(b + 11));
-  insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason) values (t056.u(ev), t056.u(b + 8), 10, 1, 2, 1, 'reason ' || ev);
+  insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason) values (t056.u(ev), t056.u(b + 8), 10, 2, 1, 'reason ' || ev);
   insert into btc_bracket_slots (id, event_id, round, slot_label) values (t056.u(b + 13), t056.u(ev), 'final', 'Final ' || ev);
   insert into live_sessions (id, org_id, event_id, format, active) values (t056.u(b + 14), t056.u(org), t056.u(ev), 'cup_taster', ev in (101, 201));
 end $$;

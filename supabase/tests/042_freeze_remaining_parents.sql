@@ -17,8 +17,8 @@ insert into btc_teams (id, event_id, name) values
   ('00000000-0000-0000-0000-000000000a01', '00000000-0000-0000-0000-0000000000a1', 'A one'),
   ('00000000-0000-0000-0000-000000000a02', '00000000-0000-0000-0000-0000000000a1', 'A two'),
   ('00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-0000000000b1', 'B one');
-insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason) values
-  ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000a01', 10, 1, 2, 1, 'first');
+insert into btc_seeding_tiebreaks (event_id, team_id, total_points, group_size, tiebreak_rank, reason) values
+  ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000a01', 10, 2, 1, 'first');
 insert into score_change_counts (event_id, table_name, n) values
   ('00000000-0000-0000-0000-0000000000a1', 'ct_results', 1);
 
