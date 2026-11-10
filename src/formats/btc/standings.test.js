@@ -89,7 +89,7 @@ describe('fetchPreliminaryStandings', () => {
     ]);
   });
 
-  it('breaks a points tie by wins, and a genuine remaining tie shares one position', async () => {
+  it('shares one position on equal points, listing the team with more wins first (display only)', async () => {
     // Deliberately fed OUT of alphabetical order: the fake client's own order() (above)
     // really sorts, so this only comes out alphabetical if fetchPreliminaryStandings
     // genuinely calls .order('name') on btc_teams — proving the module relies on the
@@ -116,8 +116,9 @@ describe('fetchPreliminaryStandings', () => {
       'Beta Team',
       'Zed Team',
     ]);
-    // wins-tiebreak winner is alone at position 1; the two remaining ties share position 2
-    expect(ranked.map(({ position }) => position)).toEqual([1, 2, 2]);
+    // equal points are level whatever the wins (Build C): all three share position 1. Alpha is LISTED first only
+    // because it has more wins; Beta and Zed (equal on wins too) stay alphabetical.
+    expect(ranked.map(({ position }) => position)).toEqual([1, 1, 1]);
   });
 
   it('scopes both queries to the given event', async () => {

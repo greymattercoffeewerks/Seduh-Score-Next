@@ -8,6 +8,20 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build C: ties on points only, finish times on the tie card · 2026-11-10
+
+**Task:** BTC March 2027 engine spec item C (`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` section 5, Option A). Branch `claude/btc-c-points-ties-8a4f2f`, PR into `dev`. **Not merged; migration `20261110100000` NOT in the cloud.** No version bump (the release PR decides).
+
+- **Rule:** a seeding tie is **equal points**; wins no longer define or order one. Migration `20261110100000_btc_seeding_points_only.sql` deletes every existing decision explicitly (the cloud table had zero rows on 2026-11-10), drops `btc_seeding_tiebreaks.wins` (the unique key is now `(event_id, total_points, tiebreak_rank)`), recreates `btc_seeding_order` (partition and order by points, then the recorded rank, then team id; `wins` stays in the output for display) and replaces `record_btc_seeding_tiebreak` and `generate_btc_bracket` (points only; hints, signatures, grants, lock and org checks unchanged). The rollback block restores the (points, wins) definitions as in force before (the view from `20261010100000`, the functions from `20261011140000`); run in a transaction, re-applied, schema fingerprint identical.
+- **New view `btc_prelim_times`** (`event_id`, `team_id`, `prelim_round`, `time_note`): confirmed preliminary matches only, one row per team per match from the side it played, a NULL round reads as 1, `security_invoker`, `authenticated` only.
+- **Client:** `seedingTieGroups` keys `points-<n>` (no `wins` on a group); `seeding.js` adds `fetchPrelimTimes`, `teamTimeEvidence`, `groupTimeEvidence` (round 1 and 2 as typed or "no time"; a sum of rounds 1 and 2 only when each has one time and both parse through `parseDuration`; "both at the limit" when both equal `maxTimeSecsForRound('preliminary')`; a group where every team is at the limit says the times cannot separate them). `seedingCard.js` shows them ("Sum 17:17 (for guidance, you decide)"). Times are read only when some team is level; a failed read shows "could not be loaded", never "no time". `standings.js` gives equal points one shared position (wins only sort rows within it).
+- **Tests:** new pgTAP `077` (all five 5.3 cases, `btc_prelim_times` reads, runs the migration's own rollback block inside the test); `029`, `040`, `042`, `056` updated for the dropped column; JS tests for grouping, the card wording, the sum, the limit, the failed read. Full `npm test` (one failure, the Windows-only `check-doc-budgets` brokenLinks path quirk), `npm run lint`, all 78 pgTAP files pass. Card checked at 360px (no overflow).
+- **Reviews:** `schema-guardian` no 🔴 (nit: rollback copy drops blank lines inside function bodies, harmless); `security-reviewer` clean; `scoring-auditor` no 🔴 (nit: an unordered tie that is not across the cut-off seeds by team id while the standings list the team with more wins first; kept, the card labels such seeds provisional; pre-existing: members can edit a rank directly); `ui-accessibility-reviewer` no 🔴 (nit: the derived sum could carry a spoken long form like `formatDurationLong`; not done, the typed round times cannot); `module-boundary-checker` clean (nit: the card shows an over-limit typed time as typed, not clamped; intended); `code-reviewer` no 🔴 (two nits fixed: the refusal path passes `times: []`, a comment); `test-auditor` 1 🔴 (the unresolved group's order could not tell wins-ascending from team-id order: fixed by re-indexing the 077 fixture so id, wins-ascending and wins-descending all differ; I confirmed it by reading before fixing, no separate checker run) and nits (screen test for equal points with different wins, no update or delete privilege on the view, anon on the restored view: all added; the forward DELETE is not exercised, accepted).
+- **Deviation:** none from the spec. `btc_prelim_times` reads NULL `prelim_round` as 1 (spec silent).
+- **Open follow-up:** after merge, push `20261110100000` to the cloud by hand (`apply_migration`) and compare `list_migrations`. Spec sections 5.1 and 5.3 still describe the pre-C state (historical), and `MARCH-2027-BOARD-PLAN.md` lines about "points and wins" are stale.
+
+---
+
 ## Organiser UX S2: BTC event dashboard as a run sheet · 2026-11-10
 
 **Task:** Organiser UX stage S2 of five (mockup U1 and U4; S1 is the shared kit that S2 builds on). Branch `claude/organiser-ux-s2-btc-dashboard-6ca85a`, commits `bdea8a5` (build) and `524e89e` (review fixes), on top of `origin/dev`. **Version: not bumped in this PR** (the app stays 4.1.0). By `docs/versioning.md` the dashboard is a minor (a visible redesign); the owner or the release PR picks the number.
@@ -73,6 +87,8 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
   - Wall-clock waits in the kit's tests (test-auditor nit) are not yet in `docs/backlog/`.
   - S2 to S5 wait for S1 to merge.
 - **Version note:** a build session that ships groundwork nobody can use yet would normally take a patch under `docs/versioning.md`. This task was held at no bump on the owner's explicit instruction. The owner or the release PR decides whether it rides a patch later.
+
+---
 
 ## Version rules moved to docs/versioning.md; minor defined · 2026-11-10
 

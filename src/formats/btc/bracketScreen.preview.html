@@ -70,6 +70,25 @@
                 group_resolved: tied_count === 1,
               }))
             : [],
+          // The typed preliminary finish times (btc_prelim_times) for the tie card: T2/T3 have both, T8 is at the
+          // limit twice, T9 has no round 2 time (an old row).
+          btc_prelim_times: seeding
+            ? [
+                ['t2', 1, '8:12'],
+                ['t2', 2, '9:05'],
+                ['t3', 1, '7:59'],
+                ['t3', 2, '9:30'],
+                ['t8', 1, '10:00'],
+                ['t8', 2, '10:00'],
+                ['t9', 1, '9:40'],
+                ['t9', 2, null],
+              ].map(([team_id, prelim_round, time_note]) => ({
+                event_id: 'ev1',
+                team_id,
+                prelim_round,
+                time_note,
+              }))
+            : [],
           btc_judges: [
             { id: 'j1', event_id: 'ev1', name: 'Alex Rivera' },
             { id: 'j2', event_id: 'ev1', name: 'Jordan Lee' },

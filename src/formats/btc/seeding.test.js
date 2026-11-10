@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   SEEDING_REASON_MAX,
   fetchSeedingOrder,
+  fetchPrelimTimes,
+  teamTimeEvidence,
+  groupTimeEvidence,
   isMissingSeedingView,
   isCutoffTieRefusal,
   CUTOFF_TIE_MESSAGE,
@@ -160,21 +163,22 @@ describe('seedingTieGroups', () => {
     expect(seedingTieGroups([])).toEqual([]);
   });
 
-  it('groups teams level on points AND wins, in seed order, with the group in seed order too', () => {
+  it('groups teams level on POINTS (wins ignored), in seed order, with the group in seed order too', () => {
     const groups = seedingTieGroups([
       row('a', 1, 50, 2),
       tied('c', 3, 40, 1),
       tied('b', 2, 40, 1),
       tied('e', 5, 30, 1),
       tied('d', 4, 30, 1),
-      // same points, different wins: NOT level
-      row('f', 6, 30, 0),
+      // same points, different wins: STILL level (a tie is equal points since Build C)
+      tied('f', 6, 30, 0),
     ]);
     expect(groups.map((g) => [g.firstSeed, g.lastSeed, g.teams.map((t) => t.teamId)])).toEqual([
       [2, 3, ['b', 'c']],
-      [4, 5, ['d', 'e']],
+      [4, 6, ['d', 'e', 'f']],
     ]);
-    expect(groups[0]).toMatchObject({ points: 40, wins: 1, resolved: false, reason: null });
+    expect(groups[0]).toMatchObject({ points: 40, resolved: false, reason: null });
+    expect(groups[0]).not.toHaveProperty('wins');
   });
 
   it('marks only the group across the cut-off as deciding who qualifies', () => {
@@ -329,18 +333,18 @@ describe('seedingTieGroups: keys and reasons', () => {
     ...extra,
   });
 
-  it('keys a group by its points and wins: digits and a hyphen only', () => {
+  it('keys a group by its points: "points-<n>", letters, digits and a hyphen only', () => {
     const [group] = seedingTieGroups([row('a', 2, 40, 1), row('b', 3, 40, 1)]);
-    expect(group.key).toBe('40-1');
-    expect(group.key).toMatch(/^[0-9-]+$/);
-    // 40 pts 1 win and 4 pts 01... can never collide: the numbers are integers
+    expect(group.key).toBe('points-40');
+    expect(group.key).toMatch(/^[a-z0-9-]+$/);
+    // 40 pts and 4 pts can never collide: the numbers are integers
     const keys = seedingTieGroups([
       row('a', 2, 40, 1),
-      row('b', 3, 40, 1),
+      row('b', 3, 40, 0),
       row('c', 4, 4, 1),
       row('d', 5, 4, 1),
     ]).map((g) => g.key);
-    expect(keys).toEqual(['40-1', '4-1']);
+    expect(keys).toEqual(['points-40', 'points-4']);
   });
 
   it('quotes a reason only for a group that is fully ordered, never for a partly ordered one', () => {
@@ -403,7 +407,7 @@ describe('seeding.js: boundaries the first tests did not pin', () => {
     ...extra,
   });
 
-  it('the same points with different wins are two groups, not one', () => {
+  it('the same points with different wins are ONE group, not two', () => {
     const groups = grouped([
       row('a', 2, 40, 2),
       row('b', 3, 40, 2),
@@ -411,8 +415,7 @@ describe('seeding.js: boundaries the first tests did not pin', () => {
       row('d', 5, 40, 1),
     ]);
     expect(groups.map((g) => [g.key, g.teams.map((t) => t.teamId)])).toEqual([
-      ['40-2', ['a', 'b']],
-      ['40-1', ['c', 'd']],
+      ['points-40', ['a', 'b', 'c', 'd']],
     ]);
   });
 
@@ -438,5 +441,106 @@ describe('seeding.js: boundaries the first tests did not pin', () => {
     };
     const [r] = await fetchSeedingOrder('ev1', client);
     expect(r.reason).toBeNull();
+  });
+});
+
+describe('fetchPrelimTimes', () => {
+  const rowOf = (teamId, round, note) => ({
+    event_id: 'ev1',
+    team_id: teamId,
+    prelim_round: round,
+    time_note: note,
+  });
+
+  it('reads only this event, and only the one view, coercing the round', async () => {
+    const client = fakeClient({ order: [rowOf('a', '1', '8:12'), rowOf('a', 2, null)] });
+    const times = await fetchPrelimTimes('ev1', client);
+    expect(client.filters).toEqual([['btc_prelim_times', 'event_id', 'ev1']]);
+    expect(times).toEqual([
+      { teamId: 'a', round: 1, note: '8:12' },
+      { teamId: 'a', round: 2, note: null },
+    ]);
+  });
+
+  it('throws a failed read (the caller decides what that means)', async () => {
+    await expect(
+      fetchPrelimTimes('ev1', fakeClient({ orderError: new Error('view') })),
+    ).rejects.toThrow('view');
+  });
+});
+
+describe('teamTimeEvidence (the tie card times)', () => {
+  const t = (teamId, round, note) => ({ teamId, round, note });
+
+  it('lists rounds 1 and 2 as typed and sums them when both parse', () => {
+    const e = teamTimeEvidence('a', [t('a', 1, '8:12'), t('a', 2, '09:05'), t('b', 1, '1:00')]);
+    expect(e.rounds).toEqual([
+      { round: 1, notes: ['8:12'] },
+      { round: 2, notes: ['09:05'] },
+    ]);
+    expect(e.sumSecs).toBe(8 * 60 + 12 + 9 * 60 + 5);
+    expect(e.bothAtLimit).toBe(false);
+  });
+
+  it('a missing round is empty (no time) and there is no sum', () => {
+    const e = teamTimeEvidence('a', [t('a', 1, '8:12')]);
+    expect(e.rounds[1]).toEqual({ round: 2, notes: [] });
+    expect(e.sumSecs).toBeNull();
+    expect(teamTimeEvidence('nobody', []).rounds).toEqual([
+      { round: 1, notes: [] },
+      { round: 2, notes: [] },
+    ]);
+  });
+
+  it('a blank or null time is no time; a time that does not parse stays as typed with no sum', () => {
+    expect(teamTimeEvidence('a', [t('a', 1, '  '), t('a', 2, null)]).rounds).toEqual([
+      { round: 1, notes: [] },
+      { round: 2, notes: [] },
+    ]);
+    const e = teamTimeEvidence('a', [t('a', 1, '8.12'), t('a', 2, '9:05')]);
+    expect(e.rounds[0].notes).toEqual(['8.12']);
+    expect(e.sumSecs).toBeNull();
+    expect(teamTimeEvidence('a', [t('a', 1, '8:60'), t('a', 2, '9:05')]).sumSecs).toBeNull();
+  });
+
+  it('two times in one round are both shown and make the sum ambiguous, so it is left out', () => {
+    const e = teamTimeEvidence('a', [t('a', 1, '8:12'), t('a', 1, '8:30'), t('a', 2, '9:05')]);
+    expect(e.rounds[0].notes).toEqual(['8:12', '8:30']);
+    expect(e.sumSecs).toBeNull();
+  });
+
+  it('a round beyond 2 is listed but is not part of the sum', () => {
+    const e = teamTimeEvidence('a', [t('a', 1, '8:00'), t('a', 2, '9:00'), t('a', 3, '7:00')]);
+    expect(e.rounds.map((r) => r.round)).toEqual([1, 2, 3]);
+    expect(e.sumSecs).toBe(17 * 60);
+  });
+
+  it('is at the limit in both rounds only when both are exactly the preliminary limit (10:00)', () => {
+    expect(teamTimeEvidence('a', [t('a', 1, '10:00'), t('a', 2, '10:00')]).bothAtLimit).toBe(true);
+    expect(teamTimeEvidence('a', [t('a', 1, '10:00'), t('a', 2, '9:59')]).bothAtLimit).toBe(false);
+    expect(teamTimeEvidence('a', [t('a', 1, '10:00')]).bothAtLimit).toBe(false);
+    expect(teamTimeEvidence('a', [t('a', 1, '15:00'), t('a', 2, '15:00')]).bothAtLimit).toBe(false);
+  });
+});
+
+describe('groupTimeEvidence', () => {
+  const group = (...ids) => ({ teams: ids.map((teamId) => ({ teamId })) });
+  const limit = (id) => [
+    { teamId: id, round: 1, note: '10:00' },
+    { teamId: id, round: 2, note: '10:00' },
+  ];
+
+  it('is at the limit only when EVERY team is', () => {
+    expect(groupTimeEvidence(group('a', 'b'), [...limit('a'), ...limit('b')]).allAtLimit).toBe(
+      true,
+    );
+    expect(groupTimeEvidence(group('a', 'b'), limit('a')).allAtLimit).toBe(false);
+    expect(groupTimeEvidence(group('a', 'b'), []).allAtLimit).toBe(false);
+  });
+
+  it('has one entry per team, in the group order, with no times at all being fine', () => {
+    const e = groupTimeEvidence(group('b', 'a'), []);
+    expect(e.teams.map((x) => x.teamId)).toEqual(['b', 'a']);
+    expect(e.teams.every((x) => x.sumSecs === null)).toBe(true);
   });
 });
