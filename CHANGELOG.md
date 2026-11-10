@@ -8,6 +8,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## v4.2.1: Behind the Seduh brought up to 4.2.0 · 2026-11-10
+
+**Task:** owner asked for a BTS update (2026-11-10). Content only in `bts/index.html`; no code, style or migration change. **Patch** (`npm version patch`, 4.2.0 to 4.2.1) under `docs/versioning.md`: a page copy update.
+
+- **New Kiarong chapter** "The organiser's run sheet" (`#ms-kiarong-runsheet`, 10 November, v4.2.0), now the latest: BTC's dashboard as a run sheet (Organiser UX S2), level on points with finish times on the tie card (BTC Build C), and the organiser's kit (Organiser UX S1). All marked live; `btc_seeding_points_only` is in the cloud (checked 2026-11-10).
+- **"One look, everywhere"** gains "One hero for the public pages" (v3.6.7), which the page had missed.
+- Scoreboard v4.2.0 and 43 entries; Kiarong rail (4 chapters, note, link to the new chapter) and intro updated. No competitor named; nothing about March, the Board or the committee.
+- **Checks:** `btsPage.test.js` and `tokenDrift.test.js` pass (39).
+- **Reviews:** `code-reviewer`, no 🔴; 5 copy nits, all fixed (245 flags, not 243; flags appear in the Setup team list, not on the dashboard; step states are in progress, not live; the time-limit message needs both rounds at the limit; scoreboard set to v4.2.1). Pre-existing, logged not fixed: `src/core/flags/README.md` and the S1 entry above also say 243.
+
+---
+
 ## BTC Build C: ties on points only, finish times on the tie card · 2026-11-10
 
 **Task:** BTC March 2027 engine spec item C (`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` section 5, Option A). Branch `claude/btc-c-points-ties-8a4f2f`, PR into `dev`. **Not merged; migration `20261110100000` NOT in the cloud.** No version bump (the release PR decides).
