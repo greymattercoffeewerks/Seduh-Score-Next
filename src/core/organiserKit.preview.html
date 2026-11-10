@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Organiser kit — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/components.css" />
+    <style>
+      /* Harness chrome only (not shipped). */
+      .harness-frames {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 24px;
+        padding: 16px;
+      }
+      .harness-frame {
+        border: 1px solid var(--color-border-card);
+      }
+      .harness-frame figcaption {
+        font: var(--text-xs) var(--font-mono);
+        padding: 4px 8px;
+        background: var(--color-surface-sunken);
+      }
+      .harness-frame iframe {
+        display: block;
+        border: 0;
+        background: var(--color-canvas);
+      }
+      .harness-page {
+        padding: var(--space-4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+      }
+      .harness-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-xl);
+      }
+      .harness-nav {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-2);
+      }
+      .harness-teams {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Demo harness: ?frame=both (default) shows the tablet-landscape and phone-360 frames side by side;
+         ?frame=raw renders the dashboard at the window's own width. Options: &band=beta|test|none,
+         &surface=paper|stage, &state=mid|empty|done. Fictional data only. -->
+    <div id="root"></div>
+    <script type="module" src="/src/core/organiserKit.preview.js"></script>
+  </body>
+</html>
