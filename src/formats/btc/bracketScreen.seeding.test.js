@@ -8,7 +8,7 @@ async function flush() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-// A view row as the database returns it. Teams are level when they share points and wins.
+// A view row as the database returns it. Teams are level when they share points (wins do not matter).
 const row = (teamId, seed, points, wins, extra = {}) => ({
   event_id: 'ev1',
   team_id: teamId,
@@ -194,6 +194,19 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(card().textContent).toContain(
       'cannot be generated until the teams level across the cut-off',
     );
+  });
+
+  it('teams level on points but not on wins are one group on the screen', async () => {
+    const order = [
+      row('t1', 1, 90, 3),
+      level('t2', 2, 60, 2),
+      level('t3', 3, 60, 1),
+      row('t4', 4, 55, 2),
+    ];
+    await mount(fakeClient(order));
+    expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(1);
+    expect(text(group(0).querySelector('h3'))).toBe('Level for 2nd to 3rd · 60 pts');
+    expect(names(group(0))).toEqual(['Team 2', 'Team 3']);
   });
 
   it('only the unordered group across the cut-off blocks, so ordering it removes the warning', async () => {

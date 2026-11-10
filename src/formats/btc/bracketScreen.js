@@ -506,7 +506,7 @@ export async function mountBracketScreen(
           // The refusal text already tells the person what happened; the next action reloads.
         }
         applySeedingRead(
-          state.entries.length === 0 ? await readSeeding() : { rows: [], failed: false },
+          state.entries.length === 0 ? await readSeeding() : { rows: [], times: [], failed: false },
         );
         resetSeedingDraft();
         showToast(refusal.message);

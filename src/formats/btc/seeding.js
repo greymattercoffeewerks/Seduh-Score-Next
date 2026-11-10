@@ -46,8 +46,8 @@ export async function fetchSeedingOrder(eventId, client = getSupabase()) {
 
 // Each team's typed preliminary finish times, one row per team per confirmed preliminary match: { teamId,
 // round, note } (round: an unnumbered match is round 1, as the view says; note: the text as typed, or null).
-// The view may not exist yet (front end ahead of its migration), which is the same "nothing to show" as the
-// seed order's; the caller decides what a failed read means (here it throws).
+// Any failed read throws (including a view that does not exist yet): the caller maps that to "the times could
+// not be loaded", never to "no time".
 export async function fetchPrelimTimes(eventId, client = getSupabase()) {
   const { data, error } = await client.from('btc_prelim_times').select('*').eq('event_id', eventId);
   if (error) throw error;

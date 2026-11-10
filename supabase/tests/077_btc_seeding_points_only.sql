@@ -7,7 +7,7 @@
 --   * the migration's own rollback block restores the (points, wins) behaviour (it is run here, inside the transaction)
 -- Fixture ids are 077-specific (prefix 0e10 / 0e40) so a parallel reviewer's database work cannot collide.
 begin;
-select plan(50);
+select plan(52);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000771', 'member077@test.seduh-next'),
@@ -23,10 +23,11 @@ insert into events (id, org_id, format, name) values
   ('00000000-0000-0000-0000-0000000e1077', '00000000-0000-0000-0000-000000000781', 'btc', 'Points-only event'),
   ('00000000-0000-0000-0000-0000000e4077', '00000000-0000-0000-0000-000000000781', 'btc', 'Rollback event');
 
--- team id: prefix p (4 hex) and an index. Z = 0 sorts FIRST by id, so if wins (or anything but the recorded
--- order) ordered the tie, Z (the fewest wins) would not be where the default id order puts it.
+-- team id: prefix p (4 hex) and an index (Ti is i*10; Z is index 0 and sorts BETWEEN T7 and T8). In the unordered
+-- tie T7 (1 win), Z (0 wins), T8 (1 win) the default order is by id: T7, Z, T8. Wins descending would give T7, T8, Z
+-- and wins ascending Z, T7, T8, so the order can only be right if wins order nobody.
 create function pg_temp.tid(p text, i int) returns uuid language sql as $f$
-  select ('00000000-0000-0000-' || p || '-' || lpad(i::text, 12, '0'))::uuid
+  select ('00000000-0000-0000-' || p || '-' || lpad((case when i = 0 then 75 else i * 10 end)::text, 12, '0'))::uuid
 $f$;
 create function pg_temp.mid(p text, i int) returns uuid language sql as $f$
   select ('00000000-0000-0000-' || p || '-1' || lpad(i::text, 11, '0'))::uuid
@@ -119,8 +120,8 @@ select is((select tied_count from btc_seeding_order where team_id = pg_temp.tid(
   'Z, T7 and T8 form ONE tie group of three (equal points, different wins)');
 select is((select tied_count from btc_seeding_order where team_id = pg_temp.tid('0e10', 7)), 3, 'T7 sees the same group');
 select is((select array_agg(team_id order by seed) from btc_seeding_order where event_id = '00000000-0000-0000-0000-0000000e1077' and seed between 8 and 10),
-  array[pg_temp.tid('0e10', 0), pg_temp.tid('0e10', 7), pg_temp.tid('0e10', 8)],
-  'unordered, the group sits at seeds 8 to 10 in team-id order: Z (the fewest wins) is NOT pushed below the others');
+  array[pg_temp.tid('0e10', 7), pg_temp.tid('0e10', 0), pg_temp.tid('0e10', 8)],
+  'unordered, the group sits at seeds 8 to 10 in team-id order T7, Z, T8: neither wins descending nor ascending');
 select is((select group_resolved from btc_seeding_order where team_id = pg_temp.tid('0e10', 0)), false, 'and is not resolved');
 select is((select wins from btc_seeding_order where team_id = pg_temp.tid('0e10', 0))::int, 0, 'wins stay in the view, for display');
 select is((select count(*)::int from information_schema.columns where table_name = 'btc_seeding_tiebreaks' and column_name = 'wins'), 0,
@@ -155,7 +156,7 @@ delete from btc_seeding_tiebreaks where team_id = pg_temp.tid('0e10', 7);
 select is((select group_resolved from btc_seeding_order where team_id = pg_temp.tid('0e10', 8)), false, 'one row gone: the group is not resolved');
 select is((select tiebreak_rank from btc_seeding_order where team_id = pg_temp.tid('0e10', 8)), null, 'and the remaining ranks show nothing');
 select is((select array_agg(team_id order by seed) from btc_seeding_order where event_id = '00000000-0000-0000-0000-0000000e1077' and seed between 8 and 10),
-  array[pg_temp.tid('0e10', 0), pg_temp.tid('0e10', 7), pg_temp.tid('0e10', 8)], 'and order nobody: team-id order again');
+  array[pg_temp.tid('0e10', 7), pg_temp.tid('0e10', 0), pg_temp.tid('0e10', 8)], 'and order nobody: team-id order again');
 select throws_ok(
   $$ select generate_btc_bracket('00000000-0000-0000-0000-000000000781', '00000000-0000-0000-0000-0000000e1077') $$,
   'P0001', 'generate_btc_bracket: teams are tied for the 8th qualifying spot — resolve the tie before generating the bracket',
@@ -203,7 +204,8 @@ select throws_ok($$ select count(*) from btc_prelim_times $$, '42501', null, 'an
 reset role;
 select is(has_table_privilege('anon', 'btc_prelim_times', 'select'), false, 'anon has no select privilege on the view');
 select is(has_table_privilege('authenticated', 'btc_prelim_times', 'select'), true, 'authenticated has select');
-select is(has_table_privilege('authenticated', 'btc_prelim_times', 'insert'), false, 'and nothing else: the view is read-only');
+select is(has_table_privilege('authenticated', 'btc_prelim_times', 'insert'), false, 'and nothing else: the view is read-only (no insert)');
+select is(has_table_privilege('authenticated', 'btc_prelim_times', 'update') or has_table_privilege('authenticated', 'btc_prelim_times', 'delete'), false, 'no update or delete either');
 select is((select reloptions::text from pg_class where relname = 'btc_prelim_times'), '{security_invoker=true}',
   'the view is security_invoker, so the caller''s own row-level security applies');
 select is((select count(*)::int from btc_prelim_times where event_id = '00000000-0000-0000-0000-0000000e1077'), 20,
@@ -459,6 +461,7 @@ select ok((select prosrc ~ 'r8\.wins = r9\.wins' from pg_proc where proname = 'g
   'rollback: the cut-off check compares wins again');
 select ok((select prosrc ~ 'v_wins' from pg_proc where proname = 'record_btc_seeding_tiebreak'),
   'rollback: the recording RPC is the (points, wins) one');
+select is(has_table_privilege('anon', 'btc_seeding_order', 'select'), false, 'rollback: anon still has no select on the restored view');
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000771';
 select is((select tied_count from btc_seeding_order where team_id = pg_temp.tid('0e40', 0)), 1,
