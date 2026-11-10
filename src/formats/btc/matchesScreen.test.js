@@ -480,7 +480,9 @@ describe('mountMatchesScreen', () => {
       // the warning is a polite status tied to the judge fieldset
       const region = root.querySelector('.btc-country-warnings');
       expect(region.getAttribute('role')).toBe('status');
-      expect(root.querySelector('fieldset').getAttribute('aria-describedby')).toBe(region.id);
+      expect(root.querySelector('.btc-judge-fieldset').getAttribute('aria-describedby')).toBe(
+        region.id,
+      );
     });
 
     it('lists one line for each team of the judge country', async () => {
@@ -502,7 +504,9 @@ describe('mountMatchesScreen', () => {
       expect(warnings()).toHaveLength(1);
       tick('j1', false);
       expect(warnings()).toEqual([]);
-      expect(root.querySelector('fieldset').hasAttribute('aria-describedby')).toBe(false);
+      expect(root.querySelector('.btc-judge-fieldset').hasAttribute('aria-describedby')).toBe(
+        false,
+      );
       tick('j1', true);
       expect(warnings()).toHaveLength(1);
       choose('team1Id', 't4'); // a team with no country

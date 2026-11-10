@@ -35,8 +35,8 @@ selectable. Registration opens January 2027. Round 2's by-results method is stro
   cloud change exists for BTC yet. Start with `git fetch origin && git checkout ccr-dd9e5a6c-bxhucc`, then `npm ci`.
 - **Next step:** the engine spec's tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
   check, B draw and `create_btc_round`, C ties on points only. E, A and D are in `dev`; B part 1 (the draw engine: pure
-  functions, `btc_round_draws`, `create_btc_round`, no screen) is built on `claude/btc-b-draw-engine-6895c3` with a PR into `dev`
-  and its migration `20261109100000` not in the cloud; B part 2 (the Draw panel) and C remain. Each has its reviewers in section
+  functions, `btc_round_draws`, `create_btc_round`, no screen) shipped in release 3.6.7 (check `CHANGELOG.md` for whether its
+  migration `20261109100000` is in the cloud); B part 2 (the Draw panel on the matches screen, front end only) is built on `claude/btc-b2-draw-panel-9d6d63` with a PR into `dev`; B part 3 (redraw a round: migration `20261109110000`, not in the cloud) is on `claude/btc-b3-redraw-round-9d6d63`, PR stacked on part 2's; C remains. Each has its reviewers in section
   8 of the spec; the C migration and the draw are scoring and tenancy gates.
 - **Waiting on the committee (none blocks the first tasks):** the real team count and round-2 method; which round has the
   10-minute limit and which the 15 (the default is 10:00 preliminary, 15:00 knockout, one function to edit); odd team
