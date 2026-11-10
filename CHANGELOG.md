@@ -8,6 +8,23 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Version rules moved to docs/versioning.md; minor defined · 2026-11-10
+
+**Task:** owner request 2026-11-10, not a roadmap item. Branch `docs/versioning-guide` in worktree `C:\Dev\seduh-score-next-ver`: commit `4bbdc88` plus the review fixes, committed together. **Committed, not pushed.** No version bump: docs, a PR template and a test comment only, and nothing the deployed app is built from changed (`docs/versioning.md`, "The CI gate").
+
+- **Why:** the owner asked what a minor is and what happens once no formats are left. Then asked for the rules in their own file, with a pointer to check when Behind the Seduh questions come up, so `CONVENTIONS.md` stays short. Its "Versioning" section had grown to about 80 lines of rules.
+- **New `docs/versioning.md`:** the rule table. Major = a new competition format or a relaunch (moves the place name). Minor = a new capability someone can use (a screen or flow, a format module, a community tool, a platform feature, a visible redesign). Patch = fixes, polish, and groundwork nobody can use yet. The highest change wins. Major test: would you announce it to organisers as "the new Seduh Score"? After Liga Seduh (5.0) the number can stay on 5.x; a 6.0 needs a relaunch (examples listed). Also in the doc: who bumps (`kb-sync` patches by default, bumps minor for a capability, and stops to ask on a new format; the release PR into `main` is the backstop), the CI gate, the place names table, and what `/bts/` must change when the place moves.
+- **Pointers:** `CONVENTIONS.md` "Versioning" is now a short pointer. Added in `CLAUDE.md` (Git section), `src/marketing/CLAUDE.md` (new "Behind the Seduh" section), the `STATUS.md` table, `ROADMAP.md` (four mentions) and a comment in `src/marketing/btsPage.test.js`.
+- **Process:** `kb-sync` step 8 now picks minor for a capability and stops on a new format. `.github/pull_request_template.md` gained a "Version (release PRs into main only)" section.
+- **Recorded as a finding, not changed:** Petrol V2 and BTC countries should have been minors; both shipped as patches. The doc says so. No version was renumbered.
+- **Reviews:**
+  - `code-reviewer` (owner's pass): no 🔴. Three nits fixed: two `ROADMAP.md` lines still citing `CONVENTIONS.md` for the nameplate rule (now point to `docs/versioning.md`); `kb-sync`'s capability list was missing "visible redesign" (added); the "say what the number covers" note restored for every bump (`docs/versioning.md`).
+  - Not recorded as run: `module-boundary-checker` (the floor for changes under `src/**`: `src/marketing/CLAUDE.md` and the test comment) and `test-auditor` (the test file changed, comment only). Both are docs-or-comment-scale, but the floor says run them; owed before the PR is called reviewed.
+- **Checks:** `npm run check:docs` OK (owner's run; re-run at close). `tools/check-doc-budgets.test.js` "brokenLinks" fails only on Windows (the known `/r/` path quirk, see the entry below).
+- **Open follow-up:** push and PR into `dev` (owner's call). Run `module-boundary-checker` and `test-auditor` as above. Behind the Seduh's current place and version are unchanged by this entry.
+
+---
+
 ## v4.0.0: Behind the Seduh rebuilt as a one-chapter reader; Kiarong (the Throwdown major bump caught up) · 2026-11-09
 
 **Task:** Behind the Seduh (`/bts/`) redesign, owner request 2026-11-09. Not an item in the handoff §14 build plan; no task ID. Branch `claude/bts-reader-kiarong` (commits `41b77b9`, `250b594`, `57052f7`) on top of `origin/dev` `98511d0`. **In a PR into `dev`, not merged, not released.** Not pushed by this session. No migration, no cloud change, no feature change.

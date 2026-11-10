@@ -44,7 +44,7 @@ settled, not that it stopped moving. A 6.0 needs a relaunch, for example:
 ## Who bumps, and when
 
 1. **Every task that ships** bumps by default with a **patch**: `kb-sync`'s step runs
-   `npm version patch --no-git-tag-version`. A build session that stops at a PR (no `kb-sync`) bumps itself.
+   `npm version patch --no-git-tag-version`. A build session that stops at a PR (no `kb-sync`) bumps itself and notes in its CHANGELOG entry what the number covers.
 2. **A task that adds a capability** bumps **minor** instead (`npm version minor --no-git-tag-version`), and says so in
    its CHANGELOG entry. The closing (Z) task of a phase does this if its tasks did not.
 3. **A task that ships a new format** stops and asks the owner, then runs `npm version major --no-git-tag-version`,
