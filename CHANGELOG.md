@@ -19,9 +19,9 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Recorded as a finding, not changed:** Petrol V2 and BTC countries should have been minors; both shipped as patches. The doc says so. No version was renumbered.
 - **Reviews:**
   - `code-reviewer` (owner's pass): no 🔴. Three nits fixed: two `ROADMAP.md` lines still citing `CONVENTIONS.md` for the nameplate rule (now point to `docs/versioning.md`); `kb-sync`'s capability list was missing "visible redesign" (added); the "say what the number covers" note restored for every bump (`docs/versioning.md`).
-  - Not recorded as run: `module-boundary-checker` (the floor for changes under `src/**`: `src/marketing/CLAUDE.md` and the test comment) and `test-auditor` (the test file changed, comment only). Both are docs-or-comment-scale, but the floor says run them; owed before the PR is called reviewed.
+  - Not run: `module-boundary-checker` and `test-auditor`. The review protocol (CLAUDE.md, step 5) needs `code-reviewer` at most for a docs- or comment-only change; the only `src/` edits are `src/marketing/CLAUDE.md` and one comment in `btsPage.test.js`.
 - **Checks:** `npm run check:docs` OK (owner's run; re-run at close). `tools/check-doc-budgets.test.js` "brokenLinks" fails only on Windows (the known `/r/` path quirk, see the entry below).
-- **Open follow-up:** push and PR into `dev` (owner's call). Run `module-boundary-checker` and `test-auditor` as above. Behind the Seduh's current place and version are unchanged by this entry.
+- **Open follow-up:** PR into `dev`, merged by the owner when CI is green. Behind the Seduh's current place and version are unchanged by this entry.
 
 ---
 
