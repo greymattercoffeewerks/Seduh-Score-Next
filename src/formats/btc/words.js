@@ -19,7 +19,7 @@ export function teamLabel({ name, country_code: countryCode }) {
 }
 
 // teamLabel as a DOM node, with the country's flag beside its code (core/countryFlag.js). The flag and code are
-// decoration for the eye (`aria-hidden`): a screen reader gets the same "Country · Name" teamLabel says, in a
+// decoration for the eye (`aria-hidden`): a screen reader gets the same "Country Â· Name" teamLabel says, in a
 // visually hidden span, so nothing depends on seeing the picture. No country: just the name. Team flags may
 // reach audience surfaces; a JUDGE's flag stays organiser-only, so judges keep the plain-text teamLabel.
 export function teamLabelNode(team, options) {

@@ -240,6 +240,24 @@ describe('mountBtcEventDashboardScreen', () => {
       expect(root.querySelector('.ok-live').dataset.state).toBe('not_showing');
     });
 
+    it('does not claim success when ANOTHER event is the live one after the publish', async () => {
+      const tables = tablesFor();
+      publishBtcLive.mockImplementation(async () => {
+        tables.live_sessions = { data: { event_id: 'other-event' }, error: null };
+      });
+      await mountBtcEventDashboardScreen(root, {
+        eventId: 'ev1',
+        client: fakeClient(tables),
+        handlers: {},
+        listQueued: async () => [],
+      });
+      root.querySelector('.ok-live-show').click();
+      await vi.waitFor(() =>
+        expect(root.querySelector('.ok-live-status').textContent).toContain('saved on this device'),
+      );
+      expect(root.querySelector('.ok-live').dataset.state).not.toBe('live');
+    });
+
     it('offers no take-over control without a handler map', async () => {
       await mount(root, {});
       expect(root.querySelector('.ok-live-show').hidden).toBe(true);

@@ -321,9 +321,19 @@ function podiumPhase(data, links) {
       blockedReason: 'The podium waits for the knockout.',
     };
   }
+  // The scores read failed: say so instead of claiming the podium is undecided (as the cut does for ties).
+  if (data.bracketScores === null || data.bracketScores === undefined) {
+    return {
+      ...base,
+      status: 'in_progress',
+      count: 'Could not check the result',
+      nextAction: { label: 'Open the bracket', href: links.bracket },
+      blockedReason: null,
+    };
+  }
   const podium = derivePodium({
     entries: data.bracket,
-    scores: data.bracketScores ?? [],
+    scores: data.bracketScores,
     teams: data.teams,
   });
   const decided = podium.places.filter((p) => p.state === 'decided');
@@ -368,7 +378,7 @@ function podiumPhase(data, links) {
  * @param {{
  *   eventId: string, teams: object[], judges: object[],
  *   matches: { match: object, judgeIds: string[] }[],
- *   bracket: { slot: object, match: object|null }[], bracketScores?: object[],
+ *   bracket: { slot: object, match: object|null }[], bracketScores: object[]|null,
  *   seedingRows?: object[]|null
  * }} data what the dashboard read; `seedingRows` is null when that read failed
  */

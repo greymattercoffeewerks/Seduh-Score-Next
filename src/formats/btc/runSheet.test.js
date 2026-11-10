@@ -382,6 +382,12 @@ describe('podium decided', () => {
     expect(p.podium.nextAction.label).toBe('Record the winner');
   });
 
+  it('says it could not check when the scores read failed, instead of claiming undecided', () => {
+    const p = byId(deriveBtcPhases(base({ matches: done, bracket, bracketScores: null })));
+    expect(p.podium.status).toBe('in_progress');
+    expect(p.podium.count).toBe('Could not check the result');
+  });
+
   it('only third place decided shows what is known', () => {
     const half = fullBracket({
       qf: 'confirmed',

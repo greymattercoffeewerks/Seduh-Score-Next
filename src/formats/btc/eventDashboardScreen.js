@@ -22,6 +22,8 @@ import { loadDashboardData } from './dashboardData.js';
 import { btcLinks, currentPhaseLabel, deriveBtcPhases, deriveBtcWarnings } from './runSheet.js';
 import { publishBtcLive } from './liveSession.js';
 
+const TAKE_OVER_WAIT_MS = 8000;
+
 const NOT_SENT_MESSAGE =
   'Not on the displays yet. The request is saved on this device and goes through when the connection is back.';
 
@@ -156,7 +158,12 @@ export async function mountBtcEventDashboardScreen(
   // Puts this event on the audience displays. The publish is queued then flushed, and it never throws for a
   // network failure, so the answer is read back: only a live row naming this event is "shown".
   async function takeOver() {
-    await publishBtcLive({ event: data.event, takeOver: true }, handlers);
+    // Bounded below the kit's own 10 s wait, so a stalled flush still gets the read-back and the honest message
+    // ("saved on this device") instead of the kit's generic failure while the publish may yet go through.
+    await raceTimeout(
+      publishBtcLive({ event: data.event, takeOver: true }, handlers),
+      TAKE_OVER_WAIT_MS,
+    ).catch(() => {});
     const live = await raceTimeout(
       findActiveLiveEventId(data.event.org_id, client),
       DEFAULT_LOAD_TIMEOUT_MS,

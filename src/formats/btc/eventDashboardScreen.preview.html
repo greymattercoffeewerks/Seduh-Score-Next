@@ -20,7 +20,17 @@
     <script type="module">
       import { mountBtcEventDashboardScreen } from './eventDashboardScreen.js';
 
-      const STAGES = ['empty', 'blocked', 'round1', 'round2', 'cut', 'knockout', 'podium', 'test', 'failed'];
+      const STAGES = [
+        'empty',
+        'blocked',
+        'round1',
+        'round2',
+        'cut',
+        'knockout',
+        'podium',
+        'test',
+        'failed',
+      ];
       const COUNTRIES = ['BN', 'MY', 'SG', 'ID', 'TH', 'PH', 'VN', 'KH', 'LA', 'MM'];
 
       const teams = (n, missing = 0) =>
@@ -30,7 +40,11 @@
           country_code: i < n - missing ? COUNTRIES[i % COUNTRIES.length] : null,
         }));
       const judges = (n) =>
-        Array.from({ length: n }, (_, i) => ({ id: `j${i + 1}`, name: `Judge ${i + 1}`, country_code: null }));
+        Array.from({ length: n }, (_, i) => ({
+          id: `j${i + 1}`,
+          name: `Judge ${i + 1}`,
+          country_code: null,
+        }));
 
       let seq = 0;
       const match = (round, status, extra = {}) => ({
@@ -46,8 +60,12 @@
         ...extra,
       });
       const prelim = (r1, r2) => [
-        ...Array.from({ length: 10 }, (_, i) => match(1, i < r1 ? 'confirmed' : i === r1 ? 'scoring' : 'pending')),
-        ...Array.from({ length: r2 === null ? 0 : 10 }, (_, i) => match(2, i < r2 ? 'confirmed' : 'pending')),
+        ...Array.from({ length: 10 }, (_, i) =>
+          match(1, i < r1 ? 'confirmed' : i === r1 ? 'scoring' : 'pending'),
+        ),
+        ...Array.from({ length: r2 === null ? 0 : 10 }, (_, i) =>
+          match(2, i < r2 ? 'confirmed' : 'pending'),
+        ),
       ];
 
       const seedingTie = () =>
@@ -92,7 +110,16 @@
           venue: 'Hall A',
           city: 'Bandar Seri Begawan',
         };
-        const s = { events: event, teams: teams(20), judges: judges(9), matches: [], slots: [], seeding: [], scores: [], live: null };
+        const s = {
+          events: event,
+          teams: teams(20),
+          judges: judges(9),
+          matches: [],
+          slots: [],
+          seeding: [],
+          scores: [],
+          live: null,
+        };
         if (stage === 'empty') Object.assign(s, { teams: [], judges: [] });
         if (stage === 'blocked') s.teams = teams(20, 2);
         if (stage === 'round1') s.matches = prelim(7, null);
@@ -107,13 +134,33 @@
         }
         if (stage === 'podium') {
           s.matches = prelim(10, 10);
-          s.slots = bracket({ qf: 'confirmed', sf: 'confirmed', final: 'confirmed', third: 'confirmed' });
+          s.slots = bracket({
+            qf: 'confirmed',
+            sf: 'confirmed',
+            final: 'confirmed',
+            third: 'confirmed',
+          });
           s.scores = [
-            { match_id: 'k-final', status: 'confirmed', team1_id: 't1', team2_id: 't2', team1_total: 30, team2_total: 20 },
-            { match_id: 'k-third_place', status: 'confirmed', team1_id: 't3', team2_id: 't4', team1_total: 25, team2_total: 22 },
+            {
+              match_id: 'k-final',
+              status: 'confirmed',
+              team1_id: 't1',
+              team2_id: 't2',
+              team1_total: 30,
+              team2_total: 20,
+            },
+            {
+              match_id: 'k-third_place',
+              status: 'confirmed',
+              team1_id: 't3',
+              team2_id: 't4',
+              team1_total: 25,
+              team2_total: 22,
+            },
           ];
         }
-        if (stage !== 'empty' && stage !== 'blocked') s.live = { event_id: stage === 'round2' ? 'ev1' : null };
+        if (stage !== 'empty' && stage !== 'blocked')
+          s.live = { event_id: stage === 'round2' ? 'ev1' : null };
         return s;
       }
 
@@ -121,20 +168,43 @@
         const answer = (table) => {
           if (fail) return { data: null, error: { code: '42501', message: 'boom' } };
           switch (table) {
-            case 'events': return { data: s.events, error: null };
-            case 'btc_teams': return { data: s.teams, error: null };
-            case 'btc_judges': return { data: s.judges, error: null };
+            case 'events':
+              return { data: s.events, error: null };
+            case 'btc_teams':
+              return { data: s.teams, error: null };
+            case 'btc_judges':
+              return { data: s.judges, error: null };
             case 'btc_matches': {
               // Slot matches are read by id (status only); the roster read has no slot rows.
-              return { data: [...s.matches, ...s.slots.filter((x) => x._status).map((x) => ({ id: x.match_id, status: x._status, round: 'quarterfinal' }))], error: null };
+              return {
+                data: [
+                  ...s.matches,
+                  ...s.slots
+                    .filter((x) => x._status)
+                    .map((x) => ({ id: x.match_id, status: x._status, round: 'quarterfinal' })),
+                ],
+                error: null,
+              };
             }
-            case 'btc_match_judges': return { data: s.matches.flatMap((m) => ['j1', 'j2', 'j3'].map((j) => ({ match_id: m.id, judge_id: j }))), error: null };
-            case 'btc_bracket_slots': return { data: s.slots, error: null };
-            case 'btc_match_scores': return { data: s.scores, error: null };
-            case 'btc_seeding_order': return { data: s.seeding, error: null };
-            case 'live_sessions': return { data: s.live, error: null };
-            case 'events_flag': return { data: null, error: null };
-            default: return { data: [], error: null };
+            case 'btc_match_judges':
+              return {
+                data: s.matches.flatMap((m) =>
+                  ['j1', 'j2', 'j3'].map((j) => ({ match_id: m.id, judge_id: j })),
+                ),
+                error: null,
+              };
+            case 'btc_bracket_slots':
+              return { data: s.slots, error: null };
+            case 'btc_match_scores':
+              return { data: s.scores, error: null };
+            case 'btc_seeding_order':
+              return { data: s.seeding, error: null };
+            case 'live_sessions':
+              return { data: s.live, error: null };
+            case 'events_flag':
+              return { data: null, error: null };
+            default:
+              return { data: [], error: null };
           }
         };
         return {
@@ -163,7 +233,10 @@
           eventId: 'ev1',
           client: createClient(scenario(stage, shadow), stage === 'failed'),
           handlers: {},
-          listQueued: async () => (stage === 'round2' ? [{ type: 'confirm_btc_match', payload: { p_match_id: 'm14' } }] : []),
+          listQueued: async () =>
+            stage === 'round2'
+              ? [{ type: 'confirm_btc_match', payload: { p_match_id: 'm14' } }]
+              : [],
           audienceLinks: {
             phone: 'https://www.seduhscore.com/#/live/demo/phone',
             projector: 'https://www.seduhscore.com/#/live/demo/projector',
