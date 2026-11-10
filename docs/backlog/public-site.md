@@ -33,3 +33,16 @@ The proof section's photo now runs edge to edge (CHANGELOG entry of the same dat
 
 - **Phone copy card covers the photo's subject.** On phones (640px and below) the proof copy card is opaque, so it covers the bowls the photo is of, and the photo is barely visible. Pre-existing: the card's opacity on phones predates the full-bleed change. Owner design decision: make the card translucent, move the copy so the photo shows, or accept it. (landing page; `ui-accessibility-reviewer` finding, not fixed)
 - **Wider source for the full-bleed slot.** `public/marketing/hero-cupping-bowls.jpg` is 1100px wide, so it upscales about 1.7x on 1830px screens and looks soft on large desktops. Replace it with a source at least 1830px wide for the full-bleed proof slot. The file is also used by the Tour page (`tourScreen.js`), so check that page when swapping it. (landing page; `ui-accessibility-reviewer` nit)
+
+## Known open items from the Behind the Seduh reader rebuild (v4.0.0, 2026-11-09)
+
+The `/bts/` page is now a one-chapter reader (CHANGELOG entry of the same date). Round 2 of the accessibility review raised one 🟣 item; the screen-reader check was not run.
+
+- **Keyboard focus can sit off-screen below 860px.** In the horizontal chapter rail, a keyboard-focused chapter is not scrolled into view, so it can sit off-screen. Seen in headless Chromium only; the cause is not established. Pre-existing, found by `ui-accessibility-reviewer`; not changed in v4.0.0. (Behind the Seduh reader)
+- **Screen reader not run on `/bts/`.** The reader's focus handling, status region and `aria-current` rail are checked by tests and a browser probe only. Owed before the page is called checked for assistive technology. (Behind the Seduh reader)
+
+## Known open items from the public page hero (2026-11-09)
+
+The shared `.page-hero` on Tour, Community hub, Pricing and Results (CHANGELOG entry of the same date). One item came out of it.
+
+- **Results loading and error states have no `<h1>`.** While `/results/` is loading or when it fails, the page shows no headline, so a screen reader gets no page title there. Pre-existing: the loading and error markup predates the shared hero. Found by `ui-accessibility-reviewer`; logged, not fixed in that change.

@@ -12,7 +12,7 @@ import { join, relative, sep } from 'node:path';
 //              *-delay and --custom-property indirection are NOT checked (known gaps, see DESIGN.md)
 //   clip-path  a polygon() (clip-path: inset(50%) visually-hidden patterns are fine)
 // Scanned: every *.css under src/ except src/ui/tokens/, and the inline <style> blocks of every HTML page except
-// public/bts/index.html (it cannot link the tokens; btsPalette.test.js holds its token copies equal), design/
+// design/
 // (design-tool exports), src/ui/tokens/ and *.preview.html (dev-only preview harnesses, never served in the product).
 //
 // The ALLOWLIST pins file + kind + selector + literal, never a whole file, so new drift in an allowlisted file
@@ -34,10 +34,7 @@ const SKIP_DIRS = [
   'brag-output',
 ];
 const SKIP_HTML = (path) =>
-  path.startsWith('design/') ||
-  path.startsWith(TOKENS_DIR) ||
-  path.endsWith('.preview.html') ||
-  path === 'public/bts/index.html';
+  path.startsWith('design/') || path.startsWith(TOKENS_DIR) || path.endsWith('.preview.html');
 
 function walk(dir, accept) {
   const found = [];
@@ -310,9 +307,11 @@ describe('Petrol token drift guard', () => {
   it('scans the stylesheets (a vacuous scan would pass anything)', () => {
     expect(sources.filter((s) => s.file.endsWith('.css')).length).toBeGreaterThan(30);
     expect(htmlFiles).toContain('app/index.html');
+    expect(htmlFiles).toContain('bts/index.html');
     expect(htmlFiles.length).toBeGreaterThan(8);
     expect(sources.some((s) => s.file.startsWith(TOKENS_DIR))).toBe(false);
-    expect(sources.some((s) => s.file === 'public/bts/index.html')).toBe(false);
+    // Behind the Seduh links the tokens since 2026-11-09, so its stylesheet is in scope like any other page's.
+    expect(sources.some((s) => s.file === 'src/marketing/bts.css')).toBe(true);
   });
 
   it('no stylesheet hand-writes a raw colour, off-token radius, motion literal or clip-path polygon', () => {
@@ -421,6 +420,7 @@ const SQUARE_ALLOWLIST = [
   ...SQUARE('src/marketing/pricing.css', 'no-corner', ['.pricing-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/results.css', 'no-corner', ['.results-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/tour.css', 'no-corner', ['.tour-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/bts.css', 'no-corner', ['.bts'], PAGE_ROOT),
   ...SQUARE('src/marketing/trust.css', 'no-corner', ['.trust-page'], PAGE_ROOT),
   ...SQUARE('src/community/communityHub.css', 'no-corner', ['.community-hub'], PAGE_ROOT),
   ...SQUARE(

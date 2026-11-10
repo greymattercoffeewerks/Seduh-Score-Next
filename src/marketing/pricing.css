@@ -28,7 +28,6 @@ body {
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
-.pricing-hero h1,
 .pricing-compare h2,
 .pricing-faq h2,
 .pricing-closing h2 {
@@ -39,17 +38,7 @@ body {
   line-height: var(--leading-tight);
   text-transform: uppercase;
 }
-.pricing-hero {
-  padding-block: clamp(3.5rem, 9vw, 7rem) clamp(2rem, 5vw, 3.5rem);
-}
-.pricing-hero h1 {
-  max-width: 52rem;
-  font-size: clamp(2.75rem, 9vw, 6.5rem);
-}
-.pricing-hero h1 span {
-  color: var(--color-accent);
-}
-.pricing-hero-intro,
+/* The hero's spacing, headline, kicker, intro and grid are the shared .page-hero (tokens/base.css). */
 .pricing-lede {
   max-width: 40rem;
   margin: var(--space-5) 0 0;

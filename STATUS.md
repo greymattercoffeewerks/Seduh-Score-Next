@@ -1,16 +1,18 @@
 # Status — read this first
 
-_As of 2026-11-08, app version 3.6.4. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-09, app version 4.0.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
+- **Behind the Seduh** is rebuilt as a one-chapter reader (`/bts/`) in a PR into `dev` (branch `claude/bts-reader-kiarong`), not yet merged or released; v4.0.0 is the Throwdown major bump caught up (see `CHANGELOG.md`).
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
-- **Petrol V2 P1 to P3 done** (tokens, components, surfaces) on `claude/petrol-v2-2a4279`, unmerged; the drift guard is done on `claude/petrol-v2-guard-cf745e` (2026-11-08, unmerged). The public-pages pass (marketing pages on the shared primitives, guard extended) is done on `claude/petrol-v2-public-16c90b`, unmerged. Merge only when the owner says all phases are done.
+- **Petrol V2 released** in 3.6.6 (2026-11-09: tokens, components, surfaces, drift guard, public pages). The shared
+  page hero on Tour, Community, Pricing and Results is in a PR to `dev` from `claude/page-hero-consistency` (2026-11-09).
 - **Open, not merged or not in the cloud** (check `CHANGELOG.md` before trusting this line): password recovery D-PW2 to
   D-PW8 not started; organiser branding BR-E1 in PR #297 (no database door, so no brand shows); T-TD.1.9 (Throwdown 3rd place
   match after a walkover) was in review with its migration not yet in the cloud on 2026-11-03.
@@ -33,8 +35,8 @@ selectable. Registration opens January 2027. Round 2's by-results method is stro
   cloud change exists for BTC yet. Start with `git fetch origin && git checkout ccr-dd9e5a6c-bxhucc`, then `npm ci`.
 - **Next step:** the engine spec's tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
   check, B draw and `create_btc_round`, C ties on points only. E, A and D are in `dev`; B part 1 (the draw engine: pure
-  functions, `btc_round_draws`, `create_btc_round`, no screen) is built on `claude/btc-b-draw-engine-6895c3` with a PR into `dev`
-  and its migration `20261109100000` not in the cloud; B part 2 (the Draw panel on the matches screen, front end only) is built on `claude/btc-b2-draw-panel-9d6d63` with a PR into `dev`; B part 3 (redraw a round: migration `20261109110000`, not in the cloud) is on `claude/btc-b3-redraw-round-9d6d63`, PR stacked on part 2's; C remains. Each has its reviewers in section
+  functions, `btc_round_draws`, `create_btc_round`, no screen) shipped in release 3.6.7 (check `CHANGELOG.md` for whether its
+  migration `20261109100000` is in the cloud); B part 2 (the Draw panel on the matches screen, front end only) is built on `claude/btc-b2-draw-panel-9d6d63` with a PR into `dev`; B part 3 (redraw a round: migration `20261109110000`, not in the cloud) is on `claude/btc-b3-redraw-round-9d6d63`, PR stacked on part 2's; C remains. Each has its reviewers in section
   8 of the spec; the C migration and the draw are scoring and tenancy gates.
 - **Waiting on the committee (none blocks the first tasks):** the real team count and round-2 method; which round has the
   10-minute limit and which the 15 (the default is 10:00 preliminary, 15:00 knockout, one function to edit); odd team
