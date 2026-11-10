@@ -98,7 +98,10 @@ export function buildLiveCard(
       } else {
         setLive(true);
         // The button hides itself on success while it holds focus: keep the keyboard user's place.
-        headline.focus();
+        // (Only when focus is still there or has been lost: never pull it from somewhere the user moved to.)
+        if (document.activeElement === showButton || document.activeElement === document.body) {
+          headline.focus();
+        }
         setStatus(result?.message || 'This event is now on the displays.', 'success');
       }
     } catch {
