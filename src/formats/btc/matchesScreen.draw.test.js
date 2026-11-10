@@ -48,6 +48,16 @@ function fakeClient(initialDb, { roundError, beforeError } = {}) {
         beforeError?.(db);
         return Promise.resolve({ data: null, error: roundError });
       }
+      if (name === 'redraw_btc_round') {
+        const inRound = (m) =>
+          m.round === 'preliminary' && (m.prelim_round ?? 1) === args.p_prelim_round;
+        const removed = db.btc_matches.filter(inRound).length;
+        db.btc_matches = db.btc_matches.filter((m) => !inRound(m));
+        db.btc_round_draws = (db.btc_round_draws ?? []).filter(
+          (d) => d.prelim_round !== args.p_prelim_round,
+        );
+        return Promise.resolve({ data: removed, error: null });
+      }
       if (name === 'create_btc_round') {
         const made = args.p_matches.map((m) => {
           idCounter += 1;
@@ -828,6 +838,175 @@ describe('Draw a round panel', () => {
       click(createButton());
       await flush();
       expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    });
+
+    describe('redrawing a round (Build B part 3)', () => {
+      const r1 = (status) => [
+        match('r1a', 1, status, 't01', 't02'),
+        match('r1b', 1, status, 't03', 't04'),
+      ];
+      const redrawButton = () => q('[data-focus-key="draw-redraw"]');
+      const isBlocked = (b) => b.getAttribute('aria-disabled') === 'true';
+
+      it('clears a drawn, unscored round after a confirm, then offers the draw again', async () => {
+        const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') });
+        db.btc_round_draws = [{ event_id: 'ev1', prelim_round: 1 }];
+        const client = await mount(db);
+        choose('draw-round-1');
+        expect(root.textContent).toContain('Round 1 has already been drawn.');
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+        redrawButton().focus();
+        click(redrawButton());
+        await flush();
+        expect(confirm.mock.calls[0][0]).toContain('removes its 2 matches');
+        expect(client.rpcCalls[0]).toEqual([
+          'redraw_btc_round',
+          { p_org_id: 'org1', p_event_id: 'ev1', p_prelim_round: 1 },
+        ]);
+        expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(0);
+        expect(cards()).toHaveLength(2); // round 1 can be drawn again
+        expect(document.activeElement.textContent).toBe('Round 1 cleared. Draw it again below.');
+        expect(publishBtcLive).toHaveBeenCalledTimes(1);
+        expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(false);
+      });
+
+      it('does nothing when the confirm is declined, and keeps focus on the button', async () => {
+        const client = await mount(
+          dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') }),
+        );
+        choose('draw-round-1');
+        vi.spyOn(window, 'confirm').mockReturnValue(false);
+        redrawButton().focus();
+        click(redrawButton());
+        await flush();
+        expect(client.rpcCalls).toHaveLength(0);
+        expect(document.activeElement).toBe(redrawButton());
+      });
+
+      it('says up front, and sends nothing, when a match is scored', async () => {
+        const client = await mount(
+          dbWith({
+            teams: teamRows(4),
+            judges: NEUTRAL_JUDGES,
+            matches: [
+              match('r1a', 1, 'scoring', 't01', 't02'),
+              match('r1b', 1, 'pending', 't03', 't04'),
+            ],
+          }),
+        );
+        choose('draw-round-1');
+        expect(isBlocked(redrawButton())).toBe(true);
+        expect(redrawButton().disabled).toBe(false); // still focusable
+        expect(q('#btc-draw-redraw-reason').textContent).toContain('in scoring or confirmed');
+        expect(redrawButton().getAttribute('aria-describedby')).toBe('btc-draw-redraw-reason');
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+        click(redrawButton());
+        await flush();
+        expect(confirm).not.toHaveBeenCalled();
+        expect(client.rpcCalls).toHaveLength(0);
+      });
+
+      it('blocks round 1 while round 2 is drawn', async () => {
+        await mount(
+          dbWith({
+            teams: teamRows(4),
+            judges: NEUTRAL_JUDGES,
+            matches: [...r1('pending'), match('r2a', 2, 'pending', 't01', 't03')],
+          }),
+        );
+        choose('draw-round-1');
+        expect(isBlocked(redrawButton())).toBe(true);
+        expect(q('#btc-draw-redraw-reason').textContent).toContain('later round is drawn');
+      });
+
+      it('shows the database refusal in words and refreshes the page', async () => {
+        const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') });
+        await mount(db, {
+          roundError: { code: 'P0001', message: 'RAW', hint: 'btc_redraw_scored' },
+          // someone scored a match on another device meanwhile
+          beforeError: (d) => {
+            d.btc_matches.find((m) => m.id === 'r1a').status = 'scoring';
+          },
+        });
+        choose('draw-round-1');
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        click(redrawButton());
+        await flush();
+        expect(q('[role="alert"]').textContent).toContain(
+          'has been scored, so it cannot be redrawn',
+        );
+        expect(q('[role="alert"]').textContent).not.toContain('RAW');
+        expect(isBlocked(redrawButton())).toBe(true); // the refreshed page now knows
+      });
+
+      it('clears the screen even when the re-read after a successful redraw fails', async () => {
+        const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') });
+        db.btc_round_draws = [{ event_id: 'ev1', prelim_round: 1 }];
+        const client = fakeClient(db);
+        screen = await mountMatchesScreen(root, { eventId: 'ev1', client, handlers: {} });
+        choose('draw-round-1');
+        const real = client.from;
+        client.from = (table) => {
+          if (table === 'btc_matches') throw new Error('offline');
+          return real(table);
+        };
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        click(redrawButton());
+        await flush();
+        expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(0);
+        expect(cards()).toHaveLength(2);
+        expect(redrawButton()).toBeNull();
+      });
+
+      it('stops offering Redraw for a round the database says is scored (votes the screen cannot see)', async () => {
+        const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') });
+        await mount(db, { roundError: { code: 'P0001', message: 'x', hint: 'btc_redraw_scored' } });
+        choose('draw-round-1');
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        click(redrawButton());
+        await flush();
+        expect(isBlocked(redrawButton())).toBe(true);
+        expect(q('#btc-draw-redraw-reason')).not.toBeNull();
+      });
+
+      it('does not offer Redraw under a later round whose record remains', async () => {
+        const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('confirmed') });
+        db.btc_round_draws = [
+          { event_id: 'ev1', prelim_round: 1 },
+          { event_id: 'ev1', prelim_round: 2 },
+        ];
+        await mount(db);
+        choose('draw-round-1');
+        expect(isBlocked(redrawButton())).toBe(true);
+      });
+
+      it('republishes when a redraw that timed out turns out to have landed', async () => {
+        const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') });
+        await mount(db, {
+          roundError: Object.assign(new Error('timed out'), { timedOut: true }),
+          beforeError: (d) => {
+            d.btc_matches = [];
+          },
+        });
+        choose('draw-round-1');
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        click(redrawButton());
+        await flush();
+        expect(publishBtcLive).toHaveBeenCalledTimes(1);
+      });
+
+      it('clears a draw record whose matches were removed, so the round can be drawn', async () => {
+        const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES });
+        db.btc_round_draws = [{ event_id: 'ev1', prelim_round: 1 }];
+        const client = await mount(db);
+        expect(root.textContent).toContain('Redraw it to clear the record');
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        click(redrawButton());
+        await flush();
+        expect(client.rpcCalls[0][0]).toBe('redraw_btc_round');
+        expect(cards()).toHaveLength(2);
+        expect(redrawButton()).toBeNull();
+      });
     });
   });
 });

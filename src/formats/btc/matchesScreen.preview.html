@@ -122,6 +122,7 @@
             ['j1', 'j2', 'j3'].map((judge_id) => ({ match_id: m.id, judge_id })),
           ),
           btc_standings: standings,
+          btc_round_draws: [],
         };
         let idCounter = 0;
 
@@ -173,10 +174,20 @@
         return {
           from: (table) => makeBuilder(table),
           rpc: (name, args) => {
+            if (name === 'redraw_btc_round') {
+              const inRound = (m) => (m.prelim_round ?? 1) === args.p_prelim_round;
+              const removed = db.btc_matches.filter(inRound).length;
+              db.btc_matches = db.btc_matches.filter((m) => !inRound(m));
+              db.btc_round_draws = db.btc_round_draws.filter(
+                (d) => d.prelim_round !== args.p_prelim_round,
+              );
+              return Promise.resolve({ data: removed, error: null });
+            }
             if (name === 'create_btc_round') {
               const made = args.p_matches.map((m) =>
                 add(args, m.team1_id, m.team2_id, m.judge_ids, args.p_prelim_round),
               );
+              db.btc_round_draws.push({ event_id: 'ev1', prelim_round: args.p_prelim_round });
               console.log(
                 'create_btc_round',
                 JSON.stringify({ ...args, p_matches: `${made.length} matches` }),
