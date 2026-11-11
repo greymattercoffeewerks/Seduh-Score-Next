@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mountBracketScreen } from './bracketScreen.js';
+import { mountStandingsScreen } from './standingsScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 
 vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
@@ -53,7 +53,12 @@ function fakeClient(
     })),
     btc_judges: [],
     btc_bracket_slots: [],
-    btc_matches: [],
+    // both preliminary rounds drawn and confirmed: the lock is allowed once the ties are ordered
+    btc_matches: [
+      { id: 'm1', event_id: 'ev1', round: 'preliminary', prelim_round: 1, status: 'confirmed' },
+      { id: 'm2', event_id: 'ev1', round: 'preliminary', prelim_round: 2, status: 'confirmed' },
+    ],
+    btc_match_scores: [],
     btc_seeding_order: order.map((r) => ({ ...r })),
   };
   const rpcCalls = [];
@@ -150,11 +155,13 @@ function applyOrder(db, args) {
   });
 }
 
-describe('the seeding ties card on the bracket screen', () => {
+describe('the seeding ties card on the standings screen', () => {
   let root;
   beforeEach(() => {
     root = document.createElement('div');
     document.body.appendChild(root);
+    // Locking asks first, naming the eight; these tests say yes unless one says otherwise.
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
   afterEach(() => {
     root.remove();
@@ -162,7 +169,7 @@ describe('the seeding ties card on the bracket screen', () => {
   });
 
   const mount = async (client) => {
-    await mountBracketScreen(root, { eventId: 'ev1', client });
+    await mountStandingsScreen(root, { eventId: 'ev1', client });
     await flush();
   };
   const card = () => root.querySelector('.btc-seeding-card');
@@ -176,7 +183,7 @@ describe('the seeding ties card on the bracket screen', () => {
   it('shows nothing when no teams are level', async () => {
     await mount(fakeClient([row('t1', 1, 90, 3), row('t2', 2, 60, 2)]));
     expect(card()).toBeNull();
-    expect(root.textContent).toContain('Generate bracket');
+    expect(root.textContent).toContain('Lock the top 8 and generate the bracket');
   });
 
   it('lists each group of level teams with where they stand, and says which one decides who qualifies', async () => {
@@ -329,7 +336,7 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(names(group(1))).toEqual(['Team 9', 'Team 8']);
     expect(card().textContent).not.toContain('cannot be generated');
     expect(root.querySelector('.screen-feedback').textContent).toBe(
-      'Order saved. Every team level across the cut-off is ordered: you can generate the bracket.',
+      'Order saved. Every team level across the cut line is ordered: you can lock the top 8.',
     );
     expect(document.activeElement.getAttribute('data-focus-key')).toMatch(/^seeding-open-/);
   });
@@ -432,7 +439,7 @@ describe('the seeding ties card on the bracket screen', () => {
     );
     expect(root.querySelector('.screen-feedback')).toBeNull();
 
-    byKey('bracket-refresh-reload').click();
+    byKey('standings-refresh-reload').click();
     await flush();
     expect(refreshNote.hidden).toBe(true);
     expect(group(1).textContent).toContain('Ordered: x');
@@ -446,7 +453,7 @@ describe('the seeding ties card on the bracket screen', () => {
       }),
     );
     expect(card()).toBeNull();
-    expect(root.textContent).toContain('Generate bracket');
+    expect(root.textContent).toContain('Lock the top 8 and generate the bracket');
     expect(root.querySelector('.screen-feedback[data-tone="error"]')).toBeNull();
     expect(warn).not.toHaveBeenCalled();
   });
@@ -455,9 +462,11 @@ describe('the seeding ties card on the bracket screen', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const client = fakeClient(nineTeamsWithTies(), { orderError: new Error('Failed to fetch') });
     await mount(client);
-    expect(root.textContent).toContain('Generate bracket');
-    expect(card().textContent).toContain('We could not check for teams that are level just now');
-    expect(card().querySelector('[role="status"]')).not.toBeNull();
+    // With no seed order at all there is nothing to draw the cut from: the page says so and offers Check again
+    // (it never shows a table of teams with no places).
+    expect(root.textContent).toContain('We could not read the standings just now');
+    expect(root.querySelector('.ok-cut-table')).toBeNull();
+    expect(byKey('seeding-retry')).not.toBeNull();
     expect(warn).toHaveBeenCalled();
     // the connection comes back
     client.control.failOrderRead = null;
@@ -509,8 +518,11 @@ describe('the seeding ties card on the bracket screen', () => {
       },
     ];
     await mount(client);
+    // The tie card goes, the table stays (the seed order is still read) and the lock card says it is locked.
     expect(card()).toBeNull();
-    expect(client.fromCalls).not.toContain('btc_seeding_order');
+    expect(client.fromCalls).toContain('btc_seeding_order');
+    expect(root.querySelector('.ok-cut-table')).not.toBeNull();
+    expect(root.textContent).toContain('The top 8 are locked');
   });
 
   it('shows team names as text, never markup', async () => {
@@ -604,14 +616,14 @@ describe('the seeding ties card on the bracket screen', () => {
   it('Generate is marked inert while teams level across the cut-off are unordered, and pressing it says why without asking the database', async () => {
     const client = fakeClient(nineTeamsWithTies());
     await mount(client);
-    const generate = byKey('generate-bracket');
+    const generate = byKey('lock-top-8');
     expect(generate.getAttribute('aria-disabled')).toBe('true');
-    expect(generate.getAttribute('aria-describedby')).toBe('btc-seeding-blocking');
-    expect(root.querySelector('#btc-seeding-blocking').textContent).toMatch(/cannot be generated/);
+    expect(generate.getAttribute('aria-describedby')).toBe('btc-lock-reason');
+    expect(root.querySelector('#btc-lock-reason').textContent).toMatch(/level across the cut line/);
     generate.click();
     await flush();
     expect(root.querySelector('.screen-feedback').textContent).toMatch(
-      /Teams are level across the 8th and 9th places/,
+      /Teams are level across the cut line/,
     );
     expect(client.rpcCalls).toEqual([]);
   });
@@ -624,7 +636,7 @@ describe('the seeding ties card on the bracket screen', () => {
     );
     const client = fakeClient(order);
     await mount(client);
-    const generate = byKey('generate-bracket');
+    const generate = byKey('lock-top-8');
     expect(generate.hasAttribute('aria-disabled')).toBe(false);
     generate.click();
     await flush();
@@ -652,7 +664,7 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(1);
     // ... and another device re-confirmed a match, making T8 and T9 level
     client.db.btc_seeding_order = level.map((r) => ({ ...r }));
-    byKey('generate-bracket').click();
+    byKey('lock-top-8').click();
     await flush();
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(2);
     expect(root.querySelector('.screen-feedback').textContent).toMatch(
@@ -664,7 +676,7 @@ describe('the seeding ties card on the bracket screen', () => {
     vi.useFakeTimers();
     try {
       const client = fakeClient(nineTeamsWithTies(), { hangRecord: true });
-      await mountBracketScreen(root, { eventId: 'ev1', client });
+      await mountStandingsScreen(root, { eventId: 'ev1', client });
       await vi.advanceTimersByTimeAsync(0);
       openButtonOf(group(1)).click();
       const input = root.querySelector('.btc-seeding-form input[type="text"]');
@@ -791,7 +803,8 @@ describe('the seeding ties card on the bracket screen', () => {
     );
     expect(root.querySelector('.btc-seeding-form')).toBeNull();
     expect(card()).toBeNull();
-    expect(root.querySelector('.btc-bracket-rounds')).not.toBeNull();
+    expect(root.textContent).toContain('The top 8 are locked');
+    expect(root.querySelector('[data-focus-key="lock-top-8"]')).toBeNull();
     expect(root.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
@@ -841,7 +854,7 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(root.querySelector('.screen-feedback').textContent).toBe(
       'Still could not check. Try again.',
     );
-    expect(card().textContent).toContain('We could not check for teams that are level just now');
+    expect(root.textContent).toContain('We could not read the standings just now');
     expect(root.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
@@ -860,7 +873,7 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(busy(root.querySelector('[data-focus-key^="seeding-cancel-"]'))).toBe(true);
     expect(busy(root.querySelector('.btc-seeding-form input[type="text"]'))).toBe(true);
     expect(busy(openButtonOf(group(0)))).toBe(true);
-    expect(busy(byKey('generate-bracket'))).toBe(true); // Generate says it is waiting too
+    expect(busy(byKey('lock-top-8'))).toBe(true); // Generate says it is waiting too
     expect(
       root.querySelector('.btc-seeding-form input[type="text"]').getAttribute('maxlength'),
     ).toBe('120');
@@ -886,7 +899,7 @@ describe('the seeding ties card on the bracket screen', () => {
         : realRpc(name, args);
     };
     await mount(client);
-    byKey('generate-bracket').click();
+    byKey('lock-top-8').click();
     await flush();
     expect(root.textContent).toContain('Generating…');
     expect(openButtonOf(group(0)).getAttribute('aria-busy')).toBe('true');
@@ -918,10 +931,10 @@ describe('the seeding ties card on the bracket screen', () => {
     await mount(client);
     openButtonOf(group(0)).click();
     byKey('seeding-down-t2').click();
-    const generate = byKey('generate-bracket');
+    const generate = byKey('lock-top-8');
     expect(generate.getAttribute('aria-disabled')).toBe('true');
     expect(root.querySelector(`#${generate.getAttribute('aria-describedby')}`).textContent).toBe(
-      'Save or cancel the order you have open before generating the bracket.',
+      'Save or cancel the order you have open first.',
     );
     generate.focus();
     generate.click();
@@ -930,9 +943,9 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(root.querySelector('.btc-seeding-form')).not.toBeNull();
     expect(names(root.querySelector('.btc-seeding-form'))).toEqual(['Team 3', 'Team 2']);
     // focus stays on the button; the message is said through the live region, not by moving focus
-    expect(document.activeElement).toBe(byKey('generate-bracket'));
+    expect(document.activeElement).toBe(byKey('lock-top-8'));
     expect(root.querySelector('.sr-only[role="status"]').textContent).toBe(
-      'Save or cancel the order you have open before generating the bracket.',
+      'Save or cancel the order you have open first.',
     );
   });
 
@@ -979,7 +992,7 @@ describe('the seeding ties card on the bracket screen', () => {
     typeReason('x');
     submitForm();
     await flush();
-    byKey('generate-bracket').click();
+    byKey('lock-top-8').click();
     await flush();
     expect(client.rpcCalls.map(([name]) => name)).toEqual(['record_btc_seeding_tiebreak']);
     client.control.release();
@@ -1002,7 +1015,7 @@ describe('the seeding ties card on the bracket screen', () => {
     await mount(client);
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(1);
     client.db.btc_seeding_order = level.map((r) => ({ ...r }));
-    byKey('generate-bracket').click();
+    byKey('lock-top-8').click();
     await flush();
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(2);
   });
@@ -1155,8 +1168,11 @@ describe('the seeding ties card on the bracket screen', () => {
     );
     expect(byKey('seeding-retry')).not.toBeNull();
     expect(card().textContent).not.toContain('cannot be generated until');
-    // Generate is no longer held back by what may be out of date: the database decides
-    expect(byKey('generate-bracket').hasAttribute('aria-disabled')).toBe(false);
+    // The lock is held back in words while what is shown may be out of date (the dialog must name the real eight)
+    expect(byKey('lock-top-8').getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelector('#btc-lock-reason').textContent).toContain(
+      'We could not check for teams that are level',
+    );
     client.control.failOrderRead = null;
     byKey('seeding-retry').click();
     await flush();
@@ -1164,7 +1180,7 @@ describe('the seeding ties card on the bracket screen', () => {
     expect(card().textContent).toContain('cannot be generated until');
   });
 
-  it('Generate goes to the database while the last read failed (it is not held back by a list that may be stale)', async () => {
+  it('the lock is refused up front, in words, while the last read failed: it never names eight from a list that may be stale', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const client = fakeClient(nineTeamsWithTies(), { recordResult: applyOrder });
     await mount(client);
@@ -1174,16 +1190,20 @@ describe('the seeding ties card on the bracket screen', () => {
     submitForm();
     await flush();
     client.rpcCalls.length = 0;
-    byKey('generate-bracket').click();
+    byKey('lock-top-8').click();
     await flush();
-    expect(client.rpcCalls.map(([name]) => name)).toEqual(['generate_btc_bracket']);
+    expect(client.rpcCalls).toEqual([]);
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(root.querySelector('.screen-feedback').textContent).toContain(
+      'We could not check for teams that are level',
+    );
   });
 
   it('after a save that could not be confirmed the screen looks at what is saved before giving the form back', async () => {
     vi.useFakeTimers();
     try {
       const client = fakeClient(nineTeamsWithTies(), { hangRecord: true });
-      await mountBracketScreen(root, { eventId: 'ev1', client });
+      await mountStandingsScreen(root, { eventId: 'ev1', client });
       await vi.advanceTimersByTimeAsync(0);
       openButtonOf(group(1)).click();
       typeReason('x');
@@ -1202,7 +1222,7 @@ describe('the seeding ties card on the bracket screen', () => {
   it('a successful Generate takes the card away', async () => {
     const client = fakeClient(resolvedCutoff(nineTeamsWithTies()));
     await mount(client);
-    byKey('generate-bracket').click();
+    byKey('lock-top-8').click();
     await flush();
     expect(root.querySelector('.btc-seeding-card')).toBeNull();
     expect(root.querySelector('.btc-seeding-form')).toBeNull();
@@ -1303,10 +1323,10 @@ describe('the seeding ties card on the bracket screen', () => {
       expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(2);
     });
 
-    it('does not read the times at all when no teams are level', async () => {
+    it('reads the times once for the table, and not again for the tie card when no teams are level', async () => {
       const client = withTimes([], [row('t1', 1, 90, 3), row('t2', 2, 60, 2)]);
       await mount(client);
-      expect(client.fromCalls).not.toContain('btc_prelim_times');
+      expect(client.fromCalls.filter((t) => t === 'btc_prelim_times')).toHaveLength(1);
     });
 
     it('keeps the times beside each team while the order form is open', async () => {
@@ -1319,6 +1339,6 @@ describe('the seeding ties card on the bracket screen', () => {
   it('does not tell the organiser to look "above" for a card that is not there', async () => {
     await mount(fakeClient([row('t1', 1, 90, 3), row('t2', 2, 60, 2)]));
     expect(root.textContent).not.toContain('(above)');
-    expect(root.textContent).toContain('If teams are level across the 8th and 9th places');
+    expect(root.textContent).toContain('Lock the top 8');
   });
 });

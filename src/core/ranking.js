@@ -16,19 +16,22 @@ export function chainComparators(...comparators) {
   };
 }
 
+// Numbers items that are ALREADY in the order to show (a caller whose order comes from elsewhere, e.g. a database
+// seed order): equal neighbours share a position and the next distinct one is its 1-based index. No sort, so the order
+// given is the order kept. `isSame(a, b)` says whether two adjacent items share a position.
+export function positionsInOrder(items, isSame) {
+  const result = [];
+  let position = 1;
+  for (let i = 0; i < items.length; i++) {
+    if (i > 0 && !isSame(items[i], items[i - 1])) position = i + 1;
+    result.push({ item: items[i], position });
+  }
+  return result;
+}
+
 // Returns a new array of { item, position }, sorted by compareFn. Does not
 // mutate `items`.
 export function rank(items, compareFn) {
   const sorted = [...items].sort(compareFn);
-  const result = [];
-  let position = 1;
-
-  for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && compareFn(sorted[i], sorted[i - 1]) !== 0) {
-      position = i + 1;
-    }
-    result.push({ item: sorted[i], position });
-  }
-
-  return result;
+  return positionsInOrder(sorted, (a, b) => compareFn(a, b) === 0);
 }

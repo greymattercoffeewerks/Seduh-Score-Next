@@ -29,6 +29,11 @@
   background: var(--color-surface-sunken);
 }
 
+.btc-bracket-refresh-note[hidden],
+.btc-bracket-refresh-note .btn[hidden] {
+  display: none;
+}
+
 .btc-bracket-refresh-note-message {
   flex: 1 1 14rem;
   min-width: 0;
@@ -132,6 +137,7 @@
 
 .btc-bracket-form-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
 }
 

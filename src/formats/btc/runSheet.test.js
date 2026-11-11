@@ -274,14 +274,14 @@ describe('the cut', () => {
     expect(deriveNextStep(Object.values(phases)).phase.id).toBe('cut');
   });
 
-  it('once the tie is recorded, the next action is Generate bracket', () => {
+  it('once the tie is recorded, the next action is Lock the top 8', () => {
     const phases = byId(
       deriveBtcPhases(
         base({ matches: done, seedingRows: seedingRows({ levelAtCut: true, resolved: true }) }),
       ),
     );
     expect(phases.cut.count).toBe('Top 8 ready');
-    expect(phases.cut.nextAction.label).toBe('Generate bracket');
+    expect(phases.cut.nextAction.label).toBe('Lock the top 8');
   });
 
   it('a tie that is not across the cut does not block it', () => {

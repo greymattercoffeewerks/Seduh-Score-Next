@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rank, chainComparators } from './ranking.js';
+import { rank, chainComparators, positionsInOrder } from './ranking.js';
 
 const byScoreDesc = (a, b) => b.score - a.score;
 
@@ -95,5 +95,19 @@ describe('chainComparators', () => {
     expect(rank(items, chained).map((r) => r.item.id)).toEqual(
       rank(items, byCorrectDesc).map((r) => r.item.id),
     );
+  });
+});
+
+describe('positionsInOrder', () => {
+  it('numbers items already in order, sharing places and skipping after a group, without sorting', () => {
+    const items = [{ p: 5 }, { p: 9 }, { p: 9 }, { p: 1 }];
+    const out = positionsInOrder(items, (a, b) => a.p === b.p);
+    expect(out.map((r) => r.item.p)).toEqual([5, 9, 9, 1]);
+    expect(out.map((r) => r.position)).toEqual([1, 2, 2, 4]);
+  });
+  it('is the numbering rank() uses', () => {
+    const items = [{ p: 1 }, { p: 9 }, { p: 9 }];
+    const byPoints = (a, b) => b.p - a.p;
+    expect(rank(items, byPoints).map((r) => r.position)).toEqual([1, 1, 3]);
   });
 });

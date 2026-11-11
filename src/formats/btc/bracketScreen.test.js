@@ -146,57 +146,19 @@ describe('mountBracketScreen', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the generate-bracket action when no bracket exists yet', async () => {
+  it('with no bracket yet it only points to Standings, where the cut is settled and locked', async () => {
     const client = fakeClient(baseDb());
     await mountBracketScreen(root, { eventId: 'ev1', client });
 
-    expect(root.querySelector('button[data-focus-key="generate-bracket"]')).not.toBeNull();
-    expect(root.querySelector('.btc-bracket-rounds')).toBeNull();
-  });
-
-  it('generates the bracket and shows the seeded slots', async () => {
-    const client = fakeClient(baseDb());
-    const handlers = { composed: true };
-    await mountBracketScreen(root, { eventId: 'ev1', client, handlers });
-
-    root
-      .querySelector('button[data-focus-key="generate-bracket"]')
-      .dispatchEvent(new Event('click', { bubbles: true }));
-    await flush();
-
-    expect(root.textContent).toContain('Quarter-finals');
-    expect(root.textContent).toContain('Alpha vs Beta');
-    expect(client.rpcCalls).toEqual([
-      ['generate_btc_bracket', { p_org_id: 'org1', p_event_id: 'ev1' }],
-    ]);
-    // A schedule edit: it refreshes the audience display only if this event is already live, and flushes with
-    // the caller's composed outbox map.
-    expect(publishBtcLive).toHaveBeenCalledTimes(1);
-    expect(publishBtcLive).toHaveBeenCalledWith(
-      {
-        event: expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true }),
-        takeOver: false,
-      },
-      handlers,
+    expect(root.querySelector('button[data-focus-key="generate-bracket"]')).toBeNull();
+    expect(root.textContent).not.toContain('Generate bracket');
+    const link = [...root.querySelectorAll('a')].find((a) =>
+      a.textContent.includes('Settle the cut in Standings'),
     );
-  });
-
-  it('shows the cut-off message when generation is refused for teams level across the 8th and 9th places', async () => {
-    const client = fakeClient(baseDb(), {
-      generateError: { code: 'P0001', message: 'teams are tied for the 8th qualifying spot' },
-    });
-    await mountBracketScreen(root, { eventId: 'ev1', client });
-
-    root
-      .querySelector('button[data-focus-key="generate-bracket"]')
-      .dispatchEvent(new Event('click', { bubbles: true }));
-    await flush();
-
-    // the screen knows this refusal (teams level across the cut-off), so it says what to do about it
-    expect(root.textContent).toContain('Teams are level across the 8th and 9th places.');
-    expect(root.textContent).not.toContain('Something went wrong saving that');
-    expect(root.querySelector('button[data-focus-key="generate-bracket"]')).not.toBeNull();
-    expect(publishBtcLive).not.toHaveBeenCalled();
+    expect(link.getAttribute('href')).toBe('#/events/ev1/btc/standings');
+    expect(root.querySelector('.btc-bracket-rounds')).toBeNull();
+    // the seed order is no longer this screen's business
+    expect(client.fromCalls).not.toContain('btc_seeding_order');
   });
 
   it('shows "Create match" for a fully-seeded slot with no match yet', async () => {
@@ -525,70 +487,10 @@ describe('mountBracketScreen', () => {
     expect(client.rpcCalls).toHaveLength(0);
   });
 
-  it('still publishes when the bracket was generated but the re-read fails (the bracket exists)', async () => {
-    const client = fakeClient(baseDb());
-    await mountBracketScreen(root, { eventId: 'ev1', client });
-    const realFrom = client.from;
-    const realRpc = client.rpc;
-    let generated = false;
-    client.rpc = (...args) =>
-      realRpc(...args).then((result) => {
-        generated = true;
-        return result;
-      });
-    client.from = (table) => {
-      if (generated) throw new Error('network down');
-      return realFrom(table);
-    };
-    root
-      .querySelector('button[data-focus-key="generate-bracket"]')
-      .dispatchEvent(new Event('click', { bubbles: true }));
-    await flush();
-    expect(publishBtcLive).toHaveBeenCalledTimes(1);
-    expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(false);
-  });
-
-  it('never waits on the publish: generating the bracket finishes even if it never settles', async () => {
-    publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
-    const client = fakeClient(baseDb());
-    await mountBracketScreen(root, { eventId: 'ev1', client });
-    root
-      .querySelector('button[data-focus-key="generate-bracket"]')
-      .dispatchEvent(new Event('click', { bubbles: true }));
-    await flush();
-    expect(root.textContent).toContain('Bracket generated.');
-    expect(root.textContent).toContain('Alpha vs Beta');
-  });
-
-  it('a refused publish is logged, not thrown: the bracket is still generated', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    publishBtcLive.mockRejectedValueOnce(new TypeError('no handler map'));
-    const client = fakeClient(baseDb());
-    await mountBracketScreen(root, { eventId: 'ev1', client });
-    root
-      .querySelector('button[data-focus-key="generate-bracket"]')
-      .dispatchEvent(new Event('click', { bubbles: true }));
-    await flush();
-    expect(root.textContent).toContain('Bracket generated.');
-    expect(error).toHaveBeenCalledWith('btc: live-view publish was refused', expect.any(TypeError));
-  });
-
   it('moves focus to the heading once the initial load succeeds', async () => {
     const client = fakeClient(baseDb());
     await mountBracketScreen(root, { eventId: 'ev1', client });
     expect(document.activeElement).toBe(root.querySelector('h1'));
-  });
-
-  it('moves focus to the toast after a successful bracket generation', async () => {
-    const client = fakeClient(baseDb());
-    await mountBracketScreen(root, { eventId: 'ev1', client });
-
-    root
-      .querySelector('button[data-focus-key="generate-bracket"]')
-      .dispatchEvent(new Event('click', { bubbles: true }));
-    await flush();
-
-    expect(document.activeElement?.textContent).toBe('Bracket generated.');
   });
 
   it('sorts rounds into bracket display order (quarterfinal, semifinal, final, third_place)', async () => {

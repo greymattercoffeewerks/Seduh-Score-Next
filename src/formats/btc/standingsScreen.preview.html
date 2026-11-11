@@ -3,69 +3,139 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BTC Standings — preview</title>
+    <title>BTC Standings: the cut — preview</title>
     <link rel="stylesheet" href="/src/ui/tokens/index.css" />
     <link rel="stylesheet" href="/src/ui/tokens/components.css" />
     <link rel="stylesheet" href="/src/formats/btc/shared.css" />
     <link rel="stylesheet" href="/src/formats/btc/standingsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/btc/bracketScreen.css" />
   </head>
   <body>
-    <!-- Demo-only harness, not part of the shipped module graph. No live Supabase: an
-         in-memory fake client stands in. -->
+    <!-- Demo-only harness, not part of the shipped module graph. No live Supabase: an in-memory fake client with
+         fictional data stands in. Open with ?view=sign-off for the sign-off sheet. -->
     <p>
-      <button id="demo-mixed">Mixed standings (a tie, an unplayed team)</button>
+      <button id="demo-tie">A tie across 8th and 9th</button>
+      <button id="demo-clean">No ties, ready to lock</button>
+      <button id="demo-open">Round 2 not confirmed</button>
       <button id="demo-empty">No teams yet</button>
+      <button id="demo-sign">Sign-off sheet</button>
     </p>
     <div id="app"></div>
     <script type="module">
       import { mountStandingsScreen } from './standingsScreen.js';
+      import { mountSignOffScreen } from './signOffScreen.js';
 
-      function createDemoClient({ empty }) {
+      const COUNTRIES = ['BN', 'MY', 'SG', 'ID', 'TH', 'PH', 'VN', 'KH'];
+      function createDemoClient({ empty, tie, open }) {
+        const n = 20;
+        const teams = empty
+          ? []
+          : Array.from({ length: n }, (_, i) => ({
+              id: `t${i + 1}`,
+              event_id: 'ev1',
+              name: `Team ${String.fromCharCode(65 + i)}`,
+              country_code: COUNTRIES[i % COUNTRIES.length],
+            }));
+        const order = empty
+          ? []
+          : teams.map((t, i) => {
+              let points = 140 - i * 4;
+              if (tie && (i === 7 || i === 8)) points = 108;
+              if (tie && i > 8) points -= 4;
+              const tied = tie && (i === 7 || i === 8);
+              return {
+                event_id: 'ev1',
+                team_id: t.id,
+                seed: i + 1,
+                played: 2,
+                wins: 1,
+                total_points: points,
+                tied_count: tied ? 2 : 1,
+                tiebreak_rank: null,
+                reason: null,
+                group_resolved: !tied,
+              };
+            });
+        const matches = [
+          { id: 'm1', event_id: 'ev1', round: 'preliminary', prelim_round: 1, status: 'confirmed' },
+          {
+            id: 'm2',
+            event_id: 'ev1',
+            round: 'preliminary',
+            prelim_round: 2,
+            status: open ? 'scoring' : 'confirmed',
+          },
+        ];
+        const times = teams.flatMap((t, i) => [
+          {
+            event_id: 'ev1',
+            team_id: t.id,
+            prelim_round: 1,
+            time_note: `${7 + (i % 3)}:${10 + i}`,
+          },
+          {
+            event_id: 'ev1',
+            team_id: t.id,
+            prelim_round: 2,
+            time_note: `${8 + (i % 2)}:${20 + i}`,
+          },
+        ]);
         const db = {
-          events: [{ id: 'ev1', org_id: 'org1', is_test: true }],
-          btc_teams: empty
-            ? []
-            : [
-                { id: 't1', event_id: 'ev1', name: 'Grey Matter' },
-                { id: 't2', event_id: 'ev1', name: 'Coffee Cartel' },
-                { id: 't3', event_id: 'ev1', name: 'Third Wave' },
-                { id: 't4', event_id: 'ev1', name: 'Bean There' },
-              ],
-          btc_standings: empty
-            ? []
-            : [
-                { event_id: 'ev1', team_id: 't1', played: 3, wins: 3, total_points: 111 },
-                { event_id: 'ev1', team_id: 't2', played: 3, wins: 1, total_points: 65 },
-                { event_id: 'ev1', team_id: 't3', played: 3, wins: 1, total_points: 65 },
-              ],
+          events: [
+            {
+              id: 'ev1',
+              org_id: 'org1',
+              name: 'ABTC Preliminaries (demo)',
+              is_test: false,
+              is_shadow: true,
+              event_date: '2027-03-20',
+            },
+          ],
+          btc_teams: teams,
+          btc_bracket_slots: [],
+          btc_matches: matches,
+          btc_match_scores: [],
+          btc_prelim_times: times,
+          btc_seeding_order: order,
         };
         function makeBuilder(table) {
           const filters = [];
-          const rows = () => (db[table] ?? []).filter((r) => filters.every(([c, v]) => r[c] === v));
+          const ins = [];
+          const rows = () =>
+            (db[table] ?? [])
+              .filter((r) => filters.every(([c, v]) => r[c] === v))
+              .filter((r) => ins.every(([c, vs]) => vs.includes(r[c])));
           const b = {
             select: () => b,
             eq: (c, v) => (filters.push([c, v]), b),
+            in: (c, vs) => (ins.push([c, vs]), b),
             order: () => b,
             single: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
             then: (res, rej) => Promise.resolve({ data: rows(), error: null }).then(res, rej),
           };
           return b;
         }
-        return { from: makeBuilder };
+        return { from: makeBuilder, rpc: () => Promise.resolve({ data: null, error: null }) };
       }
 
-      async function mount(opts) {
+      async function mount(opts, sheet = false) {
         document.getElementById('app').innerHTML = '';
-        await mountStandingsScreen(document.getElementById('app'), {
+        const fn = sheet ? mountSignOffScreen : mountStandingsScreen;
+        await fn(document.getElementById('app'), {
           eventId: 'ev1',
           client: createDemoClient(opts),
         });
       }
 
-      document.getElementById('demo-mixed').addEventListener('click', () => mount({}));
+      document.getElementById('demo-tie').addEventListener('click', () => mount({ tie: true }));
+      document.getElementById('demo-clean').addEventListener('click', () => mount({}));
+      document.getElementById('demo-open').addEventListener('click', () => mount({ open: true }));
       document.getElementById('demo-empty').addEventListener('click', () => mount({ empty: true }));
+      document
+        .getElementById('demo-sign')
+        .addEventListener('click', () => mount({ tie: true }, true));
 
-      mount({});
+      mount({ tie: true }, new URLSearchParams(location.search).get('view') === 'sign-off');
     </script>
   </body>
 </html>
