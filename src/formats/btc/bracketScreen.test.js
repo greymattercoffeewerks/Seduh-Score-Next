@@ -153,7 +153,7 @@ describe('mountBracketScreen', () => {
     expect(root.querySelector('button[data-focus-key="generate-bracket"]')).toBeNull();
     expect(root.textContent).not.toContain('Generate bracket');
     const link = [...root.querySelectorAll('a')].find((a) =>
-      a.textContent.includes('Settle the cut in Standings'),
+      a.textContent.includes('Go to the cut in Standings'),
     );
     expect(link.getAttribute('href')).toBe('#/events/ev1/btc/standings');
     expect(root.querySelector('.btc-bracket-rounds')).toBeNull();
@@ -217,7 +217,7 @@ describe('mountBracketScreen', () => {
     const client = fakeClient(db);
     await mountBracketScreen(root, { eventId: 'ev1', client });
 
-    expect(root.textContent).toContain('Match scheduled — not yet scored');
+    expect(root.textContent).toContain('Scheduled');
     expect(root.querySelector('button[data-focus-key="create-slot-s-qf1"]')).toBeNull();
   });
 
@@ -262,7 +262,7 @@ describe('mountBracketScreen', () => {
     expect(root.textContent).toContain('Confirmed');
   });
 
-  it('distinguishes "Scoring in progress" from an untouched pending match', async () => {
+  it('distinguishes "Scoring" from an untouched pending match', async () => {
     const db = baseDb();
     db.btc_bracket_slots = [
       {
@@ -279,8 +279,8 @@ describe('mountBracketScreen', () => {
     const client = fakeClient(db);
     await mountBracketScreen(root, { eventId: 'ev1', client });
 
-    expect(root.textContent).toContain('Scoring in progress');
-    expect(root.textContent).not.toContain('Match scheduled — not yet scored');
+    expect(root.textContent).toContain('Scoring');
+    expect(root.textContent).not.toContain('Scheduled');
   });
 
   it('opens the create-match form and submits successfully', async () => {
@@ -319,7 +319,7 @@ describe('mountBracketScreen', () => {
     await Promise.resolve();
 
     expect(root.textContent).toContain('match created.');
-    expect(root.textContent).toContain('Match scheduled — not yet scored');
+    expect(root.textContent).toContain('Scheduled');
     expect(client.rpcCalls).toEqual([
       [
         'create_btc_bracket_match',
@@ -612,8 +612,8 @@ describe('mountBracketScreen', () => {
       await mountBracketScreen(root, { eventId: 'ev1', client });
 
       expect(places().slice(0, 2)).toEqual([
-        'ChampionTied — not decided',
-        '1st runner-upTied — not decided',
+        'ChampionLevel: not decided',
+        '1st runner-upLevel: not decided',
       ]);
     });
 
@@ -629,7 +629,7 @@ describe('mountBracketScreen', () => {
       expect(places()).toEqual([
         'ChampionBeta',
         '1st runner-upAlpha',
-        '3rd placeTied — not decided',
+        '3rd placeLevel: not decided',
       ]);
     });
 
@@ -701,7 +701,7 @@ describe('mountBracketScreen', () => {
       await mountBracketScreen(root, { eventId: 'ev1', client });
 
       expect(note()).toBe(
-        'Tied at 30 each. Nobody advances until you record which team goes through.',
+        'Level at 30 each. Nobody advances until you record which team goes through.',
       );
       expect(openButton().textContent).toBe('Record tie-break');
       expect(root.querySelector('.btc-tiebreak-form')).toBeNull();
@@ -758,7 +758,7 @@ describe('mountBracketScreen', () => {
       await mountBracketScreen(root, { eventId: 'ev1', client });
       click(openButton());
       expect(note()).toBe(
-        'Tied at 30 each. Nobody advances until you record which team goes through.',
+        'Level at 30 each. Nobody advances until you record which team goes through.',
       );
     });
 
@@ -769,7 +769,7 @@ describe('mountBracketScreen', () => {
 
       const reason = root.querySelector('input[data-field="tiebreak-reason-s-qf1"]');
       const hint = root.querySelector(`#${reason.getAttribute('aria-describedby').split(' ')[0]}`);
-      expect(hint.textContent).toMatch(/shown on the public results page/i);
+      expect(hint.textContent).toMatch(/may show this reason/i);
     });
 
     it('a missing winner is reported ABOVE the controls, tied to the choice of team, and sends nothing', async () => {
@@ -901,7 +901,7 @@ describe('mountBracketScreen', () => {
       release();
       await flush();
       expect(root.querySelector('[role="alert"]').textContent).toMatch(
-        /next-round match has already been created/i,
+        /next-round match for this team already exists/i,
       );
       expect(root.querySelector('.btc-tiebreak-form')).not.toBeNull();
     });
@@ -922,7 +922,7 @@ describe('mountBracketScreen', () => {
       await flush();
 
       const alert = root.querySelector('[role="alert"]');
-      expect(alert.textContent).toMatch(/next-round match has already been created/i);
+      expect(alert.textContent).toMatch(/next-round match for this team already exists/i);
       expect(document.activeElement).toBe(alert);
       // a bracket-level refusal is not about either field: it hangs off the submit button
       expect(root.querySelector('button[type="submit"]').getAttribute('aria-describedby')).toBe(
@@ -951,7 +951,7 @@ describe('mountBracketScreen', () => {
       await flush();
 
       expect(root.querySelector('.btc-tiebreak-form')).toBeNull();
-      expect(root.textContent).toMatch(/no longer tied/i);
+      expect(root.textContent).toMatch(/no longer level/i);
       expect(root.querySelector('.btc-tiebreak')).toBeNull();
 
       // Nothing was saved, so nothing is published.
@@ -981,7 +981,7 @@ describe('mountBracketScreen', () => {
       submit();
       await flush();
 
-      expect(root.textContent).toMatch(/no longer tied/i);
+      expect(root.textContent).toMatch(/no longer level/i);
       expect(root.querySelector('.btc-tiebreak-form')).toBeNull();
       // and the screen is not left inert: the form can be opened again
       client.from = realFrom;
@@ -1151,7 +1151,7 @@ describe('mountBracketScreen', () => {
       submit();
       await flush();
 
-      expect(root.textContent).toMatch(/Beta goes through — saved, but the page could not refresh/);
+      expect(root.textContent).toMatch(/Beta goes through\. Saved, but the page did not refresh/);
       expect(root.querySelector('[role="alert"]')).toBeNull();
 
       // The decision IS saved, so the room is told even though this page could not refresh.
@@ -1188,7 +1188,7 @@ describe('mountBracketScreen', () => {
 
         expect(root.querySelector('.btc-bracket-refresh-note')).toBe(refreshNote);
         expect(refreshNote.hidden).toBe(false);
-        expect(refreshNote.textContent).toContain('saved, but the page could not refresh');
+        expect(refreshNote.textContent).toContain('Saved, but the page did not refresh');
         expect(root.querySelector('.screen-feedback')).toBeNull();
 
         // The old toast minimum was 1.5 seconds; this note must outlive it.

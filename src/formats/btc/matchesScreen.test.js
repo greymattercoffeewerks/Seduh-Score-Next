@@ -132,7 +132,7 @@ describe('mountMatchesScreen', () => {
     await mountMatchesScreen(root, { eventId: 'ev1', client });
 
     expect(root.querySelector('form')).not.toBeNull();
-    expect(root.textContent).toContain('No preliminary matches created yet.');
+    expect(root.textContent).toContain('No matches yet. Draw round 1 to create them.');
     expect(root.querySelectorAll('.btc-judge-checkbox-label')).toHaveLength(3);
   });
 
@@ -214,7 +214,7 @@ describe('mountMatchesScreen', () => {
     await Promise.resolve();
 
     expect(root.textContent).toContain('Something went wrong saving that — try again.');
-    expect(root.textContent).toContain('No preliminary matches created yet.');
+    expect(root.textContent).toContain('No matches yet. Draw round 1 to create them.');
     expect(publishBtcLive).not.toHaveBeenCalled();
   });
 
@@ -640,7 +640,7 @@ describe('mountMatchesScreen', () => {
       expect(confirmedRow.querySelector('.ok-row-score').textContent).toBe('11 – 6');
       expect(confirmedRow.querySelector('.ok-tag').textContent).toBe('Confirmed');
       expect(confirmedRow.querySelector('.ok-row-meta').textContent).toBe(
-        'Judges: Judge One, Judge Two, Judge Three · Time missing',
+        'Judges: Judge One, Judge Two, Judge Three · No finish time',
       );
       const pendingRow = rowOf('p1');
       expect(pendingRow.querySelector('.ok-row-number').textContent).toBe('2');

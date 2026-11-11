@@ -197,15 +197,15 @@ describe('recordTiebreak', () => {
 describe('describeTiebreakError / tiebreakRefusal', () => {
   it('explains the refusal when the next-round match already exists, keyed on the hint, and does not ask for a reload', () => {
     const err = { code: 'P0001', hint: 'bracket_advanced', message: 'anything at all' };
-    expect(describeTiebreakError(err)).toMatch(/next-round match has already been created/i);
+    expect(describeTiebreakError(err)).toMatch(/next-round match for this team already exists/i);
     expect(tiebreakRefusal(err).reload).toBe(false);
   });
 
   it('explains each refusal that means the screen is stale, and marks it for a reload', () => {
     const cases = {
-      tiebreak_not_tied: /no longer tied/i,
-      tiebreak_unconfirmed: /not been confirmed/i,
-      tiebreak_match_not_found: /could not be found/i,
+      tiebreak_not_tied: /no longer level/i,
+      tiebreak_unconfirmed: /Confirm this match's scores first/i,
+      tiebreak_match_not_found: /could not find this match/i,
     };
     for (const [hint, pattern] of Object.entries(cases)) {
       const err = { code: 'P0001', hint, message: 'x' };

@@ -162,7 +162,7 @@ export function lockedDiffers(seedingRows, lockedSeeds) {
 }
 
 export const LOCKED_DIFFERS_NOTE =
-  'Scores were changed after the bracket was generated, so the standings now differ from the locked eight. The locked eight are the ones playing.';
+  'Scores changed after the top 8 were locked, so the standings no longer match the locked eight. The locked eight are the teams in the knockout.';
 
 // Pure. The places, numbered by core/ranking.js's `positionsInOrder` (the numbering half of `rank()`, without its
 // sort): the order here is the database's seed order, which an organiser's recorded tie-break may make differ from a

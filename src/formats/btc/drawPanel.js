@@ -356,7 +356,7 @@ export function renderDrawPanel(ctx) {
       el('p', {
         id: HELP_ID,
         className: 'stage-meta',
-        text: 'Create is available once every match has three different judges and any judge from a team’s own country is changed or accepted.',
+        text: 'Create unlocks when every match has 3 different judges and each judge from a team’s own country is changed or accepted.',
       }),
     );
   }

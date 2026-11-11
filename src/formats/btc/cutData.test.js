@@ -374,7 +374,7 @@ describe('the BTC sign-off sheet content', () => {
     const tied = build({ seedingRows: rows });
     expect(tied.status.kind).toBe('draft');
     expect(tied.status.text).toMatch(/^NOT FINAL\. /);
-    expect(tied.notes.items[0].text).toBe('The order has not been recorded yet.');
+    expect(tied.notes.items[0].text).toBe('No order recorded yet.');
     expect(tied.qualifiers.columns.at(-1).cell(tied.qualifiers.rows.at(-1))).toBe(
       'Level on points: NOT SETTLED',
     );
@@ -486,6 +486,6 @@ describe('after the bracket exists', () => {
       times: [],
     });
     expect(spec.status.kind).toBe('final');
-    expect(spec.status.text).toContain('provisional');
+    expect(spec.status.text).toContain('not settled yet, so their seeds may still change');
   });
 });

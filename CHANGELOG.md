@@ -8,6 +8,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## v4.4.1: Organiser UX S5, the BTC organiser copy pass (spec U6) · 2026-11-11
+
+**Task:** Organiser UX S5 (spec U6; the wording table is `docs/specs/ORGANISER-UX-S5-COPY-TABLE.md`). Branch `claude/organiser-ux-s5-copy-pass-e207e7`, committed locally, **not pushed**. **Patch** (`npm version patch`, 4.4.0 to 4.4.1), not a minor: wording only, nothing new to use. No migration, no cloud change, no hint key, behaviour, layout or CSS change.
+
+- **What changed.** About 70 organiser-only strings on the BTC organiser screens, one vocabulary: round 1 and round 2, the cut, "level" (never "tied"), "lock the top 8". Refusal tables changed wording only; every hint key is the same. Setup's demo paragraph went from 60+ words to about 30. The Matches, Draw, Scoring, Standings (cut table notes, locked panel, level-teams card) and Bracket copy was shortened and made procedural: what happened, then what to do. The demo-loaded status now says "Lock the top 8 in Standings": since S4 the bracket is generated from Standings, so the old line pointed at the wrong screen.
+- **Why.** The organiser reads these between matches, at a table. Several refusals said what went wrong but not what to do next, and "preliminary", "RPC" and "votes" were the implementation's words, not the organiser's.
+- **Sign-off sheet wording (group B, rows B1 to B4) applied, on the owner's approval of 2026-11-11** (relayed by the coordinator; commit `cd3c8aa`, not this one): `signOff.js`, `cutData.js` and their tests. B5 (the lock reasons in `cutData.js`) was not in that approval and is unchanged; the copy table still lists it as B group. The printed sheet is committee-facing, so its wording is the owner's to check on paper.
+- **Not changed (follow-ups).** Audience `words.js` ("qualify", "tied"); core `TEST_BAND_TEXT` dash ("Test Data — Not a Live Event", shared by every format); `core/errors.js` generic sentences (every format, a core module, one pass for all formats).
+- **Checks:** 1054 BTC tests pass at this commit; eslint clean. Full suite: one unrelated, pre-existing failure in `tools/check-doc-budgets.test.js` (Windows path in `brokenLinks`), the same as S4.
+- **Reviews:** `code-reviewer` clean. `ui-accessibility-reviewer`: 0 important; 4 nits, all fixed (the tie-break hint keeps "Do not repeat scores"; demo "gives" and "erases" aligned; the standings notes keep their dropped details; stale references fixed). `test-auditor`: 0 important; nits partly fixed: exact sentences now asserted for six refusals and the odd-team hint. Left as nits: copy strings with no test, and `Scheduled`/`Scoring` substring assertions in `bracketScreen.test.js`.
+- **Pre-existing, logged, not fixed:** `bracketScreen.test.js:154` `not.toContain('Generate bracket')` passes whatever the screen renders, so it guards nothing.
+- **Status: not final.** No browser or Playwright run is recorded for this pass. B5 is unresolved (above). The S4 real-tablet and printed-PDF checks are still owed.
+
 ## v4.4.0: Organiser UX S4, the cut to the top 8 and its sign-off sheet · 2026-11-11
 
 **Task:** Organiser UX S4 (spec U3, mockup Q8). Branch `claude/organiser-ux-s4-the-cut-8e554b`, **PR into `dev`, not merged.** **Minor** (`npm version minor`, 4.3.0 to 4.4.0): a new screen and route an organiser can use. No migration, no cloud change.

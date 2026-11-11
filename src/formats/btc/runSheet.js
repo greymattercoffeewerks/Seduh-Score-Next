@@ -80,7 +80,7 @@ function setupPhase(data, links) {
       : 'in_progress';
   let blockedReason = null;
   if (state.problems.includes('odd')) {
-    blockedReason = `${teams.length} teams is an odd number: the draw needs an even number of teams.`;
+    blockedReason = `${teams.length} teams is an odd number. The draw needs an even number: add or remove a team.`;
   } else if (state.problems.includes('judges')) {
     blockedReason = `Needs at least ${MIN_JUDGES} judges.`;
   }
@@ -421,7 +421,7 @@ export function deriveBtcWarnings(data) {
     warnings.push({
       id: 'times-missing',
       severity: 'warning',
-      text: `${plural(data.withoutTimes, 'preliminary match has', 'preliminary matches have')} no finish times. A points tie may need them.`,
+      text: `${plural(data.withoutTimes, 'match has', 'matches have')} no finish times. A tie on points may need them.`,
       href: links.matches,
       actionLabel: 'Open matches',
     });
