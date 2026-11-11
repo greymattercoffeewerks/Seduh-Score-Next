@@ -76,7 +76,9 @@ export function buildBtcSignOff({
       text: final
         ? [
             `The ${KNOCKOUT_PLACES} teams below go through to the knockout.`,
-            provisional ? 'Seed order inside a tie that is not settled is provisional.' : '',
+            provisional
+              ? 'The order of teams level on points is not settled yet, so their seeds may still change.'
+              : '',
             differs ? LOCKED_DIFFERS_NOTE : '',
           ]
             .filter(Boolean)
@@ -84,7 +86,7 @@ export function buildBtcSignOff({
         : `NOT FINAL. ${lock.reason}`,
     },
     qualifiers: {
-      heading: `The ${KNOCKOUT_PLACES} going through, in seed order`,
+      heading: 'Going through to the knockout, in seed order',
       columns: [
         { key: 'seed', header: 'Seed', numeric: true, cell: (row) => String(row.seed) },
         { key: 'team', header: 'Team', cell: (row) => teamLabelNode(row.team) },
@@ -105,7 +107,7 @@ export function buildBtcSignOff({
         title: groupTitle(group),
         text: group.resolved
           ? `Order: ${group.teams.map((t) => nameOf(t.teamId)).join(', then ')}.${group.reason ? ` Reason: ${group.reason}` : ''}`
-          : 'The order has not been recorded yet.',
+          : 'No order recorded yet.',
       })),
     },
     others: {

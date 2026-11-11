@@ -123,7 +123,7 @@ describe('the BTC sign-off page', () => {
     expect(names).toEqual(Array.from({ length: 8 }, (_, i) => `Team ${i + 1}`));
     expect(root.querySelector('.ok-signoff-status').getAttribute('data-status')).toBe('final');
     expect(root.querySelector('.ok-signoff-status').textContent).toContain(
-      'differ from the locked eight',
+      'no longer match the locked eight',
     );
   });
 
