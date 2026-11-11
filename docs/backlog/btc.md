@@ -186,3 +186,16 @@ _BTC now publishes its live payload automatically; no BTC audience screen exists
 - **Judge changes do not mark a draw manual** (Build B part 2): only a pairing swap does; a hand-changed judge keeps the seed and mode on the record. If the committee wants the record to show hand-picked judges, record it in `conflict_ticks`-style data or a new flag (a migration).
 - **The panel's radio-group builder is local** (Build B part 2): the same hand-built radio pattern exists in `bracketScreen.js`, Throwdown's event screen and Cup Taster's report and time-correction screens; extract one `core/dom.js` primitive when next touched.
 - **Pre-existing: a toast's focus is dropped when it auto-clears** (`matchesScreen.js` `showToast`, same in `setupScreen.js`) and `createMatch` has no timeout.
+
+## Known open items from the BTC scores CSV (2026-11-11)
+
+_The two Records-card downloads (`scoresExport.js`, `scoresExportData.js`) follow `docs/specs/BTC-SCORES-CSV-PROPOSAL.md`. The layout is a proposal until the committee answers its six questions; the columns are one constant each in `scoresExport.js`._
+
+- **The CSV formula guard is a copy, not a shared primitive.** `scoresExport.js` `safeText` duplicates `src/tools/random-selector`'s `guardCell`. The proper home is `core/export.js` (where `buildCsv` lives), so both callers share one guard. Not done in this change because the task forbade `core/` edits; needs a `module-boundary-checker` pass and a `core/export.js` test when moved.
+- **"Confirmed at" is `btc_matches.updated_at`, not a confirmation time.** No `confirmed_at` column exists; a later tie-break or re-confirm moves it. Same source as the live payload's `confirmedAt`. Either rename the column to "Last changed" once the committee agrees, or add a `confirmed_at` column (a migration, `scoring-auditor` sign-off).
+- **Beta band needs `is_shadow`.** The Records card's file prefix reads `is_test` today; when the shadow-beta column ships, add it to `FIND_EVENT_COLUMNS` in `core/events.js` (currently `id, org_id, format, name, is_test, event_date, venue, city`) and to the band call, or a beta event's files will show only the test prefix or none.
+- **The file-name date is fixed at render.** `recordsCard` takes a static filename, so a dashboard left open past midnight names the files with the render date. Harmless, but a `build()` that stamps the date at click would need a `core/recordsCard.js` change.
+- **The cups file omits unconfirmed matches on purpose, and the matches file shows them with empty score columns.** Decided, not a defect; recorded so a reader of the sample does not take the missing Round 1 match 2 for a bug (the golden test filters it).
+- **The 1000-row cap fails loudly.** `scoresExportData.js` throws on a 1000-row PostgREST cap rather than writing a truncated file. An event past 1000 matches or cups (not reachable at 20 teams) needs paged reads.
+- **Pre-existing, kit (`src/ui/tokens/components.css`): `.ok-records-status` has no `overflow-wrap`,** so a very long unbroken slug overflows at 360px. It affects the existing JSON entry as well as the CSV pair. Fix in the kit, not in the BTC code.
+- **Pre-existing, kit: label and file squeeze side by side at 360px** (a nit from `ui-accessibility-reviewer`). Stack them below 360px in the kit's records-card CSS.

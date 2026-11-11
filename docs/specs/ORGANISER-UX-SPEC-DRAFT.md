@@ -213,20 +213,20 @@ tablets arrive (Q2).
 
 ## 9. Owner decisions (2026-11-10)
 
-| #   | Question                          | Answer                                                                                                       | Where              |
-| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------ |
-| Q1  | Scope                             | BTC only; every piece a shared `core/` module other formats port to                                          | 1, 3a              |
-| Q2  | How many devices enter scores     | One organiser device in March; leave room for scorer tablets later                                           | 2                  |
-| Q3  | Country required before round 1   | **Required**: round 1 cannot be drawn until every team has a country (screen rule, not database)             | 3; engine spec 4.3 |
-| Q4  | Flag a match stuck in scoring     | No                                                                                                           | 3                  |
-| Q5  | Status filter on the matches list | No; group by round with counts                                                                               | 4                  |
-| Q6  | Main device                       | Tablet in landscape; phone as the backup                                                                     | 2                  |
-| Q7  | Remove after confirm              | Remove only before scoring starts; fix by re-scoring (logged); the database refuses it too (P1 policy split) | 4                  |
-| Q8  | Where the cut lives               | A section of Standings                                                                                       | 5                  |
-| Q9  | Sign-off for the top 8            | A PDF sign-off sheet (browser Save as PDF, no library)                                                       | 5, 3a              |
-| Q10 | The committee's paper scoresheet  | **Pending**: the owner is getting a copy; the CSV columns follow it                                          | 6                  |
-| Q11 | Offline scoring load              | The offline track; this spec shows only its status line                                                      | 7                  |
-| Q12 | Live controls during a shadow run | Shown, with the band "Seduh Score ABTC Beta Test" (replaces D4's recommendation)                             | 3                  |
+| #   | Question                          | Answer                                                                                                                                                         | Where              |
+| --- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Q1  | Scope                             | BTC only; every piece a shared `core/` module other formats port to                                                                                            | 1, 3a              |
+| Q2  | How many devices enter scores     | One organiser device in March; leave room for scorer tablets later                                                                                             | 2                  |
+| Q3  | Country required before round 1   | **Required**: round 1 cannot be drawn until every team has a country (screen rule, not database)                                                               | 3; engine spec 4.3 |
+| Q4  | Flag a match stuck in scoring     | No                                                                                                                                                             | 3                  |
+| Q5  | Status filter on the matches list | No; group by round with counts                                                                                                                                 | 4                  |
+| Q6  | Main device                       | Tablet in landscape; phone as the backup                                                                                                                       | 2                  |
+| Q7  | Remove after confirm              | Remove only before scoring starts; fix by re-scoring (logged); the database refuses it too (P1 policy split)                                                   | 4                  |
+| Q8  | Where the cut lives               | A section of Standings                                                                                                                                         | 5                  |
+| Q9  | Sign-off for the top 8            | A PDF sign-off sheet (browser Save as PDF, no library)                                                                                                         | 5, 3a              |
+| Q10 | The committee's paper scoresheet  | Changed 2026-11-11: we propose the layout ([`BTC-SCORES-CSV-PROPOSAL.md`](BTC-SCORES-CSV-PROPOSAL.md)); the owner shows the committee and their changes follow | 6                  |
+| Q11 | Offline scoring load              | The offline track; this spec shows only its status line                                                                                                        | 7                  |
+| Q12 | Live controls during a shadow run | Shown, with the band "Seduh Score ABTC Beta Test" (replaces D4's recommendation)                                                                               | 3                  |
 
 **Knock-on changes to other documents (not made here):** the engine spec's Draw panel (4.3) gains the country rule
 (Q3); the Board plan's D4 is answered "show, with the beta band" (Q12); the P1 `btc_matches` policy split gains "no

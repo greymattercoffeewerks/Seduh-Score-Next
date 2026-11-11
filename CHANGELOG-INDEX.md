@@ -213,4 +213,5 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - T-HARDEN.remove-publish-superseded · 2026-10-11 → [`2026-10-H1`](docs/archive/changelog/2026-10-H1.md)
 - 07-core-reason-validator: shared reason validation â€¢ 2026-10-11 → [`2026-10-H1`](docs/archive/changelog/2026-10-H1.md)
 - First-flip preparation: admin-session grant fixture, runbook, announcement draft · 2026-10-28 → [`2026-10-H2-b`](docs/archive/changelog/2026-10-H2-b.md)
+- Admin console: Change password panel · 2026-10-28 → [`2026-10-H2-c`](docs/archive/changelog/2026-10-H2-c.md)
 - Codex Addendum A: Finish button, narrower events select, admin badges, service_role guard test · 2026-10-27 → [`2026-10-H2-b`](docs/archive/changelog/2026-10-H2-b.md)

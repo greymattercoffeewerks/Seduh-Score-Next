@@ -1,0 +1,4 @@
+Event,Round,Match,Status,Team 1,Team 1 country,Team 2,Team 2 country,Judge 1,Judge 2,Judge 3,Team 1 cups won,Team 2 cups won,Team 1 tokens,Team 2 tokens,More tokens (+5),Fastest (+2),Team 1 signature beverage (+2),Team 2 signature beverage (+2),Team 1 finish time,Team 2 finish time,Team 1 total,Team 2 total,Winner,Tie-break winner,Tie-break reason,Confirmed at
+SAMPLE ABTC 2027 Regional Final,Round 1,1,Confirmed,Kopi Lab,SG,Pakse Pour,LA,A. Rahman,L. Tan,M. Ito,12,3,32,13,Kopi Lab,Pakse Pour,n/a,n/a,8:42,8:30,37,15,Kopi Lab,,,2027-03-14 10:21
+SAMPLE ABTC 2027 Regional Final,Round 1,2,Confirmed,Drip Theory,MY,Ipoh White,MY,P. Nguyen,S. Lim,K. Sato,9,6,25,20,Drip Theory,Ipoh White,n/a,n/a,9:10,8:58,30,22,Drip Theory,,,2027-03-14 10:38
+SAMPLE ABTC 2027 Regional Final,Quarterfinal,1,Confirmed,Kopi Lab,SG,Second Crack,BN,D. Cruz,H. Yusof,A. Rahman,10,10,30,30,,Second Crack,Yes,No,13:55,13:40,32,32,Level,Kopi Lab,[the committee's tie-break rule],2027-03-14 15:02
