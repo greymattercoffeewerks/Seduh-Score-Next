@@ -73,7 +73,7 @@ export function renderSeedingTies({
       heading,
       el('p', {
         className: 'btc-field-error',
-        text: 'We could not check for teams that are level just now. If any are level across the 8th and 9th places, the bracket cannot be generated until they are put in order.',
+        text: 'We could not check for level teams. If teams are level across the cut line, the top 8 cannot be locked until they are in order.',
         attrs: { role: 'status' },
       }),
       renderRetry(),
@@ -264,7 +264,7 @@ export function renderSeedingTies({
         group.decidesQualifying
           ? el('p', {
               className: 'stage-meta',
-              text: 'These teams are level across the cut-off: their order decides who qualifies for the quarterfinals.',
+              text: 'These teams are level across the cut line. Their order decides who goes through to the knockout.',
             })
           : null,
         el('p', { className: 'stage-meta', text: status }),
@@ -294,13 +294,13 @@ export function renderSeedingTies({
       heading,
       el('p', {
         className: 'stage-meta',
-        text: 'Seeds decide who plays whom. Where teams are level on points, put them in the order you decided. The usual rule is the lower sum of the two finish times, shown below for guidance.',
+        text: 'Seeds decide who plays whom. Put teams that are level on points in the order you decide. The lower sum of the two finish times is the usual guide, shown below.',
       }),
       readFailed
         ? el('div', { className: 'btc-seeding-stale' }, [
             el('p', {
               className: 'btc-field-error',
-              text: 'We could not refresh this list, so it may be out of date.',
+              text: 'This list could not refresh and may be out of date. Press Check again.',
               attrs: { role: 'status' },
             }),
             renderRetry(),
@@ -310,7 +310,7 @@ export function renderSeedingTies({
         ? el('p', {
             id: 'btc-seeding-blocking',
             className: 'btc-field-error',
-            text: 'The bracket cannot be generated until the teams level across the cut-off are put in order.',
+            text: 'The top 8 cannot be locked until teams level across the cut line are in order.',
             attrs: { role: 'status' },
           })
         : null,

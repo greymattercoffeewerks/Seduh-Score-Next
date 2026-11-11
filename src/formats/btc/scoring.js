@@ -365,13 +365,13 @@ const CURATED_MESSAGES = [
 // caller falls through to core/errors' generic describeError.
 export function describeConfirmError(err) {
   if (err?.code === 'P0002') {
-    return 'This match was changed elsewhere after you started scoring it. Discard your edits to reload the latest scores, then re-enter your changes.';
+    return 'This match was changed after you started scoring it. Discard your edits to load the latest scores, then enter your changes again.';
   }
   if (err?.code === 'P0001' && err.message) {
     const message = err.message.replace(/^confirm_btc_match: /, '');
     return CURATED_MESSAGES.some((pattern) => pattern.test(message))
       ? `Could not confirm: ${message}.`
-      : 'Could not confirm this match. Check the votes and try again.';
+      : 'This match could not be confirmed. Check the cup scores and try again.';
   }
   return null;
 }

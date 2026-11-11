@@ -8,6 +8,72 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## v4.4.1: Organiser UX S5, the BTC organiser copy pass (spec U6) · 2026-11-11
+
+**Task:** Organiser UX S5 (spec U6; the wording table is `docs/specs/ORGANISER-UX-S5-COPY-TABLE.md`). Branch `claude/organiser-ux-s5-copy-pass-e207e7`, committed locally, **not pushed**. **Patch** (`npm version patch`, 4.4.0 to 4.4.1), not a minor: wording only, nothing new to use. No migration, no cloud change, no hint key, behaviour, layout or CSS change.
+
+- **What changed.** About 70 organiser-only strings on the BTC organiser screens, one vocabulary: round 1 and round 2, the cut, "level" (never "tied"), "lock the top 8". Refusal tables changed wording only; every hint key is the same. Setup's demo paragraph went from 60+ words to about 30. The Matches, Draw, Scoring, Standings (cut table notes, locked panel, level-teams card) and Bracket copy was shortened and made procedural: what happened, then what to do. The demo-loaded status now says "Lock the top 8 in Standings": since S4 the bracket is generated from Standings, so the old line pointed at the wrong screen.
+- **Why.** The organiser reads these between matches, at a table. Several refusals said what went wrong but not what to do next, and "preliminary", "RPC" and "votes" were the implementation's words, not the organiser's.
+- **Sign-off sheet wording (group B, rows B1 to B4) applied, on the owner's approval of 2026-11-11** (relayed by the coordinator; commit `cd3c8aa`, not this one): `signOff.js`, `cutData.js` and their tests. B5 (the lock reasons in `cutData.js`) was not in that approval and is unchanged; the copy table still lists it as B group. The printed sheet is committee-facing, so its wording is the owner's to check on paper.
+- **Not changed (follow-ups).** Audience `words.js` ("qualify", "tied"); core `TEST_BAND_TEXT` dash ("Test Data — Not a Live Event", shared by every format); `core/errors.js` generic sentences (every format, a core module, one pass for all formats).
+- **Checks:** 1054 BTC tests pass at this commit; eslint clean. Full suite: one unrelated, pre-existing failure in `tools/check-doc-budgets.test.js` (Windows path in `brokenLinks`), the same as S4.
+- **Reviews:** `code-reviewer` clean. `ui-accessibility-reviewer`: 0 important; 4 nits, all fixed (the tie-break hint keeps "Do not repeat scores"; demo "gives" and "erases" aligned; the standings notes keep their dropped details; stale references fixed). `test-auditor`: 0 important; nits partly fixed: exact sentences now asserted for six refusals and the odd-team hint. Left as nits: copy strings with no test, and `Scheduled`/`Scoring` substring assertions in `bracketScreen.test.js`.
+- **Pre-existing, logged, not fixed:** `bracketScreen.test.js:154` `not.toContain('Generate bracket')` passes whatever the screen renders, so it guards nothing.
+- **Status: not final.** No browser or Playwright run is recorded for this pass. B5 is unresolved (above). The S4 real-tablet and printed-PDF checks are still owed.
+
+## v4.4.0: Organiser UX S4, the cut to the top 8 and its sign-off sheet · 2026-11-11
+
+**Task:** Organiser UX S4 (spec U3, mockup Q8). Branch `claude/organiser-ux-s4-the-cut-8e554b`, **PR into `dev`, not merged.** **Minor** (`npm version minor`, 4.3.0 to 4.4.0): a new screen and route an organiser can use. No migration, no cloud change.
+
+- **Standings holds the cut.** A cut table (place, team with flag and code, R1 pts, R2 pts, total, R1 time, R2 time, time sum) with a line after the 8th. The seeding card and `record_btc_seeding_tiebreak` moved here from the bracket screen through `seedingController.js` (extracted from `bracketScreen.js`, behaviour kept). "Lock the top 8" names the eight in a `window.confirm`, calls `generate_btc_bracket` and publishes live.
+- **Why the lock is refused up front:** the old Generate still went to the database when the last seed read had failed. Now the browser refuses it, with the reason (`cutData.js` `lockState`). A bracket is published live and a failed read looks the same as a real order, so the check belongs before the write. This is a behaviour change.
+- **Sign-off sheet** at `#/events/:id/btc/sign-off` (`signOffScreen.js`, `signOff.js`, `core/signOffSheet.js`): a print-designed A4 page for a committee to sign. Browser Print to PDF, no library. A draft always says NOT FINAL.
+- **Authoritative eight:** once a bracket exists, the sheet and table take the eight from the quarterfinal slots' `seed_1`/`seed_2`, and say so when the live standings differ. Why: a preliminary match can still be re-confirmed after the lock, so live standings can drift from what was locked.
+- **Scoring discipline:** rows are in the database's `btc_seeding_order`, never re-sorted. Qualifiers are seed 8 or less. The time sum is a display aid only; it never orders anyone.
+- **Core:** `core/cutLine.js` (pure `describeCut`/`levelWords`, DOM `renderCutLine`); `core/signOffSheet.js`; `core/ranking.js` gains `positionsInOrder` (the numbering half of `rank()`, no sort), so the cut table cannot fork `rank()`'s numbering.
+- **runSheet.js** links the cut phase to Standings ("Lock the top 8"). The bracket screen with no bracket says "Settle the cut in Standings". CSS in one commented block at the end of `components.css`.
+- **Also fixed:** `.btc-bracket-refresh-note[hidden]` drew an empty box (CSS `display` overrode `hidden`); toast focus restore on Standings.
+- **Checks:** about 6500 tests pass. `tools/check-doc-budgets.test.js` (brokenLinks) fails on Windows paths; not from this change.
+- **Reviews:** `scoring-auditor` 1 🔴 (post-lock sheet read the live view), fixed; nit (unsettled tie inside the eight says seed order is provisional), done. `module-boundary-checker` 1 🔴 (`rankCutRows` forked `rank()` numbering), fixed via `positionsInOrder`; nit (draft default text), fixed; 🟣 pre-existing (`statusBand` default title says ABTC, for when `is_shadow` lands), logged, not fixed. `ui-accessibility-reviewer` 3 🔴 fixed (print colour-adjust on the bands, dark-mode label contrast, toast focus); nits: `aria-expanded` dropped from the toggle, lock actions wrapped. `test-auditor` 2 🔴 (no screen-level test of the locked eight), fixed; nits fixed. `code-reviewer` the same 🔴 as scoring-auditor, fixed; nits: dead export removed, comment on the sign-off page's whole-page failure when the view is missing.
+- **Status: not final.** Outstanding (Definition of Done): a real-tablet check; the sign-off sheet is checked on screen only, not as a printed PDF; re-review of the 🔴 fixes on the final diff is not recorded (run `scoring-auditor` and `code-reviewer` on the diff before merge). Also: S3 (matches) runs in parallel. If it merges first, rebase onto `dev` (the `components.css` block is a pure append).
+
+## v4.3.0: BTC matches grouped by round (Organiser UX S3, spec U2) · 2026-11-11
+
+**Task:** Organiser UX stage S3, the BTC matches screen (mockup U2; spec `docs/specs/ORGANISER-UX-SPEC-DRAFT.md`). Branch `claude/organiser-ux-s3-matches-9fa460`, PR into `dev`. **Not merged.** No migration, no outbox or IndexedDB change.
+
+**Bump: minor** (4.2.1 to 4.3.0, `npm version minor --no-git-tag-version`). The matches screen is a visible redesign an organiser sees (rounds collapse, Draw summary card, Remove on pending rows), so it is a capability, not a patch.
+
+- **Why:** a flat list of about 20 matches across two rounds was hard to scan on a tablet mid-event. Each round is now its own group with a header ("Round 2", "6 of 10 confirmed"); a finished round collapses to that header ("Show N matches"), so the open round is what the organiser sees.
+- **Grouping:** by `prelim_round` (null counts as round 1). Numbering restarts per round.
+- **Draw summary card** (`drawSummary.js`): once rounds are drawn and nothing is drawable, the full Draw panel gives way to a compact card, with "Open the draw panel" / "Close the draw panel" to bring the panel back.
+- **Remove on a match** (`matchList.js` `canRemoveMatch`, Q7): shows only when the match is pending, no cup tokens are recorded and the scores could be read. This is a screen rule only. The database still accepts the delete; refusing it there is the separate P1 task.
+- **Scores read:** `matchesScreen.js` reads `btc_match_scores` as advisory (null on failure, so Remove is hidden, the list still renders) and `btc_round_draws` mode and seed.
+- **Hand entry moved** into a collapsed `<details>` "Add a match by hand (for corrections)", so the draw is the default path.
+- **Existing draw tests** adjusted to open the summary first.
+
+**Files:**
+
+- New: `src/core/groupedMatchList.js` (+ `.test.js`); `src/formats/btc/matchList.js` (+ `.test.js`); `src/formats/btc/drawSummary.js`.
+- Changed: `src/formats/btc/matchesScreen.js`, `matchesScreen.css`, `matchesScreen.test.js`, `matchesScreen.draw.test.js`; `src/ui/tokens/components.css` (S3 BLOCK at the end, marked `/* END S3 BLOCK */`); `package.json`, `package-lock.json` (version); `CHANGELOG.md`, `STATUS.md`, `src/core/CLAUDE.md`, `src/formats/btc/CLAUDE.md`.
+- `groupedMatchList.js` is format-agnostic: `groupItems`, `summarizeGroup`, `isGroupCollapsed` are pure; `renderGroupedMatchList` is the DOM part. The row contract is `{number, sides[], score, meta, status{label,tone}, actions}`, with any number of sides and a `sideJoiner` option (default "vs"). The optional `filter` slot is unused by BTC (about ten matches a round); it stays because the spec asks for it.
+
+**Reviews:**
+
+- `module-boundary-checker`: 1 important, fixed. The row contract was fixed to two sides; now any number of sides plus `sideJoiner`. Nit fixed: `drawSummary.js` now reuses `groupItems` rather than its own grouping.
+- `ui-accessibility-reviewer`: clean. Fixed: seed text overflow at 360px (`overflow-wrap`) and a stray `aria-expanded`. The toggle keeps its "Show/Hide" name because the visible text matches it.
+- `test-auditor`: 1 important, fixed. Visible team sides and ordering were not asserted; now they are. Per-round numbering and item-order tests added. Still open: the `panelOpen` reset after a round is created (`matchesScreen.js` line 427) has no test. See follow-up.
+- `code-reviewer`: clean. Three nits, two fixed; the `filter` slot kept (see above).
+- `offline-sync-auditor`: not run (no outbox or IndexedDB change).
+- Checked at 360px and 1024px landscape in the preview harness.
+
+**Checks:** full suite 6453 tests, one failure in `tools/check-doc-budgets.test.js` (`brokenLinks`), unrelated and not touched here.
+
+**Follow-ups:**
+
+- P1 (separate task): the database refusal of a match delete once it has scores or is not pending. Q7 is a screen rule until then.
+- Test for the `panelOpen` reset after create (`matchesScreen.js` line 427).
+- Organiser UX S4 (cut phase links to the bracket screen, still pointing there) and S5 wait.
+
 ## v4.2.1: Behind the Seduh brought up to 4.2.0 · 2026-11-10
 
 **Task:** owner asked for a BTS update (2026-11-10). Content only in `bts/index.html`; no code, style or migration change. **Patch** (`npm version patch`, 4.2.0 to 4.2.1) under `docs/versioning.md`: a page copy update.
@@ -937,62 +1003,5 @@ These are the first gating keys enforced in the cloud for real. The only earlier
 **Verified:** full vitest, eslint and prettier clean; `npm run check:admin-leak` clean; the whole `dev-admin` Playwright project (66 tests) against the shared local stack. **Not verified:** the cloud GoTrue version and settings (design U1 to U3), a real device, the Edge Function (untouched).
 
 **Reviews:** `code-reviewer`, `module-boundary-checker` and `security-reviewer`: clean. `test-auditor`: no Important, 4 nits (2 applied: call order in U-5, a real aal2 probe in X1; 2 left: U-8 saving-render snapshot, 43.5px tolerance shared with the helper). `ui-accessibility-reviewer`: no Important, 4 nits left as known (native `required` bubble pre-empts the empty-field copy, the intro uses an unstyled `stage-meta`, Show/Hide does not cover the current-password box, no `aria-invalid`). No Important finding, so no independent refutation check was needed.
-
----
-
-## First-flip preparation: admin-session grant fixture, runbook, announcement draft · 2026-10-28
-
-**Task:** Preparing the first gating key flip (all keys still OFF). Code PR #336 (`feat/gating-ci-grant-fixture`) and docs PR #337 (`docs/first-flip-prep`), both into `dev`; released to `main` as #335 and #338. No migration, nothing run against the cloud beyond read-only aggregate queries for the runbook, no key flipped.
-
-**What changed (#336, tests only):**
-
-- `tests/e2e/support/tenants.js`: `createTenant` now gives the organisation an Annual plan through `admin_grant_create` with a real platform-admin session. `grant: false` keeps it on Community; `live: false` skips the event and live session (new `createEvent`, `goLive`, `activate` helpers). This resolves the grant boundary logged in ROADMAP (T-GATE.B3 item 6, T-GATE.B4 item 2) without touching it: `admin_grant_create` stays revoked from `service_role`, and there is no direct grant-table insert.
-- `tests/e2e/support/grants.js` (new): `grantPlan`, `setKeyEnforced` (audited `admin_set_key_enforced`, confirms the preview count) and `withKeyEnforced` (always restores OFF). The admin is made by SQL as the local database owner (the CLAUDE.md runbook route), a TOTP factor is enrolled on that login and the code is computed in the helper, so every call uses a fresh `aal2` token with a TOTP seconds old.
-- Local-only guards: `assertLocalStack` (API host) and `assertLocalDatabase` in `admins.js` (container / `DOCKER_HOST`) run before anything is made. No real credential.
-- `tests/e2e/btc-entitlement.spec.js` and Playwright project `dev-gating` (last, alone): with `btc_format` on, a granted organisation creates a BTC event and goes live; an un-granted one can create the event but is refused at go-live (INSERT and UPDATE paths) with `entitlement_required`; with the key off the same session activates.
-- `tests/e2e/gating-reset.setup.js` (project `gating-reset`, before `dev-admin`): puts `btc_format` back off in case an earlier run died with it on.
-- `admin-console-orgs` and `admin-console-plan` pass `grant: false` (they assert a Community plan / an empty change log).
-
-**What changed (#337, docs only, in the gitignored `Handoffs and Specs/`, added with `git add -f`):**
-
-- `FIRST-KEY-FLIP-RUNBOOK.md`: `cup_taster_participants` by hand, steps marked OWNER or CLAUDE, preconditions re-read on 2026-10-28 (all 11 keys off, 1 organisation with an Annual grant, 0 live sessions), preview and SQL equivalent, watch list, rollback, order of the remaining keys. Raises: the preview's zero depends on the Annual grant staying live (re-run it on the day); `audience_branding`, `results_archive_optional` and `season_history` may have no hook behind them yet.
-- `WINDOW-LOCK-ANNOUNCEMENT-DRAFT.md`: unsent DRAFT, exactly what locks (from the migration) and an inventory of every surface that shows the window. Key finding: no Per-event customer exists today and the pricing page omits the window. Ten owner questions, among them who receives it and when, whether the pricing page should say it, the archive-listing warning, whether to enforce without the CSV email (G-F1) and the 24-hour podium publish (D-G22), the contact line and the extension policy.
-
-**Verified (author's account in #336):** full `npx playwright test` on a freshly reset local stack, 95 tests; `dev-audience` and `dev-tenancy` also ran with `btc_format` ON and OFF; key back OFF and zero admins left after each run. Not re-run in this records session.
-
-**Reviews (#336):**
-
-- `security-reviewer`: clean.
-- `code-reviewer`: 5 nits, 4 applied (header trim, restore error no longer hides the original, null convention, a comment); 1 left.
-- `test-auditor`: 1 Important (a killed run could leave the key on and fail the Plan spec): fixed with the `gating-reset` project, plus the UPDATE-path test and grant validation. **No independent refutation check was run on that fix** (judged mechanical); the protocol asks for one on Important findings.
-
-**Process note:** Release PRs #335 and #338 were each opened by a sibling session and merged by that session without the owner's word; the owner's rule is that the owner says when CI is green and only then is anything merged. This is a process lapse, recorded plainly. Sessions are now briefed not to merge. The back-merge of `main` into `dev` (a fast-forward to `74247b8`, identical tree) was done on 2026-10-28.
-
----
-
-## Codex Addendum A: Finish button, narrower events select, admin badges, service_role guard test · 2026-10-27
-
-**Task:** Five small tasks handed to Codex (`Handoffs and Specs/CODEX-HANDOFF-2026-10-27.md`, Addendum A): A1 organiser Finish button for `events_open`, A3 narrow `listEventsForOrg`, A4 admin badge colours, A5 pgTAP `service_role` guard; A2 dropped. Codex's work merged as #332 (straight to `main`, not `dev` as instructed); reviewed afterwards; fixes merged as #333 into `dev`. No migration, no cloud change, every gating key still off.
-
-**What changed:**
-
-- `core/events.js`: `finishEvent(orgId, eventId, client)` wraps `public.finish_event`; `listEventsForOrg` selects `id, format, name, event_date, venue, city, is_test, ended_at` (the entitlement snapshot columns no longer reach the browser).
-- `core/eventsScreen.js` + `.css`: a "Finish event" action with a two-step confirm (hidden once `ended_at` is set, "Finished" in words), generic failure text that does not say which condition refused.
-- `src/admin/*`: badge modifier classes (`--on`, `--off`, `--revoked`, `--test`) on tokens, so Off and Revoked no longer look like good news; a stylesheet test forbids colour literals and now checks each token exists.
-- `supabase/tests/054`: `service_role` snapshot-edit refusal cases (plan 89 to 92).
-- ROADMAP: the BTC fixture grant boundary (the only grant writer is `admin_grant_create`, revoked from `service_role`, platform admin with fresh MFA). A2 was dropped for this reason; Claude Code builds an admin-session fixture before `btc_format` is flipped.
-
-**Reviews (post-merge, on #332):**
-
-- `code-reviewer`: 0 Important; nits (missing `.event-finish-confirm` CSS: fixed; client-clock `ended_at`: left).
-- `module-boundary-checker`: clean; nit (a second per-row confirm state machine beside Delete: left, extract a core primitive if a third appears).
-- `security-reviewer`: 0 Important; read only, pgTAP not run. Pre-existing: `findEvent` still `select('*')`.
-- `ui-accessibility-reviewer`: **2 Important, both confirmed by an independent checker and fixed in #333:** the idle Finish button's aria-label did not contain its visible text (WCAG 2.5.3; the checker narrowed it: in-flight and Confirm names passed), and Confirm did not carry the irreversible-consequence copy (now `aria-describedby`). Pre-existing, logged: violet TEST colour fails contrast on dark stage surfaces; "Event finished." live region inserted with its text.
-- `test-auditor`: **Important (shown by mutation), fixed:** Cancel path untested; on re-audit, the in-flight Finishing guard untested; both now have tests that fail when the behaviour is removed. Nits fixed: double-confirm guard, Finishing state, Cancel in the label-in-name test, token existence. Left: pgTAP read-back at `054:280` (pgTAP not run), no test for the header "Verified (AAL2)" badge class.
-- `ui-accessibility-reviewer` and `test-auditor` re-run on #333: a11y clean; auditor's one Important fixed in the same PR.
-
-**Not verified:** nothing rendered at 360px or with a real screen reader; pgTAP not run in this session (CI green). Pre-existing, unrelated: `src/ui/tokens/components.test.js` has one failing test and `npm run lint` has one error in a gitignored recon script; both also fail on clean `dev`.
-
-**Process note:** Codex opened #332 into `main` and it was merged without the review the protocol requires. Future Codex PRs: base `dev`, no merge until reviewers have run.
 
 ---

@@ -511,7 +511,7 @@ describe('mountScoringScreen', () => {
     expect(feedback().textContent).toMatch(/nothing was submitted/);
     expect(feedback().dataset.tone).toBe('error');
     expect(confirmButton().getAttribute('aria-disabled')).toBeNull();
-    expect(saveNotice().textContent).toMatch(/could not be saved on this device/);
+    expect(saveNotice().textContent).toMatch(/not saved on this device/);
   });
 
   it('ignores a rapid double-click: only one operation is ever queued', async () => {
@@ -655,7 +655,7 @@ describe('mountScoringScreen', () => {
     confirmButton().click();
     await flush();
     expect(root.querySelector('.screen-feedback[data-tone="success"]')).toBeNull();
-    expect(notice().textContent).toMatch(/waiting to sync/);
+    expect(notice().textContent).toMatch(/not sent yet/);
     expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
   });
 
@@ -676,7 +676,7 @@ describe('mountScoringScreen', () => {
       await fillAll();
       confirmButton().click();
       await flush();
-      expect(notice().textContent).toMatch(/changed elsewhere/);
+      expect(notice().textContent).toMatch(/was changed after you started/);
       expect(notice().textContent).not.toBe('');
       expect(byText('Discard my edits and reload').hidden).toBe(false);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
@@ -729,7 +729,7 @@ describe('mountScoringScreen', () => {
 
     it('says so, locks every input, and offers to check the sync status', async () => {
       await submitOffline();
-      expect(notice().textContent).toMatch(/saved on this device and waiting to sync/);
+      expect(notice().textContent).toMatch(/Confirm saved on this device, not sent yet/);
       expect(byText('Check sync status').hidden).toBe(false);
       expect(byText('Discard my edits and reload').hidden).toBe(true);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
@@ -789,7 +789,7 @@ describe('mountScoringScreen', () => {
       await submitOffline();
       byText('Check sync status').click();
       await flush();
-      expect(notice().textContent).toMatch(/Still not synced/);
+      expect(notice().textContent).toMatch(/Still not sent/);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
       expect(byText('Check sync status').getAttribute('aria-disabled')).toBeNull();
       // stays on the button that was pressed; the notice announces the result
@@ -801,7 +801,7 @@ describe('mountScoringScreen', () => {
       flushOutcome = 'conflict';
       byText('Check sync status').click();
       await flush();
-      expect(notice().textContent).toMatch(/changed elsewhere/);
+      expect(notice().textContent).toMatch(/was changed after you started/);
       expect(byText('Discard my edits and reload').hidden).toBe(false);
     });
 
@@ -818,7 +818,7 @@ describe('mountScoringScreen', () => {
       await submitOffline();
       root.innerHTML = '';
       await mount();
-      expect(notice().textContent).toMatch(/waiting to sync/);
+      expect(notice().textContent).toMatch(/not sent yet/);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
       expect(pressedValue(1)).toBe(2); // the saved scores are still there
     });
@@ -839,7 +839,7 @@ describe('mountScoringScreen', () => {
       queue = []; // dropped by a permanent failure in another session
       root.innerHTML = '';
       await mount();
-      expect(notice().textContent).toMatch(/was not applied/);
+      expect(notice().textContent).toMatch(/did not go through/);
       expect(notice().textContent).not.toBe('');
       expect(pressedValue(1)).toBe(2); // scores kept
       expect(confirmButton().getAttribute('aria-disabled')).toBeNull();
@@ -857,7 +857,7 @@ describe('mountScoringScreen', () => {
       confirmOpId: null,
     });
     await mount();
-    expect(notice().textContent).toMatch(/changed elsewhere/);
+    expect(notice().textContent).toMatch(/was changed after you started/);
     expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
     tapCup(2, 3);
     expect(pressedValue(2)).toBeNull();
@@ -917,12 +917,12 @@ describe('mountScoringScreen', () => {
       tapCup(1, 2);
       await flush();
       expect(saveNotice()).toBe(live);
-      expect(live.textContent).toMatch(/could not be saved on this device/);
+      expect(live.textContent).toMatch(/not saved on this device/);
       // A later success does not clear it: the earlier scores may still be unsaved.
       cacheSetFails = false;
       tapCup(2, 1);
       await flush();
-      expect(live.textContent).toMatch(/could not be saved on this device/);
+      expect(live.textContent).toMatch(/not saved on this device/);
     });
   });
 
@@ -974,7 +974,7 @@ describe('mountScoringScreen', () => {
     confirmButton().click();
     await flush();
     expect(root.querySelector('.screen-feedback[data-tone="success"]')).toBeNull();
-    expect(notice().textContent).toMatch(/waiting to sync/);
+    expect(notice().textContent).toMatch(/not sent yet/);
   });
 
   it('confirmed, but the match cannot be re-read: says so and asks for a reload before more edits', async () => {
@@ -1030,7 +1030,7 @@ describe('mountScoringScreen', () => {
       queue = []; // the reconnect flush already dropped it
       byText('Check sync status').click();
       await flush();
-      expect(feedback().textContent).toMatch(/was not applied/);
+      expect(feedback().textContent).toMatch(/did not go through/);
       expect(feedback().dataset.tone).toBe('error');
       expect(confirmButton().getAttribute('aria-disabled')).toBeNull(); // unlocked
       expect(cache.get('btc-scoring-draft:m1').confirmOpId).toBeNull();
@@ -1042,7 +1042,7 @@ describe('mountScoringScreen', () => {
       db.btc_matches[0] = { ...db.btc_matches[0], updated_at: 'T-elsewhere' };
       byText('Check sync status').click();
       await flush();
-      expect(notice().textContent).toMatch(/changed elsewhere/);
+      expect(notice().textContent).toMatch(/was changed after you started/);
       expect(byText('Discard my edits and reload').hidden).toBe(false);
     });
 
@@ -1052,7 +1052,7 @@ describe('mountScoringScreen', () => {
       failLedger = true;
       byText('Check sync status').click();
       await flush();
-      expect(notice().textContent).toMatch(/waiting to sync/);
+      expect(notice().textContent).toMatch(/not sent yet/);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
       expect(feedback().textContent).toBe('');
     });
@@ -1063,7 +1063,7 @@ describe('mountScoringScreen', () => {
       listAllOperations.mockRejectedValueOnce(new Error('idb down'));
       byText('Check sync status').click();
       await flush();
-      expect(notice().textContent).toMatch(/waiting to sync/);
+      expect(notice().textContent).toMatch(/not sent yet/);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
     });
   });
@@ -1106,7 +1106,7 @@ describe('mountScoringScreen', () => {
       confirmButton().click();
       await flush();
       expect(feedback().textContent).toBe('Match confirmed.');
-      expect(saveNotice().textContent).toMatch(/could not be saved on this device/);
+      expect(saveNotice().textContent).toMatch(/not saved on this device/);
     });
 
     it('a reload that cannot tidy its draft still loads, and warns instead of showing Retry', async () => {
@@ -1120,8 +1120,8 @@ describe('mountScoringScreen', () => {
       cacheSetFails = true;
       await mount();
       expect(cupRows()).toHaveLength(15);
-      expect(notice().textContent).toMatch(/was not applied/);
-      expect(saveNotice().textContent).toMatch(/could not be saved on this device/);
+      expect(notice().textContent).toMatch(/did not go through/);
+      expect(saveNotice().textContent).toMatch(/not saved on this device/);
     });
 
     it('discarding when the draft cannot be cleared still reloads, and warns', async () => {
@@ -1137,7 +1137,7 @@ describe('mountScoringScreen', () => {
       cacheClearFails = true;
       byText('Discard my edits and reload').click();
       await flush();
-      expect(saveNotice().textContent).toMatch(/could not be saved on this device/);
+      expect(saveNotice().textContent).toMatch(/not saved on this device/);
     });
   });
 
@@ -1167,7 +1167,7 @@ describe('mountScoringScreen', () => {
     });
     await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS + 1);
     await mounting;
-    expect(root.textContent).toContain('taking longer than expected');
+    expect(root.textContent).toContain('Still loading');
     expect(byText('Retry')).toBeTruthy();
   });
 

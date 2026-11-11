@@ -132,7 +132,7 @@ describe('mountMatchesScreen', () => {
     await mountMatchesScreen(root, { eventId: 'ev1', client });
 
     expect(root.querySelector('form')).not.toBeNull();
-    expect(root.textContent).toContain('No preliminary matches created yet.');
+    expect(root.textContent).toContain('No matches yet. Draw round 1 to create them.');
     expect(root.querySelectorAll('.btc-judge-checkbox-label')).toHaveLength(3);
   });
 
@@ -214,7 +214,7 @@ describe('mountMatchesScreen', () => {
     await Promise.resolve();
 
     expect(root.textContent).toContain('Something went wrong saving that — try again.');
-    expect(root.textContent).toContain('No preliminary matches created yet.');
+    expect(root.textContent).toContain('No matches yet. Draw round 1 to create them.');
     expect(publishBtcLive).not.toHaveBeenCalled();
   });
 
@@ -535,8 +535,8 @@ describe('mountMatchesScreen', () => {
       expect(client.rpcCalls).toHaveLength(1);
       expect(client.rpcCalls[0][0]).toBe('create_btc_match');
       // the new match is listed with the country labels
-      expect(root.querySelector('.btc-match-teams').textContent).toBe(
-        'Brunei · Team Kopi vs Singapore · Team Satay',
+      expect(root.querySelector('a[aria-label^="Score"]').getAttribute('aria-label')).toBe(
+        'Score Brunei · Team Kopi vs Singapore · Team Satay',
       );
     });
 
@@ -546,6 +546,179 @@ describe('mountMatchesScreen', () => {
       select.focus();
       choose('team1Id', 't1');
       expect(document.activeElement).toBe(root.querySelector('select[data-field="team1Id"]'));
+    });
+  });
+  describe('matches grouped by round (Organiser UX S3)', () => {
+    const m = (id, status, prelim_round, extra = {}) => ({
+      id,
+      event_id: 'ev1',
+      round: 'preliminary',
+      prelim_round,
+      status,
+      team1_id: 't1',
+      team2_id: 't2',
+      ...extra,
+    });
+    const judgesFor = (...ids) =>
+      ids.flatMap((id) => ['j1', 'j2', 'j3'].map((judge_id) => ({ match_id: id, judge_id })));
+    const score = (match_id, team1_tokens, team2_tokens, team1_total, team2_total) => ({
+      match_id,
+      event_id: 'ev1',
+      status: 'confirmed',
+      team1_tokens,
+      team2_tokens,
+      team1_total,
+      team2_total,
+    });
+    const removeFor = (id) => root.querySelector(`[data-focus-key="remove-match-${id}"]`);
+    const rowOf = (id) =>
+      root.querySelector(`a[href$="/matches/${id}/scoring"]`).closest('.ok-row');
+
+    async function mountWith(matches, scores = [], { scoresFail = false } = {}) {
+      const db = baseDb();
+      db.btc_matches = matches;
+      db.btc_match_judges = judgesFor(...matches.map((x) => x.id));
+      db.btc_match_scores = scores;
+      const client = fakeClient(db);
+      if (scoresFail) {
+        const from = client.from;
+        client.from = (table) =>
+          table === 'btc_match_scores'
+            ? {
+                select: () => ({
+                  eq: () => Promise.resolve({ data: null, error: { message: 'x' } }),
+                }),
+              }
+            : from(table);
+      }
+      await mountMatchesScreen(root, { eventId: 'ev1', client });
+      return client;
+    }
+
+    it('offers Remove only on a pending match with no cup scores', async () => {
+      await mountWith(
+        [
+          m('p1', 'pending', 1),
+          m('s1', 'scoring', 1),
+          m('c1', 'confirmed', 1),
+          m('v1', 'pending', 1),
+        ],
+        [score('c1', 6, 6, 11, 6), score('v1', 3, 0, 3, 0)],
+      );
+      // round 1 is not finished (p1 is pending), so every row is visible
+      expect(removeFor('p1')).not.toBeNull(); // pending, no scores
+      expect(removeFor('s1')).toBeNull(); // scoring
+      expect(removeFor('c1')).toBeNull(); // confirmed
+      expect(removeFor('v1')).toBeNull(); // pending but a cup has been voted
+    });
+
+    it('says Score on an unconfirmed match and View on a confirmed one, both to the scoring screen', async () => {
+      await mountWith([m('p1', 'pending', 1), m('c1', 'confirmed', 1)], [score('c1', 6, 6, 11, 6)]);
+      const scoreLink = rowOf('p1').querySelector('a.btn');
+      const viewLink = rowOf('c1').querySelector('a.btn');
+      expect(scoreLink.textContent).toBe('Score');
+      expect(viewLink.textContent).toBe('View');
+      expect(viewLink.getAttribute('href')).toBe('#/events/ev1/btc/matches/c1/scoring');
+    });
+
+    it('does not offer Remove when the scores could not be read, because "no scores" is unproven', async () => {
+      await mountWith([m('p1', 'pending', 1)], [], { scoresFail: true });
+      expect(rowOf('p1')).not.toBeNull();
+      expect(removeFor('p1')).toBeNull();
+    });
+
+    it('shows number, status tag, the confirmed score, judges and a missing-time marker', async () => {
+      await mountWith(
+        [
+          m('c1', 'confirmed', 2, { team1_time_note: '4:10', team2_time_note: '' }),
+          m('p1', 'pending', 2),
+        ],
+        [score('c1', 6, 6, 11, 6)],
+      );
+      const confirmedRow = rowOf('c1');
+      expect(confirmedRow.querySelector('.ok-row-number').textContent).toBe('1');
+      expect(confirmedRow.querySelector('.ok-row-score').textContent).toBe('11 – 6');
+      expect(confirmedRow.querySelector('.ok-tag').textContent).toBe('Confirmed');
+      expect(confirmedRow.querySelector('.ok-row-meta').textContent).toBe(
+        'Judges: Judge One, Judge Two, Judge Three · No finish time',
+      );
+      const pendingRow = rowOf('p1');
+      expect(pendingRow.querySelector('.ok-row-number').textContent).toBe('2');
+      expect(pendingRow.querySelector('.ok-row-score')).toBeNull();
+      expect(pendingRow.querySelector('.ok-tag').textContent).toBe('Scheduled');
+    });
+
+    it('collapses a finished round to its header and Show N matches opens it again', async () => {
+      await mountWith(
+        [m('a', 'confirmed', 1), m('b', 'confirmed', 1), m('c', 'pending', 2)],
+        [score('a', 6, 6, 11, 6), score('b', 6, 6, 6, 11)],
+      );
+      const [round1, round2] = root.querySelectorAll('.ok-group');
+      expect(round1.dataset.collapsed).toBe('true');
+      expect(round1.querySelectorAll('.ok-row')).toHaveLength(0);
+      expect(round1.querySelector('.ok-group-count').textContent).toBe('2 of 2 confirmed');
+      expect(round2.querySelector('.ok-group-count').textContent).toBe('0 of 1 confirmed');
+      expect(round2.querySelectorAll('.ok-row')).toHaveLength(1);
+      const toggle = round1.querySelector('button');
+      expect(toggle.textContent).toBe('Show 2 matches');
+      toggle.click();
+      const opened = root.querySelector('.ok-group');
+      expect(opened.dataset.collapsed).toBe('false');
+      expect(opened.querySelectorAll('.ok-row')).toHaveLength(2);
+      expect(root.querySelector('.ok-group button').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('shows the two teams in order, numbers each round from 1, and names a missing team', async () => {
+      await mountWith([
+        m('r1', 'pending', 1),
+        m('r2a', 'pending', 2, { team1_id: 't2', team2_id: 't1' }),
+        m('r2b', 'pending', 2, { team2_id: 'gone' }),
+      ]);
+      const sides = (id) =>
+        [...rowOf(id).querySelectorAll('.ok-row-side')].map((n) => n.textContent);
+      expect(sides('r2a')).toEqual(['Beta', 'Alpha']);
+      expect(sides('r2b')).toEqual(['Alpha', 'Unknown team']);
+      expect(rowOf('r1').querySelector('.ok-row-number').textContent).toBe('1');
+      expect(rowOf('r2a').querySelector('.ok-row-number').textContent).toBe('1'); // numbered within its round
+      expect(rowOf('r2b').querySelector('.ok-row-number').textContent).toBe('2');
+    });
+
+    it('lists an unnumbered match under Round 1', async () => {
+      await mountWith([m('u', 'pending', null), m('r2', 'pending', 2)]);
+      const headings = [...root.querySelectorAll('.ok-group-heading')].map((h) => h.textContent);
+      expect(headings).toEqual(['Round 1', 'Round 2']);
+      expect(root.querySelector('.ok-group').contains(rowOf('u'))).toBe(true);
+    });
+
+    it('keeps the hand-entry form in a collapsed section below the rounds', async () => {
+      await mountWith([m('p1', 'pending', 1)]);
+      const details = root.querySelector('details.btc-hand-section');
+      expect(details.open).toBe(false);
+      expect(details.querySelector('summary').textContent).toBe(
+        'Add a match by hand (for corrections)',
+      );
+      expect(details.querySelector('form')).not.toBeNull();
+      const list = root.querySelector('.ok-groups');
+      expect(list.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('shows a drawn round as the summary card and Open the draw panel brings the panel back', async () => {
+      await mountWith([m('p1', 'pending', 1)]);
+      const summary = root.querySelector('.ok-draw-summary');
+      expect(summary).not.toBeNull();
+      expect(summary.textContent).toContain('Round 1: 1 match, no draw record (made by hand)');
+      expect(root.querySelector('.btc-draw-panel')).toBeNull();
+      root.querySelector('[data-focus-key="draw-open"]').click();
+      expect(root.querySelector('.btc-draw-panel')).not.toBeNull();
+      expect(root.querySelector('.ok-draw-summary')).toBeNull();
+      root.querySelector('[data-focus-key="draw-close"]').click();
+      expect(root.querySelector('.ok-draw-summary')).not.toBeNull();
+    });
+
+    it('shows the full panel, not the summary, while nothing has been drawn', async () => {
+      await mountWith([]);
+      expect(root.querySelector('.btc-draw-panel')).not.toBeNull();
+      expect(root.querySelector('.ok-draw-summary')).toBeNull();
     });
   });
 });

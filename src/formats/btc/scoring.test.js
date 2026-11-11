@@ -552,7 +552,7 @@ describe('isOperationQueued', () => {
 
 describe('describeConfirmError', () => {
   it('explains an optimistic-concurrency conflict', () => {
-    expect(describeConfirmError({ code: 'P0002' })).toMatch(/changed elsewhere/);
+    expect(describeConfirmError({ code: 'P0002' })).toMatch(/was changed after you started/);
   });
 
   it.each([
@@ -585,7 +585,7 @@ describe('describeConfirmError', () => {
       code: 'P0001',
       message: 'btc_match_bonuses.fastest_team_id must be a participant of the match',
     });
-    expect(message).toBe('Could not confirm this match. Check the votes and try again.');
+    expect(message).toBe('This match could not be confirmed. Check the cup scores and try again.');
     expect(message).not.toMatch(/btc_match_bonuses|fastest_team_id/);
   });
 

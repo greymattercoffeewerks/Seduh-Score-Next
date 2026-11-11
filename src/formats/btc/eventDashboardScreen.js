@@ -25,7 +25,7 @@ import { publishBtcLive } from './liveSession.js';
 const TAKE_OVER_WAIT_MS = 8000;
 
 const NOT_SENT_MESSAGE =
-  'Not on the displays yet. The request is saved on this device and goes through when the connection is back.';
+  'Not on the displays yet. It is saved on this device and sends when the connection returns.';
 
 // "Sat 14 Mar 2027 · Venue · City", whatever of it the event has.
 function metaLine(event, phaseLabel) {
@@ -148,7 +148,7 @@ export async function mountBtcEventDashboardScreen(
       focusAfterRender = '#btc-event-dashboard-heading';
     } catch (err) {
       loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     loading = false;

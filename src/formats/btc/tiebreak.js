@@ -58,7 +58,7 @@ export function validateTiebreak({ winnerTeamId, reason, teamIds }) {
   }
   const checked = checkReason(reason);
   if (!checked.ok && checked.kind === 'empty') {
-    return { field: 'reason', message: 'Give a reason, so the decision can be explained later.' };
+    return { field: 'reason', message: 'Type a reason. It is kept with the event.' };
   }
   if (!checked.ok) {
     return {
@@ -85,19 +85,20 @@ export async function recordTiebreak(orgId, matchId, winnerTeamId, reason, clien
 const REFUSALS = {
   bracket_advanced: {
     message:
-      "That team's next-round match has already been created. Remove that match first, then change the tie-break.",
+      'The next-round match for this team already exists. Remove that match first, then change the tie-break.',
     reload: false,
   },
   tiebreak_not_tied: {
-    message: 'This match is no longer tied — the page has been refreshed with its current result.',
+    message:
+      'This match is no longer level, so it needs no tie-break. The page now shows its result.',
     reload: true,
   },
   tiebreak_unconfirmed: {
-    message: 'This match has not been confirmed yet — confirm its scores first.',
+    message: "Confirm this match's scores first, then record the tie-break.",
     reload: true,
   },
   tiebreak_match_not_found: {
-    message: 'That match could not be found — the page has been refreshed.',
+    message: 'We could not find this match. Reload the page.',
     reload: true,
   },
 };

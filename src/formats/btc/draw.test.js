@@ -70,7 +70,7 @@ describe('drawRound1', () => {
     const e = refusal(() => drawRound1({ teamIds: teams(19), seed: 's' }));
     expect(e).toBeInstanceOf(DrawError);
     expect(e.code).toBe('odd_team_count');
-    expect(e.message).toMatch(/19 teams, an odd number/);
+    expect(e.message).toMatch(/19 teams is an odd number/);
   });
 
   it('refuses a single team with the at-least-2 message, not the odd-count one', () => {

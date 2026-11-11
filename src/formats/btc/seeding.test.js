@@ -139,7 +139,7 @@ describe('isCutoffTieRefusal', () => {
     ).toBe(true);
     expect(isCutoffTieRefusal({ message: 'a bracket already exists for this event' })).toBe(false);
     expect(isCutoffTieRefusal(null)).toBe(false);
-    expect(CUTOFF_TIE_MESSAGE).toMatch(/8th and 9th/);
+    expect(CUTOFF_TIE_MESSAGE).toMatch(/across the cut line/);
   });
 });
 
@@ -251,7 +251,7 @@ describe('validateSeedingOrder', () => {
   it('requires a reason, trimmed, within the limit', () => {
     expect(validateSeedingOrder({ ...ok, reason: '   ' })).toEqual({
       field: 'reason',
-      message: 'Give a reason, so the decision can be explained later.',
+      message: 'Type a reason. It is kept with the event.',
     });
     expect(validateSeedingOrder({ ...ok, reason: 'x'.repeat(SEEDING_REASON_MAX) })).toBeNull();
     expect(
@@ -307,6 +307,22 @@ describe('refusals', () => {
     expect(refusal.reload).toBe(reload);
     expect(refusal.message.length).toBeGreaterThan(10);
     expect(describeSeedingError({ hint })).toBe(refusal.message);
+  });
+
+  it('words four refusals exactly, each with its next step', () => {
+    const say = (hint) => seedingRefusal({ hint }).message;
+    expect(say('seeding_preliminary_open')).toBe(
+      'Confirm every match in rounds 1 and 2 before putting level teams in order.',
+    );
+    expect(say('seeding_group_incomplete')).toBe(
+      'Another team is now level with this group. Put all the level teams in order.',
+    );
+    expect(say('seeding_group_invalid')).toBe(
+      'We could not find those teams. The page is up to date. Try again.',
+    );
+    expect(say('seeding_event_not_found')).toBe(
+      'We could not find this event. Check you are signed in to the right organisation.',
+    );
   });
 
   it('keys on the hint, never on the wording, and falls back to the generic message', () => {

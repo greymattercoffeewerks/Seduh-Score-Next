@@ -22,7 +22,10 @@ import { listTeams } from './teams.js';
 import { listJudges } from './judges.js';
 import { countryName } from '../../core/country.js';
 import { judgeCountryConflicts } from './countryConflicts.js';
-import { teamLabel } from './words.js';
+import { teamLabel, teamLabelNode } from './words.js';
+import { renderGroupedMatchList } from '../../core/groupedMatchList.js';
+import { canRemoveMatch, matchScoreText, matchStatusView, missingTime } from './matchList.js';
+import { renderDrawSummary, showDrawSummary } from './drawSummary.js';
 import { validateMatchDraft, createMatch, listMatches, removeMatch } from './matches.js';
 import { newSeed } from '../../core/seededShuffle.js';
 import { DrawError } from './draw.js';
@@ -69,6 +72,11 @@ export async function mountMatchesScreen(
     scoredRounds: new Set(), // rounds the database refused to redraw because something in them is scored
     listStale: false, // a write succeeded but the matches could not be re-read
     drawnRounds: new Set(), // rounds with a draw record in the database (create_btc_round refuses these)
+    drawRecords: new Map(), // round -> { mode, seed } from those records, for the summary card
+    scores: null, // match id -> btc_match_scores row; null when they could not be read (then Remove is not offered)
+    panelOpen: false, // the organiser asked for the full Draw panel although rounds are drawn
+    roundOverrides: new Map(), // round -> collapsed, the organiser's own choice (a finished round starts collapsed)
+    handOpen: false, // the "Add a match by hand" section
     avoid: true,
     draw: null,
     refusal: null,
@@ -80,7 +88,7 @@ export async function mountMatchesScreen(
     formError: null,
     busy: false,
     toastMessage: null,
-    pendingFocus: null, // null | 'heading' | 'toast' — see setupScreen.js's own comment
+    pendingFocus: null, // null | 'heading' | 'toast' | 'draw-panel' | 'draw-open' — see setupScreen.js's own comment
   };
   let toastTimer;
 
@@ -114,7 +122,7 @@ export async function mountMatchesScreen(
   }
 
   async function loadPersisted() {
-    const [event, teams, judges, matches, standings, drawnRounds] = await Promise.all([
+    const [event, teams, judges, matches, standings, drawRows, scoreRows] = await Promise.all([
       findEvent(eventId, client),
       listTeams(eventId, client),
       listJudges(eventId, client),
@@ -127,33 +135,59 @@ export async function mountMatchesScreen(
       // database with nothing on screen. A failed read just means that case is learned from the refusal instead.
       client
         .from('btc_round_draws')
-        .select('prelim_round')
+        .select('prelim_round, mode, seed')
         .eq('event_id', eventId)
-        .then(({ data, error }) => (error ? [] : (data ?? []).map((row) => row.prelim_round)))
+        .then(({ data, error }) => (error ? [] : (data ?? [])))
         .catch(() => []),
+      // Who has scores, and the confirmed totals the rows show. Advisory: a failed read must not break the screen, but
+      // then "no scores" is unproven, so Remove is not offered (matchList.js canRemoveMatch).
+      client
+        .from('btc_match_scores')
+        .select('match_id, status, team1_tokens, team2_tokens, team1_total, team2_total')
+        .eq('event_id', eventId)
+        .then(({ data, error }) => (error ? null : (data ?? [])))
+        .catch(() => null),
     ]);
-    return { event, teams, judges, matches, standings, drawnRounds: new Set(drawnRounds) };
+    return {
+      event,
+      teams,
+      judges,
+      matches,
+      standings,
+      drawnRounds: new Set(drawRows.map((row) => row.prelim_round)),
+      drawRecords: new Map(
+        drawRows.map((row) => [row.prelim_round, { mode: row.mode, seed: row.seed }]),
+      ),
+      scores: scoreRows === null ? null : new Map(scoreRows.map((row) => [row.match_id, row])),
+    };
+  }
+
+  function applyPersisted(persisted) {
+    Object.assign(state, {
+      event: persisted.event,
+      teams: persisted.teams,
+      judges: persisted.judges,
+      matches: persisted.matches,
+      standings: persisted.standings,
+      drawnRounds: persisted.drawnRounds,
+      drawRecords: persisted.drawRecords,
+      scores: persisted.scores,
+      listStale: false,
+    });
   }
 
   async function attemptLoad() {
     state.loading = true;
     render();
     try {
-      const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
-      state.event = persisted.event;
-      state.teams = persisted.teams;
-      state.judges = persisted.judges;
-      state.matches = persisted.matches;
-      state.standings = persisted.standings;
-      state.drawnRounds = persisted.drawnRounds;
-      state.listStale = false;
+      applyPersisted(await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS));
       state.loadFailedMessage = null;
       state.round = defaultRound(state.matches);
       rebuildDraw();
       state.pendingFocus = 'heading';
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;
@@ -292,16 +326,7 @@ export async function mountMatchesScreen(
   // Re-reads everything the draw depends on; a failed read keeps what is on screen.
   async function reloadPersisted() {
     try {
-      const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
-      Object.assign(state, {
-        event: persisted.event,
-        teams: persisted.teams,
-        judges: persisted.judges,
-        matches: persisted.matches,
-        standings: persisted.standings,
-        drawnRounds: persisted.drawnRounds,
-        listStale: false,
-      });
+      applyPersisted(await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS));
     } catch {
       // keep what is on screen
     }
@@ -331,6 +356,8 @@ export async function mountMatchesScreen(
       // the server cleared it, so the screen does too even when the re-read failed (it would keep the old matches)
       state.matches = state.matches.filter((m) => roundOf(m.match) !== round);
       state.drawnRounds = new Set([...state.drawnRounds].filter((r) => r !== round));
+      state.drawRecords = new Map([...state.drawRecords].filter(([r]) => r !== round));
+      state.panelOpen = true; // a cleared round is drawn again from the full panel
       state.scoredRounds = new Set([...state.scoredRounds].filter((r) => r !== round));
       requestLivePublish(false);
       state.round = round;
@@ -393,6 +420,11 @@ export async function mountMatchesScreen(
       // the round is written from here on: whatever happens next must not read as a failed create
       // its draw record now exists: a later Remove of every match must not make the round look drawable again
       state.drawnRounds = new Set([...state.drawnRounds, draw.round]);
+      state.drawRecords = new Map([
+        ...state.drawRecords,
+        [draw.round, { mode: recordMode(draw), seed: recordSeed(draw) }],
+      ]);
+      state.panelOpen = false; // the new round shows as the summary card
       requestLivePublish(false);
       toast = `Round ${draw.round} created: ${draw.pairs.length} matches.`;
       state.seedTyped = null;
@@ -414,16 +446,7 @@ export async function mountMatchesScreen(
       if (roundRefusal(err)?.reload || err?.timedOut) {
         // the page is out of date (round already drawn, event gone): refresh it, then say why
         try {
-          const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
-          Object.assign(state, {
-            event: persisted.event,
-            teams: persisted.teams,
-            judges: persisted.judges,
-            matches: persisted.matches,
-            standings: persisted.standings,
-            drawnRounds: persisted.drawnRounds,
-            listStale: false,
-          });
+          applyPersisted(await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS));
         } catch {
           // keep what is on screen; the message below still says what happened
         }
@@ -525,8 +548,8 @@ export async function mountMatchesScreen(
       // deliberate, not an oversight (found worth calling out in review,
       // code-reviewer): there's no per-row inline-error slot to put a
       // failed-delete message next to the way the create form has one next
-      // to its own fields, so the same toast path renderMatchList's success
-      // case already uses is the right one for this handler's failure case
+      // to its own fields, so the same toast handleRemoveMatch's own success
+      // branch uses is the right one for this handler's failure case
       // too.
       showToast(describeError(err));
     }
@@ -668,70 +691,103 @@ export async function mountMatchesScreen(
     form.addEventListener('submit', handleCreateMatch);
 
     return el('div', { className: 'card btc-match-form-card' }, [
-      el('h2', { text: 'Create a preliminary match' }),
+      el('h2', { text: 'New match' }),
       form,
     ]);
   }
 
-  function renderMatchRow({ match, judgeIds }) {
-    const judgeNames = judgeIds.map(judgeName).join(', ');
-    const scoreLink = el('a', {
+  // One row of the grouped list (core/groupedMatchList.js): what BTC says about a match. Score or View is the one
+  // action; Remove only before scoring starts (Q7, matchList.js canRemoveMatch).
+  function matchRowView({ match, judgeIds }, indexInRound) {
+    const team1 = state.teams.find((t) => t.id === match.team1_id);
+    const team2 = state.teams.find((t) => t.id === match.team2_id);
+    const names = `${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`;
+    const score = state.scores?.get(match.id);
+    const confirmed = match.status === 'confirmed';
+    const action = el('a', {
       className: 'btn btn-outline tap-target',
-      text: 'Score',
+      text: confirmed ? 'View' : 'Score',
       attrs: {
         href: `#/events/${eventId}/btc/matches/${match.id}/scoring`,
-        'aria-label': `Score ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`,
+        'aria-label': `${confirmed ? 'View' : 'Score'} ${names}`,
       },
     });
-    const removeButton = el('button', {
-      className: 'btn btn-outline tap-target',
-      text: 'Remove',
-      attrs: {
-        type: 'button',
-        'aria-label': `Remove ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`,
-        'data-focus-key': `remove-match-${match.id}`,
-      },
-    });
-    setBusyDisabled(removeButton, state.busy);
-    removeButton.addEventListener('click', () => handleRemoveMatch(match));
-    return el('li', {}, [
-      el('div', { className: 'btc-match-info' }, [
-        el('span', {
-          className: 'btc-match-teams',
-          text: `${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`,
-        }),
-        el('span', { className: 'stage-meta', text: `Judges: ${judgeNames}` }),
-      ]),
-      el('div', { className: 'btc-match-actions' }, [scoreLink, removeButton]),
-    ]);
+    const actions = [action];
+    if (canRemoveMatch(match, score, state.scores !== null)) {
+      const removeButton = el('button', {
+        className: 'btn btn-outline tap-target',
+        text: 'Remove',
+        attrs: {
+          type: 'button',
+          'aria-label': `Remove ${names}`,
+          'data-focus-key': `remove-match-${match.id}`,
+        },
+      });
+      setBusyDisabled(removeButton, state.busy);
+      removeButton.addEventListener('click', () => handleRemoveMatch(match));
+      actions.push(removeButton);
+    }
+    const meta = [`Judges: ${judgeIds.map(judgeName).join(', ')}`];
+    if (missingTime(match)) meta.push('No finish time');
+    return {
+      number: indexInRound + 1,
+      sides: [
+        team1 ? teamLabelNode(team1) : 'Unknown team',
+        team2 ? teamLabelNode(team2) : 'Unknown team',
+      ],
+      score: matchScoreText(match, score),
+      meta: meta.join(' · '),
+      status: matchStatusView(match),
+      actions,
+    };
   }
 
-  // Grouped by round; a match with no round number reads as round 1 (Build A). Each group is its own list.
+  // Grouped by round (core/groupedMatchList.js); a match with no round number reads as round 1 (Build A). A finished
+  // round starts collapsed to its header; the organiser's own open/close choice is kept in state.roundOverrides.
   function renderMatchList() {
-    if (state.matches.length === 0) {
-      return el('p', { className: 'stage-meta', text: 'No preliminary matches created yet.' });
+    const indexInRound = new Map();
+    const seen = new Map();
+    for (const m of state.matches) {
+      const r = roundOf(m.match);
+      const n = seen.get(r) ?? 0;
+      indexInRound.set(m.match.id, n);
+      seen.set(r, n + 1);
     }
-    const rounds = [...new Set(state.matches.map((m) => roundOf(m.match)))].sort((a, b) => a - b);
-    return el(
-      'div',
-      { className: 'btc-round-groups' },
-      rounds.map((round) =>
-        el('section', { className: 'btc-round-group' }, [
-          el('h3', { text: `Round ${round}` }),
-          el(
-            'ul',
-            { className: 'roster-list', attrs: { 'aria-label': `Round ${round} matches` } },
-            state.matches.filter((m) => roundOf(m.match) === round).map(renderMatchRow),
-          ),
-        ]),
-      ),
-    );
+    return renderGroupedMatchList({
+      items: state.matches,
+      groupKey: (m) => roundOf(m.match),
+      groupLabel: (round) => `Round ${round}`,
+      rowView: (m) => matchRowView(m, indexInRound.get(m.match.id)),
+      overrides: state.roundOverrides,
+      onToggle: (round, collapsed) => {
+        state.roundOverrides = new Map([...state.roundOverrides, [round, collapsed]]);
+        render();
+      },
+      emptyText: 'No matches yet. Draw round 1 to create them.',
+      idPrefix: 'btc-round',
+    });
+  }
+
+  // The hand-entry form, kept as the correction path (a collapsed section below the rounds).
+  function renderHandSection() {
+    const details = el('details', { className: 'card btc-hand-section' }, [
+      el('summary', {
+        className: 'btc-hand-summary',
+        text: 'Add a match by hand (for corrections)',
+      }),
+      renderCreateForm(),
+    ]);
+    details.open = state.handOpen;
+    details.addEventListener('toggle', () => {
+      state.handOpen = details.open;
+    });
+    return details;
   }
 
   function renderLoading() {
     root.appendChild(
       el('section', { className: 'screen-container btc-matches-screen' }, [
-        el('h1', { text: 'BTC Preliminary Matches' }),
+        el('h1', { text: 'Matches' }),
         el('div', {
           className: 'screen-feedback',
           text: 'Loading matches…',
@@ -756,7 +812,7 @@ export async function mountMatchesScreen(
     retryButton.addEventListener('click', () => attemptLoad());
     root.appendChild(
       el('section', { className: 'screen-container btc-matches-screen' }, [
-        el('h1', { text: 'BTC Preliminary Matches' }),
+        el('h1', { text: 'Matches' }),
         feedback,
         retryButton,
       ]),
@@ -786,9 +842,7 @@ export async function mountMatchesScreen(
         );
       }
 
-      container.appendChild(
-        el('h1', { text: 'BTC Preliminary Matches', attrs: { tabindex: '-1' } }),
-      );
+      container.appendChild(el('h1', { text: 'Matches', attrs: { tabindex: '-1' } }));
 
       if (state.teams.length < 2) {
         container.appendChild(
@@ -805,34 +859,72 @@ export async function mountMatchesScreen(
           }),
         );
       } else {
-        container.appendChild(
-          renderDrawPanel({
-            state: {
-              round: state.round,
-              round2Mode: state.round2Mode,
-              seedInput: state.seedTyped ?? state.seedInput,
-              avoid: state.avoid,
-              draw: state.draw,
-              refusal: state.refusal,
-              swapPick: state.swapPick,
-              status: state.drawStatus,
-              error: state.drawError,
-              errorFresh: state.drawErrorFresh,
-            },
-            teams: state.teams,
-            judges: state.judges,
-            busy: state.busy,
-            statusOf: (round) =>
-              roundStatus(round, state.matches, deadRounds(), state.scoredRounds),
-            on: drawHandlers,
-          }),
-        );
-        container.appendChild(renderCreateForm());
+        const summaryArgs = {
+          matches: state.matches,
+          deadRounds: deadRounds(),
+          scoredRounds: state.scoredRounds,
+        };
+        if (showDrawSummary({ ...summaryArgs, panelOpen: state.panelOpen })) {
+          container.appendChild(
+            renderDrawSummary({
+              matches: state.matches,
+              records: state.drawRecords,
+              busy: state.busy,
+              onOpen: () => {
+                state.panelOpen = true;
+                state.pendingFocus = 'draw-panel';
+                render();
+              },
+            }),
+          );
+        } else {
+          // the panel was opened from the summary: a way back to the summary while nothing is waiting to be drawn
+          if (showDrawSummary({ ...summaryArgs, panelOpen: false })) {
+            const close = el('button', {
+              className: 'btn btn-outline tap-target',
+              text: 'Close the draw panel',
+              attrs: { type: 'button', 'data-focus-key': 'draw-close' },
+            });
+            setBusyDisabled(close, state.busy);
+            close.addEventListener('click', () => {
+              if (state.busy) return;
+              state.panelOpen = false;
+              state.pendingFocus = 'draw-open';
+              render();
+            });
+            container.appendChild(close);
+          }
+          container.appendChild(
+            renderDrawPanel({
+              state: {
+                round: state.round,
+                round2Mode: state.round2Mode,
+                seedInput: state.seedTyped ?? state.seedInput,
+                avoid: state.avoid,
+                draw: state.draw,
+                refusal: state.refusal,
+                swapPick: state.swapPick,
+                status: state.drawStatus,
+                error: state.drawError,
+                errorFresh: state.drawErrorFresh,
+              },
+              teams: state.teams,
+              judges: state.judges,
+              busy: state.busy,
+              statusOf: (round) =>
+                roundStatus(round, state.matches, deadRounds(), state.scoredRounds),
+              on: drawHandlers,
+            }),
+          );
+        }
       }
 
       container.appendChild(
         el('div', { className: 'card' }, [el('h2', { text: 'Matches' }), renderMatchList()]),
       );
+      if (state.teams.length >= 2 && state.judges.length >= 3) {
+        container.appendChild(renderHandSection());
+      }
 
       let toastNode = null;
       if (state.toastMessage) {
@@ -852,6 +944,16 @@ export async function mountMatchesScreen(
         const heading = container.querySelector('h1');
         if (heading) {
           heading.focus();
+          return true;
+        }
+      } else if (state.pendingFocus === 'draw-panel' || state.pendingFocus === 'draw-open') {
+        const target =
+          state.pendingFocus === 'draw-panel'
+            ? container.querySelector('[data-field="draw-round-1"]')
+            : container.querySelector('[data-focus-key="draw-open"]');
+        state.pendingFocus = null;
+        if (target) {
+          target.focus();
           return true;
         }
       } else if (state.pendingFocus === 'toast') {

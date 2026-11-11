@@ -13,6 +13,7 @@ import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { publishBtcLive } from './liveSession.js';
+import { btcLinks } from './runSheet.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams } from './teams.js';
 import { listJudges } from './judges.js';
@@ -20,27 +21,12 @@ import {
   BRACKET_ROUND_ORDER,
   BRACKET_ROUND_LABELS,
   validateBracketMatchJudges,
-  generateBracket,
   createBracketMatch,
   fetchBracket,
   bracketMatchIds,
   fetchBracketScores,
 } from './bracket.js';
 import { derivePodium } from './podium.js';
-import {
-  fetchSeedingOrder,
-  fetchPrelimTimes,
-  isMissingSeedingView,
-  seedingTieGroups,
-  blockingGroups,
-  validateSeedingOrder,
-  recordSeedingTiebreak,
-  seedingRefusal,
-  describeSeedingError,
-  isCutoffTieRefusal,
-  CUTOFF_TIE_MESSAGE,
-} from './seeding.js';
-import { renderSeedingTies } from './seedingCard.js';
 import {
   TIEBREAK_REASON_MAX,
   tieState,
@@ -57,8 +43,8 @@ import {
 function matchStatusLabel(match) {
   if (!match) return null;
   if (match.status === 'confirmed') return 'Confirmed';
-  if (match.status === 'scoring') return 'Scoring in progress';
-  return 'Match scheduled — not yet scored';
+  if (match.status === 'scoring') return 'Scoring';
+  return 'Scheduled';
 }
 
 export async function mountBracketScreen(
@@ -78,7 +64,6 @@ export async function mountBracketScreen(
     // after generate/create-match, which cannot produce a confirmed result. Recording a
     // tie-break does move seats and the match row, so that handler reloads both.
     scores: [],
-    generating: false,
     creatingSlotId: null,
     lastClosedSlotId: null,
     draftJudgeIds: [],
@@ -97,23 +82,10 @@ export async function mountBracketScreen(
     draftTiebreakWinner: null,
     draftTiebreakReason: '',
     tiebreakError: null,
-    // The seed order (btc_seeding_order) and the form that orders one group of level teams. Only read
-    // before the bracket exists. The screen still loads where the view does not exist yet (its migration
-    // has not landed: nothing to show), and a read that FAILS is shown as such (seedingReadFailed) with a
-    // way to try again, never as "no ties". An earlier successful read is kept when a later one fails.
-    seedingRows: [],
-    // each team's typed preliminary finish times (btc_prelim_times) for the tie card; null = could not be read
-    prelimTimes: [],
-    seedingReadFailed: false,
     // Said once to a screen reader through the live region below, then cleared.
     announcement: '',
-    seedingGroupKey: null,
-    lastClosedSeedingKey: null,
-    draftSeedingOrder: [],
-    draftSeedingReason: '',
-    seedingError: null,
     // null | 'heading' | 'toast' | 'create-form' | 'create-button' | 'tiebreak-form' |
-    // 'tiebreak-error' | 'tiebreak-button' | 'seeding-form' | 'seeding-error' | 'seeding-button' —
+    // 'tiebreak-error' | 'tiebreak-button' —
     // see setupScreen.js's own comment on this pendingFocus shape.
     pendingFocus: null,
   };
@@ -171,67 +143,6 @@ export async function mountBracketScreen(
     );
   }
 
-  // { rows, times, failed }. `times` is null when the finish times could not be read: that never fails the seed
-  // order, the card just says so. A view that does not exist yet is not a failure (the front end can ship before its
-  // migration reaches the cloud project: the 2026-09-05 incident); anything else is.
-  async function readSeeding() {
-    try {
-      const rows = await fetchSeedingOrder(eventId, client);
-      let times = null;
-      if (rows.some((row) => row.tiedCount > 1)) {
-        try {
-          times = await fetchPrelimTimes(eventId, client);
-        } catch (err) {
-          console.warn('btc: the preliminary finish times could not be read', err);
-        }
-      } else {
-        times = [];
-      }
-      return { rows, times, failed: false };
-    } catch (err) {
-      if (isMissingSeedingView(err)) return { rows: [], times: [], failed: false };
-      console.warn('btc: the seed order could not be read', err);
-      return { rows: null, times: null, failed: true };
-    }
-  }
-
-  // Takes a read into the screen: a failed read keeps what was held. An open form whose group is gone (the
-  // teams stopped being level, or the group changed) is closed rather than left to disagree with the table.
-  function applySeedingRead(read) {
-    if (read.failed) {
-      state.seedingReadFailed = true;
-      return;
-    }
-    clearRefreshNote();
-    state.seedingRows = read.rows;
-    state.prelimTimes = read.times;
-    state.seedingReadFailed = false;
-    if (state.seedingGroupKey) {
-      // The key is only "points-<n>": who is in the group can change under the same numbers (one team
-      // leaves and another joins, or the group grows), and a draft of different members must not outlive it.
-      const group = seedingTieGroups(state.seedingRows).find(
-        (g) => g.key === state.seedingGroupKey,
-      );
-      const draft = state.draftSeedingOrder;
-      const sameMembers =
-        group &&
-        group.teams.length === draft.length &&
-        group.teams.every((team) => draft.includes(team.teamId));
-      if (!sameMembers) resetSeedingDraft();
-    }
-  }
-
-  const OPEN_ORDER_MESSAGE =
-    'Save or cancel the order you have open before generating the bracket.';
-
-  // The client-side gate on Generate: the groups level across the cut-off must be ordered. Not applied while
-  // the order could not be read (what is held may be out of date): the database decides then.
-  function cutoffBlocked() {
-    return (
-      !state.seedingReadFailed && blockingGroups(seedingTieGroups(state.seedingRows)).length > 0
-    );
-  }
-
   async function loadPersisted() {
     const [event, teams, judges, entries] = await Promise.all([
       findEvent(eventId, client),
@@ -242,11 +153,8 @@ export async function mountBracketScreen(
     // Needs the match ids, so it cannot join the Promise.all above. Deliberately NOT
     // degraded on failure: a podium that silently showed "Not decided yet" because its read
     // failed would be a lie, so a failed read fails the load and Retry covers it.
-    const [scores, seeding] = await Promise.all([
-      fetchBracketScores(bracketMatchIds(entries), client),
-      entries.length === 0 ? readSeeding() : { rows: [], times: [], failed: false },
-    ]);
-    return { event, teams, judges, entries, scores, seeding };
+    const scores = await fetchBracketScores(bracketMatchIds(entries), client);
+    return { event, teams, judges, entries, scores };
   }
 
   async function attemptLoad() {
@@ -259,16 +167,12 @@ export async function mountBracketScreen(
       state.judges = persisted.judges;
       state.entries = persisted.entries;
       state.scores = persisted.scores;
-      state.seedingRows = persisted.seeding.rows ?? [];
-      // null (the times could not be read) must stay null: the card says so rather than "no time"
-      state.prelimTimes = persisted.seeding.times === undefined ? [] : persisted.seeding.times;
-      state.seedingReadFailed = persisted.seeding.failed;
       state.loadFailedMessage = null;
       clearRefreshNote();
       state.pendingFocus = 'heading';
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;
@@ -282,40 +186,6 @@ export async function mountBracketScreen(
     publishBtcLive({ event: state.event, takeOver }, handlers).catch((error) => {
       console.error('btc: live-view publish was refused', error);
     });
-  }
-
-  async function handleGenerateBracket() {
-    if (state.generating || state.busy) return;
-    // The card above says why: teams level across the cut-off must be ordered first. Say it here too, in
-    // words, rather than let the database refuse with a message the organiser cannot act on.
-    // An unsaved order is not thrown away by generating: say so and leave focus on the button.
-    if (state.seedingGroupKey) {
-      showToast(OPEN_ORDER_MESSAGE, { focus: false });
-      render();
-      return;
-    }
-    if (cutoffBlocked()) {
-      showToast(CUTOFF_TIE_MESSAGE, { focus: false });
-      render();
-      return;
-    }
-    state.generating = true;
-    render();
-    try {
-      await generateBracket(state.event.org_id, eventId, client);
-      // The bracket exists from here on, whether or not the re-read below succeeds.
-      requestLivePublish(false);
-      state.entries = await fetchBracket(eventId, client);
-      resetSeedingDraft();
-      showToast('Bracket generated.');
-    } catch (err) {
-      // The refusal may mean the order held here is out of date (another device re-confirmed a match):
-      // re-read it, so the card shows what is true, and a form open on a group that no longer exists closes.
-      applySeedingRead(await readSeeding());
-      showToast(isCutoffTieRefusal(err) ? CUTOFF_TIE_MESSAGE : describeError(err));
-    }
-    state.generating = false;
-    render();
   }
 
   function openCreateForm(slotId) {
@@ -386,173 +256,6 @@ export async function mountBracketScreen(
       state.formError = describeError(err);
     }
     state.busy = false;
-    render();
-  }
-
-  // ---- ordering teams that are level in the standings (seeding.js) ----
-
-  function seedingGroup(key) {
-    return seedingTieGroups(state.seedingRows).find((group) => group.key === key) ?? null;
-  }
-
-  function focusByKey(container, key) {
-    const node = container.querySelector(`[data-focus-key="${key}"]`);
-    if (!node) return false;
-    node.focus();
-    return true;
-  }
-
-  function resetSeedingDraft() {
-    if (state.seedingGroupKey) state.lastClosedSeedingKey = state.seedingGroupKey;
-    state.seedingGroupKey = null;
-    state.draftSeedingOrder = [];
-    state.draftSeedingReason = '';
-    state.seedingError = null;
-  }
-
-  function openSeedingForm(group) {
-    if (state.busy || state.generating) return;
-    // Opening another group would silently drop the draft in this one: the card marks those buttons inert,
-    // and this keeps the rule even if one is pressed anyway.
-    if (state.seedingGroupKey && state.seedingGroupKey !== group.key) {
-      showToast('Save or cancel the order you have open first.', { focus: false });
-      render();
-      return;
-    }
-    state.seedingGroupKey = group.key;
-    // A group's teams are already in seed order, which for a group ordered earlier is the order recorded.
-    state.draftSeedingOrder = group.teams.map((team) => team.teamId);
-    state.draftSeedingReason = group.reason ?? '';
-    state.seedingError = null;
-    state.pendingFocus = 'seeding-form';
-    render();
-  }
-
-  function closeSeedingForm() {
-    if (state.busy) return;
-    resetSeedingDraft();
-    state.pendingFocus = 'seeding-button';
-    render();
-  }
-
-  function moveSeedingTeam(teamId, delta) {
-    if (state.busy || state.generating) return;
-    const order = [...state.draftSeedingOrder];
-    const from = order.indexOf(teamId);
-    const to = from + delta;
-    if (from < 0 || to < 0 || to >= order.length) return;
-    [order[from], order[to]] = [order[to], order[from]];
-    state.draftSeedingOrder = order;
-    state.seedingError = null;
-    // Focus follows the pressed team, so nothing else says what changed: say it.
-    const first = seedingGroup(state.seedingGroupKey)?.firstSeed;
-    if (first != null) {
-      const seedOf = (id) => first + order.indexOf(id);
-      state.announcement = `${teamName(order[to])} is now seed ${seedOf(order[to])}, ${teamName(order[from])} is now seed ${seedOf(order[from])}.`;
-    }
-    render();
-  }
-
-  async function handleRecordSeeding(domEvent, group) {
-    domEvent.preventDefault();
-    if (state.busy || state.generating) return;
-    // Everything the save needs is captured NOW; nothing below reads the draft after an await.
-    const orderedTeamIds = [...state.draftSeedingOrder];
-    const reason = state.draftSeedingReason;
-    const hadBlocking = blockingGroups(seedingTieGroups(state.seedingRows)).length > 0;
-    const invalid = validateSeedingOrder({
-      orderedTeamIds,
-      groupTeamIds: group.teams.map((team) => team.teamId),
-      reason,
-    });
-    if (invalid) {
-      state.seedingError = invalid;
-      state.pendingFocus = 'seeding-error';
-      render();
-      return;
-    }
-    state.busy = true;
-    state.seedingError = null;
-    state.announcement = 'Saving the order…';
-    render();
-    try {
-      await raceTimeout(
-        recordSeedingTiebreak(state.event.org_id, eventId, orderedTeamIds, reason, client),
-        DEFAULT_LOAD_TIMEOUT_MS,
-      );
-    } catch (err) {
-      if (err.timedOut) {
-        // The save may or may not have landed: say so, and leave the draft to try again (a re-record
-        // replaces, so trying again is safe).
-        state.seedingError = {
-          field: 'form',
-          message: 'Could not confirm the save. Check your connection, then try again.',
-        };
-        state.pendingFocus = 'seeding-error';
-        // Look at what is actually saved before the form is handed back, so a late save cannot be
-        // mistaken for none (and a second save made on top of it).
-        applySeedingRead(await readSeeding());
-        state.busy = false;
-        render();
-        return;
-      }
-      const refusal = seedingRefusal(err);
-      if (refusal?.reload) {
-        // The screen is out of date (the teams may no longer be level, or the bracket may exist): refresh
-        // it, close the form and say why in the toast, which is always rendered.
-        try {
-          state.entries = await fetchBracket(eventId, client);
-        } catch {
-          // The refusal text already tells the person what happened; the next action reloads.
-        }
-        applySeedingRead(
-          state.entries.length === 0 ? await readSeeding() : { rows: [], times: [], failed: false },
-        );
-        resetSeedingDraft();
-        showToast(refusal.message);
-      } else {
-        state.seedingError = { field: 'form', message: describeSeedingError(err) };
-        state.pendingFocus = 'seeding-error';
-      }
-      state.busy = false;
-      render();
-      return;
-    }
-    // The order IS saved from here on. Re-read the seed order; if that read fails, say the save worked.
-    const read = await readSeeding();
-    applySeedingRead(read);
-    resetSeedingDraft();
-    const allOrdered =
-      !read.failed && blockingGroups(seedingTieGroups(state.seedingRows)).length === 0;
-    if (read.failed) {
-      setRefreshNote('Order saved, but the page could not refresh. Reload to see the standings.');
-    } else {
-      showToast(
-        hadBlocking && allOrdered
-          ? 'Order saved. Every team level across the cut-off is ordered: you can generate the bracket.'
-          : 'Order saved.',
-      );
-      state.pendingFocus = 'seeding-button';
-    }
-    state.busy = false;
-    render();
-  }
-
-  async function retrySeeding() {
-    if (state.busy || state.generating) return;
-    state.busy = true;
-    render();
-    applySeedingRead(await readSeeding());
-    state.busy = false;
-    const found = seedingTieGroups(state.seedingRows).length;
-    showToast(
-      state.seedingReadFailed
-        ? 'Still could not check. Try again.'
-        : found > 0
-          ? `Checked: ${found} ${found === 1 ? 'group' : 'groups'} of level teams.`
-          : 'Checked: no teams are level.',
-      { focus: false },
-    );
     render();
   }
 
@@ -649,7 +352,7 @@ export async function mountBracketScreen(
     if (refreshed) showToast(`${teamName(winnerTeamId)} goes through.`);
     else {
       setRefreshNote(
-        `${teamName(winnerTeamId)} goes through \u2014 saved, but the page could not refresh. Reload to see the bracket.`,
+        `${teamName(winnerTeamId)} goes through. Saved, but the page did not refresh: reload to see the bracket.`,
       );
     }
     // Focus the slot's button and let the live-region toast speak: a focused toast would be
@@ -779,7 +482,7 @@ export async function mountBracketScreen(
         el('p', {
           id: hintId,
           className: 'stage-meta btc-tiebreak-hint',
-          text: "This reason may be shown on the public results page and the live display. Keep it factual: no personal details, and don't repeat scores.",
+          text: 'The public results page and live display may show this reason. Keep it factual. No personal details. Do not repeat scores.',
         }),
         el('div', { className: 'btc-bracket-form-actions' }, [submitButton, cancelButton]),
       ].filter(Boolean),
@@ -798,7 +501,7 @@ export async function mountBracketScreen(
     const note =
       tie === 'decided'
         ? `Level at ${each}. Tie-break: ${teamName(match.tiebreak_winner_team_id)} goes through. Reason: ${match.tiebreak_reason}`
-        : `Tied at ${each}. Nobody advances until you record which team goes through.`;
+        : `Level at ${each}. Nobody advances until you record which team goes through.`;
     const children = [el('p', { className: 'stage-meta btc-tiebreak-note', text: note })];
 
     if (state.tiebreakSlotId === slot.id) {
@@ -813,7 +516,7 @@ export async function mountBracketScreen(
           'data-focus-key': `tiebreak-open-${slot.id}`,
         },
       });
-      setBusyDisabled(button, state.busy || state.generating);
+      setBusyDisabled(button, state.busy);
       button.addEventListener('click', () => openTiebreakForm(entry));
       children.push(button);
     }
@@ -857,7 +560,7 @@ export async function mountBracketScreen(
             'data-focus-key': `create-slot-${slot.id}`,
           },
         });
-        setBusyDisabled(createButton, state.busy || state.generating);
+        setBusyDisabled(createButton, state.busy);
         createButton.addEventListener('click', () => openCreateForm(slot.id));
         children.push(createButton);
       }
@@ -973,7 +676,7 @@ export async function mountBracketScreen(
     if (podium.places.length === 0) return null;
     const placeText = (place) => {
       if (place.state === 'decided') return place.teamName;
-      if (place.state === 'tied') return 'Tied — not decided';
+      if (place.state === 'tied') return 'Level: not decided';
       return 'Not decided yet';
     };
     // A description list: each place's name (dt) is paired with its team (dd), so a screen
@@ -1005,42 +708,22 @@ export async function mountBracketScreen(
     ]);
   }
 
-  function renderGenerateCard() {
-    const generateButton = el('button', {
-      className: 'btn btn-primary tap-target',
-      text: state.generating ? 'Generating…' : 'Generate bracket',
-      attrs: { type: 'button', 'data-focus-key': 'generate-bracket' },
-    });
-    setBusyDisabled(generateButton, state.generating || state.busy);
-    if (state.seedingGroupKey) {
-      // Marked, not disabled (focus stays); pressing it says why in words (handleGenerateBracket).
-      generateButton.setAttribute('aria-disabled', 'true');
-      generateButton.setAttribute('aria-describedby', 'btc-generate-open-order');
-    } else if (cutoffBlocked()) {
-      generateButton.setAttribute('aria-disabled', 'true');
-      generateButton.setAttribute('aria-describedby', 'btc-seeding-blocking');
-    }
-    generateButton.addEventListener('click', () => handleGenerateBracket());
-
-    return el(
-      'div',
-      { className: 'card' },
-      [
-        el('h2', { text: 'Bracket' }),
-        el('p', {
-          className: 'stage-meta',
-          text: 'Every preliminary match must be confirmed and at least 8 teams must have a result before the bracket can be generated. If teams are level across the 8th and 9th places they must be put in order first.',
-        }),
-        state.seedingGroupKey
-          ? el('p', {
-              id: 'btc-generate-open-order',
-              className: 'stage-meta',
-              text: OPEN_ORDER_MESSAGE,
-            })
-          : null,
-        generateButton,
-      ].filter(Boolean),
-    );
+  // Until the bracket exists the cut is settled in Standings (Organiser UX S4): the level teams, the lock button and
+  // the committee's sign-off sheet are there. This screen only points the way.
+  function renderNoBracketCard() {
+    const links = btcLinks(eventId);
+    return el('div', { className: 'card' }, [
+      el('h2', { text: 'Bracket' }),
+      el('p', {
+        className: 'stage-meta',
+        text: 'No bracket yet. Lock the top 8 in Standings to make it.',
+      }),
+      el('a', {
+        className: 'btn btn-primary tap-target',
+        text: 'Go to the cut in Standings',
+        attrs: { href: links.cut },
+      }),
+    ]);
   }
 
   function renderLoading() {
@@ -1112,34 +795,7 @@ export async function mountBracketScreen(
       container.appendChild(el('h1', { text: 'Bracket', attrs: { tabindex: '-1' } }));
 
       if (state.entries.length === 0) {
-        const seedingGroups = seedingTieGroups(state.seedingRows);
-        const seedingCard = renderSeedingTies({
-          groups: seedingGroups,
-          form: state.seedingGroupKey
-            ? {
-                groupKey: state.seedingGroupKey,
-                orderedTeamIds: state.draftSeedingOrder,
-                reason: state.draftSeedingReason,
-                error: state.seedingError,
-              }
-            : null,
-          busy: state.busy || state.generating,
-          teamName,
-          readFailed: state.seedingReadFailed,
-          times: state.prelimTimes,
-          handlers: {
-            onOpen: openSeedingForm,
-            onMove: moveSeedingTeam,
-            onReasonInput: (value) => {
-              state.draftSeedingReason = value;
-            },
-            onSubmit: handleRecordSeeding,
-            onCancel: closeSeedingForm,
-            onRetry: retrySeeding,
-          },
-        });
-        if (seedingCard) container.appendChild(seedingCard);
-        container.appendChild(renderGenerateCard());
+        container.appendChild(renderNoBracketCard());
       } else {
         const podiumCard = renderPodium();
         if (podiumCard) container.appendChild(podiumCard);
@@ -1193,15 +849,6 @@ export async function mountBracketScreen(
           heading.focus();
           return true;
         }
-      } else if (state.pendingFocus === 'seeding-form') {
-        state.pendingFocus = null;
-        if (focusByKey(container, `seeding-form-heading-${state.seedingGroupKey}`)) return true;
-      } else if (state.pendingFocus === 'seeding-error') {
-        state.pendingFocus = null;
-        if (focusByKey(container, `seeding-error-${state.seedingGroupKey}`)) return true;
-      } else if (state.pendingFocus === 'seeding-button') {
-        state.pendingFocus = null;
-        if (focusByKey(container, `seeding-open-${state.lastClosedSeedingKey}`)) return true;
       } else if (state.pendingFocus === 'tiebreak-error') {
         state.pendingFocus = null;
         const errorNode = container.querySelector(

@@ -202,7 +202,13 @@ describe('Draw a round panel', () => {
     q('[data-field="draw-seed"]').value = text;
     click(q('[data-focus-key="draw-use-seed"]'));
   }
+  // Once a round is drawn the panel is a summary card; these tests drive the full panel, so open it first.
+  const openPanel = () => {
+    const open = q('[data-focus-key="draw-open"]');
+    if (open) click(open);
+  };
   const choose = (field) => {
+    openPanel();
     const radio = q(`[data-field="${field}"]`);
     radio.checked = true;
     radio.dispatchEvent(new Event('change', { bubbles: true }));
@@ -240,7 +246,7 @@ describe('Draw a round panel', () => {
 
   it('refuses 19 teams in words and offers no Create', async () => {
     await mount(dbWith({ teams: teamRows(19), judges: SIX_JUDGES }));
-    expect(root.textContent).toContain('There are 19 teams, an odd number.');
+    expect(root.textContent).toContain('19 teams is an odd number, so the draw cannot run.');
     expect(cards()).toHaveLength(0);
     expect(createButton()).toBeNull();
   });
@@ -273,6 +279,8 @@ describe('Draw a round panel', () => {
           matches: [round1('confirmed')[0], match('r1b', null, 'pending', 't03', 't04')],
         }),
       );
+      expect(q('.ok-draw-summary')).not.toBeNull(); // round 1 is drawn and round 2 cannot be yet: the summary card
+      openPanel();
       expect(q('[data-field="draw-round-1"]').checked).toBe(false); // round 1 is drawn, so the panel opens on round 2
       expect(q('[data-field="draw-round-2"]').checked).toBe(true);
       expect(root.textContent).toContain(
@@ -546,13 +554,18 @@ describe('Draw a round panel', () => {
         rows.map((r) => r.id),
       );
       // the list now has the round, the panel has moved on to round 2 (not yet confirmed)
-      expect(root.querySelector('.btc-round-group h3').textContent).toBe('Round 1');
-      expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(10);
-      expect(root.textContent).toContain(
-        'Round 2 can be drawn once every round 1 match is confirmed',
+      expect(root.querySelector('.ok-group-heading').textContent).toBe('Round 1');
+      expect(root.querySelectorAll('.ok-row')).toHaveLength(10);
+      // nothing is left to draw yet, so the panel becomes the compact summary with the way back
+      expect(q('.ok-draw-summary').textContent).toContain(
+        'Round 1: 10 matches, random draw, seed go-live',
       );
       // focus goes to the confirmation, not to a button that no longer exists
       expect(document.activeElement.textContent).toBe('Round 1 created: 10 matches.');
+      openPanel();
+      expect(root.textContent).toContain(
+        'Round 2 can be drawn once every round 1 match is confirmed',
+      );
       // the display refreshes only if the event is already live
       expect(publishBtcLive).toHaveBeenCalledTimes(1);
       expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(false);
@@ -560,14 +573,14 @@ describe('Draw a round panel', () => {
 
     it('shows each database refusal in words, keyed on its hint', async () => {
       const cases = [
-        ['btc_round_incomplete', 'Every team must play exactly once'],
-        ['btc_round_matches_invalid', 'not valid: check the teams'],
-        ['btc_round_bracket_exists', 'bracket has been generated'],
-        ['btc_prior_round_open', 'earlier round has to be drawn and fully confirmed'],
-        ['btc_round_exists', 'already been drawn'],
-        ['btc_round_event_not_found', 'event could not be found'],
-        ['btc_round_seed_mode', 'needs its seed'],
-        ['btc_round_invalid', 'round number or draw mode is not valid'],
+        ['btc_round_incomplete', 'Each team must play exactly once'],
+        ['btc_round_matches_invalid', 'A match is not valid. Check its teams'],
+        ['btc_round_bracket_exists', 'The top 8 are locked'],
+        ['btc_prior_round_open', 'The earlier round is not finished'],
+        ['btc_round_exists', 'is already drawn'],
+        ['btc_round_event_not_found', 'We could not find this event'],
+        ['btc_round_seed_mode', 'needs a seed'],
+        ['btc_round_invalid', 'round number or draw type is not valid'],
       ];
       for (const [hint, words] of cases) {
         root.innerHTML = '';
@@ -631,10 +644,13 @@ describe('Draw a round panel', () => {
           ],
         }),
       );
-      const groups = [...root.querySelectorAll('.btc-round-group')];
+      const groups = [...root.querySelectorAll('.ok-group')];
       expect(groups.map((g) => g.querySelector('h3').textContent)).toEqual(['Round 1', 'Round 2']);
-      expect(groups[0].querySelectorAll('li')).toHaveLength(1);
-      expect(groups[1].querySelectorAll('li')).toHaveLength(1);
+      // round 1 is finished, so it shows only its header; round 2 is open
+      expect(groups[0].dataset.collapsed).toBe('true');
+      expect(groups[0].querySelector('.ok-group-count').textContent).toBe('1 of 1 confirmed');
+      expect(groups[0].querySelector('button').textContent).toBe('Show 1 match');
+      expect(groups[1].querySelectorAll('.ok-row')).toHaveLength(1);
     });
   });
   describe('review fixes', () => {
@@ -677,7 +693,7 @@ describe('Draw a round panel', () => {
       });
       click(createButton());
       await flush();
-      expect(q('[role="alert"]').textContent).toContain('already been drawn');
+      expect(q('[role="alert"]').textContent).toContain('is already drawn');
       expect(root.textContent).toContain('its draw record is still in the database');
       expect(createButton()).toBeNull();
       expect(client.rpcCalls).toHaveLength(1);
@@ -774,10 +790,10 @@ describe('Draw a round panel', () => {
       });
       click(createButton());
       await flush();
-      expect(root.querySelector('.btc-round-group h3').textContent).toBe('Round 1');
+      expect(root.querySelector('.ok-group-heading').textContent).toBe('Round 1');
       expect(q('[data-field="draw-round-2"]').checked).toBe(true);
       expect(cards()).toHaveLength(2); // round 2 is now offered, from the refreshed matches
-      expect(q('[role="alert"]').textContent).toContain('already been drawn');
+      expect(q('[role="alert"]').textContent).toContain('is already drawn');
     });
 
     it('refuses to offer a round again after its matches are all removed in the same visit', async () => {
@@ -790,7 +806,7 @@ describe('Draw a round panel', () => {
         click(root.querySelector('[data-focus-key^="remove-match-"]'));
         await flush();
       }
-      expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(0);
+      expect(root.querySelectorAll('.ok-row')).toHaveLength(0);
       expect(root.textContent).toContain('its draw record is still in the database');
       expect(createButton()).toBeNull();
     });
@@ -863,7 +879,7 @@ describe('Draw a round panel', () => {
           'redraw_btc_round',
           { p_org_id: 'org1', p_event_id: 'ev1', p_prelim_round: 1 },
         ]);
-        expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(0);
+        expect(root.querySelectorAll('.ok-row')).toHaveLength(0);
         expect(cards()).toHaveLength(2); // round 1 can be drawn again
         expect(document.activeElement.textContent).toBe('Round 1 cleared. Draw it again below.');
         expect(publishBtcLive).toHaveBeenCalledTimes(1);
@@ -932,9 +948,7 @@ describe('Draw a round panel', () => {
         vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
         await flush();
-        expect(q('[role="alert"]').textContent).toContain(
-          'has been scored, so it cannot be redrawn',
-        );
+        expect(q('[role="alert"]').textContent).toContain('is scored, so it cannot be redrawn');
         expect(q('[role="alert"]').textContent).not.toContain('RAW');
         expect(isBlocked(redrawButton())).toBe(true); // the refreshed page now knows
       });
@@ -953,7 +967,7 @@ describe('Draw a round panel', () => {
         vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
         await flush();
-        expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(0);
+        expect(root.querySelectorAll('.ok-row')).toHaveLength(0);
         expect(cards()).toHaveLength(2);
         expect(redrawButton()).toBeNull();
       });
