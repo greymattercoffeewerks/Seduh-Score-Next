@@ -482,7 +482,7 @@ export async function mountBracketScreen(
         el('p', {
           id: hintId,
           className: 'stage-meta btc-tiebreak-hint',
-          text: 'The public results page and live display may show this reason. Keep it factual. No personal details.',
+          text: 'The public results page and live display may show this reason. Keep it factual. No personal details. Do not repeat scores.',
         }),
         el('div', { className: 'btc-bracket-form-actions' }, [submitButton, cancelButton]),
       ].filter(Boolean),

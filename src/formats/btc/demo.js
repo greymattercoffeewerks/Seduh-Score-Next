@@ -25,7 +25,7 @@ export const DEMO_TIMEOUT_MESSAGE =
 export const DEMO_REFRESH_FAILED_MESSAGE =
   'The demo loaded, but this page could not refresh. Retry to see it.';
 
-// scored: true  -> roster + every preliminary match, scored (ready for "Generate bracket")
+// scored: true  -> roster + every preliminary match, scored (ready for "Lock the top 8")
 //         false -> roster only: the demo's teams and judges, no matches
 // Resolves to the counts the database loaded: { teams, judges, matches }.
 export async function loadDemo(orgId, eventId, { scored = true } = {}, client = getSupabase()) {

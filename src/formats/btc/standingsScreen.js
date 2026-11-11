@@ -400,12 +400,12 @@ export async function mountStandingsScreen(
       'In seed order: points, then the order you set for level teams. Round points and finish times are for reference.',
       state.extras.times === null
         ? 'The finish times could not be loaded just now, so none are shown.'
-        : 'Time sum shows only when both rounds have one time. It is a guide: you decide level teams.',
+        : 'Time sum shows only when both rounds have one time in minutes:seconds. It is a guide: you decide level teams.',
     ];
     if (lockedDiffers(seeded.rows, state.lockedSeeds)) notes.push(LOCKED_DIFFERS_NOTE);
     if (rows.some((row) => !row.roundsAddUp)) {
       notes.push(
-        'For some teams the round points do not add up to the total (a match is not complete). The total is the one used.',
+        'For some teams the round points do not add up to the total (a later round, or a match not complete). The total is the one used.',
       );
     }
     return el('div', { className: 'card ok-cut-card' }, [

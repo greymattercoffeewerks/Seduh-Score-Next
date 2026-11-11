@@ -197,7 +197,7 @@ describe('mountSetupScreen', () => {
       expect(card.getAttribute('aria-labelledby')).toBe(card.querySelector('h2').id);
       expect(loadButton().textContent).toBe('Load demo');
       expect(rosterOnlyButton().textContent).toBe('Load roster only');
-      expect(card.textContent).toContain('also adds 28 matches');
+      expect(card.textContent).toContain('also gives 28 matches');
       expect(card.textContent).toContain('8 teams and 5 judges');
       // the test banner comes first in reading order
       const banner = root.querySelector('.is-test-banner');
@@ -211,7 +211,7 @@ describe('mountSetupScreen', () => {
         expect(description).toContain('Either option erases this test event');
         expect(description).toContain('matches, scores and bracket');
         // and what each mode gives is described too
-        expect(description).toContain('"Load roster only" adds none');
+        expect(description).toContain('"Load roster only" gives none');
       }
     });
 

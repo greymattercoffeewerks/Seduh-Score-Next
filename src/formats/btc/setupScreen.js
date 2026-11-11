@@ -442,7 +442,7 @@ export async function mountSetupScreen(
         el('p', {
           id: 'btc-demo-intro',
           className: 'stage-meta',
-          text: `Load a test field: ${DEMO_TEAM_COUNT} teams and ${DEMO_JUDGE_COUNT} judges. "Load demo" also adds ${DEMO_MATCH_COUNT} matches, already scored. "Load roster only" adds none.`,
+          text: `Load a test field: ${DEMO_TEAM_COUNT} teams and ${DEMO_JUDGE_COUNT} judges. "Load demo" also gives ${DEMO_MATCH_COUNT} matches, already scored. "Load roster only" gives none.`,
         }),
         el('p', {
           id: 'btc-demo-warning',
