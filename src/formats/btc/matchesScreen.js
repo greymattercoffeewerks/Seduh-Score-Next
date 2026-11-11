@@ -187,7 +187,7 @@ export async function mountMatchesScreen(
       state.pendingFocus = 'heading';
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;
@@ -691,7 +691,7 @@ export async function mountMatchesScreen(
     form.addEventListener('submit', handleCreateMatch);
 
     return el('div', { className: 'card btc-match-form-card' }, [
-      el('h2', { text: 'Create a preliminary match' }),
+      el('h2', { text: 'New match' }),
       form,
     ]);
   }
@@ -728,7 +728,7 @@ export async function mountMatchesScreen(
       actions.push(removeButton);
     }
     const meta = [`Judges: ${judgeIds.map(judgeName).join(', ')}`];
-    if (missingTime(match)) meta.push('Time missing');
+    if (missingTime(match)) meta.push('No finish time');
     return {
       number: indexInRound + 1,
       sides: [
@@ -763,7 +763,7 @@ export async function mountMatchesScreen(
         state.roundOverrides = new Map([...state.roundOverrides, [round, collapsed]]);
         render();
       },
-      emptyText: 'No preliminary matches created yet.',
+      emptyText: 'No matches yet. Draw round 1 to create them.',
       idPrefix: 'btc-round',
     });
   }
@@ -787,7 +787,7 @@ export async function mountMatchesScreen(
   function renderLoading() {
     root.appendChild(
       el('section', { className: 'screen-container btc-matches-screen' }, [
-        el('h1', { text: 'BTC Preliminary Matches' }),
+        el('h1', { text: 'Matches' }),
         el('div', {
           className: 'screen-feedback',
           text: 'Loading matches…',
@@ -812,7 +812,7 @@ export async function mountMatchesScreen(
     retryButton.addEventListener('click', () => attemptLoad());
     root.appendChild(
       el('section', { className: 'screen-container btc-matches-screen' }, [
-        el('h1', { text: 'BTC Preliminary Matches' }),
+        el('h1', { text: 'Matches' }),
         feedback,
         retryButton,
       ]),
@@ -842,9 +842,7 @@ export async function mountMatchesScreen(
         );
       }
 
-      container.appendChild(
-        el('h1', { text: 'BTC Preliminary Matches', attrs: { tabindex: '-1' } }),
-      );
+      container.appendChild(el('h1', { text: 'Matches', attrs: { tabindex: '-1' } }));
 
       if (state.teams.length < 2) {
         container.appendChild(

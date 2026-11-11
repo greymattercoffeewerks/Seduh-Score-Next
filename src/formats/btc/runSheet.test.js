@@ -428,11 +428,9 @@ describe('deriveBtcWarnings', () => {
 
   it('warns about matches without times, singular and plural, linking to Matches', () => {
     const one = deriveBtcWarnings(base({ withoutTimes: 1 }));
-    expect(one[0].text).toMatch(/^1 preliminary match has no finish times/);
+    expect(one[0].text).toMatch(/^1 match has no finish times/);
     expect(one[0].href).toBe(L.matches);
-    expect(deriveBtcWarnings(base({ withoutTimes: 3 }))[0].text).toMatch(
-      /^3 preliminary matches have/,
-    );
+    expect(deriveBtcWarnings(base({ withoutTimes: 3 }))[0].text).toMatch(/^3 matches have/);
   });
 
   it('says so when the times could not be checked, rather than claiming none are missing', () => {

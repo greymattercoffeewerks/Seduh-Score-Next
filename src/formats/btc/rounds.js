@@ -59,55 +59,56 @@ export async function redrawRound({ orgId, eventId, prelimRound }, client = getS
 // retry after a dropped response produces.
 const REFUSALS = {
   btc_round_event_not_found: {
-    message: 'That event could not be found.',
+    message: 'We could not find this event. Reload the page, then try again.',
     reload: true,
   },
   btc_round_exists: {
-    message: 'This round has already been drawn — the page has been refreshed with its matches.',
+    message: 'This round is already drawn. The page now shows its matches.',
     reload: true,
     alreadyCreated: true,
   },
   btc_prior_round_open: {
-    message: 'The earlier round has to be drawn and fully confirmed before this one.',
+    message: 'The earlier round is not finished. Draw it and confirm every match first.',
     reload: true,
   },
   btc_round_bracket_exists: {
-    message: 'The bracket has been generated, so the preliminary rounds are closed.',
+    message: 'The top 8 are locked, so the rounds are closed. Nothing was changed.',
     reload: true,
   },
   btc_round_incomplete: {
-    message: 'Every team must play exactly once in the round. A team is missing or appears twice.',
+    message:
+      'Each team must play exactly once in a round. Check that no team is missing or listed twice.',
     reload: true,
   },
   btc_round_matches_invalid: {
-    message:
-      'One of the matches is not valid: check the teams, and that each match has 3 different judges of this event.',
+    message: 'A match is not valid. Check its teams, and that it has 3 different judges.',
     reload: false,
   },
   btc_round_seed_mode: {
-    message: 'A random or by-results draw needs its seed; a manual draw has none.',
+    message:
+      'A random or by-results draw needs a seed. A draw changed by hand has none. Use New seed, then create the round again.',
     reload: false,
   },
   btc_redraw_nothing: {
-    message: 'That round has nothing to redraw — the page has been refreshed.',
+    message: 'There is nothing to redraw in this round. The page is up to date.',
     reload: true,
   },
   btc_redraw_later_round: {
-    message: 'A later round has been drawn. Redraw that round first.',
+    message: 'A later round is drawn. Redraw that round first, then this one.',
     reload: true,
   },
   btc_redraw_blocked: {
     message:
-      'The round could not be cleared. The event may be closed to changes; nothing was removed.',
+      'The round was not cleared and nothing was removed. The event may be closed to changes. Try again.',
     reload: false,
   },
   btc_redraw_scored: {
     message:
-      'A match in this round has been scored, so it cannot be redrawn. The page has been refreshed.',
+      'A match in this round is scored, so it cannot be redrawn. The page now shows the current matches.',
     reload: true,
   },
   btc_round_invalid: {
-    message: 'The round number or draw mode is not valid.',
+    message: 'The round number or draw type is not valid. Reload the page and try again.',
     reload: false,
   },
 };

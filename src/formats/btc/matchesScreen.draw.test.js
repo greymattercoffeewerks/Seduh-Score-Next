@@ -246,7 +246,7 @@ describe('Draw a round panel', () => {
 
   it('refuses 19 teams in words and offers no Create', async () => {
     await mount(dbWith({ teams: teamRows(19), judges: SIX_JUDGES }));
-    expect(root.textContent).toContain('There are 19 teams, an odd number.');
+    expect(root.textContent).toContain('19 teams is an odd number, so the draw cannot run.');
     expect(cards()).toHaveLength(0);
     expect(createButton()).toBeNull();
   });
@@ -573,14 +573,14 @@ describe('Draw a round panel', () => {
 
     it('shows each database refusal in words, keyed on its hint', async () => {
       const cases = [
-        ['btc_round_incomplete', 'Every team must play exactly once'],
-        ['btc_round_matches_invalid', 'not valid: check the teams'],
-        ['btc_round_bracket_exists', 'bracket has been generated'],
-        ['btc_prior_round_open', 'earlier round has to be drawn and fully confirmed'],
-        ['btc_round_exists', 'already been drawn'],
-        ['btc_round_event_not_found', 'event could not be found'],
-        ['btc_round_seed_mode', 'needs its seed'],
-        ['btc_round_invalid', 'round number or draw mode is not valid'],
+        ['btc_round_incomplete', 'Each team must play exactly once'],
+        ['btc_round_matches_invalid', 'A match is not valid. Check its teams'],
+        ['btc_round_bracket_exists', 'The top 8 are locked'],
+        ['btc_prior_round_open', 'The earlier round is not finished'],
+        ['btc_round_exists', 'is already drawn'],
+        ['btc_round_event_not_found', 'We could not find this event'],
+        ['btc_round_seed_mode', 'needs a seed'],
+        ['btc_round_invalid', 'round number or draw type is not valid'],
       ];
       for (const [hint, words] of cases) {
         root.innerHTML = '';
@@ -693,7 +693,7 @@ describe('Draw a round panel', () => {
       });
       click(createButton());
       await flush();
-      expect(q('[role="alert"]').textContent).toContain('already been drawn');
+      expect(q('[role="alert"]').textContent).toContain('is already drawn');
       expect(root.textContent).toContain('its draw record is still in the database');
       expect(createButton()).toBeNull();
       expect(client.rpcCalls).toHaveLength(1);
@@ -793,7 +793,7 @@ describe('Draw a round panel', () => {
       expect(root.querySelector('.ok-group-heading').textContent).toBe('Round 1');
       expect(q('[data-field="draw-round-2"]').checked).toBe(true);
       expect(cards()).toHaveLength(2); // round 2 is now offered, from the refreshed matches
-      expect(q('[role="alert"]').textContent).toContain('already been drawn');
+      expect(q('[role="alert"]').textContent).toContain('is already drawn');
     });
 
     it('refuses to offer a round again after its matches are all removed in the same visit', async () => {
@@ -948,9 +948,7 @@ describe('Draw a round panel', () => {
         vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
         await flush();
-        expect(q('[role="alert"]').textContent).toContain(
-          'has been scored, so it cannot be redrawn',
-        );
+        expect(q('[role="alert"]').textContent).toContain('is scored, so it cannot be redrawn');
         expect(q('[role="alert"]').textContent).not.toContain('RAW');
         expect(isBlocked(redrawButton())).toBe(true); // the refreshed page now knows
       });

@@ -43,8 +43,8 @@ import {
 function matchStatusLabel(match) {
   if (!match) return null;
   if (match.status === 'confirmed') return 'Confirmed';
-  if (match.status === 'scoring') return 'Scoring in progress';
-  return 'Match scheduled — not yet scored';
+  if (match.status === 'scoring') return 'Scoring';
+  return 'Scheduled';
 }
 
 export async function mountBracketScreen(
@@ -172,7 +172,7 @@ export async function mountBracketScreen(
       state.pendingFocus = 'heading';
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;
@@ -352,7 +352,7 @@ export async function mountBracketScreen(
     if (refreshed) showToast(`${teamName(winnerTeamId)} goes through.`);
     else {
       setRefreshNote(
-        `${teamName(winnerTeamId)} goes through \u2014 saved, but the page could not refresh. Reload to see the bracket.`,
+        `${teamName(winnerTeamId)} goes through. Saved, but the page did not refresh: reload to see the bracket.`,
       );
     }
     // Focus the slot's button and let the live-region toast speak: a focused toast would be
@@ -482,7 +482,7 @@ export async function mountBracketScreen(
         el('p', {
           id: hintId,
           className: 'stage-meta btc-tiebreak-hint',
-          text: "This reason may be shown on the public results page and the live display. Keep it factual: no personal details, and don't repeat scores.",
+          text: 'The public results page and live display may show this reason. Keep it factual. No personal details.',
         }),
         el('div', { className: 'btc-bracket-form-actions' }, [submitButton, cancelButton]),
       ].filter(Boolean),
@@ -501,7 +501,7 @@ export async function mountBracketScreen(
     const note =
       tie === 'decided'
         ? `Level at ${each}. Tie-break: ${teamName(match.tiebreak_winner_team_id)} goes through. Reason: ${match.tiebreak_reason}`
-        : `Tied at ${each}. Nobody advances until you record which team goes through.`;
+        : `Level at ${each}. Nobody advances until you record which team goes through.`;
     const children = [el('p', { className: 'stage-meta btc-tiebreak-note', text: note })];
 
     if (state.tiebreakSlotId === slot.id) {
@@ -676,7 +676,7 @@ export async function mountBracketScreen(
     if (podium.places.length === 0) return null;
     const placeText = (place) => {
       if (place.state === 'decided') return place.teamName;
-      if (place.state === 'tied') return 'Tied — not decided';
+      if (place.state === 'tied') return 'Level: not decided';
       return 'Not decided yet';
     };
     // A description list: each place's name (dt) is paired with its team (dd), so a screen
@@ -716,11 +716,11 @@ export async function mountBracketScreen(
       el('h2', { text: 'Bracket' }),
       el('p', {
         className: 'stage-meta',
-        text: 'There is no bracket yet. The top 8 are settled and locked in Standings, which also generates the bracket.',
+        text: 'No bracket yet. Lock the top 8 in Standings to make it.',
       }),
       el('a', {
         className: 'btn btn-primary tap-target',
-        text: 'Settle the cut in Standings',
+        text: 'Go to the cut in Standings',
         attrs: { href: links.cut },
       }),
     ]);

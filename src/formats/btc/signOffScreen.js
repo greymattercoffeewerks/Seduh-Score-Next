@@ -64,7 +64,7 @@ export async function mountSignOffScreen(root, { eventId, client = getSupabase()
       state.loadFailedMessage = null;
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;

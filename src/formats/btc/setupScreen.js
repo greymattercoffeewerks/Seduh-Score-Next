@@ -150,7 +150,7 @@ export async function mountSetupScreen(
       state.pendingFocus = 'heading';
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;
@@ -347,8 +347,8 @@ export async function mountSetupScreen(
       hasData &&
       !window.confirm(
         scored
-          ? `Replace everything on this test event with the full demo (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges and ${DEMO_MATCH_COUNT} scored matches)? Its current teams, judges, matches, scores and bracket will be erased.`
-          : `Replace everything on this test event with the demo roster only (${DEMO_TEAM_COUNT} teams and ${DEMO_JUDGE_COUNT} judges, no matches)? Its current teams, judges, matches, scores and bracket will be erased.`,
+          ? `Replace this test event with the full demo (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges, ${DEMO_MATCH_COUNT} scored matches)? Its teams, judges, matches, scores and bracket will be erased.`
+          : `Replace this test event with the demo roster (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges, no matches)? Its teams, judges, matches, scores and bracket will be erased.`,
       )
     ) {
       return;
@@ -442,12 +442,12 @@ export async function mountSetupScreen(
         el('p', {
           id: 'btc-demo-intro',
           className: 'stage-meta',
-          text: `Load a ready-made field instead of typing it. "Load demo" gives ${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges and all ${DEMO_MATCH_COUNT} preliminary matches already scored, so you can go straight to Generate bracket; the results are the same every time. "Load roster only" gives the ${DEMO_TEAM_COUNT} teams and ${DEMO_JUDGE_COUNT} judges with no matches, to score everything yourself.`,
+          text: `Load a test field: ${DEMO_TEAM_COUNT} teams and ${DEMO_JUDGE_COUNT} judges. "Load demo" also adds ${DEMO_MATCH_COUNT} matches, already scored. "Load roster only" adds none.`,
         }),
         el('p', {
           id: 'btc-demo-warning',
           className: 'stage-meta btc-demo-warning',
-          text: 'Both options replace everything on this test event: its teams, judges, matches, scores and bracket. Loading again starts over.',
+          text: "Either option erases this test event's teams, judges, matches, scores and bracket.",
         }),
         el('div', { className: 'btc-demo-actions' }, [loadButton, rosterButton]),
         statusNode,

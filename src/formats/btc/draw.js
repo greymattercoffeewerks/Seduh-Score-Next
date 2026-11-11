@@ -54,7 +54,7 @@ function assertTeamIds(teamIds) {
     // O1: the committee has not decided how to handle a bye, so the draw refuses rather than guess.
     throw new DrawError(
       'odd_team_count',
-      `There are ${teamIds.length} teams, an odd number. Every team must have an opponent, so the draw cannot run until the committee decides how to handle the extra team.`,
+      `${teamIds.length} teams is an odd number, so the draw cannot run. Ask the committee how to handle the extra team, or change the team list.`,
     );
   }
 }
@@ -277,7 +277,7 @@ export function drawRound2ByResults({
   if (!Array.isArray(standings)) {
     throw new DrawError(
       'no_standings',
-      'The round 1 results are needed to draw round 2 by results.',
+      'Round 1 results are needed to draw round 2 by results. Confirm round 1 first, or draw at random.',
     );
   }
   const teamIds = standings.map((row) => row?.teamId);

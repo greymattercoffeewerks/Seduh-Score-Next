@@ -41,9 +41,9 @@ export async function loadDemo(orgId, eventId, { scored = true } = {}, client = 
 // Keyed on the hint the database attaches to each refusal, never on message wording. Anything
 // unrecognised falls through to describeError (a raw failure becomes the generic "try again").
 const REFUSALS = {
-  demo_not_test: 'Demo data can only be loaded into a test event.',
-  demo_not_btc: 'Demo data is only available for BTC events.',
-  demo_event_not_found: 'That event could not be found — reload the page.',
+  demo_not_test: 'Demo data loads only into a test event. Open a test event and try again.',
+  demo_not_btc: 'Demo data is for BTC events only. Open a BTC event and try again.',
+  demo_event_not_found: 'We could not find this event. Reload the page.',
 };
 
 export function describeDemoError(err) {
@@ -53,6 +53,6 @@ export function describeDemoError(err) {
 // What the screen tells the person once the load worked.
 export function describeDemoLoaded({ teams, judges, matches }) {
   return matches > 0
-    ? `Demo loaded: ${teams} teams, ${judges} judges and ${matches} scored preliminary matches. Generate the bracket when you are ready.`
+    ? `Demo loaded: ${teams} teams, ${judges} judges and ${matches} scored matches. Lock the top 8 in Standings when you are ready.`
     : `Demo roster loaded: ${teams} teams and ${judges} judges, no matches.`;
 }

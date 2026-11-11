@@ -212,7 +212,7 @@ describe('The cut, on the standings screen', () => {
       expect(cells(1, 'R2 time')).toBe('about 9');
       expect(cells(1, 'Time sum')).toBe('–');
       expect(cells(2, 'R1 time')).toBe('–');
-      expect(root.textContent).toContain('It is a display aid');
+      expect(root.textContent).toContain('It is a guide');
     });
 
     it('says when the finish times could not be loaded, and still shows the table', async () => {
@@ -444,7 +444,7 @@ describe('The cut, on the standings screen', () => {
       lockButton().click();
       await flush();
       expect(root.querySelector('.screen-feedback').textContent).toContain(
-        'Teams are level across the 8th and 9th places.',
+        'Teams are level across the cut line.',
       );
       expect(publishBtcLive).not.toHaveBeenCalled();
       expect(lockButton()).not.toBeNull();
@@ -522,7 +522,7 @@ describe('The cut, on the standings screen', () => {
       const client = fakeClient([]);
       client.db.btc_teams = [];
       await mount(client);
-      expect(root.textContent).toContain('No teams registered yet');
+      expect(root.textContent).toContain('No teams yet. Add teams in Setup first.');
       expect(root.querySelector('.ok-cut-table')).toBeNull();
     });
 

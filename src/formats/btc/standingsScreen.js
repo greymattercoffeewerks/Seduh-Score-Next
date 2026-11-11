@@ -196,7 +196,7 @@ export async function mountStandingsScreen(
       state.pendingFocus = 'heading';
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;
@@ -312,7 +312,7 @@ export async function mountStandingsScreen(
         el('h2', { text: 'The top 8 are locked' }),
         el('p', {
           className: 'stage-meta',
-          text: 'The bracket has been generated, so the seeds are fixed.',
+          text: 'The top 8 are locked. The seeds are fixed.',
         }),
         el('div', { className: 'btc-bracket-form-actions' }, [
           el('a', {
@@ -397,15 +397,15 @@ export async function mountStandingsScreen(
       rail: [tieCard, renderLockCard()],
     });
     const notes = [
-      "In the database's seed order: points, then the order you record for level teams. Round points and finish times are for reference.",
+      'In seed order: points, then the order you set for level teams. Round points and finish times are for reference.',
       state.extras.times === null
         ? 'The finish times could not be loaded just now, so none are shown.'
-        : 'Time sum shows when both rounds have one time in minutes:seconds. It is a display aid: you decide level teams.',
+        : 'Time sum shows only when both rounds have one time. It is a guide: you decide level teams.',
     ];
     if (lockedDiffers(seeded.rows, state.lockedSeeds)) notes.push(LOCKED_DIFFERS_NOTE);
     if (rows.some((row) => !row.roundsAddUp)) {
       notes.push(
-        'Round points do not add up to the total for some teams (a later round, or a match not complete). The total counts.',
+        'For some teams the round points do not add up to the total (a match is not complete). The total is the one used.',
       );
     }
     return el('div', { className: 'card ok-cut-card' }, [
@@ -425,7 +425,7 @@ export async function mountStandingsScreen(
       container.appendChild(
         el('p', {
           className: 'stage-meta',
-          text: 'No teams registered yet — add teams in Setup before standings can show anything.',
+          text: 'No teams yet. Add teams in Setup first.',
         }),
       );
     } else {

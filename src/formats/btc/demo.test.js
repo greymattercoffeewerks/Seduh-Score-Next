@@ -41,14 +41,14 @@ describe('loadDemo', () => {
 describe('describeDemoError', () => {
   it('explains each refusal the database can give, keyed on the hint', () => {
     expect(describeDemoError({ code: 'P0001', hint: 'demo_not_test', message: 'x' })).toMatch(
-      /only be loaded into a test event/i,
+      /loads only into a test event/i,
     );
     expect(describeDemoError({ code: 'P0001', hint: 'demo_not_btc', message: 'x' })).toMatch(
-      /only available for BTC/i,
+      /for BTC events only/i,
     );
     expect(
       describeDemoError({ code: 'P0001', hint: 'demo_event_not_found', message: 'x' }),
-    ).toMatch(/could not be found/i);
+    ).toMatch(/could not find this event/i);
   });
 
   it('does not depend on the wording: the message text without a hint is a generic failure', () => {
@@ -71,7 +71,7 @@ describe('describeDemoError', () => {
 describe('describeDemoLoaded', () => {
   it('says matches were loaded and scored, and what to do next', () => {
     expect(describeDemoLoaded({ teams: 8, judges: 5, matches: 28 })).toBe(
-      'Demo loaded: 8 teams, 5 judges and 28 scored preliminary matches. Generate the bracket when you are ready.',
+      'Demo loaded: 8 teams, 5 judges and 28 scored matches. Lock the top 8 in Standings when you are ready.',
     );
   });
 

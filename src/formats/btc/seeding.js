@@ -147,7 +147,7 @@ export function validateSeedingOrder({ orderedTeamIds, groupTeamIds, reason }) {
   }
   const checked = checkReason(reason);
   if (!checked.ok && checked.kind === 'empty') {
-    return { field: 'reason', message: 'Give a reason, so the decision can be explained later.' };
+    return { field: 'reason', message: 'Type a reason. It is kept with the event.' };
   }
   if (!checked.ok) {
     return {
@@ -179,33 +179,32 @@ export async function recordSeedingTiebreak(
 // the refusals that mean the screen is showing stale state: the caller refreshes it.
 const REFUSALS = {
   seeding_bracket_exists: {
-    message: 'The bracket has already been generated, so the seeds are fixed.',
+    message: 'The top 8 are already locked, so the seeds are fixed.',
     reload: true,
   },
   seeding_preliminary_open: {
-    message: 'Every preliminary match must be confirmed before ties can be ordered.',
+    message: 'Confirm every match in rounds 1 and 2 before putting level teams in order.',
     reload: true,
   },
   seeding_not_tied: {
     message:
-      'Those teams are no longer level, so there is nothing to order. The page has been refreshed.',
+      'Those teams are no longer level, so there is nothing to order. The page is up to date.',
     reload: true,
   },
   seeding_group_incomplete: {
-    message:
-      'Another team is now level with this group. The page has been refreshed: order all of them.',
+    message: 'Another team is now level with this group. Put all the level teams in order.',
     reload: true,
   },
   seeding_group_invalid: {
-    message: 'Those teams could not be found. The page has been refreshed.',
+    message: 'We could not find those teams. The page is up to date. Try again.',
     reload: true,
   },
   seeding_event_not_found: {
-    message: 'That event could not be found. Check you are signed in to the right organisation.',
+    message: 'We could not find this event. Check you are signed in to the right organisation.',
     reload: false,
   },
   seeding_reason_required: {
-    message: 'Give a reason, so the decision can be explained later.',
+    message: 'Type a reason. It is kept with the event.',
     reload: false,
   },
   seeding_reason_too_long: {
@@ -231,4 +230,4 @@ export function isCutoffTieRefusal(err) {
 }
 
 export const CUTOFF_TIE_MESSAGE =
-  'Teams are level across the 8th and 9th places. Put them in order first, in "Teams level in the standings".';
+  'Teams are level across the cut line. Put them in order first, in "Teams level in the standings".';

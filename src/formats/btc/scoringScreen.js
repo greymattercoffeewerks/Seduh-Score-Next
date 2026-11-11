@@ -59,11 +59,11 @@ import {
 } from './scoring.js';
 
 const STALE_MESSAGE =
-  'This match was changed elsewhere after you started scoring it. Discard your edits to load the latest scores, then re-enter your changes.';
+  'This match was changed after you started scoring it. Discard your edits to load the latest scores, then enter your changes again.';
 const SAVE_FAILED_MESSAGE =
-  'Progress could not be saved on this device. Reloading this page would lose the scores entered so far.';
+  'Scores are not saved on this device. Do not reload: you would lose what you entered.';
 const NOT_APPLIED_MESSAGE =
-  'Your last confirmation was not applied. Your scores are still here: review them and confirm again.';
+  'The last confirm did not go through. Your scores are still here. Check them and confirm again.';
 const TOKEN_OPTIONS = [0, 1, 2, 3];
 
 export async function mountScoringScreen(
@@ -188,7 +188,7 @@ export async function mountScoringScreen(
       state.loadFailedMessage = null;
     } catch (err) {
       state.loadFailedMessage = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
+        ? 'Still loading. Check the connection, then press Retry.'
         : describeError(err);
     }
     state.loading = false;
@@ -330,9 +330,8 @@ export async function mountScoringScreen(
   function updateNotice() {
     let message = null;
     if (state.lockReason === 'pending') {
-      message =
-        'Your confirmation is saved on this device and waiting to sync. Editing is locked until it goes through.';
-      if (state.syncNote) message += ' Still not synced: check your connection and try again.';
+      message = 'Confirm saved on this device, not sent yet. Editing is locked until it sends.';
+      if (state.syncNote) message += ' Still not sent. Check the connection.';
     } else if (state.lockReason === 'reload') {
       message = 'This match was confirmed. Reload this page before editing it again.';
     } else if (state.staleMessage) {
@@ -870,7 +869,7 @@ export async function mountScoringScreen(
         el('p', {}, [el('span', { text: `${teamLabel('team2')}: ` }), ui.totals.team2]),
         el('p', {
           className: 'stage-meta',
-          text: 'A preview only. The database recalculates the official totals when the match is confirmed.',
+          text: 'Preview only. The official totals are worked out when you confirm.',
         }),
       ]),
     );

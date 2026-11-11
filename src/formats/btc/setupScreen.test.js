@@ -197,8 +197,8 @@ describe('mountSetupScreen', () => {
       expect(card.getAttribute('aria-labelledby')).toBe(card.querySelector('h2').id);
       expect(loadButton().textContent).toBe('Load demo');
       expect(rosterOnlyButton().textContent).toBe('Load roster only');
-      expect(card.textContent).toContain('28 preliminary matches');
-      expect(card.textContent).toContain('8 teams, 5 judges and all 28');
+      expect(card.textContent).toContain('also adds 28 matches');
+      expect(card.textContent).toContain('8 teams and 5 judges');
       // the test banner comes first in reading order
       const banner = root.querySelector('.is-test-banner');
       expect(banner.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -208,10 +208,10 @@ describe('mountSetupScreen', () => {
       await mountSetupScreen(root, { eventId: 'ev1', client: fakeClient(baseDb()) });
       for (const button of [loadButton(), rosterOnlyButton()]) {
         const description = describedBy(button);
-        expect(description).toContain('Both options replace everything on this test event');
+        expect(description).toContain('Either option erases this test event');
         expect(description).toContain('matches, scores and bracket');
         // and what each mode gives is described too
-        expect(description).toContain('"Load roster only" gives');
+        expect(description).toContain('"Load roster only" adds none');
       }
     });
 
@@ -233,7 +233,7 @@ describe('mountSetupScreen', () => {
 
       expect(confirm).toHaveBeenCalledTimes(2);
       expect(confirm.mock.calls[0][0]).toMatch(/full demo.*28 scored matches.*erased/i);
-      expect(confirm.mock.calls[1][0]).toMatch(/roster only.*no matches.*erased/i);
+      expect(confirm.mock.calls[1][0]).toMatch(/demo roster.*no matches.*erased/i);
       expect(client.rpcCalls).toEqual([]);
       expect(root.textContent).toContain('Alpha');
     });
@@ -277,7 +277,7 @@ describe('mountSetupScreen', () => {
       click(loadButton());
       await flush();
       expect(status()).toBe(
-        'Demo loaded: 3 teams, 2 judges and 1 scored preliminary matches. Generate the bracket when you are ready.',
+        'Demo loaded: 3 teams, 2 judges and 1 scored matches. Lock the top 8 in Standings when you are ready.',
       );
     });
 
@@ -288,7 +288,7 @@ describe('mountSetupScreen', () => {
       await flush();
 
       const expected =
-        'Demo loaded: 8 teams, 5 judges and 28 scored preliminary matches. Generate the bracket when you are ready.';
+        'Demo loaded: 8 teams, 5 judges and 28 scored matches. Lock the top 8 in Standings when you are ready.';
       expect(status()).toBe(expected);
       expect(root.querySelector('.btc-demo-card .btc-demo-status')).not.toBeNull();
       expect(root.querySelector('.btc-demo-status').getAttribute('role')).toBe('status');
@@ -382,7 +382,9 @@ describe('mountSetupScreen', () => {
       click(loadButton());
       await flush();
 
-      expect(alert()).toBe('Demo data can only be loaded into a test event.');
+      expect(alert()).toBe(
+        'Demo data loads only into a test event. Open a test event and try again.',
+      );
       expect(root.textContent).toContain('Alpha');
       // and the screen is usable again
       expect(loadButton().getAttribute('aria-disabled')).not.toBe('true');
@@ -435,7 +437,7 @@ describe('mountSetupScreen', () => {
       release();
       await flush();
       expect(client.rpcCalls).toHaveLength(1);
-      expect(status()).toMatch(/28 scored preliminary matches/);
+      expect(status()).toMatch(/28 scored matches/);
     });
 
     it('does not wait forever: after the timeout it says the demo may or may not have loaded, and unlocks the screen', async () => {

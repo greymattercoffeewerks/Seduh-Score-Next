@@ -193,14 +193,14 @@ describe('the seeding ties card on the standings screen', () => {
     expect(groups).toHaveLength(2);
     expect(text(group(0).querySelector('h3'))).toBe('Level for 2nd to 3rd · 60 pts');
     expect(names(group(0))).toEqual(['Team 2', 'Team 3']);
-    expect(group(0).textContent).not.toContain('decides who qualifies');
+    expect(group(0).textContent).not.toContain(
+      'Their order decides who goes through to the knockout',
+    );
     expect(text(group(1).querySelector('h3'))).toBe('Level for 8th to 9th · 35 pts');
-    expect(group(1).textContent).toContain('their order decides who qualifies');
+    expect(group(1).textContent).toContain('Their order decides who goes through to the knockout');
     expect(group(0).textContent).toContain('Not ordered yet');
     expect(group(1).textContent).toContain('Not ordered yet');
-    expect(card().textContent).toContain(
-      'cannot be generated until the teams level across the cut-off',
-    );
+    expect(card().textContent).toContain('cannot be locked until teams level across the cut line');
   });
 
   it('teams level on points but not on wins are one group on the screen', async () => {
@@ -228,7 +228,7 @@ describe('the seeding ties card on the standings screen', () => {
         : r,
     );
     await mount(fakeClient(order));
-    expect(card().textContent).not.toContain('cannot be generated');
+    expect(card().textContent).not.toContain('cannot be locked');
     expect(group(1).textContent).toContain('Ordered: Cup-off');
     expect(openButtonOf(group(1)).textContent).toBe('Change order');
     expect(openButtonOf(group(0)).textContent).toBe('Order these teams');
@@ -300,7 +300,7 @@ describe('the seeding ties card on the standings screen', () => {
       .querySelector('.btc-seeding-form')
       .dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     const error = root.querySelector('.btc-seeding-form [role="alert"]');
-    expect(error.textContent).toBe('Give a reason, so the decision can be explained later.');
+    expect(error.textContent).toBe('Type a reason. It is kept with the event.');
     expect(document.activeElement).toBe(error);
     const input = root.querySelector('.btc-seeding-form input[type="text"]');
     expect(input.getAttribute('aria-invalid')).toBe('true');
@@ -334,7 +334,7 @@ describe('the seeding ties card on the standings screen', () => {
     expect(root.querySelector('.btc-seeding-form')).toBeNull();
     expect(group(1).textContent).toContain('Ordered: Won the cup-off');
     expect(names(group(1))).toEqual(['Team 9', 'Team 8']);
-    expect(card().textContent).not.toContain('cannot be generated');
+    expect(card().textContent).not.toContain('cannot be locked');
     expect(root.querySelector('.screen-feedback').textContent).toBe(
       'Order saved. Every team level across the cut line is ordered: you can lock the top 8.',
     );
@@ -668,7 +668,7 @@ describe('the seeding ties card on the standings screen', () => {
     await flush();
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(2);
     expect(root.querySelector('.screen-feedback').textContent).toMatch(
-      /Teams are level across the 8th and 9th places/,
+      /Teams are level across the cut line/,
     );
   });
 
@@ -761,7 +761,7 @@ describe('the seeding ties card on the standings screen', () => {
     submitForm();
     await flush();
     expect(root.querySelector('.screen-feedback').textContent).toBe('Order saved.');
-    expect(card().textContent).toContain('cannot be generated until');
+    expect(card().textContent).toContain('cannot be locked until');
     expect(root.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
@@ -799,7 +799,7 @@ describe('the seeding ties card on the standings screen', () => {
     submitForm();
     await flush();
     expect(root.querySelector('.screen-feedback').textContent).toBe(
-      'The bracket has already been generated, so the seeds are fixed.',
+      'The top 8 are already locked, so the seeds are fixed.',
     );
     expect(root.querySelector('.btc-seeding-form')).toBeNull();
     expect(card()).toBeNull();
@@ -1154,7 +1154,7 @@ describe('the seeding ties card on the standings screen', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const client = fakeClient(nineTeamsWithTies(), { recordResult: applyOrder });
     await mount(client);
-    expect(card().textContent).toContain('cannot be generated until');
+    expect(card().textContent).toContain('cannot be locked until');
     openButtonOf(group(0)).click();
     typeReason('x');
     client.control.failOrderRead = new Error('offline');
@@ -1164,10 +1164,10 @@ describe('the seeding ties card on the standings screen', () => {
       'Order saved, but the page could not refresh. Reload to see the standings.',
     );
     expect(card().textContent).toContain(
-      'We could not refresh this list, so it may be out of date.',
+      'This list could not refresh and may be out of date. Press Check again.',
     );
     expect(byKey('seeding-retry')).not.toBeNull();
-    expect(card().textContent).not.toContain('cannot be generated until');
+    expect(card().textContent).not.toContain('cannot be locked until');
     // The lock is held back in words while what is shown may be out of date (the dialog must name the real eight)
     expect(byKey('lock-top-8').getAttribute('aria-disabled')).toBe('true');
     expect(root.querySelector('#btc-lock-reason').textContent).toContain(
@@ -1176,8 +1176,8 @@ describe('the seeding ties card on the standings screen', () => {
     client.control.failOrderRead = null;
     byKey('seeding-retry').click();
     await flush();
-    expect(card().textContent).not.toContain('We could not refresh this list');
-    expect(card().textContent).toContain('cannot be generated until');
+    expect(card().textContent).not.toContain('This list could not refresh');
+    expect(card().textContent).toContain('cannot be locked until');
   });
 
   it('the lock is refused up front, in words, while the last read failed: it never names eight from a list that may be stale', async () => {
