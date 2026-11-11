@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-11, app version 4.4.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-11, app version 4.4.1, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -28,7 +28,7 @@ picks the top 8 by points, ties by the sum of each team's two finish times, conf
 longer order the standings). Both round-2 methods (random without repeats, and by round-1 results) are to be built and
 selectable. Registration opens January 2027. Round 2's by-results method is strongest against weakest. Engine spec draft: [`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md`](docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md).
 
-**Organiser UX (five stages, reference: the approved BTC organiser mockup).** S1, the shared core kit, is a PR into `dev` from `claude/organiser-ux-s1-core-kit-1f2e99`, not merged. S2, the BTC event dashboard as a run sheet (a minor by docs/versioning.md; not bumped in the PR), is on `claude/organiser-ux-s2-btc-dashboard-6ca85a`; its PR into `dev` is not open yet. S3, the BTC matches screen grouped by round (4.3.0), is merged into `dev`. S4, the cut to the top 8 and its sign-off sheet (4.4.0), is a PR into `dev` from `claude/organiser-ux-s4-the-cut-8e554b`, not merged; a real-tablet check and a printed-PDF check are owed. S5 waits.
+**Organiser UX (five stages, per the approved mockup).** S1, the shared core kit, is a PR into `dev` from `claude/organiser-ux-s1-core-kit-1f2e99`, not merged. S2, the BTC event dashboard as a run sheet (a minor, not bumped in its PR), is on `claude/organiser-ux-s2-btc-dashboard-6ca85a`; its PR into `dev` is not open yet. S3, the BTC matches screen grouped by round (4.3.0), is merged into `dev`. S4, the cut to the top 8 and its sign-off sheet (4.4.0), is a PR into `dev` from `claude/organiser-ux-s4-the-cut-8e554b`, not merged; a real-tablet check and a printed-PDF check are owed. S5 (copy pass, 4.4.1) is committed, not pushed; B5 sign-off wording is unresolved (see CHANGELOG).
 
 ## Handover (2026-11-08, cloud session to a local session)
 
@@ -46,8 +46,7 @@ selectable. Registration opens January 2027. Round 2's by-results method is stro
   avoid); what decides a tie when both teams hit the time limit. Registration opens January 2027.
 - **Owner-only actions still open:** the backlog items listed in `docs/backlog/README.md` ("Triage"), including closing the
   `btc_matches_write FOR ALL` gap before any beta, the `/results/` indexing decision and republishing the live event.
-- **Local session notes:** `state.json` does not exist (gitignored); the frozen handoff and other specs are in
-  `Handoffs and Specs/` on the owner's machine only. Run `npm run check:docs` after any doc change; `ROADMAP.md` and
+- **Local session notes:** `state.json` is gitignored; `Handoffs and Specs/` is on the owner's machine only. Run `npm run check:docs` after any doc change; `ROADMAP.md` and
   `CHANGELOG.md` have size budgets. Every migration is pushed to the cloud by hand after merge (see `CLAUDE.md`).
 
 ## Where to find things (look up, do not read whole)
