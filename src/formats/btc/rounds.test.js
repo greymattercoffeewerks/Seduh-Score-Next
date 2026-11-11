@@ -143,6 +143,15 @@ describe('roundRefusal and describeRoundError', () => {
     }
   });
 
+  it('words the redraw and seed refusals exactly', () => {
+    expect(roundRefusal({ hint: 'btc_redraw_nothing' }).message).toBe(
+      'There is nothing to redraw in this round. The page is up to date.',
+    );
+    expect(roundRefusal({ hint: 'btc_redraw_blocked' }).message).toBe(
+      'The round was not cleared and nothing was removed. The event may be closed to changes. Try again.',
+    );
+  });
+
   it('redrawRound calls redraw_btc_round with the round and returns how many matches went', async () => {
     const client = recordingClient({ data: 2, error: null });
     expect(await redrawRound({ orgId: 'o', eventId: 'e', prelimRound: 2 }, client)).toBe(2);

@@ -309,6 +309,22 @@ describe('refusals', () => {
     expect(describeSeedingError({ hint })).toBe(refusal.message);
   });
 
+  it('words four refusals exactly, each with its next step', () => {
+    const say = (hint) => seedingRefusal({ hint }).message;
+    expect(say('seeding_preliminary_open')).toBe(
+      'Confirm every match in rounds 1 and 2 before putting level teams in order.',
+    );
+    expect(say('seeding_group_incomplete')).toBe(
+      'Another team is now level with this group. Put all the level teams in order.',
+    );
+    expect(say('seeding_group_invalid')).toBe(
+      'We could not find those teams. The page is up to date. Try again.',
+    );
+    expect(say('seeding_event_not_found')).toBe(
+      'We could not find this event. Check you are signed in to the right organisation.',
+    );
+  });
+
   it('keys on the hint, never on the wording, and falls back to the generic message', () => {
     expect(seedingRefusal({ message: 'the bracket already exists' })).toBeNull();
     expect(seedingRefusal(null)).toBeNull();

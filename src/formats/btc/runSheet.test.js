@@ -134,7 +134,9 @@ describe('empty event', () => {
     expect(fewJudges.setup.nextAction.label).toBe('Add judges');
     const odd = byId(deriveBtcPhases(base({ teams: teams(19) })));
     expect(odd.setup.nextAction.label).toBe('Add a team');
-    expect(odd.setup.blockedReason).toMatch(/odd number/);
+    expect(odd.setup.blockedReason).toMatch(
+      /odd number\. The draw needs an even number: add or remove a team\./,
+    );
   });
 });
 
