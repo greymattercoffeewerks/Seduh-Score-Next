@@ -8,6 +8,27 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## v4.5.0: BTC scores CSV, two downloads on the Records card (Organiser UX U4, Q10 proposal) · 2026-11-11
+
+**Task:** Organiser UX U4, the CSV half of the records card (spec section 6, Q10). The layout is a proposal in `docs/specs/BTC-SCORES-CSV-PROPOSAL.md` (committed in `ed5fc87`, with fictional samples in `docs/specs/samples/`). Branch `claude/btc-scores-csv-04e1ed`, **uncommitted** (the main session commits). **Minor** (4.4.1 to 4.5.0, `npm version minor`): a download an organiser can now use from the dashboard. No migration, no cloud change, no `core/` change. **Not final:** the owner has not yet shown the proposal to the committee, and the test-auditor re-check of its two fixes is not recorded (see Reviews).
+
+- **What.** Two buttons on the dashboard's Records card: "Download matches (CSV)", one row per match (totals, tokens, bonuses, finish times, winner, tie-break, confirmed at), and "Download cups (CSV)", one row per cup. File names `<event-slug>-matches-<date>.csv` and `<event-slug>-cups-<date>.csv`. On a shadow or test event the first column carries BETA TEST or TEST.
+- **Why.** After the shadow run, the committee's paper result and Seduh Score's are compared match by match (Board plan gate G1). Q10's committee sheet has not arrived, so we propose a layout from what the app records and the owner takes it to the committee. The layout is one constant each in `scoresExport.js` (`MATCH_COLUMNS`, `CUP_COLUMNS`), so the committee's changes are a one-place edit.
+- **How.** `scoresExport.js` is pure. `scoresExportData.js` reads on click only, fresh each time (no cache), from the same tables as the dashboard. Totals and tokens come from the `btc_match_scores` view and are never recomputed in the browser. Winner is the higher view total, or Level; a level knockout's tie-break gets its own two columns (from `recordedWinnerId`). A failed read throws. So does a 1000-row PostgREST cap: a truncated file would look like a result.
+- **Decisions.** The cups file holds confirmed matches only. Unconfirmed matches appear in the matches file with empty score columns. The sample cups file omits Round 1 match 2 (unconfirmed), so the golden test filters it too; a reader of the sample should not take that for a bug.
+- **Files.** New: `src/formats/btc/scoresExport.js`, `scoresExport.test.js`, `scoresExportData.js`. Changed: `eventDashboardScreen.js` (wiring; placeholder comment removed), `eventDashboardScreen.test.js`, `eventDashboardScreen.preview.html` (harness: both files download with the right columns and the prefix). Docs: `CHANGELOG-INDEX.md` and `docs/archive/changelog/2026-10-H2-c.md` (the oldest entry, 10-28, moved verbatim to keep this file under its 200 KB budget), `STATUS.md`, `docs/backlog/btc.md`, `package.json`, `package-lock.json`.
+- **Checks.** 42 tests in the two touched test files pass, including golden equality with `docs/specs/samples/*.csv`. 1072+ BTC tests pass. ESLint and prettier clean on the changed files. Verified in the dashboard preview harness.
+- **Reviews** (how each ended):
+  - `scoring-auditor`: clean. 1 nit: "Confirmed at" reads `btc_matches.updated_at`, which a later tie-break moves; no `confirmed_at` column exists (same source as the live payload's `confirmedAt`). Commented in code. Intentional for now; follow-up in `docs/backlog/btc.md` (rename to "Last changed", or add a column).
+  - `module-boundary-checker`: no core/formats violation. Fixed: a local timestamp formatter replaced with core's `formatGeneratedAt`. Not done: the CSV formula guard (`safeText`) duplicates `src/tools/random-selector`'s `guardCell`; its proper home is `core/export.js`, and the task forbade `core/` edits. Logged as a follow-up. The "Confirmed at" point is the same as scoring-auditor's.
+  - `test-auditor`: 2 important (team 2 winning untested; formula guard untested on the row path) and 2 nits. All fixed with new tests. Re-check of those tests not recorded.
+  - `ui-accessibility-reviewer` (360px first): nothing blocking. Two pre-existing kit items, `.ok-records-status` lacking `overflow-wrap` (a long unbroken slug overflows; also affects the JSON entry) and label and file squeezing side by side. Logged as kit follow-ups, not fixed here.
+  - `code-reviewer`: no important. Nits fixed (redundant lookups) or logged: the beta band needs `is_shadow` in `FIND_EVENT_COLUMNS` when the column ships; the file-name date is fixed at render (`recordsCard` takes a static name); the 1000-row cap now fails loudly.
+  - Not run: `schema-guardian`, `security-reviewer`, `offline-sync-auditor` (no migration, RLS, RPC, Storage or outbox change; the reads use the existing tenant-scoped client).
+- **Open.** The committee's answers to the six questions in the proposal (paper sheet order, per-judge scores, "cups won", a third standings file, the level-knockout tie-break rule, the 10:00 and 15:00 limits). Their changes land in `scoresExport.js`. The real-tablet check of the Records card is still owed with the rest of S2.
+
+---
+
 ## v4.4.1: Organiser UX S5, the BTC organiser copy pass (spec U6) · 2026-11-11
 
 **Task:** Organiser UX S5 (spec U6; the wording table is `docs/specs/ORGANISER-UX-S5-COPY-TABLE.md`). Branch `claude/organiser-ux-s5-copy-pass-e207e7`, committed locally, **not pushed**. **Patch** (`npm version patch`, 4.4.0 to 4.4.1), not a minor: wording only, nothing new to use. No migration, no cloud change, no hint key, behaviour, layout or CSS change.
@@ -982,26 +1003,5 @@ These are the first gating keys enforced in the cloud for real. The only earlier
 **Not verified:** the setting-ON refusal itself (the local stack has no switch for it, and a throwaway GoTrue was not run); the exact error code GoTrue returns for a too-short password; that a recovery link still works with the setting on (read from source only). Manual check on the live project is in the PR.
 
 **Reviews:** recorded in the PR description.
-
----
-
-## Admin console: Change password panel · 2026-10-28
-
-**Task:** Option (a) of `Handoffs and Specs/ADMIN-PASSWORD-DESIGN.md` (owner decisions D1 yes, D3 current password asked, D4 stay signed in, D5 minimum 12, D6 no audit row, D8 docs). PR into `dev`; not merged, nothing pushed to the cloud, no migration, no dashboard change; the gate and the Edge Function are untouched.
-
-**What changed:**
-
-- `src/admin/passwordPanel.js` (new) and its registry entry (`#/password`, "Change password"): the core form with the admin client, admin wording for every code, the current password asked, minimum 12, other sessions ended, this session kept.
-- `src/admin/currentPassword.js` and `adminClient.js createCheckClient`: the form's UI-only current-password check with a throwaway client (the server's check is `current_password` on `updateUser`, enforced only if the dashboard setting is on).
-- `core/passwordForm.js`: optional `minLength` (default 8) and `askCurrent` (default off); `core/passwordChange.js`: optional `{ currentPassword }`. The organiser console is unchanged.
-- `tools/check-admin-bundle-leak.mjs`: `seduh-admin-check` and `Sign out everywhere` listed.
-- Docs (D8): CLAUDE.md and ROADMAP no longer give the dashboard recovery email as the admin rotation route (it cannot work for an admin with an authenticator); `src/admin/CLAUDE.md` describes the panel.
-- Tests: vitest `passwordPanel.test.js` (U-1 to U-10), `core/passwordForm.test.js`, a `passwordChange` case; Playwright `admin-console-password.spec.js` (A1 to A6, 360px, a second browser context); adversarial X1 to X4.
-
-**Found while building:** `insufficient_aal` on a password change is HTTP 401 on this GoTrue (the design note guessed 403). X2 pins the known gap: a stale-TOTP `aal2` session can change the password; it is in ROADMAP as an owner decision.
-
-**Verified:** full vitest, eslint and prettier clean; `npm run check:admin-leak` clean; the whole `dev-admin` Playwright project (66 tests) against the shared local stack. **Not verified:** the cloud GoTrue version and settings (design U1 to U3), a real device, the Edge Function (untouched).
-
-**Reviews:** `code-reviewer`, `module-boundary-checker` and `security-reviewer`: clean. `test-auditor`: no Important, 4 nits (2 applied: call order in U-5, a real aal2 probe in X1; 2 left: U-8 saving-render snapshot, 43.5px tolerance shared with the helper). `ui-accessibility-reviewer`: no Important, 4 nits left as known (native `required` bubble pre-empts the empty-field copy, the intro uses an unstyled `stage-meta`, Show/Hide does not cover the current-password box, no `aria-invalid`). No Important finding, so no independent refutation check was needed.
 
 ---

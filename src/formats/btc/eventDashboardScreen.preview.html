@@ -164,6 +164,23 @@
         return s;
       }
 
+      // CSV demo rows: every confirmed preliminary reads 32 tokens to 13 over 15 cups.
+      const confirmedPrelims = (s) => s.matches.filter((m) => m.status === 'confirmed');
+      const VOTES = [3, 2, 2, 3, 1, 2, 3, 2, 2, 1, 3, 2, 2, 3, 1];
+      const prelimVotes = (m) =>
+        VOTES.map((team1_tokens, i) => ({ match_id: m.id, cup_number: i + 1, team1_tokens }));
+      const prelimScore = (m) => ({
+        match_id: m.id,
+        status: 'confirmed',
+        round: 'preliminary',
+        team1_id: m.team1_id,
+        team2_id: m.team2_id,
+        team1_tokens: 32,
+        team2_tokens: 13,
+        team1_total: 37,
+        team2_total: 15,
+      });
+
       function createClient(s, fail) {
         const answer = (table) => {
           if (fail) return { data: null, error: { code: '42501', message: 'boom' } };
@@ -196,7 +213,20 @@
             case 'btc_bracket_slots':
               return { data: s.slots, error: null };
             case 'btc_match_scores':
-              return { data: s.scores, error: null };
+              // The scripted knockout scores, plus a 32/13 result for every confirmed preliminary (CSV demo).
+              return { data: [...s.scores, ...confirmedPrelims(s).map(prelimScore)], error: null };
+            case 'btc_cup_votes':
+              return { data: confirmedPrelims(s).flatMap(prelimVotes), error: null };
+            case 'btc_match_bonuses':
+              return {
+                data: confirmedPrelims(s).map((m) => ({
+                  match_id: m.id,
+                  fastest_team_id: m.team2_id,
+                  team1_signature_beverage: false,
+                  team2_signature_beverage: false,
+                })),
+                error: null,
+              };
             case 'btc_seeding_order':
               return { data: s.seeding, error: null };
             case 'live_sessions':

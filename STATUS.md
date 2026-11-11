@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-11, app version 4.4.1, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-11, app version 4.5.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -28,7 +28,7 @@ picks the top 8 by points, ties by the sum of each team's two finish times, conf
 longer order the standings). Both round-2 methods (random without repeats, and by round-1 results) are to be built and
 selectable. Registration opens January 2027. Round 2's by-results method is strongest against weakest. Engine spec draft: [`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md`](docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md).
 
-**Organiser UX (five stages, per the approved mockup).** S1, the shared core kit, is a PR into `dev` from `claude/organiser-ux-s1-core-kit-1f2e99`, not merged. S2, the BTC event dashboard as a run sheet (a minor, not bumped in its PR), is on `claude/organiser-ux-s2-btc-dashboard-6ca85a`; its PR into `dev` is not open yet. S3, the BTC matches screen grouped by round (4.3.0), is merged into `dev`. S4, the cut to the top 8 and its sign-off sheet (4.4.0), is a PR into `dev` from `claude/organiser-ux-s4-the-cut-8e554b`, not merged; a real-tablet check and a printed-PDF check are owed. S5 (copy pass, 4.4.1) is committed, not pushed; B5 sign-off wording is unresolved (see CHANGELOG).
+**Organiser UX (five stages, per the approved mockup).** S1, the shared core kit, is a PR into `dev` from `claude/organiser-ux-s1-core-kit-1f2e99`, not merged. S2, the BTC event dashboard as a run sheet, is on `claude/organiser-ux-s2-btc-dashboard-6ca85a` (no PR yet); its Records card now has the two BTC scores CSVs (4.5.0). S3, the BTC matches screen grouped by round (4.3.0), is merged into `dev`. S4, the cut to the top 8 and its sign-off sheet (4.4.0), is a PR into `dev` from `claude/organiser-ux-s4-the-cut-8e554b`, not merged; a real-tablet check and a printed-PDF check are owed. S5 (copy pass, 4.4.1) is committed, not pushed; B5 sign-off wording is unresolved (see CHANGELOG).
 
 ## Handover (2026-11-08, cloud session to a local session)
 

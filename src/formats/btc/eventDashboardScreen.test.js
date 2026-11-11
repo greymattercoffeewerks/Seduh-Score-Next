@@ -6,9 +6,11 @@ const getDisputePack = vi.fn();
 vi.mock('../../core/disputePack.js', () => ({ getDisputePack: (...a) => getDisputePack(...a) }));
 
 const downloadJson = vi.fn();
+const downloadCsv = vi.fn();
 vi.mock('../../core/export.js', async (original) => ({
   ...(await original()),
   downloadJson: (...a) => downloadJson(...a),
+  downloadCsv: (...a) => downloadCsv(...a),
 }));
 
 import { mountBtcEventDashboardScreen } from './eventDashboardScreen.js';
@@ -63,6 +65,8 @@ const mount = (root, over, options = {}) =>
 
 const team = (i, country = 'BN') => ({ id: `t${i}`, name: `Team ${i}`, country_code: country });
 
+const CRLF = String.fromCharCode(13, 10);
+
 describe('mountBtcEventDashboardScreen', () => {
   let root;
   beforeEach(() => {
@@ -71,6 +75,7 @@ describe('mountBtcEventDashboardScreen', () => {
     publishBtcLive.mockReset();
     getDisputePack.mockReset();
     downloadJson.mockReset();
+    downloadCsv.mockReset();
   });
   afterEach(() => {
     root.remove();
@@ -265,13 +270,40 @@ describe('mountBtcEventDashboardScreen', () => {
   });
 
   describe('records card', () => {
-    it('offers the JSON record only: no CSV until the committee sheet fixes its columns (Q10)', async () => {
+    it('offers the JSON record and the two scores CSVs, named for the event and the date', async () => {
       await mount(root, {});
       const buttons = [...root.querySelectorAll('.ok-records button')];
-      expect(buttons).toHaveLength(1);
-      expect(buttons[0].textContent).toContain('Download the record (JSON)');
-      expect(buttons[0].textContent).toContain('regional-bracket-record.json');
-      expect(root.querySelector('.ok-records').textContent).not.toMatch(/csv/i);
+      expect(buttons.map((b) => b.querySelector('.ok-records-label').textContent)).toEqual([
+        'Download the record (JSON)',
+        'Download matches (CSV)',
+        'Download cups (CSV)',
+      ]);
+      const files = buttons.map((b) => b.querySelector('.ok-records-file').textContent);
+      expect(files[0]).toBe('regional-bracket-record.json');
+      expect(files[1]).toMatch(/^regional-bracket-matches-\d{4}-\d{2}-\d{2}\.csv$/);
+      expect(files[2]).toMatch(/^regional-bracket-cups-\d{4}-\d{2}-\d{2}\.csv$/);
+    });
+
+    it('reads the scores only when a CSV is clicked, then saves the right header', async () => {
+      const read = [];
+      const base = fakeClient(tablesFor());
+      const client = { from: (table) => (read.push(table), base.from(table)) };
+      await mountBtcEventDashboardScreen(root, {
+        eventId: 'ev1',
+        client,
+        listQueued: async () => [],
+      });
+      expect(read).not.toContain('btc_cup_votes');
+      expect(read).not.toContain('btc_match_bonuses');
+      root.querySelectorAll('.ok-records button')[1].click();
+      await vi.waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(1));
+      expect(downloadCsv.mock.calls[0][0]).toMatch(/-matches-/);
+      expect(downloadCsv.mock.calls[0][1].split(CRLF)[0]).toMatch(/^Event,Round,Match,Status,/);
+      root.querySelectorAll('.ok-records button')[2].click();
+      await vi.waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(2));
+      expect(downloadCsv.mock.calls[1][1].split(CRLF)[0]).toBe(
+        'Event,Round,Match,Team 1,Team 2,Cup,Team 1 tokens,Team 2 tokens,Cup won by',
+      );
     });
 
     it('builds the record through get_dispute_pack for this event', async () => {

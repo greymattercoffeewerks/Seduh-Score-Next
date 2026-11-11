@@ -21,6 +21,8 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { loadDashboardData } from './dashboardData.js';
 import { btcLinks, currentPhaseLabel, deriveBtcPhases, deriveBtcWarnings } from './runSheet.js';
 import { publishBtcLive } from './liveSession.js';
+import { loadScoresTables } from './scoresExportData.js';
+import { scoresFilename } from './scoresExport.js';
 
 const TAKE_OVER_WAIT_MS = 8000;
 
@@ -57,16 +59,25 @@ function recordFilename(event) {
   return `${slug || 'btc-event'}-record.json`;
 }
 
-// The files this event offers. The dispute pack is the exact record (the existing get_dispute_pack). The scores
-// CSV is the shadow comparison's input and its columns follow the committee's paper scoresheet (open question
-// Q10, not received yet): add its entry here, built with core/export.js, once the sheet fixes the columns. Until
-// then it is not listed, so there is no button that does nothing.
+// The files this event offers: the exact record (the existing get_dispute_pack) and the two scores CSVs for the
+// shadow comparison (docs/specs/BTC-SCORES-CSV-PROPOSAL.md). Each build() reads on the click, never on page load.
 function recordsFor(event, client) {
+  const now = new Date();
   return [
     {
       label: 'Download the record (JSON)',
       filename: recordFilename(event),
       build: () => getDisputePack(event.org_id, event.id, client),
+    },
+    {
+      label: 'Download matches (CSV)',
+      filename: scoresFilename(event, 'matches', now),
+      build: async () => (await loadScoresTables(event.id, client)).matches,
+    },
+    {
+      label: 'Download cups (CSV)',
+      filename: scoresFilename(event, 'cups', now),
+      build: async () => (await loadScoresTables(event.id, client)).cups,
     },
   ];
 }
