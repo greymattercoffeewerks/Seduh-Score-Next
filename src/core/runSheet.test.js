@@ -159,7 +159,7 @@ describe('buildRunSheet', () => {
     const sheet = buildRunSheet(btcMidRoundOne);
     const cards = [...sheet.querySelectorAll('.ok-phase')];
     expect(cards.map((card) => card.dataset.phase)).toEqual(['setup', 'round_1', 'round_2', 'cut']);
-    expect(cards.map((card) => text(card, '.ok-tag'))).toEqual([
+    expect(cards.map((card) => text(card, '.status'))).toEqual([
       'Done',
       'In progress',
       'Blocked',
@@ -175,8 +175,8 @@ describe('buildRunSheet', () => {
   it('draws the same way for a Cup Taster-shaped event (waiting phase, no actions, no progress)', () => {
     const sheet = buildRunSheet(cupTasterStages);
     const cards = [...sheet.querySelectorAll('.ok-phase')];
-    expect(cards.map((card) => text(card, '.ok-tag'))).toEqual(['Done', 'Waiting', 'Not started']);
-    expect(sheet.querySelector('.ok-bar')).toBeNull();
+    expect(cards.map((card) => text(card, '.status'))).toEqual(['Done', 'Waiting', 'Not started']);
+    expect(sheet.querySelector('.meter')).toBeNull();
     expect(sheet.querySelector('.ok-next-action')).toBeNull();
     expect(text(sheet, '.ok-next-title')).toBe('Semi-final');
     expect(text(sheet, '.ok-next-detail')).toBe(
@@ -205,14 +205,16 @@ describe('buildRunSheet', () => {
     expect(sheet.querySelector('[data-phase="setup"] a')).toBeNull();
   });
 
-  it('says the progress in words and keeps the bar decorative', () => {
+  it('draws progress as a meter whose value text says it in words', () => {
     const sheet = buildRunSheet(btcMidRoundOne);
     const card = sheet.querySelector('[data-phase="round_1"]');
-    const bar = card.querySelector('.ok-bar');
-    expect(bar.getAttribute('aria-hidden')).toBe('true');
-    expect(bar.querySelector('.ok-bar-done').style.width).toBe('70%');
-    expect(bar.querySelector('.ok-bar-active').style.width).toBe('10%');
-    expect(text(card, '.sr-only')).toBe('7 of 10 done, 1 in progress.');
+    const bar = card.querySelector('.meter');
+    expect(bar.getAttribute('role')).toBe('meter');
+    expect(bar.getAttribute('aria-valuenow')).toBe('7');
+    expect(bar.getAttribute('aria-valuemax')).toBe('10');
+    expect(bar.getAttribute('aria-valuetext')).toBe('7 of 10 done, 1 in progress');
+    expect(bar.querySelector('.meter-fill').style.width).toBe('70%');
+    expect(bar.querySelector('.meter-active').style.width).toBe('10%');
   });
 
   it('says a finished and an empty sheet in words', () => {

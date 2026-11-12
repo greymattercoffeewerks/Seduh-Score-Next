@@ -219,3 +219,7 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - Landing page cleanup, stage 1 of 3 · 2026-10-29 → [`2026-10-H2-d`](docs/archive/changelog/2026-10-H2-d.md)
 - T-ID.A3: people.phone is E.164 in the database, shape only (not pushed to the cloud) · 2026-10-29 → [`2026-10-H2-d`](docs/archive/changelog/2026-10-H2-d.md)
 - Password screens follow the cloud's new password settings · 2026-10-29 → [`2026-10-H2-d`](docs/archive/changelog/2026-10-H2-d.md)
+- 059 test 22 flake fixed (test only) · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)
+- Seduh ID phone work closed out: client checker, cloud push, database checked against the shared cases · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)
+- Landing page: proof photo full bleed · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)
+- Landing page cleanup, stage 3 of 3: the live now bar · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)

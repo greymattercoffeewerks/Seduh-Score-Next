@@ -71,7 +71,7 @@ describe('buildEventWarnings', () => {
   it('lists a BTC-shaped event warnings worst first, each severity in a word, each with its fix link', () => {
     const card = buildEventWarnings(btcWarnings);
     const items = [...card.querySelectorAll('.ok-warn-item')];
-    expect(items.map((li) => li.querySelector('.ok-tag').textContent)).toEqual([
+    expect(items.map((li) => li.querySelector('.status').textContent)).toEqual([
       'Problem',
       'Check',
       'Note',

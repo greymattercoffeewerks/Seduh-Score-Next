@@ -337,6 +337,49 @@ disabled control; it was 0.6 in four places and 0.42 in one).
 six, `.app-shell-context-empty`, was not an empty state at all but a layout flag on the header's context row, and is
 now `.app-shell-context-idle`.
 
+## Vocabulary (Petrol Kaizen P5)
+
+Five small parts every screen used to draw for itself. Styles are `src/ui/tokens/vocabulary.css` (imported by
+`index.css`, so every page that loads the tokens has them); the builders are `core/vocabulary.js` and `core/tablist.js`.
+Paper and stage come from the colour tokens; no shadows, Hybrid radii, no `clip-path`.
+
+| Part      | Markup                                                                               | Rule                                                                                                                                                            |
+| --------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.status` | `statusMark(state, label, { light })`: `<span class="status" data-state="live">Live` | One mark and a label, `--radius-sm`, never a pill. The **shape** is a cue as well as the colour. Stroke by default, `.status--light` for a quiet fill.          |
+| `.tabs`   | `buildTablist({ idBase, label, tabs, selected, onSelect, panel })`                   | `role="tablist"`/`tab`/`tabpanel`, roving tabindex, ArrowLeft/Right (wrap), Home, End, automatic activation. Selected tab = the surface plus a 2px accent edge. |
+| `.stat`   | `buildStat({ label, value, unit, sub, tone })`, in a `.stats` grid                   | Label, figure in mono with `.tabular-nums`, sub-line. `data-tone="ok\|warn"` is a start edge; the sub-line says it in words.                                    |
+| `.meter`  | `buildMeter({ label, done, total, active, valueText })`                              | `role="meter"` with `aria-valuenow/min/max` and a sentence in `aria-valuetext`. `.meter-fill` solid, `.meter-active` hatched.                                   |
+| `.steps`  | `<ol class="steps">`, `<li data-state="done">`, `<li aria-current="step">`           | A counter number; done gets a check; the current step has a tint **and** a 2px accent edge. A step that navigates holds a `.steps-link` button.                 |
+
+**Status states and shapes:** `live` filled square that breathes (the base.css 4s blip, only under
+`prefers-reduced-motion: no-preference`), `queued` hollow, `done` check, `attention` "!", `failed` cross, `offline`
+dashed hollow, `test` violet stripes (`--color-test`, solid in both variants; the only violet in the vocabulary, per D9).
+The label is the accessible name and the glyph has an empty alt. The kit's own words map through `kitState()`:
+not_started to queued, in_progress to live, done to done, blocked to failed, waiting to offline (dashed), and a
+warning's error/warning/info to failed/attention/queued. `.status--light` is for the surface colour only (on the paper sunken fill its tint is under 4.5:1). A long sentence does not go inside a mark (it never wraps):
+put the mark first and the words beside it.
+
+**Migrated onto the parts:** the organiser kit (`runSheet` phase tags and progress bar, `eventWarnings`,
+`groupedMatchList`; `.ok-tag` and `.ok-bar` are gone), the audience chrome (`viewer-shell`: Live, Not live, Reconnecting
+as live, queued, offline), the admin console's badges, Cup Taster's dashboard live line and "Confirmed" heat label, Brew
+Planner (the cheat-sheet views are a real tablist, the five-step stepper is `.steps`, the verdict tiles are `.stat`,
+the "covered" and "short by" pills are `.status`). The urgent ring that was written three times (viewer, the console's timing screen,
+the standalone Timer) is one rule, `.countdown-cue` in `core/countdownDisplay.css`.
+
+**Left as they are, on purpose** (each is listed with its reason in `LEFT_AS_IS` in `tokenDrift.test.js`): status
+_lines_ of words (`ok-live-status`, `audience-links-status`, the tour and results status text, `standings-status`
+column), interactive chips (the header sync chip, Brew Planner and Behind the Seduh filter chips), the splash credit
+pill, the station letter badge and Guess the Bean's pills, and a few name chips whose state is already in their words
+(`viewer-heat-chip`, BTC and Throwdown stage chips, Guess the Bean's session status): candidates for a later pass.
+Guess the Bean's start countdown (`.gtb-display-countdown`) is a 3-2-1 splash, not a clock, so it is not moved onto the
+countdown element. There is no standings view switch in the app today, so nothing there moved onto the tablist.
+The BTC run sheet's phase cards stay cards (they hold a count, a reason and an action); their state tag and progress
+are the new parts, and the current phase keeps `aria-current="step"`.
+
+`tokenDrift.test.js` guards this (no allowlist for the tab rule): a CSS class or `className` containing badge, status,
+chip or pill must be on `LEFT_AS_IS` with a reason or it fails (and a stale entry fails), and `role="tab"` may be written
+only by `core/tablist.js`.
+
 ## Drift guard
 
 A second check covers the public pages (`src/marketing/*.css`, `src/community/communityHub.css`). It is a heuristic,

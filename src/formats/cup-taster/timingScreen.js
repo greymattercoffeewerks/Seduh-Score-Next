@@ -835,7 +835,7 @@ export async function mountTimingScreen(
           attrs: { tabindex: '-1' },
         }),
       );
-      countdownEl = el('div', { className: 'countdown-display' });
+      countdownEl = el('div', { className: 'countdown-display countdown-cue' });
       const startedAtMs = new Date(data.heat.started_at).getTime();
       const initialRemaining = remainingSecs(startedAtMs, data.heat.duration_secs, Date.now());
       countdownEl.textContent = formatDuration(initialRemaining);

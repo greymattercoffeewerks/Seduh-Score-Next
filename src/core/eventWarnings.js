@@ -11,6 +11,7 @@
 // warning is about.
 // Styled in components.css (`.ok-warn*`).
 import { el } from './dom.js';
+import { kitState, statusMark } from './vocabulary.js';
 import { kitId, safeHref } from './kitLink.js';
 
 export const SEVERITIES = ['error', 'warning', 'info'];
@@ -93,10 +94,8 @@ export function buildEventWarnings(
           { className: 'ok-warn-list', attrs: { role: 'list' } },
           list.map((warning) => {
             const parts = [
-              el('span', {
-                className: 'ok-tag ok-warn-tag',
-                text: SEVERITY_LABELS[warning.severity],
-                attrs: { 'data-severity': warning.severity },
+              statusMark(kitState(warning.severity), SEVERITY_LABELS[warning.severity], {
+                className: 'ok-warn-tag',
               }),
               el('span', { className: 'ok-warn-text', text: warning.text }),
             ];

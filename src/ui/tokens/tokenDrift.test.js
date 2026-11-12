@@ -690,3 +690,154 @@ describe('feedback ladder drift guard', () => {
     ).toEqual([]);
   });
 });
+
+// ---- the vocabulary (Petrol Kaizen P5) ----
+//
+// A state is drawn by the core .status (core/vocabulary.js statusMark), and a view switch is a tablist built by
+// core/tablist.js. Two rules:
+//   1. no stylesheet selector or className makes a badge / status / chip / pill class, unless it is listed in
+//      LEFT_AS_IS with its reason (a decorative or interactive element that is not a state mark). A new one fails:
+//      use .status, or add an entry here on purpose. An entry that no longer matches anything fails too.
+//   2. no src/ JavaScript or HTML page writes role="tab" except core/tablist.js, which owns the roving tabindex and
+//      the arrow keys (a hand-rolled tab with neither is the bug this replaces).
+
+const STATE_MARK_NAME = /(?:^|-)(?:badge|status|chip|chips|pill)(?:-|$)/;
+// The vocabulary's own names (src/ui/tokens) and the long-standing shared live blip.
+const VOCABULARY_NAMES = new Set(['status', 'status--light', 'status-live-dot']);
+
+const GUARD_SKIP = (file) => file.endsWith('.preview.js');
+const classNamesInCss = (css) => {
+  const selectors = stripCssComments(css).replace(/\{[^{}]*\}/g, (block) =>
+    block.replace(/[^{}]+/g, ''),
+  );
+  return [...selectors.matchAll(/\.([a-z][\w-]*)/gi)].map((m) => m[1]);
+};
+const classNamesInJs = (js) =>
+  [...js.matchAll(/className\s*:\s*(['"`])([^'"`]*)\1/g)].flatMap((m) =>
+    m[2].split(/\s+/).filter((token) => /^[a-z][\w-]*$/i.test(token)),
+  );
+const stateMarkNames = (names) =>
+  [...new Set(names)].filter((n) => STATE_MARK_NAME.test(n) && !VOCABULARY_NAMES.has(n)).sort();
+
+const LEFT = (reason, ...names) => names.map((name) => ({ name, reason }));
+const LEFT_AS_IS = [
+  ...LEFT(
+    'a layout hook on a core .status mark (viewer chrome, admin console), not a second look',
+    'viewer-badge',
+    'adm-badge',
+  ),
+  ...LEFT(
+    'a sentence or a line of words about a state (a polite status message, a table column, a hero status line), not a mark',
+    'adm-key-status',
+    'app-shell-auth-status',
+    'archive-status',
+    'audience-links-status',
+    'btc-demo-status',
+    'btc-draw-status',
+    'btc-status-stack',
+    'community-tool-status',
+    'event-live-status',
+    'gtb-status',
+    'gtb-status-emoji',
+    'homepage-listing-status',
+    'ok-live-status',
+    'ok-records-status',
+    'ok-signoff-status',
+    'petrol-format-status',
+    'results-sheet-status',
+    'results-sheet-status-title',
+    'rs-board-status',
+    'rs-status-dot',
+    'standings-status',
+    'tour-hero-status',
+    'tour-planned-status',
+    'tour-status-mark',
+  ),
+  ...LEFT(
+    'an interactive control or a filter/toggle chip (a button that does something), not a state label',
+    'app-shell-sync-chip',
+    'app-shell-sync-chip-live',
+    'app-shell-sync-chip-pending',
+    'app-shell-sync-chip-stuck',
+    'bp-chip',
+    'bp-chips',
+    'bts-chip',
+    'bts-chips',
+  ),
+  ...LEFT(
+    'a name or label chip whose state is already in its words (a check mark or "max" in the label), a candidate for .status in a later pass',
+    'btc-stage-chip',
+    'btc-stage-chips',
+    'td-stage-chip',
+    'viewer-heat-chip',
+    'viewer-heat-chips',
+    'gtb-session-row-status',
+  ),
+  ...LEFT(
+    'decorative: a credit pill, a station letter or a count pill that is not a state',
+    'splash-badge',
+    'splash-badge-generic',
+    'splash-badge-host',
+    'splash-badge-live',
+    'station-badge',
+    'gtb-display-pill',
+    'gtb-guess-pill',
+  ),
+];
+
+const TAB_ROLE = /\brole\s*[=:]\s*["']tab["']|["']role["']\s*[,:]\s*["']tab["']/;
+const roleTabIn = (text) => TAB_ROLE.test(text);
+
+describe('vocabulary drift guard', () => {
+  // The token stylesheets are scanned too (components.css is where a new kit badge would be written).
+  const tokenSheets = walk(TOKENS_DIR, (name) => name.endsWith('.css'))
+    .map(rel)
+    .map((file) => ({ file, css: readFileSync(file, 'utf8') }));
+  const cssNames = [...sources, ...tokenSheets]
+    .filter((s) => !GUARD_SKIP(s.file))
+    .flatMap((s) => classNamesInCss(s.css).map((name) => ({ name, file: s.file })));
+  const jsNames = jsSources
+    .filter((s) => !GUARD_SKIP(s.file))
+    .flatMap((s) => classNamesInJs(s.js).map((name) => ({ name, file: s.file })));
+  const found = new Map();
+  for (const { name, file } of [...cssNames, ...jsNames]) {
+    if (stateMarkNames([name]).length) found.set(name, [...(found.get(name) ?? []), file]);
+  }
+  const listed = new Set(LEFT_AS_IS.map((e) => e.name));
+
+  it('no new badge / status / chip / pill class: draw a state with .status (core/vocabulary.js statusMark)', () => {
+    const unlisted = [...found.keys()].filter((name) => !listed.has(name)).sort();
+    expect(unlisted).toEqual([]);
+  });
+
+  it('every LEFT_AS_IS entry still names a class that exists (no stale cover), with a reason', () => {
+    const stale = LEFT_AS_IS.filter((e) => !found.has(e.name)).map((e) => e.name);
+    expect(stale).toEqual([]);
+    expect(LEFT_AS_IS.every((e) => e.reason.length > 10)).toBe(true);
+  });
+
+  it('role="tab" is written only by core/tablist.js', () => {
+    const htmlPages = htmlFiles.map((file) => ({ file, js: readFileSync(file, 'utf8') }));
+    const offenders = [...jsSources, ...htmlPages]
+      .filter((s) => s.file !== 'src/core/tablist.js' && roleTabIn(s.js))
+      .map((s) => s.file);
+    expect(offenders).toEqual([]);
+    expect(roleTabIn(jsSources.find((s) => s.file === 'src/core/tablist.js').js)).toBe(true);
+  });
+
+  it('the matchers: they catch the shapes they claim to and leave the vocabulary alone', () => {
+    expect(
+      stateMarkNames(classNamesInCss('.x-badge{a:b} .y .status{a:b} .status--light{a:b}')),
+    ).toEqual(['x-badge']);
+    expect(
+      stateMarkNames(['viewer-heat-chip', 'tag', 'bp-pills', 'adm-badge--on', 'statuses']),
+    ).toEqual(['adm-badge--on', 'viewer-heat-chip']);
+    expect(
+      stateMarkNames(classNamesInJs("el('span', { className: 'foo-status bar status' })")),
+    ).toEqual(['foo-status']);
+    expect(roleTabIn("el('button', { attrs: { role: 'tab' } })")).toBe(true);
+    expect(roleTabIn('<button role="tab">')).toBe(true);
+    expect(roleTabIn("setAttribute('role', 'tab')")).toBe(true);
+    expect(roleTabIn("attrs: { role: 'tablist' } role: 'tabpanel'")).toBe(false);
+  });
+});

@@ -6,6 +6,7 @@
 // What it draws is exactly the fields named below: an event's label (format, date, short id), date, format and state, never an entry, a person, a
 // score, a phone or an e-mail (spec D-A4; the function returns none).
 import { el } from '../core/dom.js';
+import { statusMark } from '../core/vocabulary.js';
 import { formatDate } from './format.js';
 import {
   bruneiDay,
@@ -252,9 +253,7 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
           [
             el('strong', { text: tierLabel(grant.tier) }),
             el('span', { className: 'adm-muted', text: ` · ${scope}` }),
-            revoked
-              ? el('span', { className: 'adm-badge adm-badge--revoked', text: 'Revoked' })
-              : null,
+            revoked ? statusMark('failed', 'Revoked', { className: 'adm-badge' }) : null,
           ].filter(Boolean),
         ),
         el('p', { className: 'adm-muted', text: windowText(grant) }),
@@ -326,9 +325,7 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
               className: 'adm-muted',
               text: ` · ${formatName(event.format)} · ${formatDate(event.event_date)}`,
             }),
-            event.is_test
-              ? el('span', { className: 'adm-badge adm-badge--test', text: 'Test event' })
-              : null,
+            event.is_test ? statusMark('test', 'Test event', { className: 'adm-badge' }) : null,
           ].filter(Boolean),
         ),
         el('p', {

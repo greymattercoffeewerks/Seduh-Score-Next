@@ -172,16 +172,7 @@ body {
   font-size: min(30vw, 55vh);
 }
 
-/* Color alone is never the only urgency signal (same reasoning as
-   timingScreen.css's own [data-urgent] rule) — weight + outline carry the
-   state for anyone who can't distinguish the color shift, and both stay
-   present even when the blink below is suppressed by prefers-reduced-motion. */
-.timer-display[data-urgent='true'] {
-  color: var(--color-danger);
-  font-weight: var(--font-weight-bold);
-  outline: var(--border-strong) solid var(--color-danger);
-  outline-offset: var(--space-3);
-}
+/* The urgent ring (colour, weight and an outline) is core/countdownDisplay.css's .countdown-cue, which this display carries. */
 
 /* Blink is scoped to the LAST 10 SECONDS WHILE RUNNING only — deliberately
    not applied to [data-status='expired'] below, which gets a steady (not
@@ -200,18 +191,8 @@ body {
   }
 }
 
-/* The moment time runs out is the one state this tool must never leave
-   silent for anyone who can't hear the beep — found in review
-   (ui-accessibility-reviewer): the OLD version turned the urgent styling OFF
-   the instant status flipped to 'expired', leaving a plain "0:00" with only
-   an audio cue. This sustains a strong visual treatment (steady, not
-   blinking — see the comment above) until Reset starts a fresh idle state. */
-.timer-display[data-status='expired'] {
-  color: var(--color-danger);
-  font-weight: var(--font-weight-bold);
-  outline: var(--border-strong) solid var(--color-danger);
-  outline-offset: var(--space-3);
-}
+/* The expired state's steady ring is core/countdownDisplay.css's .countdown-cue[data-status='expired'] (it must
+   never go silent for anyone who can't hear the beep). */
 
 .timer-expired-banner {
   font-size: var(--text-lg);

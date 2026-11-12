@@ -21,6 +21,7 @@
 // above the groups for a format with a longer list (BTC does not use it: about ten matches a round).
 // Styled in components.css (`.ok-groups`, `.ok-group*`, `.ok-row*`).
 import { el } from './dom.js';
+import { kitState, statusMark } from './vocabulary.js';
 
 export const ROW_TONES = ['done', 'in_progress', 'not_started'];
 
@@ -107,13 +108,7 @@ function renderRow(view, joiner) {
   if (hasValue(view.score)) {
     tail.push(el('span', { className: 'ok-row-score', text: String(view.score) }));
   }
-  tail.push(
-    el('span', {
-      className: 'ok-tag',
-      text: view.status?.label ?? 'Not started',
-      attrs: { 'data-status': tone },
-    }),
-  );
+  tail.push(statusMark(kitState(tone), view.status?.label ?? 'Not started'));
   children.push(el('div', { className: 'ok-row-tail' }, tail));
   const actions = (view.actions ?? []).filter(Boolean);
   if (actions.length > 0) children.push(el('div', { className: 'ok-row-actions' }, actions));
@@ -195,11 +190,7 @@ export function renderGroupedMatchList({
             className: 'ok-group-count',
             text: `${summary.done} of ${summary.total} ${doneWord}`,
           }),
-          el('span', {
-            className: 'ok-tag',
-            text: words[summary.state],
-            attrs: { 'data-status': summary.state },
-          }),
+          statusMark(kitState(summary.state), words[summary.state]),
         ]),
         toggle,
       ]),

@@ -557,6 +557,7 @@ section only records the conventions a new screen or token needs to follow.
   source order decided which rendered): `components.test.js` fails CI for it, and for a page that links a
   stylesheet relying on the shapes without linking this one. A surface that needs a different look overrides
   the specific property in its own CSS, after this file (see `src/admin/admin.css`), and says why.
+- **State words and tab rows come from `src/ui/tokens/vocabulary.css` and `core/tablist.js`, not local classes (Petrol Kaizen P5).** A status mark is `.status` with a `data-state` (`live`, `queued`, `done`, `attention`, `failed`, `offline`, `test`); `test` is the only violet. A tab row is `buildTablist()`. A new badge, chip or pill class must use these or be listed in `LEFT_AS_IS` in `src/ui/tokens/tokenDrift.test.js` with its reason; the vocabulary drift guard fails otherwise.
 - **An organiser's brand (BR-D1, BR-D2) follows three rules, each held by a test** (`brandColor.test.js`,
   `brandSlot.test.js`, `brandAttribution.test.js`). (1) **Brand styling goes only on nodes a surface owns, never on
   the shared audience root** (`applyBrandColors(node, brand, mode)` in `core/brandSlot.js`), because the root

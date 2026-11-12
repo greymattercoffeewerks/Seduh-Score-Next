@@ -1,10 +1,36 @@
 # Changelog — Seduh Score Next
 
-Newest first. **This file holds only the last ~two weeks** (entries dated 2026-10-30 or later). Older
+Newest first. **This file holds only the last ~two weeks** (entries dated 2026-10-31 or later). Older
 entries are moved verbatim to `docs/archive/changelog/<period>.md`; find one by task id or title in
 [`CHANGELOG-INDEX.md`](CHANGELOG-INDEX.md) (one line per archived entry), or `grep -r` the directory.
 A new entry goes at the top of this file. When it passes ~200 KB, move the oldest entries to the
 archive and add them to the index (CI's `check:docs` enforces the budget).
+
+---
+
+## Petrol Kaizen P5: the vocabulary (status marks, tabs, stats, meter, steps) · 2026-11-13
+
+**Task:** Petrol Kaizen P5 ("vocabulary"), the third of the four post-V2 Kaizen items. Branch `claude/petrol-kaizen-p5-25fb67`, cut from P4's branch `claude/keen-wiles-9e7b3c`, so this is a **draft PR against P4's branch**, not into `dev`; P4 is PR #457, still open. No migration, no cloud change, no scoring, ranking or timing logic changed. **No version bump**, same as P4: this stacks on an unreleased branch and the release PR takes it. It is a visible restyle, so expect a minor at release (`docs/versioning.md`; the release owner's call). **Not final:** the UI checks listed under Reviews are owed.
+
+- **What.** One vocabulary for the state words the app shows, in `src/ui/tokens/vocabulary.css` (imported by `index.css`). `.status` takes `data-state` `live`, `queued`, `done`, `attention`, `failed`, `offline` or `test`; each state has a shape and a colour, so it is never colour alone. `live` breathes only under `prefers-reduced-motion: no-preference`. `test` is the only violet. Also `.tabs` / `.tab`, `.stat` / `.stats`, `.meter`, `.steps` / `.steps-link`, and `.countdown-cue` (in `core/countdownDisplay.css`). Core JS: `core/tablist.js` (`buildTablist()`: roving tabindex, Arrow, Home and End keys, tabpanel labelling) and `core/vocabulary.js` (`statusMark()`, `kitState()`, `buildMeter()`, `meterSegments()`, `buildStat()`). Written up in `DESIGN.md` ("Vocabulary") and shown on `preview.html`.
+- **Why.** Each screen had its own badge, live line and tab row, so one state read differently from screen to screen. The aim: one look per state, never colour alone, and a real tab pattern for the cheat-sheet views.
+- **Migrated.**
+  - `.ok-tag` and `.ok-bar` removed (runSheet, eventWarnings, groupedMatchList). The progress bar is now `role="meter"`.
+  - Viewer chrome badge: Live = `live`, Not live = `queued`, Reconnecting = `offline`. `viewer-badge` stays as a hook class for e2e.
+  - Admin badges: `adm-badge` stays as a hook class.
+  - Cup Taster: the dashboard live line and the heat "Confirmed" label.
+  - Brew Planner: the cheat-sheet views are a real tablist, the stepper is `.steps`, the verdict tiles are `.stat`, the coverage pills are `.status`.
+  - The urgent countdown ring, written three times, is now one `.countdown-cue` in `core/countdownDisplay.css` (timing screen and standalone Timer; `tools/timer/index.html` links it).
+- **Left as-is.** About 45 badge, chip, status and pill names stay, each with a reason in `LEFT_AS_IS` in `tokenDrift.test.js`: status text lines; interactive chips (sync chip, filter chips); the splash credit pill; the station badge; GTB pills; name chips whose state is in their words (`viewer-heat-chip`, the BTC and TD stage chips, `gtb-session-row-status`). No standings view switch exists, so nothing moved to the tablist. BTC run-sheet phase cards stay cards. No "records counts" tile exists on the BTC dashboard (the records card is a download list). The GTB start countdown is a 3-2-1 splash, so it stays.
+- **Tests.** `tokenDrift.test.js` gained "vocabulary drift guard": a new badge, status, chip or pill class must be on `LEFT_AS_IS` or use the vocabulary; stale entries fail; token CSS is scanned too; `role="tab"` appears only in `core/tablist.js`. New `core/tablist.test.js` and `core/vocabulary.test.js` (the mapping is pinned; every state has a shape in the stylesheet). Brew Planner tablist and steps tests added. ESLint clean. Vitest 6609 of 6610 pass; the one failure is `tools/check-doc-budgets.test.js` (a Windows path separator), pre-existing and not this change. `libphonenumber-js` is not installed in the shared `node_modules` (environmental), so a scratch copy was junction-linked to run five test files; that copy is not part of the change.
+- **Browser.** `preview.html` and Brew Planner at 360px in paper: good. `preview.html` in stage: good. One real bug found and fixed: the done, attention and failed mark backgrounds used `currentColor`, which resolved to the glyph colour.
+- **Reviews** (how each ended):
+  - `ui-accessibility-reviewer`: no Important. Nits fixed: a forced-colors meter fill; `.status--light` documented as for the surface colour only (under 4.5:1 on paper sunken). Not fixed: "Done" is announced only through CSS alt text on `.steps`; `.steps` has `list-style: none`, so VoiceOver may drop list semantics; the step-item border is 2.47:1 (pre-existing). Not checked: viewer chrome RECONNECTING at 360px with a long brand; admin key-status label overflow at 360px; a forced-colors and reduced-motion run.
+  - `module-boundary-checker`: clean. Pre-existing, logged here: `timingScreen` and `timerScreen` run their own countdown tickers instead of `core/countdownDisplay.js` `renderCountdown`.
+  - `code-reviewer`: 1 Important, fixed: an ESLint `no-useless-escape` in `admin.css.test.js`. Nits fixed: stale comments in `timer.css` and `splashScreen.css`; `TAB_ROLE` quoted-key form.
+  - `test-auditor`: 3 Important, all fixed: the drift guard scanned no token CSS; the `kitState` mapping was not pinned; the stylesheet shape per state was untested. Nits fixed. Known gap, not fixed: the drift guard misses backtick and template-literal `className` forms.
+  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor` (no standings, ranking or scoring code touched), `offline-sync-auditor` (no outbox or sync change).
+- **Follow-ups** (not yet filed in `docs/backlog/`; no area file fits the shared kit, so the owner picks one): move the name chips to `.status`; unify the three countdown tickers on `renderCountdown`; give "Done" a real text node in `.steps`; run the forced-colors, reduced-motion and 360px chrome checks above. **Owed:** a real-device check of the status marks and the tablist on the Honor tablet (the primary device).
 
 ---
 
@@ -824,112 +850,3 @@ These are the first gating keys enforced in the cloud for real. The only earlier
 - **B2 (#373):** all four ran, Important findings independently re-checked. schema-guardian and security-reviewer both found a stale-link race (a concurrent phone change could leave a link to the old number's identity): fixed with a row lock and a phone re-check in the update, and the independent checker confirmed it fixed. A block reviving when a number reverted: fixed (stale blocks are dropped). test-auditor found vacuous assertions (the leaked-flag check, a loose `041` regex, the untested backstop and carve-out, an order-dependent count): all fixed, and the checker mutated the function in a rolled-back transaction to show the flag leak, carve-out removal and loosening are now detected. Residual: shrinking the guard's role list to `authenticated` is not detected (anon and service_role stop earlier at table privileges; the list is a second wall). code-reviewer: nothing Important; nits fixed (runbook SQL quoting and transaction, e2e phone uniqueness). The two-session race is not testable in pgTAP (reasoned, and the `for update` and predicate are pinned by a catalog assertion).
 - **Accepted by design (spec 3.3):** a member can learn that a published non-test result exists for a phone they type (an opted-out identity is indistinguishable), and a member of two organisations sees the same uuid for the same person.
 - **This PR:** docs only; code-reviewer (result in the PR).
-
-## 059 test 22 flake fixed (test only) · 2026-10-30
-
-**Task:** `059_public_live_now.sql` test 22 ("an event whose grant ended is still listed") failed about 4 runs in 10 (7 of 20 locally; once in CI on #360). `public_live_now()` orders by `updated_at desc, id limit 3`; in one transaction `now()` is frozen, so the locked event's session tied with the four cap sessions and the random `live_sessions.id` decided whether it was in the top 3. Not a clock or day-boundary problem: nothing in the migration or the window-lock functions depends on a date.
-
-**What changed:** the locked session now gets `updated_at = now() + interval '1 second'`, strictly newest. Test only; no migration, no app code. Test 23 (expects 0 once the lock is enforced) now proves the lock rather than the limit.
-
-**Verified:** 50 consecutive local runs of the file after the change: 48 passed in a first batch of 25 (2 failures not attributed: the shared local database was being reset by another session at the time) and 25 of 25 in a second batch.
-
-**Reviews:** test-only change; test-auditor not run.
-
-## Seduh ID phone work closed out: client checker, cloud push, database checked against the shared cases · 2026-10-30
-
-**Task:** Close the Seduh ID phone work (T-ID.A0 to A4 done; the client phone checker is the client half of T-ID.A3; its commits were first labelled `T-ID.B1`, relabelled here so B1 means only the identity tables). One records PR for the four merged PRs and the cloud push, plus one test addition. No migration, no app code.
-
-**What shipped, in order (all merged into `dev`):**
-
-- #357: `core/registry.js` refuses a non-E.164 phone before it reaches the database.
-- #359: `createPerson` stays refuse-only (no silent repair); the roster maps `phone_invalid` to a message.
-- #358 (T-ID.A3): the two migrations, shape-only database, `update_roster_entry` needs canonical E.164 (hint `phone_invalid`), CHECK `people_phone_e164`. Entry above.
-- #360: `src/core/phone.js` rewritten on libphonenumber-js (Brunei-first policy), a country select in the roster form, the shared fixture `tests/fixtures/phone-cases.json`.
-- **Cloud (2026-10-30, owner-approved, `apply_migration`):** the two migrations were pushed as cloud versions `20261030005330` (`phone_e164_shape`) and `20261030005349` (`people_phone_e164_check`). The repo files are `20261030100000` and `20261030110000`: the number differs because `apply_migration` stamps the push time, as in earlier pushes; the SQL is the same. Verified: the CHECK is validated and 23 of 23 people hold a valid E.164 phone. On 2026-10-29 the owner had approved deleting 17 test rows from the cloud `people` table (16 junk phones and one test person); no entry referenced them.
-- Owner decisions accepted: 001 and 0011 handling as built; every recommendation in `PHONE-CHECKER-DESIGN.md` section 7.
-
-**This PR:** the generator `tools/generate-phone-fixture-sql.mjs` now writes a pgTAP test, `supabase/tests/060b_phone_fixture_cases.sql`, with the shared cases embedded (the old `tests/fixtures/phone_cases.sql` is gone: `supabase test db` runs pg_prove in a container that sees only `supabase/tests`, so a test could not `\i` a file outside it, and a fixture inside it would be run as a test). It checks, for every case with an expected value (the client output), that `app.is_e164` accepts it and `update_roster_entry` stores it unchanged, and for the 69 `refuse` cases that the raw input is not E.164 and `update_roster_entry` answers `phone_invalid`, with the person unchanged afterwards (214 assertions). It also asserts minimum counts, so an empty fixture cannot pass. The vitest stale-file guard in `phone.test.js` stays and now compares against the generated test. Fixture ids use the `b60` block. Checked by mutation: changing the expected hint failed 69 of 214.
-
-**Reviews:** #357 to #360 (their own entries and PRs): the A3 test-auditor found two Important gaps (length bounds untested), fixed with boundary tests; the `adminErrors.test.js` hint-classification CI failure (two new hints not classified) was fixed; the #360 CI failures were a fixture file inside the pg_prove glob (moved out), and a Playwright failure on the Phone label (the country select is now labelled "Country code" and the e2e phones are complete Brunei numbers), both fixed; `059_public_live_now.sql` test 22 failed once in CI on #360 and passed on the next run (see below). This PR: code-reviewer found nothing; test-auditor found one Nit (the database was only given the 2 already-canonical cases, not every expected output), fixed by feeding every `expect` value to the database. Full pgTAP after `db:reset`: 3344 tests, only `059` test 22 failed (the flake below, not this change).
-
-**Found, not fixed (the owner decides):** `059_public_live_now.sql` test 22 is flaky, about 40% locally (7 of 20 runs failed). It is not a clock or day-boundary problem. `public_live_now()` ends `order by ls.updated_at desc, ls.id limit 3`; in the test the four "cap" sessions and the "locked" session all take `updated_at = now()` (frozen inside the transaction), so five rows tie and the random `ls.id` decides whether the locked event is in the top 3 (3 in 5). Test 23 (expects 0) passes either way, so it can pass without proving the lock. Fix: give the locked session an `updated_at` strictly newer than the cap rows. Evidence in the side-session notes (`059-test22-flake.md`).
-
-## Landing page: proof photo full bleed · 2026-10-30
-
-**Task:** The landing proof section (the "Completed" / "Not a demo. Real events, real brackets." card) now uses a full-bleed photo: the story spans the viewport edge to edge, and the copy sits in the usual content wrap. Visual only. Not a handoff §14 task. No migration, no cloud change, no data, no release.
-
-**What changed:**
-
-- `landing.css`: `.petrol-proof` loses its vertical padding and `.petrol-story` takes it instead, so the photo reaches every edge. The copy sits in a new `.petrol-story-wrap` (`petrol-wrap`), so it still lines up with the rest of the page. The scrim gradient is anchored to `--story-gutter` (where the content wrap starts), not the viewport edge: the text side stays dark at every width and the photo shows on the right on wide screens. Phone (640px and below) padding moved from the story to the wrap.
-- `landingScreen.js`: `STORY_PHOTO` constant (`src`, `alt`, `position`). `position` is set as inline `object-position`, the focal-point hook for the `object-fit: cover` crop, same idea as `HERO_PHOTOS`. The default `50% 50%` is a no-op on purpose; it is there to be changed. `proofSection()` builds the story and the copy wrap. The reveal observer now watches the story. `alt`, `loading="lazy"`, the copy text and the latest-event block logic are unchanged.
-
-**Verified:**
-
-- Browser at 360, 768, 1280 and 1830px, with and without the latest-result block: no horizontal overflow; the card grows with its text.
-- ESLint and Prettier clean. `vitest src/marketing`: 199 passing.
-
-**Reviews:**
-
-- `code-reviewer`: no findings. One nit: the default `object-position` is a no-op hook. Intentional.
-- `ui-accessibility-reviewer`: no blocking findings. Nits, none fixed:
-  - Descriptive alt on a photo that reads as near-decorative. Kept on purpose: it is a genuine event photo, and the brief said keep the alt.
-  - The photo is 1100px wide, so it upscales about 1.7x on 1830px screens and is soft on large desktops. A wider source fixes it (ROADMAP).
-  - The raw rgba scrim values are undocumented. Intentional.
-
-**Open follow-up:**
-
-- Phone (640px and below): the opaque copy card covers the photo's subject, so the photo is barely visible. Pre-existing (the phone rule already set the card's background before this change); owner design decision. ROADMAP "Known open items from the landing proof photo".
-- Wider source for the full-bleed slot (`hero-cupping-bowls.jpg`, also used by the Tour page). ROADMAP, same section.
-- Package version bump (CLAUDE.md step 8) NOT done: this session's edit scope was CHANGELOG.md and ROADMAP.md only. Run `npm version patch --no-git-tag-version` before the release that carries this.
-- `state.json` not touched: it is not in this worktree, and its reset is `kb-sync`'s job.
-
----
-
-## Landing page cleanup, stage 3 of 3: the live now bar · 2026-10-30
-
-**Task:** Stage 3 of the three-stage landing page cleanup: a "live now" bar on the landing page, listing events an organiser has opted in to publish. Stages 1 and 2 are in the entries below. Not a handoff §14 task. Migration `20261029100000_homepage_live_listing.sql` written and tested locally; NOT pushed to the cloud project (the main session pushes it after merge, `apply_migration`, version `20261029100000`). No package version bump, no release.
-
-**What changed:**
-
-- **Opt-in:** `events.list_on_homepage boolean not null default false`. It sits on `events`, not `live_sessions`, because `events` is closed to anon and `live_sessions` is anon-readable: the flag must not be readable by anon through a table.
-- **Door:** `public.public_live_now()` is `SECURITY DEFINER` with an empty `search_path`, executable by anon and authenticated only. It returns typed rows (`kind = 'live'`, `event_name`, `org_name`, `org_slug`, `format`, `last_activity_at`, `listed_count`), at most 3, and only when: the event is opted in, `events.is_test` is false, the session is not `is_test`, `events.ended_at` is null, `app.event_window_locked` is false, and the `live_sessions` row is active with `updated_at` within 12 hours. There is no heartbeat, so the 12 hour window is the stand-in for "still running": `publish_session` advances `updated_at` on every publish (trigger `set_updated_at`), and without a window an organisation's last session would stay active, and listed, forever. The typed `kind` leaves room for a registration row later.
-- **Organiser card:** `src/core/homepageListingCard.js` on BOTH the Cup Taster and BTC event dashboards: an opt-in toggle. It reads the flag itself, not through `findEvent`'s shared column list. Adding the column to the shared list would break about 20 screens if the frontend deployed before the migration. The card hides on any failure, uses `aria-disabled` (not `disabled`, which drops keyboard focus) with a busy guard, and has timeouts.
-- **Bar:** `src/core/publicLiveNow.js` (`findLiveNow`, `liveNowRow`, `liveAudienceHref`, which builds `/app/#/live/<slug>/phone`: the phone view, since people open it on their own devices). `src/marketing/landingScreen.js` gains `liveBar()` and `mountLandingScreen({ loadLive })`. `main.js` loads it by lazy dynamic import under a 6 s `raceTimeout`, skipped under the prerender (same guard as stage 2). The bar is absent, and the page identical, when nothing is listed or the request fails. "N more" is a disclosure button. Nothing on the bar claims registration.
-- **Styles and docs:** `landing.css` (bar block), `src/marketing/CLAUDE.md` (the landing page now makes one more anonymous read, the bar, through the door above).
-- **Tests:** new `supabase/tests/059_public_live_now.sql` (25 assertions: default off; anon cannot read or write the flag; each hiding condition, including the window lock; the 12 hour boundary; the cap of 3 with `listed_count`; a non-member's update changes zero rows; privileges and `search_path`). `018` classifies the column as `metadata`; `037` adds `public_live_now` to the anon door list. No new table, so the `040`/`041` matrices need no entry (`041`'s guard covers only uuid-argument functions). Vitest: `publicLiveNow.test.js`, `homepageListingCard.test.js`, `landingScreen.test.js`.
-- **Rollback:** a `-- rollback:` block drops the function, then the column. Run inside a transaction and checked.
-
-**Verified:**
-
-- vitest: 193 files, 5535 tests passing. ESLint and Prettier clean.
-- pgTAP: full suite passing after `db:reset`.
-- Rollback: run in a transaction.
-- Browser at 360px, dev server from this worktree on port 5391 against the local stack with seeded listed events: bar about 103px tall; controls 44px; no horizontal overflow; disclosure works; bar absent and page identical with nothing listed; exactly one `public_live_now` request per page view.
-- `dist/index.html` (prerender) has no bar markup.
-
-**Not verified, so this entry is not final:**
-
-- The organiser opt-in card was not rendered in a real browser, nor traversed by keyboard or screen reader. Unit tests only. This is a Definition-of-Done item.
-- Real data against the cloud project: the migration is not pushed yet.
-- Insertion shifts the page down about 103px if the answer arrives late. Accepted as a design call.
-- Privacy page wording was not updated. The bar publishes only what an organiser opted in (event name and organiser name). Follow-up below.
-
-**Reviews:**
-
-- `security-reviewer`: no Important. Nits, not changed: the per-row `app.event_window_locked` call costs a little (fine at one active session per org; a `window_locked_events` set would avoid it); organiser-controlled names appear on a public homepage (rendered as text, capped, no moderation: see ROADMAP); the 12 hour window is keyed on `updated_at`, so an organisation touching its own session keeps its bar up (its own org only).
-- `schema-guardian`: clean. Verified that `updated_at` advances on publish, the rollback order, and the `018`/`037` changes.
-- `code-reviewer`: one Important, fixed (the shared `FIND_EVENT_COLUMNS` change described above; the card now reads the flag itself). Nits: late-insertion layout shift (accepted); dead hook classes (kept, harmless).
-- `module-boundary-checker`: clean. Nit, not extracted: `tidy()` resembles the `text()` helper in brandSlot. A third caller would justify extracting it. Suggestion: a test that walks marketing's static imports to keep the Supabase client out (ROADMAP).
-- `test-auditor`: its Important #1 (dashboards not receiving the flag) was against a mid-edit snapshot and is resolved by the self-loading card. Important #2 (the window-lock condition was untested) FIXED with two assertions. Nits fixed: the `059` header claim about other rows (the door caps at 3 before the test filter, so the test assumes no other opted-in live events); `toEqual` on the update payload. Not done, logged: failed unlist, `orgName` null wording, a loader that never resolves, `main.js` passing `loadLive`.
-- `ui-accessibility-reviewer`: 2 Important, both FIXED: the card had no timeouts; native `disabled` dropped keyboard focus (now `aria-disabled` with a busy guard). Nits fixed: `role="list"` on the panel; the toggle is named "+N more live". Not done, logged: the raw rgba border has no token; clamped long names have no visible full text.
-
-**Open follow-up:**
-
-- Browser check of the organiser toggle (both dashboards), and a Playwright test that mounts both. ROADMAP.
-- Privacy page wording for the homepage listing. ROADMAP.
-- Cloud push of `20261029100000` after merge, then a real-data check of the bar against the cloud.
-- Package version bump (CLAUDE.md step 8) not done: this session's edit scope was CHANGELOG.md and ROADMAP.md only. Owed before release.
-- `CONVENTIONS.md` not updated: the self-loading card (a card reads its own column instead of the shared `findEvent` list, so the frontend can deploy before the migration) is a pattern that should generalise. Owed.
-- Registration rows on the bar, admin moderation of listed names, and the other deferred items: see ROADMAP "Known open items from the landing page cleanup (stage 3, 2026-10-30)".
-
----
