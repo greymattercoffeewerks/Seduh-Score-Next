@@ -432,23 +432,6 @@
   overflow-wrap: anywhere;
 }
 
-/* A problem beside the field it is about, in words (the colour alone is never the message). */
-.adm-field-error {
-  color: var(--color-danger);
-  font-size: var(--text-sm);
-}
-
-.adm-field-error:empty {
-  /* Out of the flow but still in the accessibility tree: a live region that goes from display:none to text in one
-     step is often not announced (the same rule .screen-feedback:empty follows in components.css). */
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
 .adm-fieldset {
   margin: 0;
   padding: 0;
@@ -523,10 +506,6 @@
 /* The checked colour of a native radio or checkbox is the console's, not the browser's blue. */
 .adm-check input {
   accent-color: var(--color-accent);
-}
-
-.field-input[aria-invalid='true'] {
-  border-color: var(--color-danger);
 }
 
 /* An empty paragraph (the link-name preview before there is anything to say) must not add a gap of its own. */

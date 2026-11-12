@@ -94,7 +94,9 @@ describe('buildEventWarnings', () => {
 
   it('says so when there is nothing, instead of drawing nothing', () => {
     const card = buildEventWarnings([]);
-    expect(card.querySelector('.ok-warn-empty').textContent).toBe('Nothing needs attention.');
+    expect(card.querySelector('.empty[data-kind="done"]').textContent).toBe(
+      'Nothing needs attention.',
+    );
     expect(card.querySelector('.ok-warn-list')).toBeNull();
     expect(card.querySelector('.ok-warn-count')).toBeNull();
     expect(buildEventWarnings(undefined, { emptyText: 'All clear.' }).textContent).toContain(

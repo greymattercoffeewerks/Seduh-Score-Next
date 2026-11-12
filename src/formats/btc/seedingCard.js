@@ -72,7 +72,7 @@ export function renderSeedingTies({
     return el('div', { className: 'card btc-seeding-card' }, [
       heading,
       el('p', {
-        className: 'btc-field-error',
+        className: 'form-field-error',
         text: 'We could not check for level teams. If teams are level across the cut line, the top 8 cannot be locked until they are in order.',
         attrs: { role: 'status' },
       }),
@@ -199,7 +199,7 @@ export function renderSeedingTies({
     const errorNode = error
       ? el('p', {
           id: errorId,
-          className: 'btc-field-error',
+          className: 'form-field-error',
           text: error.message,
           attrs: {
             role: 'alert',
@@ -299,7 +299,7 @@ export function renderSeedingTies({
       readFailed
         ? el('div', { className: 'btc-seeding-stale' }, [
             el('p', {
-              className: 'btc-field-error',
+              className: 'form-field-error',
               text: 'This list could not refresh and may be out of date. Press Check again.',
               attrs: { role: 'status' },
             }),
@@ -309,7 +309,7 @@ export function renderSeedingTies({
       mustOrder
         ? el('p', {
             id: 'btc-seeding-blocking',
-            className: 'btc-field-error',
+            className: 'form-field-error',
             text: 'The top 8 cannot be locked until teams level across the cut line are in order.',
             attrs: { role: 'status' },
           })

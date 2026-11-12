@@ -56,7 +56,7 @@ export function createAccountLookup({ ctx, idPrefix, cannotUse, mayTakeFocus, on
     if (!found) return;
     const lines = [el('p', { text: `Found: ${found.email}` })];
     if (found.deleted || found.banned) {
-      lines.push(el('p', { className: 'adm-field-error', text: cannotUse }));
+      lines.push(el('p', { className: 'form-field-error', text: cannotUse }));
     } else {
       lines.push(
         el('p', {

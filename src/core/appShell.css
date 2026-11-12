@@ -60,7 +60,7 @@
   min-height: var(--app-shell-chip-height);
 }
 
-.app-shell-context-empty {
+.app-shell-context-idle {
   display: contents;
 }
 

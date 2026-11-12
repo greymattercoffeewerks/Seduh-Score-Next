@@ -153,7 +153,7 @@ export function confirmAction({
 }) {
   const holder = el('div', { className: 'adm-role-control' });
   const message = el('p', {
-    className: 'adm-field-error',
+    className: 'form-field-error',
     attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
   });
   let busy = false;

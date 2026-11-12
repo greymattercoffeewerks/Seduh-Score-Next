@@ -2,6 +2,7 @@
 // everywhere), navigation drawn from the panel registry, and the host the current panel mounts into. Panel
 // routes live in the URL hash (`#/orgs`, `#/orgs/<id>`), one panel at a time.
 import { el, brandLockup, setBusyDisabled } from '../core/dom.js';
+import { confirmDialog } from '../core/feedback.js';
 import { feedbackRegion, setFeedback, SIGN_OUT_FAILED } from './screenParts.js';
 
 // The panel a hash names: by its FIRST segment, so `#/orgs/<id>` is still the `orgs` panel (which then reads the
@@ -28,9 +29,21 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
   let mounted = null;
   let mountedPanel = null;
   let shownHash = window.location.hash;
-  function confirmLeave() {
+  // What is lost cannot be got back, so it is the native dialog (core/feedback.js), with focus on Cancel.
+  let asking = false;
+  async function confirmLeave() {
     const warning = mounted?.leaveWarning?.();
-    return !warning || window.confirm(warning);
+    if (!warning) return true;
+    asking = true;
+    try {
+      return await confirmDialog({
+        title: 'Leave this screen?',
+        body: warning,
+        confirmLabel: 'Leave',
+      });
+    } finally {
+      asking = false;
+    }
   }
 
   // One flag for the whole header: while either sign-out is in flight the other is out too (two overlapping
@@ -44,8 +57,16 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
       attrs: { type: 'button' },
     });
     button.addEventListener('click', async () => {
-      if (busy || !confirmLeave()) return;
+      if (busy) return;
+      // Taken BEFORE the question, which is asynchronous now: a second click while the dialog is up, or in the
+      // microtask before it, must not start a second sign-out.
       busy = true;
+      if (!(await confirmLeave())) {
+        busy = false;
+        // A Back press while the dialog was up was ignored (showPanel waits for it): put the address back.
+        if (window.location.hash !== shownHash) window.location.replace(shownHash);
+        return;
+      }
       for (const other of signOutButtons) setBusyDisabled(other, true);
       setFeedback(feedback, '');
       const result = await handler();
@@ -87,13 +108,22 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
   root.append(skip, header, feedback, nav, host);
 
   function showPanel() {
+    if (asking) return;
     const panel = routeOf(window.location.hash, panels);
     // Going to another panel with something on screen that cannot be got back: ask, and put the address back if the
     // answer is no (the replacement fires hashchange again, which lands here with the panel that is still mounted).
-    if (panel !== mountedPanel && mountedPanel && !confirmLeave()) {
-      window.location.replace(shownHash);
+    if (panel !== mountedPanel && mountedPanel && mounted?.leaveWarning?.()) {
+      confirmLeave().then((ok) => {
+        if (ok) applyPanel();
+        else window.location.replace(shownHash);
+      });
       return;
     }
+    applyPanel();
+  }
+
+  function applyPanel() {
+    const panel = routeOf(window.location.hash, panels);
     // A hash that names no panel (empty after the Back button, or typed by hand) shows the first panel by fallback.
     // Say so in the address, so the page and the URL agree: the replacement fires hashchange again, which a panel
     // that keeps views of its own (orgsPanel.js) answers by showing the view that address means.

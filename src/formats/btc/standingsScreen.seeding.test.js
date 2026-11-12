@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { answerIfOpen, openFeedbackText } from '../../core/feedbackTestKit.js';
 import { mountStandingsScreen } from './standingsScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 
@@ -160,8 +161,7 @@ describe('the seeding ties card on the standings screen', () => {
   beforeEach(() => {
     root = document.createElement('div');
     document.body.appendChild(root);
-    // Locking asks first, naming the eight; these tests say yes unless one says otherwise.
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    // Locking asks first, naming the eight; these tests say yes (answerIfOpen) unless one says otherwise.
   });
   afterEach(() => {
     root.remove();
@@ -639,6 +639,7 @@ describe('the seeding ties card on the standings screen', () => {
     const generate = byKey('lock-top-8');
     expect(generate.hasAttribute('aria-disabled')).toBe(false);
     generate.click();
+    answerIfOpen('confirm');
     await flush();
     expect(client.rpcCalls.map(([name]) => name)).toEqual(['generate_btc_bracket']);
     expect(root.querySelector('.screen-feedback').textContent).toBe('Bracket generated.');
@@ -665,6 +666,7 @@ describe('the seeding ties card on the standings screen', () => {
     // ... and another device re-confirmed a match, making T8 and T9 level
     client.db.btc_seeding_order = level.map((r) => ({ ...r }));
     byKey('lock-top-8').click();
+    answerIfOpen('confirm');
     await flush();
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(2);
     expect(root.querySelector('.screen-feedback').textContent).toMatch(
@@ -900,6 +902,7 @@ describe('the seeding ties card on the standings screen', () => {
     };
     await mount(client);
     byKey('lock-top-8').click();
+    answerIfOpen('confirm');
     await flush();
     expect(root.textContent).toContain('Generating…');
     expect(openButtonOf(group(0)).getAttribute('aria-busy')).toBe('true');
@@ -993,6 +996,7 @@ describe('the seeding ties card on the standings screen', () => {
     submitForm();
     await flush();
     byKey('lock-top-8').click();
+    answerIfOpen('confirm');
     await flush();
     expect(client.rpcCalls.map(([name]) => name)).toEqual(['record_btc_seeding_tiebreak']);
     client.control.release();
@@ -1016,6 +1020,7 @@ describe('the seeding ties card on the standings screen', () => {
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(1);
     client.db.btc_seeding_order = level.map((r) => ({ ...r }));
     byKey('lock-top-8').click();
+    answerIfOpen('confirm');
     await flush();
     expect(root.querySelectorAll('.btc-seeding-group')).toHaveLength(2);
   });
@@ -1191,9 +1196,9 @@ describe('the seeding ties card on the standings screen', () => {
     await flush();
     client.rpcCalls.length = 0;
     byKey('lock-top-8').click();
+    expect(openFeedbackText()).toBeNull(); // a refused gate asks nothing
     await flush();
     expect(client.rpcCalls).toEqual([]);
-    expect(window.confirm).not.toHaveBeenCalled();
     expect(root.querySelector('.screen-feedback').textContent).toContain(
       'We could not check for teams that are level',
     );
@@ -1223,6 +1228,7 @@ describe('the seeding ties card on the standings screen', () => {
     const client = fakeClient(resolvedCutoff(nineTeamsWithTies()));
     await mount(client);
     byKey('lock-top-8').click();
+    answerIfOpen('confirm');
     await flush();
     expect(root.querySelector('.btc-seeding-card')).toBeNull();
     expect(root.querySelector('.btc-seeding-form')).toBeNull();

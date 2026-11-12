@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountSetupScreen, validateRosterName } from './setupScreen.js';
 import { publishBtcLive } from './liveSession.js';
+import { answerFeedback, openFeedbackText } from '../../core/feedbackTestKit.js';
 
 vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
 
@@ -224,26 +225,27 @@ describe('mountSetupScreen', () => {
     });
 
     it('asks before replacing a roster, naming the mode, and does nothing if the person says no', async () => {
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
       const client = fakeClient(baseDb());
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(loadButton());
+      expect(openFeedbackText()).toMatch(/full demo.*28 scored matches.*erased/i);
+      expect(document.querySelector('dialog .feedback-test').textContent).toBe('Test event');
+      answerFeedback('cancel');
       click(rosterOnlyButton());
+      expect(openFeedbackText()).toMatch(/demo roster.*no matches.*erased/i);
+      answerFeedback('cancel');
       await flush();
 
-      expect(confirm).toHaveBeenCalledTimes(2);
-      expect(confirm.mock.calls[0][0]).toMatch(/full demo.*28 scored matches.*erased/i);
-      expect(confirm.mock.calls[1][0]).toMatch(/demo roster.*no matches.*erased/i);
       expect(client.rpcCalls).toEqual([]);
       expect(root.textContent).toContain('Alpha');
     });
 
     it('loads the scored demo and replaces the roster on screen', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb());
       const handlers = { composed: true };
       await mountSetupScreen(root, { eventId: 'ev1', client, handlers });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
 
       expect(client.rpcCalls).toEqual([
@@ -271,10 +273,10 @@ describe('mountSetupScreen', () => {
     });
 
     it("prints the SERVER's numbers, not a hard-coded message", async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb(), { demoReply: { teams: 3, judges: 2, matches: 1 } });
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
       expect(status()).toBe(
         'Demo loaded: 3 teams, 2 judges and 1 scored matches. Lock the top 8 in Standings when you are ready.',
@@ -282,9 +284,9 @@ describe('mountSetupScreen', () => {
     });
 
     it('shows the result INSIDE the card, and it stays (the 1.5 s toast is not used)', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       await mountSetupScreen(root, { eventId: 'ev1', client: fakeClient(baseDb()) });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
 
       const expected =
@@ -299,19 +301,19 @@ describe('mountSetupScreen', () => {
     });
 
     it('keeps focus on the button that was pressed instead of moving it down the page', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       await mountSetupScreen(root, { eventId: 'ev1', client: fakeClient(baseDb()) });
       loadButton().focus();
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
       expect(document.activeElement).toBe(loadButton());
     });
 
     it('loads the roster only when asked, and says so', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb());
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(rosterOnlyButton());
+      answerFeedback('confirm');
       await flush();
 
       expect(client.rpcCalls[0][1].p_scored).toBe(false);
@@ -321,20 +323,18 @@ describe('mountSetupScreen', () => {
     it('asks when only teams exist, and when only judges exist (either is data to lose)', async () => {
       for (const keep of ['btc_teams', 'btc_judges']) {
         root.innerHTML = '';
-        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
         const db = baseDb();
         db.btc_teams = keep === 'btc_teams' ? db.btc_teams : [];
         db.btc_judges = keep === 'btc_judges' ? db.btc_judges : [];
         await mountSetupScreen(root, { eventId: 'ev1', client: fakeClient(db) });
         click(loadButton());
+        expect(document.querySelectorAll('dialog.dialog')).toHaveLength(1);
+        answerFeedback('cancel');
         await flush();
-        expect(confirm).toHaveBeenCalledTimes(1);
-        confirm.mockRestore();
       }
     });
 
     it('does not ask when there is nothing to lose (an empty roster)', async () => {
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
       const db = baseDb();
       db.btc_teams = [];
       db.btc_judges = [];
@@ -343,16 +343,16 @@ describe('mountSetupScreen', () => {
       click(loadButton());
       await flush();
 
-      expect(confirm).not.toHaveBeenCalled();
+      expect(document.querySelector('dialog.dialog')).toBeNull();
       expect(client.rpcCalls).toHaveLength(1);
     });
 
     it('never waits on the publish: the demo result still shows if it never settles', async () => {
       publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb());
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
       expect(status()).toMatch(/demo/i);
       expect(root.textContent).toContain('Bean Scene');
@@ -361,10 +361,10 @@ describe('mountSetupScreen', () => {
     it('a refused publish is logged, not thrown: the demo still loads', async () => {
       const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       publishBtcLive.mockRejectedValueOnce(new TypeError('no handler map'));
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb());
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
       expect(root.textContent).toContain('Bean Scene');
       expect(error).toHaveBeenCalledWith(
@@ -374,12 +374,12 @@ describe('mountSetupScreen', () => {
     });
 
     it('explains a refusal in an alert inside the card and leaves the roster alone', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb(), {
         demoError: { code: 'P0001', hint: 'demo_not_test', message: 'wording does not matter' },
       });
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
 
       expect(alert()).toBe(
@@ -393,7 +393,6 @@ describe('mountSetupScreen', () => {
     });
 
     it('shows a visible, announced "Loading demo…" while it works, and says which button is busy', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       let release;
       const gate = new Promise((resolve) => {
         release = resolve;
@@ -401,6 +400,7 @@ describe('mountSetupScreen', () => {
       const client = fakeClient(baseDb(), { demoGate: gate });
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(rosterOnlyButton());
+      answerFeedback('confirm');
       await flush();
 
       expect(status()).toBe('Loading demo…');
@@ -416,7 +416,6 @@ describe('mountSetupScreen', () => {
     });
 
     it('sends ONE request however many times the buttons are pressed while it is loading', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       let release;
       const gate = new Promise((resolve) => {
         release = resolve;
@@ -424,6 +423,7 @@ describe('mountSetupScreen', () => {
       const client = fakeClient(baseDb(), { demoGate: gate });
       await mountSetupScreen(root, { eventId: 'ev1', client });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
       click(loadButton());
       click(rosterOnlyButton());
@@ -443,10 +443,10 @@ describe('mountSetupScreen', () => {
     it('does not wait forever: after the timeout it says the demo may or may not have loaded, and unlocks the screen', async () => {
       vi.useFakeTimers();
       try {
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         const client = fakeClient(baseDb(), { demoGate: new Promise(() => {}) });
         await mountSetupScreen(root, { eventId: 'ev1', client });
         click(loadButton());
+        answerFeedback('confirm');
         // still waiting at 19 s: the limit is 20 s, not the 10 s a plain read gets
         await vi.advanceTimersByTimeAsync(19000);
         expect(status()).toBe('Loading demo…');
@@ -464,7 +464,6 @@ describe('mountSetupScreen', () => {
     });
 
     it('if re-reading the roster fails after a successful load, drops the old roster for the retry view that says the demo loaded', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb());
       await mountSetupScreen(root, { eventId: 'ev1', client });
       const realFrom = client.from;
@@ -480,6 +479,7 @@ describe('mountSetupScreen', () => {
         return realFrom(table);
       };
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
 
       expect(root.textContent).toContain(
@@ -501,6 +501,7 @@ describe('mountSetupScreen', () => {
       expect(loadButton().getAttribute('aria-disabled')).not.toBe('true');
       expect(rosterOnlyButton().getAttribute('aria-disabled')).not.toBe('true');
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
       expect(client.rpcCalls).toHaveLength(2);
     });
@@ -508,7 +509,6 @@ describe('mountSetupScreen', () => {
     it('a roster re-read that HANGS after a successful load does not lock the screen: the retry view appears', async () => {
       vi.useFakeTimers();
       try {
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         const client = fakeClient(baseDb());
         await mountSetupScreen(root, { eventId: 'ev1', client });
         const realFrom = client.from;
@@ -527,6 +527,7 @@ describe('mountSetupScreen', () => {
           });
         client.from = (table) => (loaded ? hang : realFrom(table));
         click(loadButton());
+        answerFeedback('confirm');
         await vi.advanceTimersByTimeAsync(10001);
 
         expect(root.textContent).toContain(
@@ -541,9 +542,9 @@ describe('mountSetupScreen', () => {
     });
 
     it('clears an old demo result once the roster is changed by hand (it would no longer be true)', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       await mountSetupScreen(root, { eventId: 'ev1', client: fakeClient(baseDb()) });
       click(loadButton());
+      answerFeedback('confirm');
       await flush();
       expect(status()).toMatch(/Demo loaded/);
 
@@ -742,7 +743,7 @@ describe('mountSetupScreen', () => {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await Promise.resolve();
 
-    const errorNode = root.querySelector('.btc-field-error');
+    const errorNode = root.querySelector('.form-field-error');
     expect(errorNode.getAttribute('role')).toBe('alert');
     expect(errorNode.id).toBeTruthy();
     // the error AND the name hint both describe the field

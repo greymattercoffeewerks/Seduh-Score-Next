@@ -1,0 +1,280 @@
+/*
+ * Feedback parts — Petrol Kaizen P4. One answer for each way the app talks back, from the lightest to the heaviest
+ * (the ladder is written up in DESIGN.md, "Feedback ladder"):
+ *
+ *   1. inline     .screen-feedback (components.css) and .form-field-error, under the thing that caused it
+ *   2. toast      .toast, routine success only, about 3 seconds
+ *   3. confirm    .confirm-panel, opens beside the button, for an action that can be undone or re-done
+ *   4. dialog     .dialog on the native <dialog>, ONLY for a permanent delete
+ *   +  empty      .empty, with data-kind first-use | done | no-results
+ *
+ * Imported by index.css, so every page that loads the tokens has them (Guess the Bean, the Timer and Behind the
+ * Seduh load index.css but not components.css, which is why the buttons here are the parts' own .fb-btn, not .btn).
+ * Colour comes from the tokens, so a data-surface="stage" ancestor flips every part with no extra rule. No shadows,
+ * Hybrid radii (--radius-sm small, --radius-md boxes, --radius-lg dialog), and the global reduced-motion rule in
+ * base.css switches the entrances off. Violet (--color-test) is used only by .feedback-test, for a test event.
+ * The parts are built by core/feedback.js.
+ */
+
+/* ---- 1. A field's error line: its own mark, so colour is not the only cue ---- */
+.form-field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+
+.form-field-error::before {
+  content: '!';
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 1px;
+  border-radius: var(--radius-sm);
+  background: var(--color-danger);
+  color: var(--color-danger-contrast);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+/* An error region created empty and filled later stays in the accessibility tree (the same reason
+   .screen-feedback:empty is clipped, not display:none), and without its mark. */
+.form-field-error:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.form-field-error:empty::before {
+  content: none;
+}
+
+/* ---- the parts' own buttons ---- */
+.fb-btn {
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.fb-btn:hover {
+  background: var(--color-surface-sunken);
+}
+
+.fb-btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.fb-btn--primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.fb-btn--danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--color-danger-contrast);
+}
+
+.fb-btn--danger:hover {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  filter: brightness(0.9);
+}
+
+.fb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The one place violet appears in these parts: the event being changed is a test event. */
+.feedback-test {
+  align-self: flex-start;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-test);
+  color: var(--color-test-contrast);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.feedback-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.feedback-body {
+  margin: 0;
+  white-space: pre-line; /* a caller's list of names keeps its line breaks */
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ---- 3. Confirm in place ---- */
+.confirm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-inline-start: 4px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  /* Inside a grid row (the match list's .ok-row) the panel spans the whole row, not one auto-placed cell. */
+  grid-column: 1 / -1;
+  animation: feedback-in var(--dur-base) var(--ease-out) both;
+}
+
+.confirm-panel[data-tone='danger'] {
+  border-inline-start-color: var(--color-danger);
+}
+
+@keyframes feedback-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* ---- 4. Dialog (permanent deletes only) ---- */
+.dialog {
+  box-sizing: border-box;
+  width: min(32rem, calc(100vw - var(--space-5)));
+  margin: auto;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: var(--border-strong) solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: feedback-in var(--dur-base) var(--ease-out) both;
+}
+
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--clr-petrol-950) 72%, transparent);
+}
+
+/* ---- 2. Toast (routine success only; an error never goes here) ---- */
+.toast-region {
+  position: fixed;
+  inset-inline: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-canvas);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  animation: feedback-in var(--dur-base) var(--ease-out) both;
+}
+
+.toast::before {
+  content: '\2713';
+  flex: none;
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---- Empty ---- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: var(--border-hairline) dashed var(--color-border-card);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+}
+
+/* display:flex above would beat the hidden attribute's UA rule (a search page shows and hides one). */
+.empty[hidden] {
+  display: none;
+}
+
+/* The kind is a mark as well as words: + first use, a tick when everything is done, ? when a search found nothing. */
+.empty[data-kind]::before {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1.5px solid var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.empty[data-kind='first-use']::before {
+  content: '+';
+}
+
+.empty[data-kind='done']::before {
+  content: '\2713';
+}
+
+.empty[data-kind='no-results']::before {
+  content: '?';
+}
+
+.empty-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.empty-text {
+  margin: 0;
+}

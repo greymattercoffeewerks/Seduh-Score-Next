@@ -215,7 +215,7 @@ export function mountCreateOrgPanel(host, ctx) {
       if (mode !== 'existing' || !found) return;
       const lines = [el('p', { text: `Found: ${found.email}` })];
       if (found.deleted || found.banned) {
-        lines.push(el('p', { className: 'adm-field-error', text: CANNOT_OWN }));
+        lines.push(el('p', { className: 'form-field-error', text: CANNOT_OWN }));
       } else {
         lines.push(
           el('p', {

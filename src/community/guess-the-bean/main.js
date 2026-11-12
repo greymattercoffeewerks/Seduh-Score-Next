@@ -32,7 +32,7 @@ let signingIn = false;
       authHandle.unmount();
       mountSetupScreen(document.getElementById('app')).catch((err) => {
         document.getElementById('app').innerHTML =
-          '<section class="gtb-screen"><p class="gtb-field-error">Something went wrong loading your sessions — try reloading the page.</p></section>';
+          '<section class="gtb-screen"><p class="form-field-error">Something went wrong loading your sessions — try reloading the page.</p></section>';
         console.error(err);
       });
     },

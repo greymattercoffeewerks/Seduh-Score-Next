@@ -13,6 +13,7 @@
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
+import { confirmInPlace } from '../../core/feedback.js';
 import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { renderStatusBand } from '../../core/statusBand.js';
@@ -221,15 +222,14 @@ export async function mountStandingsScreen(
     });
 
   // The confirmation names the eight, in the database's seed order; the dialog is the last chance to stop.
-  function lockQuestion() {
+  function lockNames() {
     const rows = cutQualifiers(
       deriveCutRows({ teams: state.teams, seedingRows: seeding.state.rows }),
     );
-    const names = rows.map((row, i) => `${i + 1}. ${row.team.name}`).join('\n');
-    return `Lock the top ${KNOCKOUT_PLACES} and generate the bracket? This cannot be undone.\n\n${names}`;
+    return rows.map((row, i) => `${i + 1}. ${row.team.name}`).join('\n');
   }
 
-  async function handleLock() {
+  async function handleLock(trigger) {
     if (state.generating || seeding.state.busy) return;
     const lock = currentLock();
     // The card says why: say it here too, in words, rather than let the database refuse with a message the
@@ -239,7 +239,13 @@ export async function mountStandingsScreen(
       render();
       return;
     }
-    if (!window.confirm(lockQuestion())) return;
+    const confirmed = await confirmInPlace(trigger, {
+      title: `Lock the top ${KNOCKOUT_PLACES} and generate the bracket?`,
+      body: `This cannot be undone.\n\n${lockNames()}`,
+      confirmLabel: 'Lock and generate',
+      isTest: Boolean(state.event?.is_test),
+    });
+    if (!confirmed) return;
     state.generating = true;
     render();
     try {
@@ -337,7 +343,7 @@ export async function mountStandingsScreen(
     setBusyDisabled(button, state.generating || seeding.state.busy);
     // Marked, not disabled (focus stays and the reason stays reachable); pressing it says why in words.
     if (!lock.allowed) button.setAttribute('aria-disabled', 'true');
-    button.addEventListener('click', () => handleLock());
+    button.addEventListener('click', () => handleLock(button));
     return el('div', { className: 'card ok-cut-lock' }, [
       el('h2', { text: 'Lock the top 8' }),
       el('p', {
@@ -364,7 +370,7 @@ export async function mountStandingsScreen(
       return el('div', { className: 'card' }, [
         el('h2', { text: 'The cut' }),
         el('p', {
-          className: 'btc-field-error',
+          className: 'form-field-error',
           text: 'We could not read the standings just now, so the cut cannot be shown.',
           attrs: { role: 'status' },
         }),
