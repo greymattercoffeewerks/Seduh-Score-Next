@@ -220,7 +220,7 @@ describe('Behind the Seduh: the reader', () => {
     const before = visible(root, '.bts-chapter')[0].id;
     type(root.querySelector('#bts-search'), 'zzz no such thing');
     expect(visible(root, '.bts-entry')).toHaveLength(0);
-    expect(root.querySelector('.bts-empty').hidden).toBe(false);
+    expect(root.querySelector('.empty').hidden).toBe(false);
     [...root.querySelectorAll('.bts-result button')][0].click();
     expect(visible(root, '.bts-chapter').map((c) => c.id)).toEqual([before]);
     expect(root.querySelector('#bts-search').value).toBe('');

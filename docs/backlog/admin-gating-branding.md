@@ -193,3 +193,9 @@ Built: the "Forgot password?" request screen, the screen a recovery link opens, 
 - **No "your password was changed" email** (D-PW7), so a takeover through a borrowed session is not announced; signing out the other sessions is the only mitigation.
 - **Local mail catcher e2e** (`tests/e2e/password-recovery.spec.js`, project `dev-recovery`) follows the link itself because the local redirect allow-list holds only the site root (config.toml is not touched): run `npx playwright test --project=dev-recovery --no-deps` with the local stack up. It is in the CI chain after `dev-admin`; its first CI run is the proof that CI's `supabase start` delivers to Mailpit.
 - **Pre-existing, logged only:** the footer version link measures 32x16 px at 360px (under the 44px target); `setFeedback` still has verbatim copies in `loginScreen.js` and `eventsScreen.js` (the shared one is now `core/dom.js`); a full vitest run prints a jsdom "Not implemented: navigation" error from a test outside this change.
+
+## Known open items from Petrol Kaizen P4 (feedback ladder, 2026-11-13)
+
+- **The admin field hint sits before its input.** `DESIGN.md` says the hint goes after the input, so the sibling selector that hides the error can reach it. Not changed in P4 (`ui-accessibility-reviewer`, Not fixed). Move the hint and keep the selector.
+- **The admin plan panel's errors land in a polite status region** (pre-existing, `planParts.js`). An error should be assertive or sit inline by its cause.
+- **The leave-screen and sign-out warning stays a native dialog on purpose** (a one-time password cannot be recovered). Recorded so nobody "fixes" it into an undoable panel; the owner can overrule.

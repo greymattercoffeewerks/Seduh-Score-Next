@@ -208,10 +208,6 @@ body {
 .gtb-display-result.is-winner {
   border-color: var(--color-success);
 }
-.gtb-display-empty {
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
 .gtb-display-feed.is-new {
   animation: gtb-display-row-in var(--dur-stage) var(--ease-out) both;
 }

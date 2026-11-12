@@ -87,7 +87,7 @@ export function buildEventWarnings(
   }
   const body =
     list.length === 0
-      ? el('p', { className: 'ok-warn-empty', text: emptyText })
+      ? el('p', { className: 'empty', text: emptyText, attrs: { 'data-kind': 'done' } })
       : el(
           'ul',
           { className: 'ok-warn-list', attrs: { role: 'list' } },

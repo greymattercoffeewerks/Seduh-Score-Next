@@ -153,9 +153,12 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
 
   // ---- status line (filter mode) and pager ----
   const result = make(doc, 'div', { className: 'bts-result', role: 'status' });
-  const empty = make(doc, 'div', { className: 'bts-empty panel', hidden: '' }, [
-    make(doc, 'b', { text: 'Nothing matches.' }),
-    doc.createTextNode("Either the search is too picky, or it hasn't been built yet."),
+  const empty = make(doc, 'div', { className: 'empty', hidden: '', 'data-kind': 'no-results' }, [
+    make(doc, 'p', { className: 'empty-title', text: 'Nothing matches.' }),
+    make(doc, 'p', {
+      className: 'empty-text',
+      text: "Either the search is too picky, or it hasn't been built yet.",
+    }),
   ]);
   const pager = make(doc, 'div', { className: 'bts-pager' });
   pane.prepend(result);

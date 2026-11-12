@@ -161,7 +161,7 @@ export function renderSignOffSheet(spec) {
               ),
             ),
           )
-        : el('p', { className: 'ok-signoff-empty', text: model.notes.emptyText });
+        : el('p', { className: 'ok-signoff-none', text: model.notes.emptyText });
     parts.push(
       el('section', { className: 'ok-signoff-section ok-signoff-box' }, [
         el('h3', { className: 'ok-signoff-heading', text: model.notes.heading }),

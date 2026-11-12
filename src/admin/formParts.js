@@ -7,7 +7,7 @@ import { el } from '../core/dom.js';
 // (a lookup that found nothing), where moving focus is not always possible.
 export function field({ id, label, hint, input, live = false }) {
   const errorLine = el('p', {
-    className: 'adm-field-error',
+    className: 'form-field-error',
     id: `${id}-error`,
     attrs: { 'data-for': id, ...(live ? { 'aria-live': 'polite' } : {}) },
   });

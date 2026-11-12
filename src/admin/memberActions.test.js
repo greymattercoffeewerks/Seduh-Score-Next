@@ -538,7 +538,7 @@ describe('Change a role', () => {
     // and it can be tried again, or cancelled
     expect(buttonNamed('Confirm').getAttribute('aria-disabled')).not.toBe('true');
     // focus goes to the refusal itself, which is what the person needs to hear (not back to the button that failed)
-    expect(document.activeElement).toBe(root.querySelector('.adm-field-error'));
+    expect(document.activeElement).toBe(root.querySelector('.form-field-error'));
   });
 
   it('says each other documented refusal in words', async () => {
@@ -744,7 +744,7 @@ describe('Change a role: more of what it promises', () => {
 
   it('the message region is a live region that exists from the start, so a refusal is announced', () => {
     mount({});
-    const message = root.querySelector('.adm-field-error');
+    const message = root.querySelector('.form-field-error');
     expect(message.getAttribute('role')).toBe('status');
     expect(message.getAttribute('aria-live')).toBe('polite');
     expect(message.textContent).toBe('');

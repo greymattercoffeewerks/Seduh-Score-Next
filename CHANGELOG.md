@@ -1,10 +1,32 @@
 # Changelog — Seduh Score Next
 
-Newest first. **This file holds only the last ~two weeks** (entries dated 2026-10-24 or later). Older
+Newest first. **This file holds only the last ~two weeks** (entries dated 2026-10-30 or later). Older
 entries are moved verbatim to `docs/archive/changelog/<period>.md`; find one by task id or title in
 [`CHANGELOG-INDEX.md`](CHANGELOG-INDEX.md) (one line per archived entry), or `grep -r` the directory.
 A new entry goes at the top of this file. When it passes ~200 KB, move the oldest entries to the
 archive and add them to the index (CI's `check:docs` enforces the budget).
+
+---
+
+## Petrol Kaizen P4: the feedback ladder (toast, confirm, dialog, empty state, field errors) · 2026-11-13
+
+**Task:** Petrol Kaizen P4 ("feedback"), the first of the four post-V2 Kaizen items; it ships alone first (owner decision, 2026-11-12). Branch `claude/keen-wiles-9e7b3c`, cut from `dev`, **uncommitted** (the main session commits). **No version bump** in this change: the release PR takes it. The change is visible, so expect a minor at release (`docs/versioning.md`; the release owner's call). No migration, no cloud change, no format module touched. **Not final only for** the real-tablet check of the dialog and panel (see Follow-ups); the three 🔴 fixes were re-checked by the reviewer that raised each one (clean).
+
+- **What.** One written ladder for how the app talks back, in `DESIGN.md` ("Feedback ladder"): inline line (`.screen-feedback`, `.form-field-error`), toast (`toast()`, success only, about 3 s, polite region), confirm in place (`confirmInPlace()`, for anything that can be undone or redone), dialog (`confirmDialog()`, native `<dialog>`, for a permanent delete only). Also `emptyState()` and `.empty` with `data-kind` `first-use` / `done` / `no-results`. Parts: `src/core/feedback.js`, `src/ui/tokens/feedback.css` (imported by `index.css`). Guess the Bean, the Timer and Behind the Seduh do not load `components.css`, so the parts carry their own `.fb-btn`.
+- **Field states.** `aria-invalid="true"` on an input gives a 2px `--color-danger` edge; `.form-field-error` has its own mark, so the error is not colour alone. Readonly is dashed. Disabled uses a new `--opacity-disabled` (0.5, `spacing.css`); the three disabled opacities that were hand-written (0.6 in GTB, the BTC token and `.btn`; 0.42 in the random selector) now use it. `tour.css` 0.68 is not a disabled control and is left.
+- **Migrated.** All seven `window.confirm` calls are gone. In place: BTC lock top 8, redraw a round, remove a match. Dialog: BTC demo load (it erases a test event's roster), Guess the Bean reset data and end session, and the admin console's leave-screen and sign-out warning. The admin one stays a dialog on purpose: a one-time password cannot be recovered, so it is a stop, not an undo (the owner can overrule). Field errors in adm, btc and gtb now use the core `.form-field-error`. Five empty classes became `.empty` (`bts-empty`, `gtb-display-empty`, `ok-records-empty`, `ok-warn-empty`, `rs-history-empty`). Two were not empty states and were renamed: `.app-shell-context-empty` is a layout flag (now `.app-shell-context-idle`), and `ok-signoff-empty` on the print sign-off sheet is a plain line, not a dashed box (now `ok-signoff-none`).
+- **Why.** `window.confirm` is unstyled, blocks the thread and is hard to read at 360px. A permanent delete needs a stop the user cannot tap past by reflex; an undoable action needs only a panel beside its button, so the decision stays where the finger is. Errors never go in a toast (it is gone before it is read); they stay inline. The ladder is written down so the next screen picks the step without a review round.
+- **Tests.** `tokenDrift.test.js` gained "feedback ladder drift guard" (no `confirm(` in `src` JS; no `*-field-error` or `*-empty` class outside core; disabled rules use the token). New `core/feedback.test.js` (19 tests). `core/feedbackTestKit.js` is test-only. `testSetup.js` has a global `afterEach` that removes leftover dialogs, panels and the toast region. The BTC remove-declined test now flushes and checks that nothing was deleted or published. About 6,590 vitest tests pass; ESLint clean. The one failure, `tools/check-doc-budgets.test.js` (`brokenLinks`, a Windows path), also fails on `dev`: pre-existing.
+- **Browser.** `preview.html` at 360px, paper and stage: focus starts on Cancel; `aria-expanded` and `aria-controls` track the panel; the violet strip shows on `is_test`; the dialog is modal; no horizontal overflow.
+- **Reviews** (how each ended):
+  - `ui-accessibility-reviewer` (360px first): 1 Important, fixed. A confirm panel inside the match list's grid row auto-placed into the narrow number column; now `grid-column: 1 / -1`. Nits fixed: stage glyph contrast (muted to secondary); `aria-expanded` removed on close; Cancel and Confirm `aria-describedby` the question; the toast region announces its first message once the region exists. Not fixed: the admin hint sits before its input, so the sibling selector cannot hide it (DESIGN says the hint goes after the input). Logged (`admin-gating-branding.md`). Pre-existing, logged: errors shown through the 1.5 s in-screen toast (BTC matches remove, GTB reset and end session) and errors in polite status regions (BTC standings, admin plan panel).
+  - `code-reviewer`: 1 Important, fixed. A screen re-render under an open panel left its promise pending and the trigger `aria-expanded`; a `MutationObserver` now settles it as declined. Nits fixed: a duplicated CSS line; an admin Back press during the sign-out dialog now restores the address.
+  - `module-boundary-checker`: clean (no `core/` to `formats/` or `admin/` violation). Flagged, deliberate, not fixed: core `toast()` has no production caller yet, because five screens keep their own in-screen `showToast` (they also move focus and show errors). Recorded in DESIGN.md as a follow-up. It also flagged the admin leave-warning as not a permanent delete; kept as a dialog (above).
+  - `test-auditor`: 1 Important, fixed (the BTC remove-declined test, above). Nits fixed: refused-gate asserts now assert that no question was asked; `is_test` strip asserted for Redraw; `feedback.test.js` added; regex gaps widened. Not done: no test for `feedbackTestKit.js` (it is test-only).
+  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor` (no migration, RLS, scoring or outbox change).
+  - Re-check (2026-11-13): `ui-accessibility-reviewer`, `code-reviewer` and `test-auditor` each re-ran on the fixes: no failed fix, no regression. One nit from it fixed (first toast of a page could reorder two same-tick messages). Left, noted: `tokenDrift.test.js`'s confirm matcher misses `window['confirm'](` and a `//` inside a string on the same line (no such call in `src/` today).
+- **Follow-ups** (filed in `docs/backlog/`): migrate the five in-screen toasts (BTC matches, standings, setup and bracket; GTB setup) to `toast()` for success and inline lines for errors (`btc.md`, `guess-the-bean.md`); the older inline confirms in Cup Taster and Throwdown (`#confirm-finish-*`) and Team and Events (`#team-confirm-*`) (`cup-taster.md`, `tenancy.md`); `.gtb-input` has no `aria-invalid` edge because GTB does not load `components.css` (`guess-the-bean.md`); the admin hint order (`admin-gating-branding.md`). **Owed:** a real-device check of the dialog and the confirm panel on the tablet (Honor tablet is the primary device).
+- **Archive.** `CHANGELOG.md` was at 199.6 KB before this entry, so the four 2026-10-29 entries moved verbatim to `docs/archive/changelog/2026-10-H2-d.md` (indexed). The header now reads "2026-10-30 or later".
 
 ---
 
@@ -909,99 +931,5 @@ These are the first gating keys enforced in the cloud for real. The only earlier
 - Package version bump (CLAUDE.md step 8) not done: this session's edit scope was CHANGELOG.md and ROADMAP.md only. Owed before release.
 - `CONVENTIONS.md` not updated: the self-loading card (a card reads its own column instead of the shared `findEvent` list, so the frontend can deploy before the migration) is a pattern that should generalise. Owed.
 - Registration rows on the bar, admin moderation of listed names, and the other deferred items: see ROADMAP "Known open items from the landing page cleanup (stage 3, 2026-10-30)".
-
----
-
-## Landing page cleanup, stage 2 of 3 · 2026-10-29
-
-**Task:** Stage 2 of the three-stage landing page cleanup: a latest-event proof card on the landing page, read from the published-results archive. Stage 3 (a live info bar behind a per-event opt-in) is NOT started. No migration, no RLS change, no cloud change, no data, no package version bump, no release. Not a handoff §14 task.
-
-**What changed:**
-
-- `core/publicResults.js`: `findLatestPublishedResult()` reads `public_results` as anon, newest by `published_at`, limit 1, three columns (`event_id`, `payload`, `published_at`). The card uses only the event name, date and organiser from the payload; competitor and score data is never rendered.
-- `src/marketing/main.js`: loads it by dynamic import, so the Supabase chunk stays off the page's modulepreload list, inside a 6 s `raceTimeout`. The load is skipped under the build-time prerender, detected from the jsdom user agent on `window.navigator`. `globalThis.navigator` is Node's and never matched, which is the bug code review caught. The prerendered page therefore makes no request.
-- `landingScreen.js`: `mountLandingScreen(root, { loadLatest })` inserts a block under the heading, linking to `/results/?sheet=<id>`. On a failed load, an empty archive, or a malformed row the static card stays byte-for-byte unchanged. The event id must be a uuid, the date must be a real calendar date (2026-02-30 is rejected), and all text is set through `el()`.
-- `landing.css`: block styles. The link is 44px tall at 360px.
-- `src/marketing/CLAUDE.md`: the landing page now makes one anonymous read; the prerender skip is noted.
-- Tests: `landingScreen.test.js` (loaded state, fallbacks, markup as text, no competitor data, impossible dates), `publicResults.test.js`, and a new `main.test.js` (the prerender makes no request).
-- Test events cannot reach `public_results`: the publish trigger rejects `is_test`, so the card cannot show a demo event.
-
-**Verified:**
-
-- vitest `src/marketing src/core`: 2339 passing. ESLint and Prettier clean.
-- `npm run build` and prerender: `dist/index.html` has the static card, no latest block, and no Supabase preload.
-- Browser at 360px, fallback and loaded states: no horizontal overflow; link 44px tall.
-- **Not verified, so this entry is not final:** a real-data render against the cloud archive (no `VITE_SUPABASE` env locally); reduced-motion emulation; a screen reader pass; live behaviour on a production build.
-
-**Reviews:**
-
-- `code-reviewer`: one Important, fixed. The prerender guard used `globalThis.navigator`, so it never fired; changed to `window.navigator` and a test added. One nit (comment placement), fixed.
-- `module-boundary-checker`: found the same prerender issue (duplicate, fixed). Boundary clean: no `core/` import from a format, no format logic in `core/`.
-- `ui-accessibility-reviewer`: no Important. Nit (`overflow-wrap` on the meta line), fixed. Layout shift on insertion accepted: the card sits below the fold.
-- `test-auditor`: the same prerender finding (fixed); a weak competitor fixture (fixed, now populated standings, so the no-competitor-data assertion means something); date rollover on 2026-02-30 (code fixed, test added).
-
-**Open follow-up:**
-
-- Stage 3 (above).
-- Definition-of-Done items still open: the real-data check against the cloud archive, the screen reader pass, reduced-motion emulation and the production-build check. Until these are done the task is not closed.
-- Package version bump (CLAUDE.md step 8) is not done: this session's edit scope was CHANGELOG.md and state.json only. Owed before release.
-- `ROADMAP.md` "Known open items from the landing page cleanup" still says stage 2 is not started. Not edited this session for the same scope reason; it needs updating with this entry.
-- The stage 1 screen-reader order nit is still open.
-
----
-
-## Landing page cleanup, stage 1 of 3 · 2026-10-29
-
-**Task:** Stage 1 of a three-stage landing page cleanup. Stage 1 is layout and repetition only: the format rows read better on a phone, and the proof cards that repeated the hero stat strip are gone. Stage 2 (latest-event card wired to the published-results archive) and stage 3 (a live info bar behind a per-event opt-in) are NOT started. No migration, no cloud change, no data, no package version bump, no release.
-
-**What changed:**
-
-- `landing.css` and `landingScreen.js`: at 640px and below each format row is a two-column grid (`index status` / `main main`). The tier pill (Basic free / Soon) now sits beside the row number and the name and description use the full row width. Live rows went from 350px and 387px to 196px and 217px wide at 360px. The Soon tag is wrapped in `.petrol-format-status`; the text div carries `.petrol-format-main`.
-- The four proof cards (`.petrol-fact`: 0 installs, 1 event flow, 3 live surfaces, 2 formats live) are removed, because the hero stat strip already repeats them. Dead `.petrol-proof-facts` CSS and an empty "Responsive" header are removed too. The page is about 575px shorter on a phone (5641px to 5066px).
-- Copy lost on purpose: the "event flow" and "live surfaces" claims no longer appear on the landing page. The ticker still says 0 installs and 3 tiers; it is decorative and `aria-hidden`, and it is left as it was.
-- `src/marketing/CLAUDE.md`: the removal is noted beside the proof-section line it changes.
-
-**Verified:** the two reviews below. The row widths and page heights are the figures recorded when the change was made; this entry did not re-measure them, and no test asserts them.
-
-**Reviews:**
-
-- `code-reviewer`: no Important. Two nits, both fixed: the empty CSS header, and the CLAUDE.md prose.
-- `ui-accessibility-reviewer`: no Important. Nits: (a) DOM order is index, main, status, but the mobile visual order puts the tier pill first, so a screen reader hears the tier last. Left: fixing it means reordering the DOM, which also changes the desktop grid; sequencing only, not a missing name or state. (b) The empty header: fixed. (c) Copy-claim loss: deliberate, see above.
-- Pre-existing, logged not fixed: `.petrol-format-index` uses `--clr-petrol-500` (#4a5a57), 2.67:1 on the stage canvas. That fails 4.5:1 for the number at normal size, and 3:1 for the large-text size on desktop. See ROADMAP "Known open items from the landing page cleanup".
-
-**Open follow-up:** stage 2 and stage 3 (above); the screen-reader order nit (a); the contrast item in ROADMAP.
-
----
-
-## T-ID.A3: people.phone is E.164 in the database, shape only (not pushed to the cloud) · 2026-10-29
-
-**Task:** Seduh ID Layer 1 keys a person on a validated E.164 phone (`SEDUH-ID-LAYER1-SPEC-DRAFT.md` 3.3, 4.2, T-ID.A3; owner decisions in HANDOFF-CORRECTION-004 and `PHONE-CHECKER-DESIGN.md` 7, answered 2026-10-29). The first version put a SQL port of `normalizePhone` in the database; the owner then decided the database is **shape-only** and all interpretation lives in the client, so the PR was amended in place (nothing had been pushed).
-
-**What changed:**
-
-- `20261030100000_phone_e164_shape.sql`: `app.is_e164` (the shape `^\+[1-9][0-9]{7,14}$`) and `app.phone_repair_class` (valid / repairable_default_country / null_phone / ambiguous; only an exact 7-digit Brunei number `^[2-578][0-9]{6}$` is repairable with +673; 8 digits, a leading 0 and everything else is ambiguous). `update_roster_entry` (from the 20261011140000 body, null-org guard kept) trims, then REQUIRES canonical E.164 and otherwise refuses with hint `phone_invalid`; no normalisation, no default country. Changes no row; safe to push at any time.
-- `20261030110000_people_phone_e164_check.sql`: the `people_phone_e164` CHECK, added VALID (a NOT VALID check still blocks updates of legacy rows), behind a guard that refuses with a row count if any non-E.164 row remains. Push only after the stored phones are valid; the 2026-10-29 cloud re-audit showed 24 people, all valid.
-- `supabase/scripts/people_phone_audit.sql` (read-only: class, row ids, digit counts, never a value) and `people_phone_repair.sql` (owner-run, repairs only the exact 7-digit Brunei rows with a unique target, never deletes, ends in ROLLBACK).
-- `src/core/phone.js`: `E164_PATTERN` now uses `[0-9]` (same behaviour) so the client, `app.is_e164` and the CHECK are the same string; `supabase/phonePattern.test.js` fails if they drift.
-- pgTAP: new `060_phone_e164.sql`; fixtures in 040/041 use `e1.phone`; 024's phone-cap case uses a padded canonical value.
-
-**Reviews:** first pass: security-reviewer and schema-guardian found no Important; code-reviewer none; test-auditor two Important (length bounds untested), fixed with boundary tests (its independent check was not run: test-only fix). After the shape-only amendment: schema-guardian and security-reviewer re-run on the new diff only, no Important findings; doc-drift nits fixed.
-
-**Not done:** the client rewrite (`phone.js` interpretation, `registry.js` calling it, the `phone_invalid` message, the country select, the shared fixture) is the next task; until it lands the roster UI still normalises with +673 itself and sends canonical values, which the RPC accepts.
-
-## Password screens follow the cloud's new password settings · 2026-10-29
-
-**Task:** On 2026-10-29 the owner switched on "require current password when changing password" and set the minimum length to 12 on the LIVE project. GoTrue then refuses `updateUser({ password })` without `current_password` unless the session is a recovery session (`internal/api/user.go`, read, not run), which would have left every NEW login stuck at the one-time-password gate and broken the organiser Change password screen, with only "Could not save your password. Try again." on screen. PR into `dev`; no migration, no cloud change, no gate change, `config.toml` untouched.
-
-**What changed:**
-
-- `core/setPasswordScreen.js`: a "One-time password" box first (sent as `current_password`); intro says to enter it again.
-- `core/changePasswordScreen.js`: a "Current password" box first (`askCurrent`), sent as `current_password`.
-- `core/passwordForm.js`: `MIN_PASSWORD_LENGTH` 8 to 12 (`weak_password` was being shown for 8 to 11 characters as "too easy to guess"); `currentLabel` option; `current_password_required` / `current_password_mismatch` are worded ("That is not your current password." / "...the one-time password you were given...") instead of the generic retry line. The recovery link screens are unchanged (a recovery session is exempt).
-- Tests: the unit tests that asserted 8 now assert 12; new cases for the extra box, the empty box and both error codes on both screens; a Playwright test for the organiser Change password screen (also proves GoTrue ignores `current_password` while the setting is off).
-
-**Not verified:** the setting-ON refusal itself (the local stack has no switch for it, and a throwaway GoTrue was not run); the exact error code GoTrue returns for a too-short password; that a recovery link still works with the setting on (read from source only). Manual check on the live project is in the PR.
-
-**Reviews:** recorded in the PR description.
 
 ---

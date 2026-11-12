@@ -949,8 +949,9 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
                     ),
                 )
               : el('p', {
-                  className: 'rs-history-empty',
+                  className: 'empty',
                   text: 'No draws yet. The result controls will keep your record accurate.',
+                  attrs: { 'data-kind': 'first-use' },
                 }),
           ]),
         ]);

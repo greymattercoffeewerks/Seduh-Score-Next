@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { answerFeedback, answerIfOpen, openFeedbackText } from '../../core/feedbackTestKit.js';
 import { mountStandingsScreen } from './standingsScreen.js';
 import { publishBtcLive } from './liveSession.js';
 
@@ -108,7 +109,6 @@ describe('The cut, on the standings screen', () => {
     publishBtcLive.mockClear();
     root = document.createElement('div');
     document.body.appendChild(root);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
   afterEach(() => {
     root.remove();
@@ -251,6 +251,7 @@ describe('The cut, on the standings screen', () => {
         await mountStandingsScreen(root, { eventId: 'ev1', client });
         await vi.advanceTimersByTimeAsync(10);
         lockButton().click();
+        answerIfOpen('confirm');
         await vi.advanceTimersByTimeAsync(10);
         expect(document.activeElement.getAttribute('data-focus-key')).toBe('standings-toast');
         await vi.advanceTimersByTimeAsync(5000);
@@ -304,8 +305,8 @@ describe('The cut, on the standings screen', () => {
       expect(lockButton().getAttribute('aria-disabled')).toBe('true');
       expect(reason()).toContain('level across the cut line');
       lockButton().click();
+      expect(openFeedbackText()).toBeNull(); // a refused gate asks nothing
       await flush();
-      expect(window.confirm).not.toHaveBeenCalled();
       expect(client.rpcCalls).toEqual([]);
     });
 
@@ -350,6 +351,7 @@ describe('The cut, on the standings screen', () => {
       expect(lockButton().getAttribute('aria-disabled')).toBe('true');
       expect(reason()).toBe('Round 2 still has 2 matches to confirm.');
       lockButton().click();
+      answerIfOpen('confirm');
       await flush();
       expect(client.rpcCalls).toEqual([]);
       expect(root.querySelector('.screen-feedback').textContent).toBe(reason());
@@ -390,8 +392,9 @@ describe('The cut, on the standings screen', () => {
       await mount(client, { handlers });
       expect(reason()).toContain('cannot be undone');
       lockButton().click();
+      const question = openFeedbackText();
+      answerFeedback('confirm');
       await flush();
-      const question = window.confirm.mock.calls[0][0];
       for (let i = 1; i <= 8; i++) expect(question).toContain(`${i}. Team ${i}`);
       expect(question).not.toContain('Team 9');
       expect(client.rpcCalls).toEqual([
@@ -420,17 +423,18 @@ describe('The cut, on the standings screen', () => {
       order[8].seed = 8;
       await mount(fakeClient(order));
       lockButton().click();
+      const question = openFeedbackText();
+      answerFeedback('confirm');
       await flush();
-      const question = window.confirm.mock.calls[0][0];
       expect(question).toContain('8. Team 9');
       expect(question).not.toContain('Team 8\n');
     });
 
     it('does nothing when the confirmation is declined', async () => {
-      window.confirm.mockReturnValue(false);
       const client = fakeClient(plain());
       await mount(client);
       lockButton().click();
+      answerFeedback('cancel');
       await flush();
       expect(client.rpcCalls).toEqual([]);
       expect(root.querySelector('.ok-cut-lock h2').textContent).toBe('Lock the top 8');
@@ -442,6 +446,7 @@ describe('The cut, on the standings screen', () => {
       });
       await mount(client);
       lockButton().click();
+      answerIfOpen('confirm');
       await flush();
       expect(root.querySelector('.screen-feedback').textContent).toContain(
         'Teams are level across the cut line.',
@@ -454,6 +459,7 @@ describe('The cut, on the standings screen', () => {
       publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
       await mount(fakeClient(plain()));
       lockButton().click();
+      answerIfOpen('confirm');
       await flush();
       expect(root.textContent).toContain('Bracket generated.');
 
@@ -464,6 +470,7 @@ describe('The cut, on the standings screen', () => {
       document.body.appendChild(root);
       await mount(fakeClient(plain()));
       lockButton().click();
+      answerIfOpen('confirm');
       await flush();
       expect(root.textContent).toContain('Bracket generated.');
       expect(error).toHaveBeenCalledWith(
@@ -489,6 +496,7 @@ describe('The cut, on the standings screen', () => {
         return realFrom(table);
       };
       lockButton().click();
+      answerIfOpen('confirm');
       await flush();
       expect(publishBtcLive).toHaveBeenCalledTimes(1);
       expect(root.textContent).toContain('Bracket generated.');

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { REVOKE_DELAY_MS } from '../../core/export.js';
+import { answerFeedback } from '../../core/feedbackTestKit.js';
 import { validateCreateDraft, findWinnerContact, mountSetupScreen } from './setupScreen.js';
 
 describe('validateCreateDraft', () => {
@@ -124,10 +125,6 @@ function fakeClient({ sessions = [], failOn = null, exportRows = [] } = {}) {
 }
 
 beforeEach(() => {
-  vi.stubGlobal(
-    'confirm',
-    vi.fn(() => true),
-  );
   if (!global.URL.createObjectURL) global.URL.createObjectURL = vi.fn(() => 'blob:mock');
   if (!global.URL.revokeObjectURL) global.URL.revokeObjectURL = vi.fn();
 });
@@ -485,17 +482,13 @@ describe('mountSetupScreen', () => {
       (b) => b.textContent === 'End session',
     );
     endButton.click();
+    answerFeedback('confirm');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(global.confirm).toHaveBeenCalled();
     expect(root.querySelector('h1').textContent).toBe('Create a session');
   });
 
   it('declining the End Session confirmation leaves the session untouched', async () => {
-    vi.stubGlobal(
-      'confirm',
-      vi.fn(() => false),
-    );
     const root = document.createElement('div');
     document.body.appendChild(root);
     await mountSetupScreen(root, {
@@ -519,6 +512,7 @@ describe('mountSetupScreen', () => {
       (b) => b.textContent === 'End session',
     );
     endButton.click();
+    answerFeedback('cancel');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('h1').textContent).toBe('Session One');
@@ -547,6 +541,7 @@ describe('mountSetupScreen', () => {
       (b) => b.textContent === 'Reset data',
     );
     resetButton.click();
+    answerFeedback('confirm');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(client.rpc).toHaveBeenCalledWith('reset_guess_session_data', { p_session_id: 's1' });
@@ -917,6 +912,7 @@ describe('mountSetupScreen', () => {
       (b) => b.textContent === 'Reset data',
     );
     resetButton.click();
+    answerFeedback('confirm');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('.gtb-toast').textContent).toMatch(/not the session creator/i);
@@ -952,6 +948,7 @@ describe('mountSetupScreen', () => {
       (b) => b.textContent === 'End session',
     );
     endButton.click();
+    answerFeedback('confirm');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('.gtb-toast').textContent).toMatch(/could not end that session/i);
@@ -992,8 +989,6 @@ describe('mountSetupScreen', () => {
     // regardless of that stale node's own disabled attribute — only a
     // live re-check of state.busy inside the handler itself prevents a
     // second confirm()/delete from firing concurrently with the first.
-    const confirmSpy = vi.fn(() => true);
-    vi.stubGlobal('confirm', confirmSpy);
     const deleteSpy = vi.fn(() => Promise.resolve({ error: null }));
     const root = document.createElement('div');
     document.body.appendChild(root);
@@ -1018,10 +1013,13 @@ describe('mountSetupScreen', () => {
       (b) => b.textContent === 'End session',
     );
     endButton.click();
+    answerFeedback('confirm');
+    // the stale button node is clicked again while the first delete is still in flight
+    await Promise.resolve();
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('dialog.dialog')).toBeNull();
     expect(deleteSpy).toHaveBeenCalledTimes(1);
   });
 

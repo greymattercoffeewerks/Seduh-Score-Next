@@ -447,7 +447,7 @@ export async function mountBracketScreen(
     const errorNode = error
       ? el('p', {
           id: errorId,
-          className: 'btc-field-error',
+          className: 'form-field-error',
           text: error.message,
           attrs: { role: 'alert', tabindex: '-1', 'data-focus-key': `tiebreak-error-${slot.id}` },
         })
@@ -627,7 +627,7 @@ export async function mountBracketScreen(
         state.formError
           ? el('p', {
               id: errorId,
-              className: 'btc-field-error',
+              className: 'form-field-error',
               text: state.formError,
               attrs: { role: 'alert' },
             })

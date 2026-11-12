@@ -50,4 +50,8 @@
 
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
+
+  /* A disabled control fades to this, one value everywhere (Petrol Kaizen P4; it was 0.6 in four places and 0.42 in
+     one). Disabled controls are exempt from the text-contrast rule, but 0.5 keeps the label legible. */
+  --opacity-disabled: 0.5;
 }

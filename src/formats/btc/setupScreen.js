@@ -9,6 +9,7 @@
 // sibling this was modeled on.
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
+import { confirmDialog } from '../../core/feedback.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { publishBtcLive } from './liveSession.js';
@@ -345,11 +346,14 @@ export async function mountSetupScreen(
     const hasData = state.teams.length > 0 || state.judges.length > 0;
     if (
       hasData &&
-      !window.confirm(
-        scored
-          ? `Replace this test event with the full demo (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges, ${DEMO_MATCH_COUNT} scored matches)? Its teams, judges, matches, scores and bracket will be erased.`
-          : `Replace this test event with the demo roster (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges, no matches)? Its teams, judges, matches, scores and bracket will be erased.`,
-      )
+      !(await confirmDialog({
+        title: scored
+          ? `Replace this test event with the full demo (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges, ${DEMO_MATCH_COUNT} scored matches)?`
+          : `Replace this test event with the demo roster (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges, no matches)?`,
+        body: 'Its teams, judges, matches, scores and bracket will be erased. This cannot be undone.',
+        confirmLabel: 'Erase and load demo',
+        isTest: true,
+      }))
     ) {
       return;
     }
@@ -428,7 +432,7 @@ export async function mountSetupScreen(
     const errorNode =
       status?.tone === 'error'
         ? el('p', {
-            className: 'btc-field-error btc-demo-error',
+            className: 'form-field-error btc-demo-error',
             text: status.message,
             attrs: { role: 'alert' },
           })
@@ -551,7 +555,7 @@ export async function mountSetupScreen(
     const errorNode = draftError
       ? el('p', {
           id: errorId,
-          className: 'btc-field-error',
+          className: 'form-field-error',
           text: draftError,
           attrs: { role: 'alert' },
         })
@@ -676,7 +680,7 @@ export async function mountSetupScreen(
     const errorNode = edit.error
       ? el('p', {
           id: errorId,
-          className: 'btc-field-error',
+          className: 'form-field-error',
           text: edit.error,
           attrs: { role: 'alert' },
         })

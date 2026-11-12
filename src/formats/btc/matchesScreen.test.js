@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountMatchesScreen } from './matchesScreen.js';
 import { publishBtcLive } from './liveSession.js';
+import { answerFeedback } from '../../core/feedbackTestKit.js';
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 import { _clearAllForTests } from '../../core/db.js';
 
 vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
@@ -301,13 +304,13 @@ describe('mountMatchesScreen', () => {
       { match_id: 'm1', judge_id: 'j3' },
     ];
     const client = fakeClient(db);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await mountMatchesScreen(root, { eventId: 'ev1', client });
 
     expect(root.textContent).toContain('Alpha vs Beta');
     root
       .querySelector('button[aria-label="Remove Alpha vs Beta"]')
       .dispatchEvent(new Event('click', { bubbles: true }));
+    answerFeedback('confirm');
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -354,11 +357,11 @@ describe('mountMatchesScreen', () => {
       { match_id: 'm1', judge_id: 'j2' },
       { match_id: 'm1', judge_id: 'j3' },
     ];
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await mountMatchesScreen(root, { eventId: 'ev1', client: fakeClient(db) });
     root
       .querySelector('button[aria-label="Remove Alpha vs Beta"]')
       .dispatchEvent(new Event('click', { bubbles: true }));
+    answerFeedback('confirm');
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -410,15 +413,18 @@ describe('mountMatchesScreen', () => {
       { match_id: 'm1', judge_id: 'j3' },
     ];
     const client = fakeClient(db);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     await mountMatchesScreen(root, { eventId: 'ev1', client });
 
     root
       .querySelector('button[aria-label="Remove Alpha vs Beta"]')
       .dispatchEvent(new Event('click', { bubbles: true }));
-    await Promise.resolve();
+    answerFeedback('cancel');
+    await flush();
 
     expect(root.querySelector('button[aria-label="Remove Alpha vs Beta"]')).not.toBeNull();
+    expect(client.rpcCalls ?? []).toEqual([]);
+    expect(db.btc_matches).toHaveLength(1); // nothing was deleted
+    expect(publishBtcLive).not.toHaveBeenCalled();
   });
 
   expect(publishBtcLive).not.toHaveBeenCalled();

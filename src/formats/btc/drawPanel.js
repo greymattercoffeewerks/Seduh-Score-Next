@@ -55,7 +55,7 @@ export function renderDrawPanel(ctx) {
   const errorNode = state.error
     ? el('p', {
         id: ERROR_ID,
-        className: 'btc-field-error',
+        className: 'form-field-error',
         text: state.error,
         // role=alert only the first time it is drawn: every action rebuilds the page, and a rebuilt alert node is
         // announced again, so a later swap or tick would repeat the same error
@@ -122,7 +122,7 @@ export function renderDrawPanel(ctx) {
       setBusyDisabled(redraw, busy);
       if (!status.redraw.possible) redraw.setAttribute('aria-disabled', 'true');
       redraw.addEventListener('click', () => {
-        if (status.redraw.possible) on.redraw(state.round);
+        if (status.redraw.possible) on.redraw(state.round, redraw);
       });
       if (!status.redraw.possible) {
         nodes.push(el('p', { id: reasonId, className: 'stage-meta', text: status.redraw.reason }));
@@ -289,7 +289,9 @@ export function renderDrawPanel(ctx) {
       notes.push(el('p', { className: 'btc-draw-warning', text: c.message }));
     }
     if (issue.duplicate) {
-      notes.push(el('p', { className: 'btc-field-error', text: 'Choose three different judges.' }));
+      notes.push(
+        el('p', { className: 'form-field-error', text: 'Choose three different judges.' }),
+      );
     }
     if (notes.length > 0)
       for (const select of selects) select.setAttribute('aria-describedby', noteId);

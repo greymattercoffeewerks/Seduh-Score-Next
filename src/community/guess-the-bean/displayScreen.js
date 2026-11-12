@@ -192,8 +192,9 @@ export async function mountDisplayScreen(
     if (!guesses.length) {
       list.appendChild(
         el('p', {
-          className: 'gtb-display-empty',
+          className: 'empty',
           text: 'No guesses yet. Scan the code below to be first.',
+          attrs: { 'data-kind': 'first-use' },
         }),
       );
       return;

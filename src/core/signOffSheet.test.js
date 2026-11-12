@@ -114,7 +114,7 @@ describe('renderSignOffSheet', () => {
     const spec = btcSpec();
     spec.notes.items = [];
     const sheet = renderSignOffSheet(spec);
-    expect(sheet.querySelector('.ok-signoff-empty').textContent).toBe(
+    expect(sheet.querySelector('.ok-signoff-none').textContent).toBe(
       'No teams were level on points.',
     );
   });

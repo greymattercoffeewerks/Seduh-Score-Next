@@ -68,7 +68,7 @@ function parseSessionParams(search = window.location.search) {
 // role or field association meant a screen-reader user submitting an
 // invalid guess got total silence.
 function fieldError(id, message) {
-  return el('p', { className: 'gtb-field-error', text: message, attrs: { id, role: 'alert' } });
+  return el('p', { className: 'form-field-error', text: message, attrs: { id, role: 'alert' } });
 }
 
 export function renderEntryForm(draft, { errors, submitting, submitError }) {
@@ -178,7 +178,7 @@ export function renderEntryForm(draft, { errors, submitting, submitError }) {
     ...(submitError
       ? [
           el('p', {
-            className: 'gtb-field-error gtb-contact-error',
+            className: 'form-field-error gtb-contact-error',
             text: submitError,
             attrs: { id: 'gtb-submit-error', role: 'alert', tabindex: '-1' },
           }),

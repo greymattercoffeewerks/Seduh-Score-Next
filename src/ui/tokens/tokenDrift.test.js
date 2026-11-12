@@ -591,3 +591,102 @@ describe('drift rules (the reader and the four checks, on synthetic CSS)', () =>
     expect(() => declarations('.a{color:red}}')).toThrow();
   });
 });
+
+// ---- the feedback ladder (Petrol Kaizen P4) ----
+//
+// The app talks back through the parts in src/core/feedback.js and src/ui/tokens/feedback.css: a browser pop-up
+// ignores the stage mode, the Petrol type and the test-event strip, and a second field-error or empty class is the
+// "each surface writes its own" drift this phase removed (3 error classes and 6 empty classes became .form-field-error
+// and .empty). Three rules, none with an allowlist, so a new exception is a deliberate edit of this file:
+//   1. no window.confirm( / confirm( call in src/ JavaScript
+//   2. no CSS class or className ending -field-error or -empty, except the core names form-field-error and empty
+//   3. a rule for a disabled control fades with var(--opacity-disabled), never a number
+
+const stripJsComments = (js) =>
+  js.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/[^\n]*/g, '$1');
+const CONFIRM_CALL = /(?<![\w$])(?:window\.|globalThis\.)?confirm\s*\(/g;
+const LOCAL_FEEDBACK_CLASS = /(?<![\w:-])((?:[a-z][a-z0-9]*-)*(?:field-error|empty))(?![\w-])/g;
+const CORE_FEEDBACK_CLASSES = new Set(['form-field-error', 'empty']);
+const DISABLED_SELECTOR = /:disabled|\[aria-disabled|\[disabled/;
+
+const jsSources = walk('src', (name) => name.endsWith('.js') && !name.endsWith('.test.js'))
+  .map(rel)
+  .map((file) => ({ file, js: stripJsComments(readFileSync(file, 'utf8')) }));
+
+const confirmCalls = (js) => [...js.matchAll(CONFIRM_CALL)].map((m) => m[0]);
+// Local feedback classes named in a stylesheet's selectors (declarations() already drops comments).
+const feedbackClassesInCss = (css) => {
+  const text = stripCssComments(css).replace(/\{[^{}]*\}/g, (block) =>
+    block.replace(/[^{}]+/g, ''),
+  ); // selectors only
+  return [...text.matchAll(LOCAL_FEEDBACK_CLASS)]
+    .map((m) => m[1])
+    .filter((name) => !CORE_FEEDBACK_CLASSES.has(name));
+};
+const feedbackClassesInJs = (js) =>
+  [...js.matchAll(/className\s*:\s*(['"`])([^'"`]*)\1/g)].flatMap((m) =>
+    [...m[2].matchAll(LOCAL_FEEDBACK_CLASS)]
+      .map((c) => c[1])
+      .filter((name) => !CORE_FEEDBACK_CLASSES.has(name)),
+  );
+const rawDisabledOpacity = (css) =>
+  declarations(css)
+    .filter((d) => d.prop === 'opacity' && DISABLED_SELECTOR.test(d.selector))
+    .filter((d) => !/^(?:1|var\(\s*--opacity-disabled\s*\))$/.test(d.value)) // 1 resets a fade, it is not one
+    .map((d) => `${d.selector} { opacity: ${d.value} }`);
+
+describe('feedback ladder drift guard', () => {
+  it('scans the JavaScript (a vacuous scan would pass anything)', () => {
+    expect(jsSources.length).toBeGreaterThan(100);
+    expect(jsSources.some((s) => s.file === 'src/core/feedback.js')).toBe(true);
+  });
+
+  it('no src/ JavaScript calls window.confirm: use confirmInPlace or confirmDialog from core/feedback.js', () => {
+    const found = jsSources.filter((s) => confirmCalls(s.js).length > 0).map((s) => s.file);
+    expect(found).toEqual([]);
+  });
+
+  it('no stylesheet or className makes a new *-field-error or *-empty class: use .form-field-error and .empty', () => {
+    const found = [
+      ...sources.flatMap((s) => feedbackClassesInCss(s.css).map((c) => `${s.file}  .${c}`)),
+      ...jsSources.flatMap((s) => feedbackClassesInJs(s.js).map((c) => `${s.file}  '${c}'`)),
+    ];
+    expect(found).toEqual([]);
+  });
+
+  it('a disabled control fades with var(--opacity-disabled), not a number', () => {
+    const found = sources.flatMap((s) => rawDisabledOpacity(s.css).map((d) => `${s.file}  ${d}`));
+    expect(found).toEqual([]);
+  });
+
+  it('the matchers: they catch the shapes they claim to and let the core names through', () => {
+    expect(confirmCalls("if (!window.confirm('Sure?')) return;")).toHaveLength(1);
+    expect(confirmCalls('const ok = confirm(msg);')).toHaveLength(1);
+    expect(
+      confirmCalls('await confirmInPlace(btn, {}); submitConfirm(); window.confirmed = 1;'),
+    ).toEqual([]);
+    expect(confirmCalls(stripJsComments('// not window.confirm(\nconst x = 1;'))).toEqual([]);
+    expect(feedbackClassesInCss('.adm-field-error{color:red} .x-empty .y:empty{}')).toEqual([
+      'adm-field-error',
+      'x-empty',
+    ]);
+    expect(feedbackClassesInCss('.form-field-error{x:y} .empty{x:y} .ok-empty-note{x:y}')).toEqual(
+      [],
+    );
+    expect(feedbackClassesInJs("el('p', { className: 'btc-field-error btc-demo-error' })")).toEqual(
+      ['btc-field-error'],
+    );
+    expect(feedbackClassesInJs("el('p', { className: 'form-field-error' })")).toEqual([]);
+    // a bare name is flagged too (only the core names pass), and a pseudo-class is not a class
+    expect(feedbackClassesInCss('.field-error{x:y} .screen-feedback:empty{x:y}')).toEqual([
+      'field-error',
+    ]);
+    expect(feedbackClassesInJs("el('p', { className: 'field-error' })")).toEqual(['field-error']);
+    expect(
+      rawDisabledOpacity('.a:disabled{opacity:.6} .b[aria-disabled="true"]{opacity:0.42}'),
+    ).toHaveLength(2);
+    expect(
+      rawDisabledOpacity('.a:disabled{opacity:var(--opacity-disabled)} .b{opacity:.6}'),
+    ).toEqual([]);
+  });
+});

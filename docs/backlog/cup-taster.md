@@ -881,3 +881,7 @@ _Result-recorded and rank-impact screens shipped; these were flagged and documen
 - **Rank rows beyond eight** are summarised as "+N more"; a very long tie at the edge of the top five is not listed in full.
 
 ---
+
+## Known open items from Petrol Kaizen P4 (feedback ladder, 2026-11-13)
+
+- **Older inline confirms are not on the ladder.** Cup Taster's finish confirm (`#confirm-finish-*`) and Throwdown's use the old in-line pattern. Move them to `confirmInPlace` (undoable) or `confirmDialog` (permanent delete) from `src/core/feedback.js`. Not done in P4, which was limited to the seven `window.confirm` calls.
