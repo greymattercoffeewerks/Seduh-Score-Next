@@ -267,30 +267,66 @@ test.describe('the New organisation panel (real page, real local Supabase)', () 
     await expect(page.locator('body')).toContainText(`Again Two ${uniq} was created.`);
   });
 
-  test('leaving while a password is on screen asks first, and staying keeps the password', async ({
-    page,
-  }) => {
-    const login = await createLoneUser('create-org-leave');
+  // The leave warning is core/feedback.js's confirmDialog (a native <dialog> in the page), not window.confirm, so
+  // there is no browser dialog to listen for: the question is a dialog element with its own buttons.
+  async function openLeaveQuestion(page, label) {
+    const login = await createLoneUser(label);
     await stubAdminAccounts(page, () => ({
       status: 201,
       body: { userId: login.userId, email: login.email, password: NEW_PASSWORD },
     }));
     await openNewOrganisation(page, { secret, admin });
-    await fillOrg(page, `Leave ${uniq}`, `d10-${uniq}-leave`);
+    await fillOrg(page, `Leave ${uniq}`, `d10-${uniq}-${label}`);
     await page.getByLabel('Owner’s email').fill(login.email);
     await page.getByRole('button', { name: 'Create organisation' }).click();
     await expect(page.locator('.adm-password')).toHaveText(NEW_PASSWORD);
-
-    const dialogs = [];
+    // A browser dialog would be a bug now: the question must be in the page.
+    const native = [];
     page.on('dialog', async (dialog) => {
-      dialogs.push(dialog.message());
+      native.push(dialog.message());
       await dialog.dismiss();
     });
     await page.locator('nav').getByRole('link', { name: 'Organisations' }).click();
-    await expect.poll(() => dialogs.length).toBe(1);
-    expect(dialogs[0]).toMatch(/one-time password/);
+    const question = page.getByRole('dialog', { name: 'Leave this screen?' });
+    await expect(question).toBeVisible();
+    await expect(question).toContainText(/one-time password/);
+    // Focus starts on the safe answer, so Enter or a stray tap never leaves by accident.
+    await expect(question.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    return { question, native };
+  }
+
+  test('leaving while a password is on screen asks first, and staying keeps the password', async ({
+    page,
+  }) => {
+    const { question, native } = await openLeaveQuestion(page, 'create-org-leave');
+
+    // Escape is "stay", not "leave".
+    await page.keyboard.press('Escape');
+    await expect(question).toBeHidden();
     await expect(page.locator('.adm-password')).toHaveText(NEW_PASSWORD);
     await expect(page).toHaveURL(/#\/new-org$/);
+
+    // Cancel is "stay" too.
+    await page.locator('nav').getByRole('link', { name: 'Organisations' }).click();
+    await page
+      .getByRole('dialog', { name: 'Leave this screen?' })
+      .getByRole('button', { name: 'Cancel' })
+      .click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.locator('.adm-password')).toHaveText(NEW_PASSWORD);
+    await expect(page).toHaveURL(/#\/new-org$/);
+    expect(native).toEqual([]);
+  });
+
+  test('choosing Leave goes to Organisations and the password is gone', async ({ page }) => {
+    const { question, native } = await openLeaveQuestion(page, 'create-org-leave-yes');
+    await question.getByRole('button', { name: 'Leave' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(heading(page)).toHaveText('Organisations');
+    await expect(page).toHaveURL(/#\/orgs$/);
+    await expect(page.locator('.adm-password')).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText(NEW_PASSWORD);
+    expect(native).toEqual([]);
   });
 
   test('a new login whose email already has an account says so and offers the existing-account path', async ({
