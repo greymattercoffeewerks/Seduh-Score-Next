@@ -432,7 +432,7 @@ statement in one transaction and ends with a count per year: compare it with the
 
 **3. Correct.** Fix the source CSV and run steps 1 and 2 again: the load upserts on `(competition, edition_year,
 country_code, team_name)` (a correction updates the row, never duplicates it), upserts the round scores, and deletes
-round rows of the loaded teams that the file no longer has. A team is a new team when its name changes. It never touches
+round rows of the loaded teams that the file no longer has (only when a rounds file is given: a template-only load never removes round scores). A team is a new team when its name changes. It never touches
 `listed`, so a row you unlisted stays unlisted when its file is loaded again.
 
 **4. Unlist** (a removal is never a delete; the row and its rounds stay, both doors stop showing them at once):

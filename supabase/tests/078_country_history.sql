@@ -12,12 +12,13 @@
 -- All fixtures use the user-assigned ISO codes XA, XB and XC (never a real country) so the file also passes on a local
 -- database into which the real results have been loaded for a hand check; every assertion is limited to those codes.
 -- Fixture XA (listed): 2023 Alpha champion (1), Beta final (2); 2024 Alpha quarter-final, Epsilon quarter-final.
---   matches with a known opponent: Alpha won SF 12-9 and the final 13-12; Beta lost that final 12-13; Alpha lost a
---   QF 10-14 in 2024; Epsilon drew a QF 8-8 (counts for neither). So: 2 championships, 4 entries, 3 teams, 2 won, 2 lost.
+--   matches count only against an opponent with a listed row: Alpha won the final 13-12 against Beta (Beta lost it);
+--   Alpha's SF 12-9 v Delta, QF 10-14 v Gamma and Epsilon's 8-8 v Zeta have no listed opponent, so they do not count.
+--   So: 2 championships, 4 entries, 3 teams, 1 won, 1 lost.
 -- Fixture XB: Shown (listed) and Hidden (unlisted, with a round score 97 that must never appear).
 -- Fixture XC: one team, unlisted.
 begin;
-select plan(78);
+select plan(90);
 
 -- ============ fixtures (as postgres) ============
 
@@ -145,10 +146,10 @@ select is((select r ->> 'country_code' from t78_xa), 'XA', 'anon reads the recor
 select is((select (r ->> 'has_record')::boolean from t78_xa), true, 'a listed country has a record');
 select is(
   (select r -> 'stats' from t78_xa),
-  jsonb_build_object('championships', 2, 'entries', 4, 'teams', 3, 'matches_won', 2, 'matches_lost', 2,
+  jsonb_build_object('championships', 2, 'entries', 4, 'teams', 3, 'matches_won', 1, 'matches_lost', 1,
     'best_finish', jsonb_build_object('team_name', 'Alpha', 'competition', 'btc', 'edition_year', 2023,
                                       'stage_reached', 'champion', 'placement', 1)),
-  'the derived stats are right: 2 championships, 4 entries, 3 teams, 2 matches won, 2 lost (a level score counts for neither), best finish Alpha 2023 champion');
+  'the derived stats are right: 2 championships, 4 entries, 3 teams, 1 match won, 1 lost (only matches against a listed opponent count), best finish Alpha 2023 champion');
 select is(
   (select array_agg((c ->> 'edition_year')::int order by o) from t78_xa, jsonb_array_elements(r -> 'championships') with ordinality as e(c, o)),
   array[2024, 2023], 'championships are listed newest first');
@@ -306,6 +307,7 @@ select is(pg_temp.try_round('quarter_final', null, null, 1, null, null) , 'ok', 
 
 -- ============ the import's upsert updates, never duplicates ============
 
+update app.historical_results set listed = false where id = '00000000-0000-0000-0000-000000007804';
 insert into app.historical_results
   (competition, competition_name, edition_year, team_name, country_code, stage_reached, placement, source_ref, supplied_by, supplied_on, permission_ref)
 values ('btc', 'Fictional Cup 2024', 2024, 'Epsilon', 'XA', 'semi_final', 3, 'fictional.csv#4', 'Fictional Federation', '2026-02-02', 'Fictional Federation, 2026-02-02: corrected')
@@ -317,7 +319,7 @@ select is(
   1, 're-importing a corrected row leaves one row');
 select is(
   (select stage_reached || '/' || placement || '/' || listed from app.historical_results where id = '00000000-0000-0000-0000-000000007804'),
-  'semi_final/3/true', 'and the same row now holds the correction (and a re-import does not touch listed)');
+  'semi_final/3/false', 'and the same row now holds the correction, and the re-import left it unlisted (the load never touches listed)');
 
 update app.historical_results set listed = false where id = '00000000-0000-0000-0000-000000007804';
 select is(
@@ -330,6 +332,60 @@ delete from app.historical_results where id = '00000000-0000-0000-0000-000000007
 select is(
   (select count(*)::int from app.historical_round_scores where result_id = '00000000-0000-0000-0000-000000007801'),
   0, 'owner SQL that deletes a result takes its round scores with it');
+
+-- every vocabulary value is ACCEPTED, not only the wrong ones refused
+select is(
+  (select string_agg(pg_temp.try_result('btc', 2023, 'V' || st, 'XA', st, null), ',' order by st)
+     from unnest(array['champion', 'final', 'semi_final', 'quarter_final', 'preliminary', 'entered']) st),
+  'ok,ok,ok,ok,ok,ok', 'every stage in the vocabulary can be stored');
+select is(
+  (select string_agg(pg_temp.try_result('btc', 2023, 'P' || v.pl || v.st, 'XA', v.st, v.pl), ',' order by v.pl)
+     from (values (1, 'champion'), (2, 'final'), (3, 'semi_final'), (4, 'semi_final')) v(pl, st)),
+  'ok,ok,ok,ok', 'placements 1 to 4 can be stored with their stages (3 and 4 are the semi-finalists)');
+select is(
+  (select string_agg(pg_temp.try_round(rd, null, null, 5, null, null), ',' order by rd)
+     from unnest(array['preliminary', 'quarter_final', 'semi_final', 'final_champion', 'final_runner_up']) rd),
+  'ok,ok,ok,ok,ok', 'every round in the vocabulary can be stored (the third-place match is final_runner_up)');
+select is(pg_temp.try_round('preliminary', 10, 12, 21, null, null), '23514 historical_round_scores_r1_r2_total', 'round one plus round two above the total is refused too');
+select throws_ok(
+  $$ insert into app.historical_round_scores (result_id, round, score) values ('00000000-0000-0000-0000-000000007803', 'preliminary', 1) $$,
+  '23505', null, 'a team cannot have two rows for one round (the load upsert key)');
+-- a row loaded without saying listed is published
+insert into app.historical_results
+  (competition, competition_name, edition_year, team_name, country_code, stage_reached, source_ref, supplied_by, supplied_on, permission_ref)
+values ('btc', 'Fictional Cup 2026', 2026, 'Fresh', 'XA', 'preliminary', 'f#f', 'F', '2026-01-01', 'P');
+select is(
+  (select public.public_country_record('XA')::text ~ 'Fresh'), true, 'a newly loaded row is listed by default (the load never sets listed)');
+select is(
+  (select (public.public_country_record('XB') -> 'stats' ->> 'matches_won')::int), 0,
+  'an unlisted row match is not counted (the Hidden team 97-96 win)');
+
+-- an unlisted opponent disappears from the other side's rounds and match counts (a removal is complete)
+insert into app.historical_results
+  (id, competition, competition_name, edition_year, team_name, country_code, stage_reached, source_ref, supplied_by, supplied_on, permission_ref)
+values
+  ('00000000-0000-0000-0000-000000007808', 'btc', 'Fictional Cup 2025', 2025, 'Visible', 'XA', 'quarter_final', 'f#8', 'F', '2026-01-01', 'P'),
+  ('00000000-0000-0000-0000-000000007809', 'btc', 'Fictional Cup 2025', 2025, 'Withdrawn', 'XB', 'quarter_final', 'f#9', 'F', '2026-01-01', 'P');
+insert into app.historical_round_scores (result_id, round, score, opponent_team_name, opponent_score) values
+  ('00000000-0000-0000-0000-000000007808', 'quarter_final', 31, 'Withdrawn', 29),
+  ('00000000-0000-0000-0000-000000007809', 'quarter_final', 29, 'Visible', 31);
+select is(
+  (select r::text ~ 'Withdrawn' from (select public.public_country_record('XA') as r) x), true,
+  'control: while its opponent is listed the pairing is shown');
+select is(
+  (select (public.public_country_record('XA') -> 'stats' ->> 'matches_won')::int), 1,
+  'control: the 31-29 win counts while its opponent is listed');
+update app.historical_results set listed = false where id = '00000000-0000-0000-0000-000000007809';
+select is(
+  (select r::text ~ 'Withdrawn|"opponent_score": 29' from (select public.public_country_record('XA') as r) x), false,
+  'once the opponent is unlisted its name and score are gone from the other team''s round');
+select is(
+  (select (public.public_country_record('XA') -> 'stats' ->> 'matches_won')::int), 0,
+  'and the match is not counted as a win (earlier fixtures left no other win in XA)');
+select is(
+  (select (c -> 'teams' -> 0 -> 'rounds' -> 0 ->> 'score')::int
+     from jsonb_array_elements(public.public_country_record('XA') -> 'championships') c where c ->> 'edition_year' = '2025'),
+  31, 'while the team''s own score stays');
 
 select * from finish();
 rollback;

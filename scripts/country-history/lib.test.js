@@ -1,7 +1,7 @@
 // Unit tests for the country-history import. FICTIONAL data only (the real results are never committed): countries XA,
 // XB and XC are user-assigned ISO codes that no real country uses, accepted through the `extraCodes` option.
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -379,6 +379,125 @@ describe('what the validator refuses (each is an error that blocks a load)', () 
     });
     expect(hasError(d, /opponent and opponent_score must both be filled or both empty/)).toBe(true);
   });
+  it('round one plus round two above the total', () => {
+    const d = dataset({
+      rnd: (r) => {
+        r[0][4] = 60;
+        r[0][5] = 50;
+      },
+    });
+    expect(hasError(d, /r1 \+ r2 = 110 but the printed total is 100/)).toBe(true);
+  });
+  it('a quarter-finalist with no preliminary row, a semi-finalist who skipped the quarter-final', () => {
+    const noPrelim = dataset({
+      rnd: (r) =>
+        r.splice(
+          r.findIndex((x) => x[1] === 'preliminary' && x[2] === 'Crew Hotel'),
+          1,
+        ),
+    });
+    expect(
+      hasError(noPrelim, /Crew Hotel is in the quarter_final but not in the preliminary/),
+    ).toBe(true);
+    const skipped = dataset({
+      rnd: (r) => {
+        r.find((x) => x[1] === 'semi_final' && x[2] === 'Crew Delta')[2] = 'Crew Juliet';
+      },
+    });
+    expect(hasError(skipped, /Crew Juliet is in the semi_final but not in the quarter_final/)).toBe(
+      true,
+    );
+  });
+  it('a team in both the final and the third-place match', () => {
+    const d = dataset({
+      rnd: (r) => r.push([2024, 'final_runner_up', 'Crew Alpha', 'XA', '', '', 3, '', '']),
+    });
+    expect(hasError(d, /Crew Alpha is in both the final and the third-place match/)).toBe(true);
+  });
+  it('a pairing whose other side names someone else, or has a different score', () => {
+    const name = dataset({
+      rnd: (r) => {
+        r.find((x) => x[1] === 'final_champion' && x[2] === 'Crew Bravo')[7] = 'Crew Charlie';
+      },
+    });
+    expect(hasError(name, /do not agree on their final_champion match/)).toBe(true);
+    const score = dataset({
+      rnd: (r) => {
+        r.find((x) => x[1] === 'final_champion' && x[2] === 'Crew Bravo')[6] = 11;
+      },
+    });
+    expect(hasError(score, /do not agree on their final_champion match/)).toBe(true);
+  });
+  it('each field rule of the template', () => {
+    expect(
+      hasError(
+        dataset({}, [2024], { ...OPTS, competition: 'xyz' }),
+        /competition "xyz" is not one of/,
+      ),
+    ).toBe(true);
+    expect(
+      hasError(
+        dataset({ tpl: (t) => (t[0][3] = 'Atlantis') }),
+        /host_country "Atlantis" is not an ISO/,
+      ),
+    ).toBe(true);
+    expect(
+      hasError(dataset({}, [2024], { ...OPTS, suppliedOn: undefined }), /supplied_on is missing/),
+    ).toBe(true);
+    expect(
+      hasError(
+        dataset({}, [2024], { ...OPTS, permissionRef: 'x'.repeat(301) }),
+        /permission_ref is longer than 300/,
+      ),
+    ).toBe(true);
+    expect(
+      hasError(
+        dataset({ tpl: (t) => (t[0][4] = 'C'.repeat(121)) }),
+        /team_name is longer than 120/,
+      ),
+    ).toBe(true);
+    expect(hasError(dataset({ tpl: (t) => (t[0][0] = '') }), /competition_name is empty/)).toBe(
+      true,
+    );
+    expect(hasError(dataset({ tpl: (t) => (t[0][8] = '') }), /supplied_by is empty/)).toBe(true);
+    expect(
+      hasError(
+        dataset({ tpl: (t) => (t[0][2] = 'Test\u0007ville') }),
+        /host_city contains a control character/,
+      ),
+    ).toBe(true);
+    expect(
+      hasError(
+        dataset({ tpl: (t) => (t[0][8] = 'F\u0007') }),
+        /supplied_by contains a control character/,
+      ),
+    ).toBe(true);
+  });
+  it('a rounds file missing a column', () => {
+    const d = buildDataset({
+      templateText: csv([TPL_HEAD, ...year(2024).tpl]),
+      roundsText: 'edition_year,round\n2024,preliminary',
+      options: OPTS,
+    });
+    expect(hasError(d, /rounds: missing column\(s\)/)).toBe(true);
+  });
+  it('a team with a stage but no rounds at all, and a podium place left blank', () => {
+    const none = dataset({
+      rnd: (r) => {
+        for (let i = r.length - 1; i >= 0; i -= 1) if (r[i][2] === 'Crew Juliet') r.splice(i, 1);
+      },
+    });
+    expect(hasError(none, /Crew Juliet.*the rounds file has no round for this team/)).toBe(true);
+    const blank = dataset({ tpl: (t) => (t[0][7] = '') });
+    expect(blank.errors).toEqual([]);
+    expect(
+      blank.warnings.some((w) => /rounds imply placement 1 but none is filled in/.test(w)),
+    ).toBe(true);
+  });
+  it('a name longer than the database allows', () => {
+    const d = dataset({ tpl: (t) => (t[0][0] = 'C'.repeat(121)) });
+    expect(hasError(d, /competition_name is longer than 120/)).toBe(true);
+  });
   it('a file with a missing column or no rows', () => {
     expect(buildDataset({ templateText: 'team_name\nA', options: OPTS }).errors[0]).toMatch(
       /template: missing column/,
@@ -453,6 +572,10 @@ describe('the load SQL', () => {
     ).toHaveLength(1);
     expect(sql.match(/on conflict \(result_id, round\) do update/g)).toHaveLength(1);
     expect(sql).toMatch(/delete from app\.historical_round_scores s/);
+    // it removes rounds the file no longer has and keeps the ones it has (not the other way round)
+    expect(sql).toMatch(
+      /and not exists \(select 1 from rs where rs\.result_id = s\.result_id and rs\.round = s\.round\)/,
+    );
   });
   it('never touches listed on update, so an unlisted row stays unlisted after a re-load', () => {
     const update = sql.slice(sql.indexOf('do update'), sql.indexOf('returning id'));
@@ -482,6 +605,7 @@ describe('the load SQL', () => {
     });
     expect(d.errors).toEqual([]);
     expect(toSql(d)).toMatch(/where false/);
+    expect(toSql(d)).not.toMatch(/delete from app\.historical_round_scores/);
   });
 });
 
@@ -553,8 +677,10 @@ describe('the command line', () => {
       '--supplied-on',
       '2026-01-01',
     ];
+    const before = readdirSync(dir).sort();
     expect(run(args, log)).toBe(0);
     expect(existsSync(out)).toBe(false);
+    expect(readdirSync(dir).sort()).toEqual(before);
     expect(run([...args, '--write-sql', out], log)).toBe(0);
     expect(readFileSync(out, 'utf8')).toMatch(/begin;/);
     rmSync(dir, { recursive: true, force: true });

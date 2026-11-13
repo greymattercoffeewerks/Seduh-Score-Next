@@ -203,7 +203,9 @@ begin
     into v_won, v_lost
     from app.historical_results h
     join app.historical_round_scores s on s.result_id = h.id
-   where h.listed and h.country_code = v_code and s.opponent_team_name is not null;
+   where h.listed and h.country_code = v_code and s.opponent_team_name is not null
+     -- an opponent that has been unlisted is not shown, and its match is not counted either (a removal is complete)
+     and exists (select 1 from app.historical_results o where o.listed and o.competition = h.competition and o.edition_year = h.edition_year and o.team_name = s.opponent_team_name);
 
   -- Best finish: deepest stage, then the best published placement, then the most recent year.
   select jsonb_build_object(
@@ -240,7 +242,8 @@ begin
                      select jsonb_agg(
                               jsonb_build_object(
                                 'round', s.round, 'r1', s.r1, 'r2', s.r2, 'score', s.score,
-                                'opponent_team_name', s.opponent_team_name, 'opponent_score', s.opponent_score)
+                                'opponent_team_name', case when exists (select 1 from app.historical_results o where o.listed and o.competition = h.competition and o.edition_year = h.edition_year and o.team_name = s.opponent_team_name) then s.opponent_team_name end,
+                                'opponent_score', case when exists (select 1 from app.historical_results o where o.listed and o.competition = h.competition and o.edition_year = h.edition_year and o.team_name = s.opponent_team_name) then s.opponent_score end)
                               order by case s.round
                                          when 'preliminary' then 1 when 'quarter_final' then 2
                                          when 'semi_final' then 3 when 'final_champion' then 4
