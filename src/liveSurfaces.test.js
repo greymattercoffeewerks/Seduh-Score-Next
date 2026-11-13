@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mountProjector, mountPhone } from './liveSurfaces.js';
+import { mountProjector, mountPhone, mountSplash } from './liveSurfaces.js';
 import { preliminaryPayload } from './formats/btc/demoLivePayload.js';
 
 // A client whose live_sessions row can be swapped and whose realtime callback can be fired, so a format
@@ -661,5 +661,33 @@ describe('BTC on the live surfaces', () => {
     expect(root.textContent).not.toContain('Result recorded');
     expect(root.textContent).not.toContain('Alex');
     handle.unmount();
+  });
+});
+
+describe('mountSplash and the country-pages QR', () => {
+  const btcSession = { id: 's1', org_id: 'org1', event_id: 'ev1', format: 'btc', active: true };
+  async function splash(row, options) {
+    const root = document.createElement('div');
+    document.body.replaceChildren(root);
+    mountSplash(root, {
+      orgId: 'org1',
+      client: fakeClient(row, { events: [{ id: 'ev1', name: 'Fictional Cup' }] }),
+      ...options,
+    });
+    return root;
+  }
+  it('shows the hub QR on the splash of a live BTC event when switched on', async () => {
+    const root = await splash(btcSession, { countryPagesPublic: true });
+    await vi.waitFor(() =>
+      expect(root.querySelector('.splash-extra-host .qr-block')).not.toBeNull(),
+    );
+    expect(root.querySelector('.qr-block-url').textContent).toBe('www.seduhscore.com/id/country/');
+  });
+  it('shows nothing, and by default nothing, for a BTC event, a Cup Taster event, or when off', async () => {
+    const off = await splash(btcSession);
+    const cup = await splash({ ...btcSession, format: 'cup_taster' }, { countryPagesPublic: true });
+    await vi.waitFor(() => expect(cup.querySelector('.splash-eventline').textContent).not.toBe(''));
+    expect(cup.querySelector('.qr-block')).toBeNull();
+    expect(off.querySelector('.qr-block')).toBeNull();
   });
 });

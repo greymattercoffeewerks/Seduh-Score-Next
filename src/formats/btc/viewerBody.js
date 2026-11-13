@@ -13,6 +13,7 @@
 // body is a polite live region and a rebuild would have a screen reader read the whole page again.
 import { markRankRow } from '../../core/rankMotion.js';
 import { el } from '../../core/dom.js';
+import { buildCountryChip } from '../../core/countryChip.js';
 import { sharedPositions } from '../../core/rankMovement.js';
 import {
   btcBand,
@@ -136,7 +137,7 @@ function renderUpNext(upNext, thenNext) {
 }
 
 // The whole table is in the page; the rows past the top places are `hidden` until asked for.
-function renderStandings(payload, { isShowingAll, onToggle }) {
+function renderStandings(payload, { isShowingAll, onToggle, chipFor }) {
   const standings = payload.standings;
   const shared = sharedPositions(standings, (row) => row.position);
   const beyondTop = (row) => row.position > PHONE_TOP_PLACES;
@@ -162,6 +163,9 @@ function renderStandings(payload, { isShowingAll, onToggle }) {
                 className: 'btc-phone-name-text',
                 text: withCountry(row.teamName, row.country),
               }),
+              // The team's country as a link to its record page: null (nothing drawn) while the country pages are
+              // not public (core/countryPages.js).
+              chipFor(row.country),
               tiedSuffix(row, shared)
                 ? el('span', { className: 'btc-phone-name-suffix', text: tiedSuffix(row, shared) })
                 : null,
@@ -297,7 +301,8 @@ function renderRecent(results) {
 
 // One phone body for one event. renderBody(container, payload) is what core/viewer-shell.js calls once there is
 // something to show; it returns the cleanup the shell calls before its next rebuild and on unmount.
-export function createBtcViewerBody() {
+// `countryChip` is for tests (both states of the country-pages switch); production uses the real chip builder.
+export function createBtcViewerBody({ countryChip = buildCountryChip } = {}) {
   let showAll = false;
   let toggle = null;
   let focusToggle = false;
@@ -305,6 +310,7 @@ export function createBtcViewerBody() {
   function paint(container, payload) {
     const standings = payload.standings?.length
       ? renderStandings(payload, {
+          chipFor: countryChip,
           isShowingAll: () => showAll,
           onToggle: () => {
             showAll = !showAll;

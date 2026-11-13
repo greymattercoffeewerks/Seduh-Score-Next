@@ -14,6 +14,7 @@ import { listPublishedResults, publishedOrgName } from '../core/publicResults.js
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
 import { buildScoringRecord } from './scoringRecord.js';
+import { buildCountryChip } from '../core/countryChip.js';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -120,7 +121,7 @@ function buildHero(stats) {
   );
 }
 
-function podiumRow(entry) {
+function podiumRow(entry, chipFor) {
   return el('li', { className: 'results-podium-row' }, [
     el('span', {
       className: 'results-podium-rank tabular-nums',
@@ -137,6 +138,9 @@ function podiumRow(entry) {
         // el() appends every array entry as-is, and appendChild(null)
         // throws.
         entry.cafe ? el('span', { className: 'results-podium-venue', text: entry.cafe }) : null,
+        // A team's country (a BTC row; today's published payloads carry none, so this draws nothing). The chip is
+        // null while the country pages are not public (core/countryPages.js).
+        chipFor(entry.country),
       ].filter(Boolean),
     ),
     scoreCell(entry.correct, entry.total),
@@ -165,7 +169,7 @@ function buildSheetLink(event, { withName = false } = {}) {
   ]);
 }
 
-function buildLatestResult(event, client) {
+function buildLatestResult(event, client, chipFor) {
   const timeSpan = el('span', { className: 'tabular-nums' }, [
     ...withSrExpansion(
       formatDuration(event.winningTimeSecs),
@@ -214,7 +218,11 @@ function buildLatestResult(event, client) {
           ]),
           buildSheetLink(event),
         ]),
-        el('ol', { className: 'results-podium' }, event.podium.map(podiumRow)),
+        el(
+          'ol',
+          { className: 'results-podium' },
+          event.podium.map((entry) => podiumRow(entry, chipFor)),
+        ),
       ]),
       buildScoringRecord(event.eventId, { client, title: event.eventName }),
     ],
@@ -359,7 +367,8 @@ function toEventPayload(row) {
   return { ...row.payload, publishedAt: row.published_at, eventId: row.event_id };
 }
 
-export async function mountResultsScreen(root, { client } = {}) {
+// `countryChip` is for tests (both states of the country-pages switch); production uses the real chip builder.
+export async function mountResultsScreen(root, { client, countryChip = buildCountryChip } = {}) {
   function renderMain(...children) {
     root.replaceChildren(
       el('main', { className: 'results-page', attrs: { 'data-surface': 'stage' } }, [
@@ -401,7 +410,7 @@ export async function mountResultsScreen(root, { client } = {}) {
   };
 
   const hero = buildHero(stats);
-  const latestSection = latest ? buildLatestResult(latest, client) : null;
+  const latestSection = latest ? buildLatestResult(latest, client, countryChip) : null;
   // The latest podium is already the "Latest result" feature above — the archive
   // table below covers everything else, not a repeat of the same row.
   const rest = events.filter((event) => event !== latest);

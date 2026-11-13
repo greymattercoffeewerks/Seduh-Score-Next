@@ -1,20 +1,19 @@
 # Status — read this first
 
-_As of 2026-11-13, app version 4.9.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-13, app version 4.10.0, nameplate Kiarong. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
-- **Behind the Seduh** is rebuilt as a one-chapter reader (`/bts/`) in a PR into `dev` (branch `claude/bts-reader-kiarong`), not yet merged or released; v4.0.0 is the Throwdown major bump caught up (see `CHANGELOG.md`).
+- **Behind the Seduh** is rebuilt as a one-chapter reader (`/bts/`) in a PR into `dev` (`claude/bts-reader-kiarong`), not yet released.
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
-- **Petrol V2 released** in 3.6.6 (2026-11-09).
-- **Tour refresh** (`/tour/`, 4.9.0): uncommitted.
+- **Country pages** (4.10.0): database merged (#465); pages in a PR into `dev`. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
 - **Petrol Kaizen P4** (PR #457, open) and **P5** (vocabulary, draft PR on P4's branch) built; tablet checks owed. **P6** (token roles, density) in a PR to `dev`; iPad check owed.
-- **Open, not merged or not in the cloud** (check `CHANGELOG.md` before trusting this line): password recovery D-PW2 to
+- **Open, not merged or not in the cloud** (check `CHANGELOG.md`): password recovery D-PW2 to
   D-PW8 not started; organiser branding BR-E1 in PR #297 (no database door, so no brand shows); T-TD.1.9 (Throwdown 3rd place
   match after a walkover) was in review with its migration not yet in the cloud on 2026-11-03.
 
