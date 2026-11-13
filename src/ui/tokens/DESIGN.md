@@ -380,6 +380,58 @@ are the new parts, and the current phase keeps `aria-current="step"`.
 chip or pill must be on `LEFT_AS_IS` with a reason or it fails (and a stale entry fails), and `role="tab"` may be written
 only by `core/tablist.js`.
 
+## Token layers and density (Petrol Kaizen P6)
+
+Three layers, each reading only the one below (Ant Design's seed, map and alias, in Petrol's words):
+
+| Layer    | Where                                 | Names                                                            | Holds                                          |
+| -------- | ------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| ramp     | `colors.css`, `spacing.css`           | `--clr-teal-700`, `--clr-petrol-400`, `--radius-md`              | the raw values                                 |
+| semantic | `colors.css` (paper and stage)        | `--color-accent`, `--color-border-input`, `--radius-sm`          | what a value means; `data-surface` flips it    |
+| role     | `roles.css` (imported by `index.css`) | `--btn-primary-bg`, `--field-edge`, `--box-edge`, `--radius-box` | what a **part** uses; a bare `var()`, no value |
+
+A role token is a renaming layer: it never holds a literal and never aliases another role, so a part moved onto one
+renders the same pixels (checked in a real browser, old tokens against new, over the preview and a synthetic page with
+every part in paper, stage and a branded subtree; `roles.test.js` resolves each role through the ramp in both modes).
+Change what "a primary button" looks like in one line of `roles.css`, not five files.
+
+**Radius by role** (daisyUI's names): `--radius-field` (something you press or type into: button, input, inline
+message), `--radius-selector` (a mark that shows state or choice: tag, status, tab, step, meter, live blip),
+`--radius-box` (card, panel, tile, confirm panel, empty state), `--radius-dialog` (the `<dialog>`). Today they are 3, 3,
+6 and 10px, the Hybrid values above. The semantic `--radius-sm/-md/-lg` stay (the bevel and the screen sheets read them).
+
+**Colour roles:** `--btn-primary-bg/-fg/-hover`, `--btn-danger-bg/-fg`, `--btn-outline-edge`, `--field-edge`,
+`--field-edge-error`, `--box-edge`, `--selected-bg/-fg/-edge`. Add one when the same semantic colour is repeated for the
+same job in several files; do not add one for a value a single part uses. Violet is never a role: `--color-test` is read
+directly, and only for `is_test`.
+
+**Why the colour roles are declared three times.** A custom property that is a `var()` resolves where it is declared, and
+the resolved value inherits. Declared on `:root` alone, `--btn-primary-bg` would stay the paper accent inside a
+`data-surface="stage"` subtree (the stage block re-points `--color-accent` on the descendant only). So `roles.css`
+declares the colour roles on `:root, [data-surface], [data-brand]`: every element that can re-point a semantic colour,
+including an organiser's brand colour (`core/brandSlot.js` sets the accent on a surface-owned node and writes
+`data-brand`). The radius roles do not depend on a surface and sit on `:root`.
+
+**Density: `data-density="compact"`** (`density.css`), the way `data-surface` flips colour. A screen's root writes the
+attribute and everything inside gets tighter padding, gaps and table cells. **Opt-in per screen, no global switch**: it
+is written only by the three screens that need it (the BTC matches screen, the BTC standings screen with its cut
+table, the Cup Taster heats screen), never on `<html>`, a page or `:root`. Measured in the harnesses: a Cup Taster heat
+card 215 to 183px and the screen 1310 to 1180px at 820px wide; the BTC matches screen 4657 to 4112px at 360px; a kit
+match row 123 to 58px at 820px (a round of eight matches gives back about half a screen).
+
+- **The floor.** Compact never trims a control. `--tap-target-min` (44px) is defined once (`spacing.css`) and not
+  redefined; `density.css` sets no `height`, `min-height` or `block-size`; and a `[data-density]` rule anywhere may set
+  only padding, gap and `margin-top`/`margin-block-start` (and `--density-*` values). Every `.btn`, `.field-input` and
+  checkbox label keeps 44px, so a row is shorter only by the space around its content. `tokenDrift.test.js` fails on
+  anything else.
+- **Where the rules live.** The tokens (`--density-stack`, `-card-pad`, `-row-pad-y`, `-row-pad-x`, `-cell-pad`,
+  `-gap`) are in `density.css`; the overrides for the shared parts (screen container, `.card`, the organiser kit) are
+  the last block of `components.css`; a format's own parts (a heat card, a standings table) add their own rule in the
+  format's stylesheet, reading the same tokens, so `core/` never names a format's class.
+- **Not touched:** the modal `<dialog>` and the feedback parts, the projector and phone audience surfaces (a venue
+  display is read from across a room; compact is for the hand-held organiser and judge views), and the 360px stacked
+  table layouts (they have their own spacing).
+
 ## Drift guard
 
 A second check covers the public pages (`src/marketing/*.css`, `src/community/communityHub.css`). It is a heuristic,
@@ -396,6 +448,17 @@ writes a raw colour (hex, `rgb()`, `hsl()`), a `border-radius` length that is no
 `var(--bevel-*)`, `0` or `inherit`, a time or easing literal in `transition`/`animation`, or a
 `clip-path: polygon()`. Known gaps: longhand `animation-delay`/`transition-delay` (stagger offsets), named and modern colours (`white`, `oklch()`), and values hidden behind a custom property are not checked. For a translucent token colour use `color-mix(in srgb, var(--clr-white) 8%, transparent)`.
 
+A fourth check guards the role layer and density (Petrol Kaizen P6). The token parts (`components`, `base`, `feedback`,
+`vocabulary`) must not read `--radius-sm/-md/-lg` directly (strict, no allowlist) and must read a role-covered semantic
+colour (`--color-border-input`, `--color-border-card`, `--color-accent-hover`, `--color-accent-contrast`,
+`--color-accent-tint`, `--color-accent-tint-text`, `--color-danger-contrast`) only where `COVERED_COLOUR_READS` lists it
+with a reason (a mark's own ink, a flag's edge). The screen, tool and public sheets (22 files, 71 reads) are a **ratchet**,
+not a licence: `DIRECT_RADIUS` pins each file's count, exact both ways, so a new direct read fails and a file that
+migrates must lower its number; the public `bts` and `results` pages (with its print sheet) and the standalone tools
+carry their reason. New work takes the role token. The disabled-opacity rule now also covers `.is-disabled`,
+`.disabled` and `[data-disabled]`. The density rules above are checked here too, along with the "written only on a
+screen root" rule.
+
 A third check, with no allowlist, guards the feedback ladder: no `window.confirm(` or `confirm(` in `src/` JavaScript, no
 CSS class or `className` ending `-field-error` or `-empty` other than the core `.form-field-error` and `.empty`, and a
 rule for a disabled control (`:disabled`, `[aria-disabled]`, `[disabled]`) may only set `opacity` to
@@ -409,6 +472,6 @@ several screens need the same value.
 ## Live preview
 
 `src/ui/tokens/preview.html` renders every token — palette swatches for both surface
-modes, the type scale, spacing/radius, buttons (big bevel, busy, disabled), the selected state, inputs and feedback, the feedback ladder (toast, confirm in place, dialog, field states, empty states, in paper and stage), the decorative `.cut-lg`, a mock scoreboard using
+modes, the type scale, spacing/radius, buttons (big bevel, busy, disabled), the selected state, inputs and feedback, the feedback ladder (toast, confirm in place, dialog, field states, empty states, in paper and stage), the role tokens as the browser resolves them in paper and stage, compact density next to normal (with the measured row and button heights), the decorative `.cut-lg`, a mock scoreboard using
 `.font-mono-score`, and the `is_test` banner. Open it via the dev server (`npm run dev`,
 then navigate to `/src/ui/tokens/preview.html`) when changing any token value.

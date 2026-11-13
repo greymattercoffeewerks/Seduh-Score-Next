@@ -206,3 +206,11 @@ _The two Records-card downloads (`scoresExport.js`, `scoresExportData.js`) follo
 - **The matches remove error goes through the 1.5 s in-screen toast** (pre-existing; `ui-accessibility-reviewer`). Same fix as above.
 - **Standings errors land in a polite status region** (pre-existing, `standingsScreen.js`). An error should be assertive or sit inline by the cause.
 - **The Lock top 8, Redraw round and Remove match confirms** are built (in place, `confirmInPlace`) but have had no real-tablet check at 360px. Owed.
+
+## Known open items from Petrol Kaizen P6 (token roles and density, 2026-11-13)
+
+- **22 screen, tool and public sheets still read `--radius-sm/-md/-lg` directly (71 reads).** Pinned per file in `DIRECT_RADIUS` in `tokenDrift.test.js` (exact both ways, so it only goes down). Move each onto `--radius-field`/`-selector`/`-box`/`-dialog` when a rule is next edited. The Guess the Bean and Timer sheets use 6px on buttons and inputs, which no role names; decide whether that is Hybrid or a deviation first.
+- **Compact density is on three screens only** (BTC matches, BTC standings, Cup Taster heats). Candidates not done: BTC bracket, Cup Taster scoring and roster, the Throwdown screens. A real-iPad check of the three is owed.
+- **The preview's `.ok-cut-table` stacks its cells at 360px** (its own markup in `preview.html`, not the standings screen); harmless, left.
+- **`tools/check-doc-budgets.test.js` "flags a relative link" fails on Windows** (a fake `/r/` path); pre-existing, unrelated to P6.
+- **Guard gaps from `test-auditor` (nits):** the role-reader check is substring presence per part, so a part can flip back to `var(--color-accent)` unnoticed (pin each part's `var(--role)` read count); `directRadiusReads` misses a semantic radius hidden behind a custom property.

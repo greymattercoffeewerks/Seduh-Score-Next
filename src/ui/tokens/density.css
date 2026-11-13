@@ -1,0 +1,38 @@
+/*
+ * Density (Petrol Kaizen P6): `data-density="compact"` tightens spacing, row padding and table cells for the dense
+ * organiser and judge views on a tablet (a round of 8 matches, a 20-team table, a list of heats), the way
+ * `data-surface` flips colour. It is Ant Design's compact algorithm done with the one mechanism this system already
+ * has: an attribute on an ancestor.
+ *
+ * Opt-in per screen, no global switch: a screen's root writes `data-density="compact"`, and everything inside is
+ * tighter. There is no "normal" attribute to write; leaving it off is normal. A part that must stay roomy inside a
+ * compact screen is not a case yet (a modal <dialog> sits in the top layer but still inherits, and its own rules,
+ * feedback.css, read no density token, so it is unchanged).
+ *
+ * THE FLOOR. Compact trims padding, gaps and the space around a row. It never trims a control: `--tap-target-min`
+ * (44px) is not redefined here, and this file sets no `min-height`, `height` or `block-size` at all, so a `.btn`,
+ * a `.field-input`, a checkbox label or a link row keeps its 44px target and the row that holds one stays at least
+ * that tall. tokenDrift.test.js (no height, spacing-only rules) and roles.test.js (the controls' own min-height) fail if any of that changes. What compact gives back is the 16px or so of padding
+ * around each row, and the gaps between rows and cards.
+ *
+ * This file is the token set only. The rules for the shared parts (the screen container, .card, the organiser kit) are
+ * the last block of components.css, which owns those class names (this file is loaded by every page, including the
+ * ones that must not get components.css, so it names none). A format's own parts (a heat card, a standings table) add
+ * their own `[data-density='compact']` rule in the format's stylesheet, reading the same tokens, so core never names a
+ * format's class.
+ */
+
+/* The compact set. Each is a spacing step from spacing.css; the normal value is whatever the part already has:
+   stack     between a screen's cards and sections (normal --space-6)
+   card-pad  inside a card (normal --space-5, --space-4 for a kit card)
+   row-pad-y above and below a list row's content (normal --space-2 to --space-3)
+   cell-pad  a table cell, top and bottom (normal --space-2)
+   gap       between the things inside a row or card (normal --space-3) */
+[data-density='compact'] {
+  --density-stack: var(--space-4);
+  --density-card-pad: var(--space-3);
+  --density-row-pad-y: var(--space-1);
+  --density-row-pad-x: var(--space-3);
+  --density-cell-pad: var(--space-1);
+  --density-gap: var(--space-2);
+}

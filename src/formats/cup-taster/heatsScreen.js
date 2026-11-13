@@ -369,7 +369,10 @@ export async function mountHeatGenerationScreen(
     if (signal?.aborted) return;
     root.innerHTML = '';
 
-    const container = el('section', { className: 'screen-container heats-screen' });
+    const container = el('section', {
+      className: 'screen-container heats-screen',
+      attrs: { 'data-density': 'compact' },
+    });
 
     // D9: is_test must render unmistakably on every surface an organiser or
     // audience member can see, not only the audience-facing live surfaces

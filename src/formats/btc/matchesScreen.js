@@ -842,7 +842,10 @@ export async function mountMatchesScreen(
         return true;
       }
 
-      const container = el('section', { className: 'screen-container btc-matches-screen' });
+      const container = el('section', {
+        className: 'screen-container btc-matches-screen',
+        attrs: { 'data-density': 'compact' },
+      });
 
       if (state.event?.is_test) {
         container.appendChild(
