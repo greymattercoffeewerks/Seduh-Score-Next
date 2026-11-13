@@ -90,6 +90,8 @@ export function normaliseCountryRecord(raw) {
       championships: count(stats.championships),
       entries: count(stats.entries),
       teams: count(stats.teams),
+      // Read but not shown by the pages (owner decision, 2026-11-13: only the final pairings are published, so these
+      // understate every country). Kept so the figure can return once full pairings exist.
       matchesWon: count(stats.matches_won),
       matchesLost: count(stats.matches_lost),
       bestFinish: normaliseBest(stats.best_finish),
