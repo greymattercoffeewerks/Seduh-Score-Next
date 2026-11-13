@@ -54,8 +54,8 @@
    every screen using `.card`. */
 .card {
   background: var(--color-surface);
-  border: var(--border-hairline) solid var(--color-border-card);
-  border-radius: var(--radius-md);
+  border: var(--border-hairline) solid var(--box-edge);
+  border-radius: var(--radius-box);
   padding: var(--space-5);
 }
 
@@ -75,7 +75,7 @@
   justify-content: center;
   min-height: var(--tap-target-min);
   padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-field);
   border: var(--border-hairline) solid transparent;
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -135,26 +135,26 @@
 }
 
 .btn-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
 }
 
 .btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
-  background: var(--color-accent-hover);
+  background: var(--btn-primary-hover);
 }
 
 .btn-primary:active:not(:disabled):not([aria-disabled='true']) {
-  background: color-mix(in srgb, var(--color-accent-hover) 80%, black);
+  background: color-mix(in srgb, var(--btn-primary-hover) 80%, black);
 }
 
 /* The big primary button (Petrol V2): the screen's one main call-to-action (Start the heat, Record the result).
-   `.btn btn-primary btn-lg`. The soft bevel chamfer is the same shape as base.css's .btn-bevel (for CTAs that are not .btn). Small and secondary buttons never take it: they keep --radius-sm. */
+   `.btn btn-primary btn-lg`. The soft bevel chamfer is the same shape as base.css's .btn-bevel (for CTAs that are not .btn). Small and secondary buttons never take it: they keep --radius-field. */
 .btn-primary.btn-lg {
   min-height: calc(var(--tap-target-min) + var(--space-2));
   padding: var(--space-3) var(--space-6);
   font-size: var(--text-md);
   /* The bevel shape, same declarations as base.css's .btn-bevel (see the comment there). */
-  border-radius: var(--bevel-lg) var(--radius-sm) var(--bevel-lg) var(--radius-sm);
+  border-radius: var(--bevel-lg) var(--radius-field) var(--bevel-lg) var(--radius-field);
 }
 
 @supports (corner-shape: bevel) {
@@ -175,7 +175,7 @@
 .btn-outline {
   background: transparent;
   color: var(--color-text);
-  border-color: var(--color-border-strong);
+  border-color: var(--btn-outline-edge);
 }
 
 .btn-outline:hover:not(:disabled):not([aria-disabled='true']) {
@@ -196,12 +196,12 @@
 .selectable[aria-current='true'],
 .selectable[aria-current='page'],
 .selectable[aria-current='step'] {
-  background-color: var(--color-accent-tint);
-  background-image: linear-gradient(var(--color-accent), var(--color-accent));
+  background-color: var(--selected-bg);
+  background-image: linear-gradient(var(--selected-edge), var(--selected-edge));
   background-repeat: no-repeat;
   background-size: 2px 100%;
   background-position: left center;
-  color: var(--color-accent-tint-text);
+  color: var(--selected-fg);
 }
 
 .is-selected::before,
@@ -250,8 +250,8 @@
   padding: var(--space-2) var(--space-3);
   /* --color-border-input (petrol-400), not --color-border (2.1:1): a form control's edge must reach 3:1 against
      what it sits on (WCAG 1.4.11). 4.0:1 on the paper surface, 4.2:1 on the stage surface. */
-  border: var(--border-hairline) solid var(--color-border-input);
-  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-body);
@@ -275,7 +275,7 @@
    field does not grow. An error replaces the hint, it does not sit beside it. Read-only: a dashed edge on the
    sunken fill (still focusable and copyable, unlike disabled). */
 .field-input[aria-invalid='true'] {
-  border: var(--border-strong) solid var(--color-danger);
+  border: var(--border-strong) solid var(--field-edge-error);
   padding: calc(var(--space-2) - 1px) calc(var(--space-3) - 1px);
 }
 
@@ -290,7 +290,7 @@
 
 .screen-feedback {
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-field);
   font-size: var(--text-sm);
 }
 
@@ -562,7 +562,7 @@
 }
 
 .ok-phase[data-status='not_started'] {
-  border-color: var(--color-border-card);
+  border-color: var(--box-edge);
   color: var(--color-text-secondary);
 }
 
@@ -719,7 +719,7 @@
   max-inline-size: 100%;
   padding: var(--space-2);
   background: var(--clr-white);
-  border: var(--border-hairline) solid var(--color-border-card);
+  border: var(--border-hairline) solid var(--box-edge);
 }
 
 .ok-live-qr[hidden] {
@@ -1303,4 +1303,50 @@
   .ok-signoff-box {
     break-inside: avoid;
   }
+}
+
+/* ==========================================================================================================
+ * Compact density (Petrol Kaizen P6): the shared parts' overrides for `data-density="compact"`. The tokens it reads are
+ * in density.css; the rules for a format's own parts are in the format's stylesheet. Spacing only: no height of any
+ * kind, so every control keeps its own min-height of --tap-target-min (tokenDrift.test.js and roles.test.js hold it).
+ * ======================================================================================================== */
+
+[data-density='compact'] .screen-container,
+.screen-container[data-density='compact'] {
+  gap: var(--density-stack);
+  padding-block: var(--density-card-pad);
+}
+
+[data-density='compact'] .card {
+  padding: var(--density-card-pad);
+}
+
+/* The organiser kit's cards and their bordered rows. */
+[data-density='compact'] .ok-card {
+  padding: var(--density-card-pad);
+  gap: var(--density-gap);
+}
+
+[data-density='compact'] .ok-row {
+  padding: var(--density-row-pad-y) var(--density-row-pad-x);
+  gap: var(--density-row-pad-y) var(--density-gap);
+}
+
+[data-density='compact'] .ok-group-header {
+  padding-block: var(--density-row-pad-y);
+}
+
+[data-density='compact'] .ok-groups {
+  gap: var(--density-gap);
+}
+
+[data-density='compact'] .ok-cut-table th,
+[data-density='compact'] .ok-cut-cell {
+  padding-block: var(--density-cell-pad);
+}
+
+[data-density='compact'] .ok-cut,
+[data-density='compact'] .ok-cut-main,
+[data-density='compact'] .ok-cut-rail {
+  gap: var(--density-gap);
 }

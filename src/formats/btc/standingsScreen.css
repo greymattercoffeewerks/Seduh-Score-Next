@@ -78,3 +78,12 @@
 .standings-row[data-status='pending'] .standings-status {
   color: var(--color-text-secondary);
 }
+
+/* Compact density (tokens/density.css): the table's cells give back their vertical padding. Rows still hold the
+   44px targets (none are in the table), and the 360px stacked layout keeps its own spacing. */
+@media (min-width: 481px) {
+  [data-density='compact'] .standings-table th,
+  [data-density='compact'] .standings-table td {
+    padding-block: var(--density-cell-pad);
+  }
+}

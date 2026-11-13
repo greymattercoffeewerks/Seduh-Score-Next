@@ -10,8 +10,8 @@
  *   .steps    an ordered list. data-state="done" gets a check, aria-current="step" gets a tint and a 2px accent edge.
  *
  * Imported by index.css, so every page that loads the tokens has them. Paper and stage come from the colour tokens (a
- * data-surface="stage" ancestor flips every part with no extra rule). No shadows, Hybrid radii (--radius-sm for marks
- * and tabs, --radius-md for tiles), no clip-path. Violet (--color-test) appears only in .status[data-state='test'].
+ * data-surface="stage" ancestor flips every part with no extra rule). No shadows, Hybrid radii (--radius-selector for marks
+ * and tabs, --radius-box for tiles), no clip-path. Violet (--color-test) appears only in .status[data-state='test'].
  */
 
 /* ---- .status ---- */
@@ -22,7 +22,7 @@
   gap: var(--space-2);
   padding: 2px var(--space-2) 2px 6px;
   border: var(--border-hairline) solid currentColor;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   color: var(--status-ink);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
@@ -43,7 +43,7 @@
   place-items: center;
   width: 0.875rem;
   height: 0.875rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   font-family: var(--font-mono);
   font-size: var(--text-3xs);
   font-weight: var(--font-weight-bold);
@@ -150,7 +150,7 @@
   max-inline-size: 100%;
   padding: var(--space-1);
   background: var(--color-surface-sunken);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   overflow-x: auto;
 }
 
@@ -160,7 +160,7 @@
   padding: 0 var(--space-4);
   border: 0;
   border-block-end: var(--border-strong) solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   background: transparent;
   color: var(--color-text-secondary);
   font-family: var(--font-body);
@@ -180,7 +180,7 @@
 /* The selected tab is the surface it opens onto, with a 2px accent edge: an edge as well as a fill. */
 .tab[aria-selected='true'] {
   background: var(--color-surface);
-  border-block-end-color: var(--color-accent);
+  border-block-end-color: var(--selected-edge);
   color: var(--color-text);
 }
 
@@ -207,8 +207,8 @@
   min-inline-size: 0;
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
-  border: var(--border-hairline) solid var(--color-border-card);
-  border-radius: var(--radius-md);
+  border: var(--border-hairline) solid var(--box-edge);
+  border-radius: var(--radius-box);
 }
 
 /* A tone is an edge on the start side; the sub-line carries it in words, so colour is not the only cue. */
@@ -254,8 +254,8 @@
   inline-size: 100%;
   block-size: 0.5rem;
   background: var(--color-surface-sunken);
-  border: var(--border-hairline) solid var(--color-border-card);
-  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--box-edge);
+  border-radius: var(--radius-selector);
   box-sizing: content-box;
   overflow: hidden;
 }
@@ -295,7 +295,7 @@
   padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
   background: var(--color-surface);
   border: var(--border-hairline) solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
 }
@@ -309,7 +309,7 @@
   inline-size: 1.5rem;
   block-size: 1.5rem;
   border: var(--border-strong) solid currentColor;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   font-weight: var(--font-weight-semibold);
@@ -328,9 +328,9 @@
 .steps > li[aria-current='step'] {
   padding: calc(var(--space-1) - 1px) calc(var(--space-3) - 1px) calc(var(--space-1) - 1px)
     calc(var(--space-1) - 1px);
-  background: var(--color-accent-tint);
-  border: var(--border-strong) solid var(--color-accent);
-  color: var(--color-accent-tint-text);
+  background: var(--selected-bg);
+  border: var(--border-strong) solid var(--selected-edge);
+  color: var(--selected-fg);
   font-weight: var(--font-weight-bold);
 }
 

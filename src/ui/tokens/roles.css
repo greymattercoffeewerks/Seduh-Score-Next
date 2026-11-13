@@ -1,0 +1,58 @@
+/*
+ * Role tokens (Petrol Kaizen P6) — the third token layer: ramp -> semantic -> role.
+ *
+ *   ramp      colors.css, spacing.css         --clr-teal-700, --radius-md, --space-3
+ *   semantic  colors.css (paper + stage)      --color-accent, --color-border-input, --radius-sm
+ *   role      this file                       --btn-primary-bg, --field-edge, --radius-field
+ *
+ * A role token names what a PART uses, and does nothing else: it is a renaming layer, every value below is a
+ * `var()` of a semantic token, so the rendered pixels are the same as before the layer existed. Components read the
+ * role; a later change to "what a primary button looks like" is one line here, not a hunt across five files.
+ * Role tokens alias, they never hold a literal (roles.test.js resolves each one through the ramp, in both modes).
+ *
+ * Why the colour block has three selectors. A custom property that is a `var()` is resolved where it is DECLARED
+ * and the resolved value is what inherits. Declared on :root alone, `--btn-primary-bg` would be the paper accent
+ * inside a `[data-surface='stage']` subtree, because the stage block re-points --color-accent on the descendant
+ * only. So the colour roles are declared again on every element that can re-point a semantic colour: :root,
+ * every [data-surface] (paper/stage), and every [data-brand] (core/brandSlot.js sets an organiser's accent on a
+ * surface-owned node and marks it). The radius roles do not depend on a surface, so :root is enough.
+ *
+ * What does NOT belong here: a value only one part uses (keep it in that part's rule), a colour that has no
+ * semantic name yet (add the semantic token first), and anything violet (--color-test is read directly, and only for
+ * is_test, DESIGN.md D9).
+ */
+
+/* Radius by role (daisyUI's names). Hybrid shape: 3px for controls and marks, 6px for boxes, 10px for dialogs.
+   field: an input, a button, an inline message: anything you press or type into.
+   selector: a mark that shows state or choice: tag, status, tab, step, meter.
+   box: a card, panel, tile, confirm panel, empty state. dialog: the modal <dialog>. */
+:root {
+  --radius-field: var(--radius-sm);
+  --radius-selector: var(--radius-sm);
+  --radius-box: var(--radius-md);
+  --radius-dialog: var(--radius-lg);
+}
+
+:root,
+[data-surface],
+[data-brand] {
+  /* Buttons */
+  --btn-primary-bg: var(--color-accent);
+  --btn-primary-fg: var(--color-accent-contrast);
+  --btn-primary-hover: var(--color-accent-hover);
+  --btn-danger-bg: var(--color-danger);
+  --btn-danger-fg: var(--color-danger-contrast);
+  --btn-outline-edge: var(--color-border-strong);
+
+  /* Fields: 3:1 edges (WCAG 1.4.11), and the error edge. */
+  --field-edge: var(--color-border-input);
+  --field-edge-error: var(--color-danger);
+
+  /* A box's hairline edge (card, panel, tile, confirm panel). */
+  --box-edge: var(--color-border-card);
+
+  /* Selected / current: the tint, the text on it, and the accent edge that carries the state. */
+  --selected-bg: var(--color-accent-tint);
+  --selected-fg: var(--color-accent-tint-text);
+  --selected-edge: var(--color-accent);
+}

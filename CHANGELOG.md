@@ -8,6 +8,21 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Petrol Kaizen P6: token roles and compact density · 2026-11-13
+
+**Task:** Petrol Kaizen P6 ("token roles"), the last Kaizen phase. Branch `claude/petrol-kaizen-p6-f3656c`, cut from `dev` at `0a439a6` (P4 live as 4.6.0, P5 merged); PR into `dev`. No migration, no cloud change, no scoring logic. **No version bump** (the main session sets the release number).
+
+- **Role layer.** New `src/ui/tokens/roles.css` (imported by `index.css`): radius roles `--radius-field` and `-selector` (3px), `--radius-box` (6px), `--radius-dialog` (10px); colour roles `--btn-primary-bg/-fg/-hover`, `--btn-danger-bg/-fg`, `--btn-outline-edge`, `--field-edge`, `--field-edge-error`, `--box-edge`, `--selected-bg/-fg/-edge`. Each is a bare `var()` of a semantic token. `components`, `base`, `feedback` and `vocabulary` read them (28 radius reads, about 45 colour reads). The colour roles are declared on `:root, [data-surface], [data-brand]` because a `var()` custom property resolves where it is declared; on `:root` alone a stage subtree would keep the paper accent.
+- **Pixel proof.** In a browser, old tokens against new, on the token preview (327 elements, all computed properties) and a synthetic page with every part in paper, stage and a branded subtree (70 elements, light and stage, plus `::before`/`::after`): about 260,000 property comparisons, no difference (one animated opacity on the breathing live blip differed by timing). `roles.test.js` resolves every role through the ramp in both modes against the semantic token it names.
+- **Compact density.** `data-density="compact"` (`density.css` tokens; shared-part overrides at the end of `components.css`; format rules in the format sheets). Opt-in on three screen roots: BTC matches, BTC standings (cut table), Cup Taster heats. Spacing only; the 44px floor is held by a test (a `[data-density]` rule may set only padding, gap and margin-top; `--tap-target-min` is defined once; `density.css` sets no height). Measured: heat card 215 to 183px and screen 1310 to 1180px at 820px; BTC matches screen 4657 to 4112px at 360px; a kit match row 123 to 58px at 820px; every control 44px.
+- **Drift guard.** Token parts may not read `--radius-sm/-md/-lg`; a role-covered semantic colour only where `COVERED_COLOUR_READS` lists it; screen, tool and public sheets are a ratchet (`DIRECT_RADIUS`: 22 files, 71 reads, exact both ways, with `bts` and `results` carrying their reason); the disabled-opacity rule also covers `.is-disabled`, `.disabled`, `[data-disabled]`; the density rules and "written only on a screen root" are tested. Three mutations checked to fail.
+- **Docs and preview.** `DESIGN.md` "Token layers and density"; `preview.html` shows the roles as resolved in paper and stage and compact next to normal with measured heights; backlog items in `docs/backlog/btc.md`.
+- **Browser.** 360px first, then 820px, paper and stage: no horizontal overflow, controls 44px, compact screens shorter. Real-iPad check owed.
+- **Tests.** Lint and prettier clean; full suite passes except `tools/check-doc-budgets.test.js` "flags a relative link", a Windows path problem that predates this work. `sharedPrimitives.test.js` regex widened to accept the role radii.
+- **Reviews:** see the PR description (ui-accessibility-reviewer, module-boundary-checker, code-reviewer, test-auditor).
+
+---
+
 ## Petrol Kaizen P5: the vocabulary (status marks, tabs, stats, meter, steps) · 2026-11-13
 
 **Task:** Petrol Kaizen P5 ("vocabulary"), the third of the four post-V2 Kaizen items. Branch `claude/petrol-kaizen-p5-25fb67`, cut from P4's branch `claude/keen-wiles-9e7b3c`, so this is a **draft PR against P4's branch**, not into `dev`; P4 is PR #457, still open. No migration, no cloud change, no scoring, ranking or timing logic changed. **No version bump**, same as P4: this stacks on an unreleased branch and the release PR takes it. It is a visible restyle, so expect a minor at release (`docs/versioning.md`; the release owner's call). **Not final:** the UI checks listed under Reviews are owed.

@@ -196,3 +196,32 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Compact density (tokens/density.css): more heats fit on an iPad. The heat card's action link and the roster
+   fold's summary keep their 44px targets; only the gaps and the roster's row padding give back space. */
+[data-density='compact'] .heat-card {
+  gap: var(--density-gap);
+}
+
+[data-density='compact'] .heat-card + .heat-card {
+  margin-top: var(--density-gap);
+}
+
+[data-density='compact'] .heat-entries-list {
+  gap: var(--density-row-pad-y);
+}
+
+[data-density='compact'] .roster-list {
+  gap: 0;
+}
+
+[data-density='compact'] .roster-list li {
+  padding-block: var(--density-row-pad-y);
+}
+
+@media (min-width: 481px) {
+  [data-density='compact'] .assignment-table th,
+  [data-density='compact'] .assignment-table td {
+    padding-block: var(--density-cell-pad);
+  }
+}

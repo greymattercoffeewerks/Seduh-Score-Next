@@ -422,7 +422,10 @@ export async function mountStandingsScreen(
   }
 
   function renderLoaded() {
-    const container = el('section', { className: 'screen-container btc-standings-screen' });
+    const container = el('section', {
+      className: 'screen-container btc-standings-screen',
+      attrs: { 'data-density': 'compact' },
+    });
     const band = renderStatusBand(state.event);
     if (band) container.appendChild(band);
     container.appendChild(el('h1', { text: 'Standings', attrs: { tabindex: '-1' } }));

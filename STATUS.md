@@ -11,8 +11,8 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
-- **Petrol V2 released** in 3.6.6 (2026-11-09). The shared page hero is in a PR to `dev` from `claude/page-hero-consistency`.
-- **Petrol Kaizen P4** (PR #457, open) and **P5** (vocabulary, draft PR on P4's branch) built; tablet checks owed. **P6 next** (`CHANGELOG.md`, 2026-11-13).
+- **Petrol V2 released** in 3.6.6 (2026-11-09).
+- **Petrol Kaizen P4** (PR #457, open) and **P5** (vocabulary, draft PR on P4's branch) built; tablet checks owed. **P6** (token roles, density) in a PR to `dev`; iPad check owed.
 - **Open, not merged or not in the cloud** (check `CHANGELOG.md` before trusting this line): password recovery D-PW2 to
   D-PW8 not started; organiser branding BR-E1 in PR #297 (no database door, so no brand shows); T-TD.1.9 (Throwdown 3rd place
   match after a walkover) was in review with its migration not yet in the cloud on 2026-11-03.

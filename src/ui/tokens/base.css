@@ -138,7 +138,7 @@ body {
 }
 
 /* A small "LIVE" pulse dot, used sparingly (heat in progress, live
-   session connected). A machined blip (--radius-sm, 3px), not a circle: it
+   session connected). A machined blip (--radius-selector, 3px), not a circle: it
    reads as a "telemetry indicator" rather than an "online dot" and matches
    the marketing exploration's own motif. Motion is opt-in via
    prefers-reduced-motion so it degrades to a static blip rather than being
@@ -147,7 +147,7 @@ body {
   display: inline-block;
   width: 0.5rem;
   height: 0.5rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   background: var(--color-accent);
 }
 
@@ -186,7 +186,7 @@ body {
 }
 
 /* Petrol V2 — the soft bevel chamfer, ONLY on big primary buttons (Hybrid rule: small elements keep the 3px
-   --radius-sm). Top-left and bottom-right are chamfered by --bevel-lg, the other two corners stay a 3px machined
+   --radius-field). Top-left and bottom-right are chamfered by --bevel-lg, the other two corners stay a 3px machined
    radius. Two spellings of one shape:
      .btn-bevel            shape only, for a call-to-action that is not a .btn (marketing, pricing, tools);
      .btn-primary.btn-lg   the console's big primary button, in components.css (same declarations, keep in sync).
@@ -197,7 +197,7 @@ body {
    the border follow it. Browsers without `corner-shape` get the asymmetric radius below: a rounded 9px corner
    on the same two diagonals, which still reads as the same family. */
 .btn-bevel.btn-bevel {
-  border-radius: var(--bevel-lg) var(--radius-sm) var(--bevel-lg) var(--radius-sm);
+  border-radius: var(--bevel-lg) var(--radius-field) var(--bevel-lg) var(--radius-field);
 }
 
 @supports (corner-shape: bevel) {
@@ -230,7 +230,7 @@ body {
   align-items: center;
   padding: var(--space-1) var(--space-2);
   border: var(--border-hairline) solid var(--tag-edge, var(--color-border));
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   color: var(--tag-ink, var(--color-text-secondary));
   font-family: var(--font-mono);
   font-size: var(--text-3xs);
@@ -250,15 +250,15 @@ body {
 }
 
 .panel {
-  border: var(--border-hairline) solid var(--color-border-card);
-  border-radius: var(--radius-md);
+  border: var(--border-hairline) solid var(--box-edge);
+  border-radius: var(--radius-box);
 }
 
 .icon-frame {
   display: grid;
   place-items: center;
   border: var(--border-hairline) solid var(--frame-edge, var(--color-accent));
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-selector);
   color: var(--frame-ink, var(--color-accent));
 }
 
@@ -269,8 +269,8 @@ body {
   width: var(--tap-target-min);
   height: var(--tap-target-min);
   padding: 0;
-  border: var(--border-hairline) solid var(--color-border-input);
-  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
   background: transparent;
   color: var(--color-text);
   cursor: pointer;
@@ -283,7 +283,7 @@ body {
   min-height: var(--tap-target-min);
   padding: var(--space-2) var(--space-4);
   border: var(--border-hairline) solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-field);
   font-weight: var(--font-weight-semibold);
   font-size: var(--text-sm);
   text-decoration: none;
@@ -294,18 +294,18 @@ body {
 }
 
 .action-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
 }
 
 .action-primary:hover {
-  background: var(--color-accent-hover);
+  background: var(--btn-primary-hover);
 }
 
 .action-outline {
   background: transparent;
   color: var(--color-text);
-  border-color: var(--color-border-input);
+  border-color: var(--field-edge);
 }
 
 .action-outline:hover {
@@ -382,7 +382,7 @@ body {
 
 /* Legacy corner cut, kept for LARGE DECORATIVE PANELS only (the random selector's board frame). A clip-path cuts
    off the outside focus ring, so never put it on anything focusable: a big button is `.btn-bevel`, a small
-   element takes `--radius-sm`. */
+   element takes `--radius-field`. */
 .cut-lg {
   clip-path: polygon(
     var(--cut-lg) 0,

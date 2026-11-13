@@ -607,7 +607,8 @@ const stripJsComments = (js) =>
 const CONFIRM_CALL = /(?<![\w$])(?:window\.|globalThis\.)?confirm\s*\(/g;
 const LOCAL_FEEDBACK_CLASS = /(?<![\w:-])((?:[a-z][a-z0-9]*-)*(?:field-error|empty))(?![\w-])/g;
 const CORE_FEEDBACK_CLASSES = new Set(['form-field-error', 'empty']);
-const DISABLED_SELECTOR = /:disabled|\[aria-disabled|\[disabled/;
+const DISABLED_SELECTOR =
+  /:disabled|\[aria-disabled|\[disabled|\[data-disabled|\.is-disabled|\.disabled\b/;
 
 const jsSources = walk('src', (name) => name.endsWith('.js') && !name.endsWith('.test.js'))
   .map(rel)
@@ -839,5 +840,240 @@ describe('vocabulary drift guard', () => {
     expect(roleTabIn('<button role="tab">')).toBe(true);
     expect(roleTabIn("setAttribute('role', 'tab')")).toBe(true);
     expect(roleTabIn("attrs: { role: 'tablist' } role: 'tabpanel'")).toBe(false);
+  });
+});
+
+// ---- the role layer and density (Petrol Kaizen P6) ----
+//
+// src/ui/tokens/roles.css names what a part uses (--radius-field, --btn-primary-bg, --field-edge, --box-edge, ...) on top
+// of the semantic layer, and density.css adds data-density="compact". Four rules:
+//   1. the token parts (components, base, feedback, vocabulary) never read --radius-sm/-md/-lg directly: they take the
+//      role (--radius-field, -selector, -box, -dialog). Strict, no allowlist.
+//   2. a screen, tool or public stylesheet may still read the semantic radius, but only as many times as DIRECT_RADIUS
+//      pins for that file (exact both ways: a new direct read fails, and a file that migrates must lower its number).
+//      This is a ratchet over the legacy sheets, not a licence; the public bts and results pages (the print sheet is
+//      in results.css) are listed with their reason. New work takes the role token.
+//   3. the token parts read a semantic colour that a role covers (--color-border-input, --color-border-card,
+//      --color-accent-contrast, --color-danger-contrast, ...) only where COVERED_COLOUR_READS lists it with its reason
+//      (a mark's own ink, a flag's edge), exact both ways; roles.css itself is where they are named.
+//   4. density: a [data-density] rule may set only spacing (padding, gap, margin) and --density-* values, so it can
+//      never shrink a control below --tap-target-min; nothing redefines --tap-target-min; the attribute is written
+//      only on a screen's root by the screens listed in DENSITY_SCREENS, never on <html>/<body>, a page or :root (no
+//      global switch).
+
+const TOKEN_PARTS = ['components', 'base', 'feedback', 'vocabulary'].map(
+  (n) => `${TOKENS_DIR}${n}.css`,
+);
+const tokenParts = TOKEN_PARTS.map((file) => ({ file, css: readFileSync(file, 'utf8') }));
+const RADIUS_BORDER = /^border(-(top|bottom|start|end)-(left|right|start|end))?-radius$/;
+const SEMANTIC_RADIUS = /var\(\s*--radius-(?:sm|md|lg)\s*(?:,[^)]*)?\)/g;
+const directRadiusReads = (css) =>
+  declarations(css)
+    .filter((d) => RADIUS_BORDER.test(d.prop.replace(/^-(?:webkit|moz|ms|o)-/, '')))
+    .flatMap((d) => [...d.value.matchAll(SEMANTIC_RADIUS)].map(() => d.selector));
+
+const LEGACY =
+  'legacy screen sheet: reads the semantic radius directly; take the role token when a rule here is next edited';
+const OWN_LOOK =
+  'a standalone page with its own look that does not load components.css (the buttons and inputs here are 6px by design, which no role names)';
+const DIRECT_RADIUS = {
+  'src/admin/admin.css': [4, LEGACY],
+  'src/community/guess-the-bean/displayScreen.css': [4, OWN_LOOK],
+  'src/community/guess-the-bean/setupScreen.css': [1, OWN_LOOK],
+  'src/community/guess-the-bean/shared.css': [4, OWN_LOOK],
+  'src/core/appShell.css': [8, LEGACY],
+  'src/core/eventsScreen.css': [2, LEGACY],
+  'src/core/oneTimePasswordCard.css': [1, LEGACY],
+  'src/core/splashScreen.css': [2, LEGACY],
+  'src/core/viewer-shell.css': [2, LEGACY],
+  'src/formats/btc/bracketScreen.css': [2, LEGACY],
+  'src/formats/btc/matchesScreen.css': [3, LEGACY],
+  'src/formats/btc/scoringScreen.css': [2, LEGACY],
+  'src/formats/btc/viewerBody.css': [1, LEGACY],
+  'src/formats/cup-taster/heatsScreen.css': [1, LEGACY],
+  'src/formats/cup-taster/reportScreen.css': [3, LEGACY],
+  'src/formats/cup-taster/timingScreen.css': [2, LEGACY],
+  'src/formats/cup-taster/viewerBody.css': [2, LEGACY],
+  'src/marketing/bts.css': [
+    14,
+    'the public Behind the Seduh page: its own sheet, linked beside the tokens, not a console part',
+  ],
+  'src/marketing/results.css': [
+    3,
+    'the public results page and its printable sheet: a public, print-first sheet, not a console part',
+  ],
+  'src/tools/brew-planner/brewPlanner.css': [1, OWN_LOOK],
+  'src/tools/random-selector/randomSelector.css': [6, OWN_LOOK],
+  'src/tools/timer/timer.css': [3, OWN_LOOK],
+};
+
+// Reads of a semantic colour that a role covers, left on purpose: 'file | token' -> [count, reason].
+const COVERED_COLOUR_TOKENS = [
+  '--color-border-input',
+  '--color-border-card',
+  '--color-accent-hover',
+  '--color-accent-contrast',
+  '--color-accent-tint',
+  '--color-accent-tint-text',
+  '--color-danger-contrast',
+];
+const COVERED_COLOUR_READS = {
+  [`${TOKENS_DIR}base.css | --color-accent-contrast`]: [
+    1,
+    'the ink of a solid .tag (a mark, not a button)',
+  ],
+  [`${TOKENS_DIR}feedback.css | --color-danger-contrast`]: [
+    1,
+    'the "!" on the field-error mark (a mark, not a button)',
+  ],
+  [`${TOKENS_DIR}vocabulary.css | --color-accent-contrast`]: [
+    1,
+    'the number on the current step (a mark, not a button)',
+  ],
+  [`${TOKENS_DIR}vocabulary.css | --color-danger-contrast`]: [
+    1,
+    'the ink of the failed .status mark',
+  ],
+  [`${TOKENS_DIR}components.css | --color-border-card`]: [
+    2,
+    "a country flag's image edge and the organiser warning item's start rule: neither is a box edge",
+  ],
+};
+const coveredColourReads = (css) => {
+  const counts = new Map();
+  for (const d of declarations(css)) {
+    for (const token of COVERED_COLOUR_TOKENS) {
+      const n = d.value.split(`var(${token})`).length - 1;
+      if (n) counts.set(token, (counts.get(token) ?? 0) + n);
+    }
+  }
+  return counts;
+};
+
+// Density: the only properties a [data-density] rule may set.
+const DENSITY_PROPS =
+  /^(?:padding(?:-(?:block|inline)(?:-(?:start|end))?|-(?:top|right|bottom|left))?|gap|row-gap|column-gap|margin-(?:top|block-start)|--density-[\w-]+)$/;
+const densityRules = (css) => declarations(css).filter((d) => /\[data-density\b/.test(d.selector));
+const DENSITY_SCREENS = [
+  'src/formats/btc/matchesScreen.js',
+  'src/formats/btc/standingsScreen.js',
+  'src/formats/cup-taster/heatsScreen.js',
+];
+const densitySheets = [
+  ...sources.filter((s) => s.file.endsWith('.css')),
+  ...walk(TOKENS_DIR, (name) => name.endsWith('.css'))
+    .map(rel)
+    .map((file) => ({ file, css: readFileSync(file, 'utf8') })),
+];
+
+describe('role layer and density drift guard', () => {
+  it('scans the token parts and the screen sheets (a vacuous scan would pass anything)', () => {
+    expect(tokenParts).toHaveLength(4);
+    expect(tokenParts.every((p) => declarations(p.css).length > 20)).toBe(true);
+    expect(Object.keys(DIRECT_RADIUS).length).toBeGreaterThan(15);
+  });
+
+  it('the token parts read the radius roles, never --radius-sm/-md/-lg directly', () => {
+    const found = tokenParts.flatMap((p) =>
+      directRadiusReads(p.css).map((sel) => `${p.file}  ${sel}`),
+    );
+    expect(
+      found,
+      'use --radius-field, --radius-selector, --radius-box or --radius-dialog (roles.css)',
+    ).toEqual([]);
+  });
+
+  it('a screen, tool or public sheet reads the semantic radius no more than DIRECT_RADIUS pins (exact both ways)', () => {
+    const actual = {};
+    for (const s of sources) {
+      if (!s.file.endsWith('.css')) continue;
+      const n = directRadiusReads(s.css).length;
+      if (n) actual[s.file] = n;
+    }
+    expect(actual).toEqual(
+      Object.fromEntries(Object.entries(DIRECT_RADIUS).map(([f, [n]]) => [f, n])),
+    );
+    expect(Object.values(DIRECT_RADIUS).every(([, reason]) => reason.length > 10)).toBe(true);
+  });
+
+  it('the token parts read a role-covered semantic colour only where COVERED_COLOUR_READS lists it (exact both ways)', () => {
+    const actual = {};
+    for (const p of tokenParts)
+      for (const [token, n] of coveredColourReads(p.css)) actual[`${p.file} | ${token}`] = n;
+    expect(actual).toEqual(
+      Object.fromEntries(Object.entries(COVERED_COLOUR_READS).map(([k, [n]]) => [k, n])),
+    );
+  });
+
+  it('density rules set only spacing, so a control never drops below --tap-target-min', () => {
+    const scanned = densitySheets.flatMap((s) =>
+      densityRules(s.css).map((d) => ({ ...d, file: s.file })),
+    );
+    expect(scanned.length, 'the density rules were not found').toBeGreaterThan(10);
+    expect(scanned.some((d) => d.file.startsWith('src/formats/btc/'))).toBe(true);
+    expect(scanned.some((d) => d.file.startsWith('src/formats/cup-taster/'))).toBe(true);
+    const offenders = scanned
+      .filter((d) => !DENSITY_PROPS.test(d.prop))
+      .map((d) => `${d.file}  ${d.selector} { ${d.prop} }`);
+    expect(
+      offenders,
+      'a density rule may only set padding, gap or margin (the 44px floor)',
+    ).toEqual([]);
+  });
+
+  it('nothing redefines --tap-target-min but spacing.css, and density.css sets no height of any kind', () => {
+    const redefined = densitySheets
+      .filter((s) => declarations(s.css).some((d) => d.prop === '--tap-target-min'))
+      .map((s) => s.file);
+    expect(redefined).toEqual([`${TOKENS_DIR}spacing.css`]);
+    const density = declarations(readFileSync(`${TOKENS_DIR}density.css`, 'utf8'));
+    expect(density.filter((d) => /(?:^|-)(?:height|block-size)$/.test(d.prop))).toEqual([]);
+  });
+
+  it('density is opt-in per screen: written only on a screen root, never on a page, <html>, <body> or :root', () => {
+    const writers = jsSources
+      .filter((s) => /data-density|dataset\.density|documentElement[^;]*density/.test(s.js))
+      .map((s) => s.file)
+      .sort();
+    expect(writers).toEqual([...DENSITY_SCREENS].sort());
+    for (const s of jsSources.filter((x) => DENSITY_SCREENS.includes(x.file)))
+      expect(s.js).toMatch(
+        /className: '[^']*screen-container[^']*',\s*attrs: \{ 'data-density': 'compact' \}/,
+      );
+    const pages = htmlFiles.filter((f) => /data-density/.test(readFileSync(f, 'utf8')));
+    expect(pages).toEqual([]);
+    const globalSelectors = densitySheets.flatMap((s) =>
+      declarations(s.css)
+        .map((d) => d.selector)
+        .filter((sel) => /(?:^|[\s,>])(?::root|html|body)\[data-density/.test(sel)),
+    );
+    expect(globalSelectors).toEqual([]);
+  });
+
+  it('the matchers: they catch the shapes they claim to', () => {
+    expect(directRadiusReads('.a{border-radius:var(--radius-sm)}')).toHaveLength(1);
+    expect(
+      directRadiusReads('.a{border-radius:0 var(--radius-md) var(--radius-md) 0}'),
+    ).toHaveLength(2);
+    expect(
+      directRadiusReads(
+        '.a{border-radius:var(--radius-field)} .b{border-radius:var(--radius-full)}',
+      ),
+    ).toEqual([]);
+    expect(directRadiusReads('.a{--x:var(--radius-sm)}')).toEqual([]);
+    expect([...coveredColourReads('.a{border:1px solid var(--color-border-input)}')]).toEqual([
+      ['--color-border-input', 1],
+    ]);
+    expect([...coveredColourReads('.a{border:1px solid var(--field-edge)}')]).toEqual([]);
+    expect(DENSITY_PROPS.test('padding-block')).toBe(true);
+    expect(DENSITY_PROPS.test('--density-gap')).toBe(true);
+    expect(DENSITY_PROPS.test('min-height')).toBe(false);
+    expect(DENSITY_PROPS.test('height')).toBe(false);
+    expect(DENSITY_PROPS.test('font-size')).toBe(false);
+    expect(densityRules("[data-density='compact'] .a{min-height:1px}")).toHaveLength(1);
+    expect(densityRules('.a{min-height:1px}')).toEqual([]);
+    expect(
+      rawDisabledOpacity('.a.is-disabled{opacity:.4} .b[data-disabled]{opacity:.3}'),
+    ).toHaveLength(2);
   });
 });

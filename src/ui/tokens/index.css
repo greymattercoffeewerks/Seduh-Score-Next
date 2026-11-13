@@ -8,6 +8,8 @@
 @import './spacing.css';
 @import './motion.css';
 @import './brand.css';
+@import './roles.css';
+@import './density.css';
 @import './base.css';
 @import './feedback.css';
 @import './vocabulary.css';
