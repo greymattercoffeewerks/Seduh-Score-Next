@@ -506,7 +506,7 @@ textarea:focus-visible {
   accent-color: var(--rs-accent);
 }
 .rs-volume-range:disabled {
-  opacity: 0.42;
+  opacity: var(--opacity-disabled);
 }
 .rs-event-branding {
   margin-top: var(--space-4);
@@ -572,10 +572,6 @@ textarea:focus-visible {
 }
 .rs-history-panel h2 {
   max-width: 15rem;
-}
-.rs-history-empty {
-  color: var(--color-text-secondary);
-  line-height: var(--leading-relaxed);
 }
 .rs-history {
   margin: var(--space-4) 0 0;

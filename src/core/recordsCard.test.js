@@ -85,7 +85,9 @@ describe('buildRecordsCard', () => {
   it('says so when there is nothing to download', () => {
     const card = buildRecordsCard([]);
     expect(card.querySelectorAll('button')).toHaveLength(0);
-    expect(card.querySelector('.ok-records-empty').textContent).toBe('No records to download yet.');
+    expect(card.querySelector('.empty[data-kind="first-use"]').textContent).toBe(
+      'No records to download yet.',
+    );
   });
 
   it('builds on click, saves what build() returned, and says it downloaded', async () => {

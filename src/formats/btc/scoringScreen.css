@@ -78,7 +78,7 @@
 /* A locked cell (confirming, waiting to sync, stale) must not look tappable. The dash
    border and the changed cursor are shape cues, not only a dimmer colour. */
 .btc-token[aria-disabled='true'] {
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
   border-style: dashed;
 }

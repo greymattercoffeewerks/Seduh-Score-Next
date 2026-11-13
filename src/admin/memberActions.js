@@ -167,7 +167,7 @@ export function roleControl({
 
   // Read aloud when it fills; focus goes to it after a refusal, because it is what the operator needs to hear.
   const message = el('p', {
-    className: 'adm-field-error',
+    className: 'form-field-error',
     attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
   });
   let busy = false;

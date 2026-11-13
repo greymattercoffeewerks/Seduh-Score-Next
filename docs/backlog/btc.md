@@ -199,3 +199,10 @@ _The two Records-card downloads (`scoresExport.js`, `scoresExportData.js`) follo
 - **The 1000-row cap fails loudly.** `scoresExportData.js` throws on a 1000-row PostgREST cap rather than writing a truncated file. An event past 1000 matches or cups (not reachable at 20 teams) needs paged reads.
 - **Pre-existing, kit (`src/ui/tokens/components.css`): `.ok-records-status` has no `overflow-wrap`,** so a very long unbroken slug overflows at 360px. It affects the existing JSON entry as well as the CSV pair. Fix in the kit, not in the BTC code.
 - **Pre-existing, kit: label and file squeeze side by side at 360px** (a nit from `ui-accessibility-reviewer`). Stack them below 360px in the kit's records-card CSS.
+
+## Known open items from Petrol Kaizen P4 (feedback ladder, 2026-11-13)
+
+- **Five screens keep their own in-screen `showToast`** (BTC matches, standings, setup and bracket). They show errors in it, which is gone in 1.5 s, and move focus onto it. Move success to core `toast()` and errors to an inline `.screen-feedback` line. Found while building the ladder (`DESIGN.md`, "Feedback ladder"); not done in P4.
+- **The matches remove error goes through the 1.5 s in-screen toast** (pre-existing; `ui-accessibility-reviewer`). Same fix as above.
+- **Standings errors land in a polite status region** (pre-existing, `standingsScreen.js`). An error should be assertive or sit inline by the cause.
+- **The Lock top 8, Redraw round and Remove match confirms** are built (in place, `confirmInPlace`) but have had no real-tablet check at 360px. Owed.

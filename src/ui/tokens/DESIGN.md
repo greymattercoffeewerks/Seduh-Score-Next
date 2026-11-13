@@ -297,6 +297,46 @@ live bar and edge-to-edge format rows, the printable results sheet, a flag glyph
 corner on something that touches both screen edges reads as a bug, not a style. These are the `SQUARE_ALLOWLIST` in
 `tokenDrift.test.js`, each with its reason.
 
+## Feedback ladder (Petrol Kaizen P4)
+
+One answer for each way the app talks back. Pick the lightest step that is still safe. The parts are `core/feedback.js`
+(the scripted ones) and `src/ui/tokens/feedback.css` (imported by `index.css`, so every page that loads the tokens has
+them; the buttons are the parts' own `.fb-btn` because Guess the Bean, the Timer and Behind the Seduh do not load
+`components.css`). Paper and stage modes come from the tokens, so a `data-surface="stage"` ancestor flips them. No
+shadows, Hybrid radii (`--radius-sm` buttons and strips, `--radius-md` boxes, `--radius-lg` the dialog), and the
+global reduced-motion rule turns the entrance off.
+
+| Step               | Part                                                      | Use it for                                                                                         | Never for                                                                         |
+| ------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1 inline line      | `.screen-feedback` (`setFeedback`), `.form-field-error`   | Validation, "saving…", a failure, under what caused it                                             |                                                                                   |
+| 2 toast            | `toast(message)`, `.toast`                                | Routine success only: "Cupper added". About 3 s, a polite live region                              | **Errors** (a toast is gone before it is read) and anything that needs a decision |
+| 3 confirm in place | `confirmInPlace(trigger, opts)`, `.confirm-panel`         | An action that can be undone or done again: lock, redraw, remove a match                           | A permanent delete                                                                |
+| 4 dialog           | `confirmDialog(opts)`, `.dialog` on the native `<dialog>` | **Only** a permanent delete: erase a test event's roster, delete guesses, lose a one-time password | Anything with an undo                                                             |
+
+Not yet migrated (follow-ups, not part of P4): the five screens that keep their own in-screen toast (`showToast` in the
+BTC matches, standings, setup and bracket screens and Guess the Bean setup) still show errors in it and move focus onto
+it; they should move to `toast()` for success and to an inline line for errors. The Cup Taster, Throwdown, Team and
+Events screens keep their older inline confirms (`#confirm-finish-*`, `#team-confirm-*`).
+
+Rules every confirm follows: the title names the consequence and the body says how to undo it (or that it cannot be);
+focus starts on **Cancel**; Escape closes (and a panel returns focus to its trigger); the trigger carries
+`aria-expanded` / `aria-controls` while a panel is open; and when the event is `is_test` the violet **Test event** strip
+(`.feedback-test`, `--color-test`) shows at the top, because violet means `is_test` and nothing else. A format passes
+`isTest` and words; it never names a format to the part. The panel opens after the trigger's parent (or `anchor`), so
+it sits beside the button, and pressing the same trigger again closes it. `window.confirm` is banned in `src/` by
+`tokenDrift.test.js`.
+
+**Field states** are on the existing `.form-field` / `.field-input` (`components.css`): a hint is `.form-field-hint`;
+an error is `aria-invalid="true"` on the input (a 2px `--color-danger` edge) plus a `.form-field-error` message that has
+its own "!" mark, so colour is never the only cue, and the error hides the hint (put the hint after the input);
+`readonly` is a dashed edge on the sunken fill; disabled fades to `--opacity-disabled` (0.5, one value for every
+disabled control; it was 0.6 in four places and 0.42 in one).
+
+**Empty** is `.empty` with `data-kind`: `first-use` (a "+", says what to do), `done` (a tick, nothing needs doing),
+`no-results` (a "?", says what was looked for). `emptyState()` builds one. It replaced six local classes. One of the
+six, `.app-shell-context-empty`, was not an empty state at all but a layout flag on the header's context row, and is
+now `.app-shell-context-idle`.
+
 ## Drift guard
 
 A second check covers the public pages (`src/marketing/*.css`, `src/community/communityHub.css`). It is a heuristic,
@@ -313,6 +353,11 @@ writes a raw colour (hex, `rgb()`, `hsl()`), a `border-radius` length that is no
 `var(--bevel-*)`, `0` or `inherit`, a time or easing literal in `transition`/`animation`, or a
 `clip-path: polygon()`. Known gaps: longhand `animation-delay`/`transition-delay` (stagger offsets), named and modern colours (`white`, `oklch()`), and values hidden behind a custom property are not checked. For a translucent token colour use `color-mix(in srgb, var(--clr-white) 8%, transparent)`.
 
+A third check, with no allowlist, guards the feedback ladder: no `window.confirm(` or `confirm(` in `src/` JavaScript, no
+CSS class or `className` ending `-field-error` or `-empty` other than the core `.form-field-error` and `.empty`, and a
+rule for a disabled control (`:disabled`, `[aria-disabled]`, `[disabled]`) may only set `opacity` to
+`var(--opacity-disabled)`.
+
 To allow a value, add an entry to `ALLOWLIST` in that file: the file, the kind, the full selector chain, the exact
 literal, and a reason (ideally a named exception above; two Guess the Bean entries, the spinner and the display countdown, are allowlisted on judgment and not yet named there). Entries are exact (a second copy of the value in the
 same rule fails, and an entry that stops matching fails), so prefer a token to an entry, and add a token when
@@ -321,6 +366,6 @@ several screens need the same value.
 ## Live preview
 
 `src/ui/tokens/preview.html` renders every token — palette swatches for both surface
-modes, the type scale, spacing/radius, buttons (big bevel, busy, disabled), the selected state, inputs and feedback, the decorative `.cut-lg`, a mock scoreboard using
+modes, the type scale, spacing/radius, buttons (big bevel, busy, disabled), the selected state, inputs and feedback, the feedback ladder (toast, confirm in place, dialog, field states, empty states, in paper and stage), the decorative `.cut-lg`, a mock scoreboard using
 `.font-mono-score`, and the `is_test` banner. Open it via the dev server (`npm run dev`,
 then navigate to `/src/ui/tokens/preview.html`) when changing any token value.

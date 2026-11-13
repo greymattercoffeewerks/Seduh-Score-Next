@@ -813,21 +813,6 @@ a.bts-cycle:hover {
   color: var(--color-text-secondary);
 }
 
-.bts-empty {
-  padding: var(--space-6) var(--space-5);
-  border-style: dashed;
-  text-align: center;
-  color: var(--color-text-secondary);
-}
-
-.bts-empty b {
-  display: block;
-  margin-bottom: var(--space-1);
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  color: var(--color-text);
-}
-
 /* ---- bio, closer, footer ---- */
 
 .bts-bio {

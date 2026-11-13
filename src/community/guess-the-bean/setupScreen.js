@@ -17,6 +17,7 @@
 import qrcode from 'qrcode-generator';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
+import { confirmDialog } from '../../core/feedback.js';
 import { copyText } from '../../core/clipboard.js';
 import { describeError } from '../../core/errors.js';
 import { downloadJson } from '../../core/export.js';
@@ -250,9 +251,11 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     // RPC concurrently with the first. Found in review (code-reviewer).
     if (state.busy) return;
     const session = activeSession();
-    const ok = window.confirm(
-      `This will permanently delete all guesses for "${session.name}". Session settings are preserved. Are you sure?`,
-    );
+    const ok = await confirmDialog({
+      title: `Delete all guesses for "${session.name}"?`,
+      body: 'This permanently deletes every guess. Session settings are kept.',
+      confirmLabel: 'Delete guesses',
+    });
     if (!ok) return;
     state.busy = true;
     render();
@@ -275,9 +278,11 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     // Same busy re-check as handleResetData above.
     if (state.busy) return;
     const session = activeSession();
-    const ok = window.confirm(
-      `This will delete all guesses and end "${session.name}". This can't be undone. Are you sure?`,
-    );
+    const ok = await confirmDialog({
+      title: `End "${session.name}"?`,
+      body: "This deletes all guesses and ends the session. This can't be undone.",
+      confirmLabel: 'End session',
+    });
     if (!ok) return;
     state.busy = true;
     render();
@@ -331,14 +336,14 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
         'Session name',
         nameInput,
         state.createErrors.name
-          ? [el('p', { className: 'gtb-field-error', text: state.createErrors.name })]
+          ? [el('p', { className: 'form-field-error', text: state.createErrors.name })]
           : [],
       ),
       labeledField(
         'Real bean count',
         beanInput,
         state.createErrors.beanCount
-          ? [el('p', { className: 'gtb-field-error', text: state.createErrors.beanCount })]
+          ? [el('p', { className: 'form-field-error', text: state.createErrors.beanCount })]
           : [],
       ),
     ];
@@ -353,7 +358,7 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     const form = el('form', { className: 'gtb-setup-form' }, [
       ...fields,
       ...(state.createErrors.create
-        ? [el('p', { className: 'gtb-field-error', text: state.createErrors.create })]
+        ? [el('p', { className: 'form-field-error', text: state.createErrors.create })]
         : []),
       submitButton,
     ]);
@@ -520,7 +525,7 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     } else if (state.winnerError) {
       winnerChildren.push(
         el('p', {
-          className: 'gtb-field-error',
+          className: 'form-field-error',
           text: state.winnerError,
           attrs: { role: 'alert' },
         }),

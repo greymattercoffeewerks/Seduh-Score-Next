@@ -145,7 +145,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
         if (isGateRefusal(answer.error)) return onGateRefused();
         preview.replaceChildren(
           el('p', {
-            className: 'adm-field-error',
+            className: 'form-field-error',
             text: answer.error.timedOut ? SLOW_MESSAGE : describeAdminError(answer.error),
           }),
         );
@@ -154,7 +154,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
       const count = Number.isInteger(answer.data?.would_lose) ? answer.data.would_lose : null;
       if (count === null) {
         preview.replaceChildren(
-          el('p', { className: 'adm-field-error', text: describeAdminError({}) }),
+          el('p', { className: 'form-field-error', text: describeAdminError({}) }),
         );
         return;
       }

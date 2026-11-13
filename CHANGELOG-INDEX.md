@@ -1,6 +1,6 @@
 # Changelog index (archived entries)
 
-One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries since 2026-10-24 are in [`CHANGELOG.md`](CHANGELOG.md).
+One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries since 2026-10-30 are in [`CHANGELOG.md`](CHANGELOG.md).
 
 - D-PW1: organiser password recovery and Change password · 2026-10-23 → [`2026-10-H2`](docs/archive/changelog/2026-10-H2.md)
 - T-GATE.C: the admin Plan panel (gating step 3), still dark · 2026-10-23 → [`2026-10-H2`](docs/archive/changelog/2026-10-H2.md)
@@ -215,3 +215,7 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - First-flip preparation: admin-session grant fixture, runbook, announcement draft · 2026-10-28 → [`2026-10-H2-b`](docs/archive/changelog/2026-10-H2-b.md)
 - Admin console: Change password panel · 2026-10-28 → [`2026-10-H2-c`](docs/archive/changelog/2026-10-H2-c.md)
 - Codex Addendum A: Finish button, narrower events select, admin badges, service_role guard test · 2026-10-27 → [`2026-10-H2-b`](docs/archive/changelog/2026-10-H2-b.md)
+- Landing page cleanup, stage 2 of 3 · 2026-10-29 → [`2026-10-H2-d`](docs/archive/changelog/2026-10-H2-d.md)
+- Landing page cleanup, stage 1 of 3 · 2026-10-29 → [`2026-10-H2-d`](docs/archive/changelog/2026-10-H2-d.md)
+- T-ID.A3: people.phone is E.164 in the database, shape only (not pushed to the cloud) · 2026-10-29 → [`2026-10-H2-d`](docs/archive/changelog/2026-10-H2-d.md)
+- Password screens follow the cloud's new password settings · 2026-10-29 → [`2026-10-H2-d`](docs/archive/changelog/2026-10-H2-d.md)

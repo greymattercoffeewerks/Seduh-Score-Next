@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountMatchesScreen } from './matchesScreen.js';
 import { publishBtcLive } from './liveSession.js';
 import { countryName } from '../../core/country.js';
+import { answerFeedback } from '../../core/feedbackTestKit.js';
 
 vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
 
@@ -801,9 +802,9 @@ describe('Draw a round panel', () => {
       click(createButton());
       await flush();
       expect(client.rpcCalls.filter(([n]) => n === 'create_btc_round')).toHaveLength(1);
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       for (let i = 0; i < 2; i += 1) {
         click(root.querySelector('[data-focus-key^="remove-match-"]'));
+        answerFeedback('confirm');
         await flush();
       }
       expect(root.querySelectorAll('.ok-row')).toHaveLength(0);
@@ -870,11 +871,17 @@ describe('Draw a round panel', () => {
         const client = await mount(db);
         choose('draw-round-1');
         expect(root.textContent).toContain('Round 1 has already been drawn.');
-        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
         redrawButton().focus();
         click(redrawButton());
+        expect(document.querySelector('.confirm-panel').textContent).toContain(
+          'removes its 2 matches',
+        );
+        // D9: a test event's panel carries the violet strip, so a rehearsal never reads as the real event
+        expect(document.querySelector('.confirm-panel .feedback-test').textContent).toBe(
+          'Test event',
+        );
+        answerFeedback('confirm');
         await flush();
-        expect(confirm.mock.calls[0][0]).toContain('removes its 2 matches');
         expect(client.rpcCalls[0]).toEqual([
           'redraw_btc_round',
           { p_org_id: 'org1', p_event_id: 'ev1', p_prelim_round: 1 },
@@ -891,9 +898,9 @@ describe('Draw a round panel', () => {
           dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') }),
         );
         choose('draw-round-1');
-        vi.spyOn(window, 'confirm').mockReturnValue(false);
         redrawButton().focus();
         click(redrawButton());
+        answerFeedback('cancel');
         await flush();
         expect(client.rpcCalls).toHaveLength(0);
         expect(document.activeElement).toBe(redrawButton());
@@ -915,10 +922,9 @@ describe('Draw a round panel', () => {
         expect(redrawButton().disabled).toBe(false); // still focusable
         expect(q('#btc-draw-redraw-reason').textContent).toContain('in scoring or confirmed');
         expect(redrawButton().getAttribute('aria-describedby')).toBe('btc-draw-redraw-reason');
-        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
         await flush();
-        expect(confirm).not.toHaveBeenCalled();
+        expect(document.querySelector('.confirm-panel')).toBeNull();
         expect(client.rpcCalls).toHaveLength(0);
       });
 
@@ -945,8 +951,8 @@ describe('Draw a round panel', () => {
           },
         });
         choose('draw-round-1');
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
+        answerFeedback('confirm');
         await flush();
         expect(q('[role="alert"]').textContent).toContain('is scored, so it cannot be redrawn');
         expect(q('[role="alert"]').textContent).not.toContain('RAW');
@@ -964,8 +970,8 @@ describe('Draw a round panel', () => {
           if (table === 'btc_matches') throw new Error('offline');
           return real(table);
         };
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
+        answerFeedback('confirm');
         await flush();
         expect(root.querySelectorAll('.ok-row')).toHaveLength(0);
         expect(cards()).toHaveLength(2);
@@ -976,8 +982,8 @@ describe('Draw a round panel', () => {
         const db = dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches: r1('pending') });
         await mount(db, { roundError: { code: 'P0001', message: 'x', hint: 'btc_redraw_scored' } });
         choose('draw-round-1');
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
+        answerFeedback('confirm');
         await flush();
         expect(isBlocked(redrawButton())).toBe(true);
         expect(q('#btc-draw-redraw-reason')).not.toBeNull();
@@ -1003,8 +1009,8 @@ describe('Draw a round panel', () => {
           },
         });
         choose('draw-round-1');
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
+        answerFeedback('confirm');
         await flush();
         expect(publishBtcLive).toHaveBeenCalledTimes(1);
       });
@@ -1014,8 +1020,8 @@ describe('Draw a round panel', () => {
         db.btc_round_draws = [{ event_id: 'ev1', prelim_round: 1 }];
         const client = await mount(db);
         expect(root.textContent).toContain('Redraw it to clear the record');
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         click(redrawButton());
+        answerFeedback('confirm');
         await flush();
         expect(client.rpcCalls[0][0]).toBe('redraw_btc_round');
         expect(cards()).toHaveLength(2);

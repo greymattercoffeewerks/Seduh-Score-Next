@@ -2486,7 +2486,7 @@ describe('mountAppShell — sync panel', () => {
       expect(button(root).hidden).toBe(true);
       expect(staticChip(root).hidden).toBe(true);
       // Nothing to put in the row, so it takes no space of its own.
-      expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+      expect(context(root).classList.contains('app-shell-context-idle')).toBe(true);
     });
 
     it('shows each status as ONE short chip, and the live region keeps the full sentence', async () => {
@@ -2781,15 +2781,15 @@ describe('mountAppShell — sync panel', () => {
           syncPollMs: 20,
         });
         await tick(30);
-        expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+        expect(context(root).classList.contains('app-shell-context-idle')).toBe(true);
         await setNav({ eventId: 'ev1', links: [] });
         await flush(() =>
           expect(root.querySelector('.app-shell-breadcrumb').textContent).toBe('October Cup'),
         );
-        expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+        expect(context(root).classList.contains('app-shell-context-idle')).toBe(false);
         await setNav({ eventId: null, links: [] });
         await flush(() =>
-          expect(context(root).classList.contains('app-shell-context-empty')).toBe(true),
+          expect(context(root).classList.contains('app-shell-context-idle')).toBe(true),
         );
       });
 
@@ -2797,7 +2797,7 @@ describe('mountAppShell — sync panel', () => {
         const root = document.createElement('div');
         mountTracked(root, { client: fakeClient({}), syncPollMs: 60000, dropCheckMs: 10 });
         await tick(30);
-        expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+        expect(context(root).classList.contains('app-shell-context-idle')).toBe(true);
         await enqueueOperation('doomed_op', {});
         await flushOutbox({
           doomed_op: async () => {
@@ -2809,7 +2809,7 @@ describe('mountAppShell — sync panel', () => {
             '1 write lost — not saved and not retried',
           ),
         );
-        expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+        expect(context(root).classList.contains('app-shell-context-idle')).toBe(false);
         expect(button(root).textContent).toBe('1 write lost');
       });
     });
@@ -2818,7 +2818,7 @@ describe('mountAppShell — sync panel', () => {
       const root = document.createElement('div');
       mountTracked(root, { client: fakeClient({}), syncPollMs: 60000, dropCheckMs: 10 });
       await tick(30);
-      expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+      expect(context(root).classList.contains('app-shell-context-idle')).toBe(true);
       await enqueueOperation('doomed_op', {});
       await enqueueOperation('slow_op', {});
       let release;
@@ -2835,7 +2835,7 @@ describe('mountAppShell — sync panel', () => {
         await flush(() =>
           expect(root.querySelector('.app-shell-sync').textContent).toBe('Not synced'),
         );
-        expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+        expect(context(root).classList.contains('app-shell-context-idle')).toBe(false);
         expect(button(root).hidden).toBe(false);
         // Worded apart from the pending chip's "Not synced (N)": the two differ in text, not only colour.
         expect(button(root).textContent).toBe('Sync failing');
@@ -2852,7 +2852,7 @@ describe('mountAppShell — sync panel', () => {
           '1 write lost — not saved and not retried',
         ),
       );
-      expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+      expect(context(root).classList.contains('app-shell-context-idle')).toBe(false);
       expect(button(root).textContent).toBe('1 write lost');
     });
 
@@ -2864,7 +2864,7 @@ describe('mountAppShell — sync panel', () => {
       await setNav({ eventId: null, links: [] });
       await flush(() => expect(staticChip(root).hidden).toBe(true));
       expect(button(root).hidden).toBe(true);
-      expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+      expect(context(root).classList.contains('app-shell-context-idle')).toBe(true);
     });
 
     // jsdom does no layout; this pins the CSS half of the guarantee against
@@ -2939,7 +2939,7 @@ describe('mountAppShell — sync panel', () => {
           [
             '.app-shell-context => display, flex, min-height, order',
             '.app-shell-context => display',
-            '.app-shell-context-empty => display',
+            '.app-shell-context-idle => display',
             '.app-shell-sync => height, margin, position, white-space, width',
             '.app-shell-sync-chip => display, flex, min-height, position, white-space',
             '.app-shell-sync-chip[hidden] => display',
@@ -2984,7 +2984,7 @@ describe('mountAppShell — sync panel', () => {
         expect(css).toMatch(
           /@media \(min-width: 640px\)\s*\{\s*\.app-shell-context\s*\{\s*display:\s*contents/,
         );
-        expect(decls(/^\.app-shell-context-empty$/)).toMatch(/display:\s*contents/);
+        expect(decls(/^\.app-shell-context-idle$/)).toMatch(/display:\s*contents/);
       });
 
       it('truncates the event name instead of wrapping it, so a long name can never grow the header', () => {

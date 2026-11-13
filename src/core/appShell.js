@@ -349,7 +349,7 @@ export function mountAppShell(
   });
   // The event name and the sync chip: one extra row under the brand on a phone,
   // dissolved into the header's own row from 640px up (see appShell.css).
-  const contextEl = el('div', { className: 'app-shell-context app-shell-context-empty' }, [
+  const contextEl = el('div', { className: 'app-shell-context app-shell-context-idle' }, [
     breadcrumbEl,
     syncChipStatic,
     syncChipButton,
@@ -696,7 +696,7 @@ export function mountAppShell(
   // it under the brand; from 640px up it is dissolved into the header row).
   function updateContextRow() {
     contextEl.classList.toggle(
-      'app-shell-context-empty',
+      'app-shell-context-idle',
       breadcrumbEl.textContent === '' && syncChipStatic.hidden && syncChipButton.hidden,
     );
   }

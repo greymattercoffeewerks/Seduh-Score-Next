@@ -61,3 +61,10 @@ See `android/guess-the-bean-widget/CLAUDE.md`.
   Not blocking Phase 2 closure. Flagged by: ui-accessibility-reviewer during Phase 2. **CLOSED (triage 2026-11-07):** both screens now use `setBusyDisabled` (aria-disabled, no native `disabled`) and `withFocusPreservation`, and keep an `aria-live="polite"` status that receives focus (`src/community/guess-the-bean/authScreen.js:39,137,150`, `src/core/loginScreen.js:52,179,192`; CHANGELOG-archive 2026-09-H1, follow-up task_8aad08ec).
 
 ---
+
+## Known open items from Petrol Kaizen P4 (feedback ladder, 2026-11-13)
+
+- **`.gtb-input` has no `aria-invalid` edge.** Guess the Bean does not load `components.css`, so the field-state rules from the kit do not reach it. The core `.form-field-error` message is in `feedback.css`, which GTB does load. Either load the field rules or copy the edge into GTB's own CSS.
+- **Reset data and End session show their errors through the 1.5 s in-screen toast** (pre-existing; `ui-accessibility-reviewer`). Errors belong inline by the action.
+- **The setup screen's in-screen toast** should move to core `toast()` for success and an inline line for errors (see the BTC section of this kit's follow-ups).
+- **The Reset and End session dialogs** are built (`confirmDialog`) but have had no real-tablet check. Owed.

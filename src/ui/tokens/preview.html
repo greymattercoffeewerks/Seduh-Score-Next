@@ -12,6 +12,26 @@
         margin: 0 auto;
         padding: var(--space-6) var(--space-5);
       }
+      .pv-feedback-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+        gap: var(--space-4);
+        margin-top: var(--space-4);
+      }
+      .pv-feedback-col {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        min-width: 0;
+      }
+      .pv-feedback-col .toast-demo {
+        display: flex;
+        justify-content: center;
+      }
+      .guide-note {
+        margin: 0 0 var(--space-3);
+        color: var(--color-text-secondary);
+      }
       .guide-heading {
         font-family: var(--font-display);
         font-size: var(--text-2xl);
@@ -378,6 +398,130 @@
         <div class="screen-feedback" data-tone="success">Saved. Slides in over 220ms.</div>
         <div class="screen-feedback" data-tone="error">Could not save that.</div>
       </div>
+
+      <h2 class="guide-heading">Feedback ladder</h2>
+      <p class="guide-note">
+        Inline line, toast, confirm in place, dialog. The buttons are live (core/feedback.js); the
+        static panels, field states and empty states are shown in paper, then the same parts in
+        stage.
+      </p>
+      <div class="btn-row">
+        <button class="btn btn-outline" type="button" id="pv-toast">Show a toast</button>
+        <button class="btn btn-outline" type="button" id="pv-confirm">Lock standings…</button>
+        <button class="btn btn-outline" type="button" id="pv-confirm-test">
+          Lock (test event)…
+        </button>
+        <button class="btn btn-outline" type="button" id="pv-dialog">Delete guesses…</button>
+      </div>
+      <div class="pv-feedback-grid">
+        <div class="pv-feedback-col">
+          <div class="confirm-panel" role="group" aria-labelledby="pv-cp1" data-tone="warning">
+            <p class="feedback-test">Test event</p>
+            <p class="feedback-title" id="pv-cp1">Lock the top 8 and generate the bracket?</p>
+            <p class="feedback-body">This cannot be undone.</p>
+            <div class="fb-actions">
+              <button class="fb-btn" type="button">Cancel</button>
+              <button class="fb-btn fb-btn--primary" type="button">Lock and generate</button>
+            </div>
+          </div>
+          <div class="confirm-panel" role="group" aria-labelledby="pv-cp2" data-tone="danger">
+            <p class="feedback-title" id="pv-cp2">Redraw round 2?</p>
+            <p class="feedback-body">
+              This removes its 4 matches. You can draw the round again afterwards.
+            </p>
+            <div class="fb-actions">
+              <button class="fb-btn" type="button">Cancel</button>
+              <button class="fb-btn fb-btn--danger" type="button">Redraw round</button>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-field-label" for="pv-err">Heat time</label>
+            <input
+              class="field-input"
+              id="pv-err"
+              value="4.48"
+              aria-invalid="true"
+              aria-describedby="pv-err-m"
+            />
+            <p class="form-field-hint">Minutes and seconds, like 4:48</p>
+            <p class="form-field-error" id="pv-err-m">
+              Use minutes and seconds with a colon, like 4:48.
+            </p>
+          </div>
+          <div class="form-field">
+            <label class="form-field-label" for="pv-ro">Cafe (read-only)</label>
+            <input class="field-input" id="pv-ro" value="BrewLab" readonly />
+          </div>
+          <div class="form-field">
+            <label class="form-field-label" for="pv-dis">Seed (disabled)</label>
+            <input class="field-input" id="pv-dis" value="3" disabled />
+          </div>
+          <div class="empty" data-kind="first-use">
+            <p class="empty-title">No records yet</p>
+            <p class="empty-text">Records appear here once a match is confirmed.</p>
+          </div>
+          <div class="empty" data-kind="done">
+            <p class="empty-text">Nothing needs attention.</p>
+          </div>
+          <div class="empty" data-kind="no-results">
+            <p class="empty-text">No heats match "Final".</p>
+          </div>
+        </div>
+        <div
+          class="pv-feedback-col"
+          data-surface="stage"
+          style="background: var(--color-canvas); padding: var(--space-4)"
+        >
+          <div class="confirm-panel" role="group" aria-labelledby="pv-cp3" data-tone="warning">
+            <p class="feedback-test">Test event</p>
+            <p class="feedback-title" id="pv-cp3">Lock the top 8 and generate the bracket?</p>
+            <p class="feedback-body">This cannot be undone.</p>
+            <div class="fb-actions">
+              <button class="fb-btn" type="button">Cancel</button>
+              <button class="fb-btn fb-btn--primary" type="button">Lock and generate</button>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-field-label" for="pv-err2">Heat time</label>
+            <input class="field-input" id="pv-err2" value="4.48" aria-invalid="true" />
+            <p class="form-field-error">Use minutes and seconds with a colon, like 4:48.</p>
+          </div>
+          <div class="empty" data-kind="first-use">
+            <p class="empty-title">No records yet</p>
+            <p class="empty-text">Records appear here once a match is confirmed.</p>
+          </div>
+          <div class="toast-demo"><div class="toast">Cupper added</div></div>
+        </div>
+      </div>
+      <script type="module">
+        import { toast, confirmInPlace, confirmDialog } from '../../core/feedback.js';
+        const $ = (id) => document.getElementById(id);
+        $('pv-toast').addEventListener('click', () => toast('Cupper added'));
+        const ask = (id, opts) =>
+          $(id).addEventListener('click', async () => {
+            const ok = await confirmInPlace($(id), opts);
+            if (ok) toast('Confirmed');
+          });
+        ask('pv-confirm', {
+          title: 'Lock standings?',
+          body: 'Knockout seeding will use this order. This cannot be undone.',
+          confirmLabel: 'Lock standings',
+        });
+        ask('pv-confirm-test', {
+          title: 'Lock standings?',
+          body: 'This cannot be undone.',
+          confirmLabel: 'Lock standings',
+          isTest: true,
+        });
+        $('pv-dialog').addEventListener('click', async () => {
+          const ok = await confirmDialog({
+            title: 'Delete all guesses for "Pop-up"?',
+            body: 'This permanently deletes every guess. Session settings are kept.',
+            confirmLabel: 'Delete guesses',
+          });
+          if (ok) toast('Deleted');
+        });
+      </script>
 
       <h2 class="guide-heading">Type scale</h2>
       <div class="type-row">

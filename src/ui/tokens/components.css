@@ -131,7 +131,7 @@
 .btn:disabled,
 .btn[aria-disabled='true'] {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
 }
 
 .btn-primary {
@@ -267,6 +267,25 @@
 .field-input:disabled,
 .field-input[aria-disabled='true'] {
   color: var(--color-text-secondary);
+  opacity: var(--opacity-disabled);
+}
+
+/* Field states (Petrol Kaizen P4). Error: a 2px --color-danger edge, and the message is a .form-field-error (its own
+   mark, feedback.css), so colour is not the only cue; the padding gives back the 1px the thicker edge takes, so the
+   field does not grow. An error replaces the hint, it does not sit beside it. Read-only: a dashed edge on the
+   sunken fill (still focusable and copyable, unlike disabled). */
+.field-input[aria-invalid='true'] {
+  border: var(--border-strong) solid var(--color-danger);
+  padding: calc(var(--space-2) - 1px) calc(var(--space-3) - 1px);
+}
+
+.field-input[aria-invalid='true'] ~ .form-field-hint {
+  display: none;
+}
+
+.field-input[readonly] {
+  background: var(--color-surface-sunken);
+  border-style: dashed;
 }
 
 .screen-feedback {
@@ -700,12 +719,6 @@
   justify-self: start;
 }
 
-.ok-warn-empty {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-}
-
 /* ---- Live now. ---- */
 .ok-live-state {
   display: flex;
@@ -845,12 +858,6 @@
   font-weight: var(--font-weight-regular);
   color: var(--color-text-secondary);
   overflow-wrap: anywhere;
-}
-
-.ok-records-empty {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
 }
 
 /* ---- The dashboard layout the kit is designed around: one column on a phone (360px first); on a tablet in

@@ -122,7 +122,11 @@ export function buildRecordsCard(records, options = {}) {
 
   const body =
     entries.length === 0
-      ? el('p', { className: 'ok-records-empty', text: 'No records to download yet.' })
+      ? el('p', {
+          className: 'empty',
+          text: 'No records to download yet.',
+          attrs: { 'data-kind': 'first-use' },
+        })
       : el('ul', { className: 'ok-records-list', attrs: { role: 'list' } }, rows);
 
   return el(

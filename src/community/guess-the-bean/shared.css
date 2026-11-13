@@ -81,14 +81,8 @@ body {
 .gtb-input:disabled,
 .gtb-input[aria-disabled='true'],
 input[type='checkbox'][aria-disabled='true'] {
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
-}
-
-.gtb-field-error {
-  color: var(--color-danger);
-  font-size: var(--text-sm);
-  margin: 0;
 }
 
 /* core/dom.js's labeledField() emits a generic .form-field/.form-field-label

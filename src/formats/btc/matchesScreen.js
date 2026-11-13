@@ -14,6 +14,7 @@
 // CLAUDE.md history entry for the three review rounds that shape came from.
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
+import { confirmInPlace } from '../../core/feedback.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { publishBtcLive } from './liveSession.js';
@@ -320,7 +321,7 @@ export async function mountMatchesScreen(
       render();
     },
     create: () => handleCreateRound(),
-    redraw: (round) => handleRedrawRound(round),
+    redraw: (round, trigger) => handleRedrawRound(round, trigger),
   };
 
   // Re-reads everything the draw depends on; a failed read keeps what is on screen.
@@ -334,14 +335,19 @@ export async function mountMatchesScreen(
 
   // Clears a round (its matches and its draw record) so it can be drawn again. Destructive, so it asks first, the way
   // Remove does; the database refuses unless nothing in the round is scored.
-  async function handleRedrawRound(round) {
+  async function handleRedrawRound(round, trigger) {
     if (state.busy) return;
     const count = state.matches.filter((m) => roundOf(m.match) === round).length;
-    const ok = window.confirm(
-      count > 0
-        ? `Redraw round ${round}? This removes its ${count} ${count === 1 ? 'match' : 'matches'} and the draw record. This can't be undone.`
-        : `Redraw round ${round}? This clears the leftover draw record. This can't be undone.`,
-    );
+    const ok = await confirmInPlace(trigger, {
+      title: `Redraw round ${round}?`,
+      body:
+        count > 0
+          ? `This removes its ${count} ${count === 1 ? 'match' : 'matches'} and the draw record. You can draw the round again afterwards; these matches cannot be brought back.`
+          : 'This clears the leftover draw record. You can draw the round again afterwards.',
+      confirmLabel: 'Redraw round',
+      tone: 'danger',
+      isTest: Boolean(state.event?.is_test),
+    });
     if (!ok) return;
     state.busy = true;
     state.drawError = null;
@@ -522,16 +528,18 @@ export async function mountMatchesScreen(
   // createMatch has no idempotency key (see the RPC's own comment) — a
   // dropped response after a real write can leave a duplicate match behind
   // with no way to tell it apart from a legitimate rematch except the
-  // organiser's own judgment. This is that cleanup path. window.confirm
-  // matches this codebase's own established danger-zone pattern
-  // (src/community/guess-the-bean/setupScreen.js's Reset Data/End Session)
-  // for a destructive action with no undo — removing a match cascades to
+  // organiser's own judgment. This is that cleanup path. It asks in place
+  // (core/feedback.js) first; removing a match cascades to
   // its btc_match_judges/btc_cup_votes/btc_match_bonuses rows too.
-  async function handleRemoveMatch(match) {
+  async function handleRemoveMatch(match, trigger) {
     if (state.busy) return;
-    const ok = window.confirm(
-      `Remove the match ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}? This can't be undone.`,
-    );
+    const ok = await confirmInPlace(trigger, {
+      title: `Remove the match ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}?`,
+      body: 'Its judges are removed with it. Create the match again to get it back.',
+      confirmLabel: 'Remove match',
+      tone: 'danger',
+      isTest: Boolean(state.event?.is_test),
+    });
     if (!ok) return;
     state.busy = true;
     render();
@@ -680,7 +688,7 @@ export async function mountMatchesScreen(
         state.formError
           ? el('p', {
               id: errorId,
-              className: 'btc-field-error',
+              className: 'form-field-error',
               text: state.formError,
               attrs: { role: 'alert' },
             })
@@ -724,7 +732,7 @@ export async function mountMatchesScreen(
         },
       });
       setBusyDisabled(removeButton, state.busy);
-      removeButton.addEventListener('click', () => handleRemoveMatch(match));
+      removeButton.addEventListener('click', () => handleRemoveMatch(match, removeButton));
       actions.push(removeButton);
     }
     const meta = [`Judges: ${judgeIds.map(judgeName).join(', ')}`];

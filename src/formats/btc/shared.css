@@ -42,10 +42,4 @@
   border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
-/* Shared across every BTC screen's own inline field errors
-   (the setup screen and the matches screen both use this class). */
-.btc-field-error {
-  color: var(--color-danger);
-  font-size: var(--text-sm);
-  margin: 0;
-}
+/* Inline field errors are core's .form-field-error (src/ui/tokens/feedback.css). */
