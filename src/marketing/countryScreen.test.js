@@ -66,6 +66,68 @@ describe('the country page', () => {
     expect(spoken).not.toContain('Rival');
   });
 
+  it('opens on a compact page: round scores are behind a native disclosure per team, closed by default', async () => {
+    await mount();
+    const details = root.querySelectorAll('.country-team-details');
+    expect(details).toHaveLength(1);
+    expect(details[0].tagName).toBe('DETAILS');
+    expect(details[0].open).toBe(false);
+    // the summary is the row (name, stage), with a cue and a spoken hint; the scores are inside the disclosure body
+    const summary = details[0].querySelector(':scope > summary');
+    expect(summary.querySelector('.country-team-name').textContent).toBe('Alpha Brew');
+    expect(summary.querySelector('.country-team-cue').getAttribute('aria-hidden')).toBe('true');
+    expect(summary.querySelector('.sr-only').textContent).toContain('round scores');
+    expect(summary.textContent).not.toContain('Prelims');
+    expect(details[0].querySelector(':scope > .country-team-rounds').textContent).toContain(
+      'Prelims 40+33=73',
+    );
+  });
+
+  it('gives EVERY team that has round scores its own disclosure, in its own row, and none to one without', async () => {
+    const raw = structuredClone(FICTIONAL_RECORD);
+    raw.country_code = 'BN';
+    const [first] = raw.championships[0].teams;
+    raw.championships[0].teams = [
+      first,
+      {
+        ...structuredClone(first),
+        team_name: 'Second Brew',
+        rounds: [{ round: 'preliminary', r1: 20, r2: 21, score: 41 }],
+      },
+      { ...structuredClone(first), team_name: 'Third Brew', rounds: [] },
+    ];
+    await mount(normaliseCountryRecord(raw));
+    const rows = [...root.querySelectorAll('.country-team')];
+    expect(rows.map((r) => r.querySelector('.country-team-name').textContent)).toEqual([
+      'Alpha Brew',
+      'Second Brew',
+      'Third Brew',
+    ]);
+    expect(rows.map((r) => r.querySelector('details') !== null)).toEqual([true, true, false]);
+    expect(rows[1].querySelector('.country-team-rounds').textContent).toContain('Prelims 20+21=41');
+    expect(rows[0].querySelector('.country-team-rounds').textContent).not.toContain('20+21');
+  });
+
+  it('has no disclosure for a team with no published scores, only its name and stage', async () => {
+    const raw = structuredClone(FICTIONAL_RECORD);
+    raw.country_code = 'BN';
+    raw.championships[0].teams[0].rounds = [];
+    await mount(normaliseCountryRecord(raw));
+    expect(root.querySelector('.country-team-details')).toBeNull();
+    expect(root.querySelector('.country-team .country-team-name').textContent).toBe('Alpha Brew');
+  });
+
+  it('puts the totals in one row and the best finish in the same summary block, after them', async () => {
+    await mount();
+    const summary = root.querySelector('.country-summary');
+    expect([...summary.children].map((c) => c.className)).toEqual([
+      'country-stats',
+      'country-best',
+    ]);
+    expect(summary.querySelectorAll('.country-stat')).toHaveLength(3);
+    expect(summary.querySelector('.country-best-label').textContent).toBe('Best finish');
+  });
+
   it('labels every result "From the organiser’s records" and never "Recorded by Seduh Score"', async () => {
     await mount();
     const labels = [...root.querySelectorAll('.country-provenance')].map((n) => n.textContent);
