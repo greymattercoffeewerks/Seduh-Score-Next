@@ -3,6 +3,7 @@
 // (admin_set_key_enforced, audited). Turning a key on is only offered after its preview and needs the preview's count, so
 // it cannot be done blind; turning it off is one confirmed step. This file never flips anything by itself.
 import { el, setBusyDisabled } from '../core/dom.js';
+import { statusMark } from '../core/vocabulary.js';
 import { isGateRefusal } from './gate.js';
 import { SLOW_MESSAGE } from './gate.js';
 import { describeAdminError } from './adminErrors.js';
@@ -73,10 +74,11 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
     // what a preview row costs an organisation: a limit it would hit, or access it would lose
     const costWords = key.kind === 'cap' ? 'be held to the limit' : 'lose access';
     const status = el('p', { className: 'adm-key-status' }, [
-      el('span', {
-        className: `adm-badge adm-badge--${enforced ? 'on' : 'off'}`,
-        text: enforced ? 'On: in force' : 'Off: nobody is restricted yet',
-      }),
+      statusMark(
+        enforced ? 'live' : 'queued',
+        enforced ? 'On: in force' : 'Off: nobody is restricted yet',
+        { className: 'adm-badge' },
+      ),
       el('span', { className: 'adm-muted', text: keyRuleText(key) }),
     ]);
     const preview = el('div', { className: 'adm-key-preview', attrs: { 'aria-live': 'polite' } });

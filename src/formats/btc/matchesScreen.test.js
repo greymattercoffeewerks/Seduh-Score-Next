@@ -644,14 +644,14 @@ describe('mountMatchesScreen', () => {
       const confirmedRow = rowOf('c1');
       expect(confirmedRow.querySelector('.ok-row-number').textContent).toBe('1');
       expect(confirmedRow.querySelector('.ok-row-score').textContent).toBe('11 – 6');
-      expect(confirmedRow.querySelector('.ok-tag').textContent).toBe('Confirmed');
+      expect(confirmedRow.querySelector('.status').textContent).toBe('Confirmed');
       expect(confirmedRow.querySelector('.ok-row-meta').textContent).toBe(
         'Judges: Judge One, Judge Two, Judge Three · No finish time',
       );
       const pendingRow = rowOf('p1');
       expect(pendingRow.querySelector('.ok-row-number').textContent).toBe('2');
       expect(pendingRow.querySelector('.ok-row-score')).toBeNull();
-      expect(pendingRow.querySelector('.ok-tag').textContent).toBe('Scheduled');
+      expect(pendingRow.querySelector('.status').textContent).toBe('Scheduled');
     });
 
     it('collapses a finished round to its header and Show N matches opens it again', async () => {

@@ -395,53 +395,6 @@
   color: var(--color-text-secondary);
 }
 
-/* ---- Status tag (a phase state, a warning severity): a square, in the state colour, ALWAYS with words. ---- */
-.ok-tag {
-  display: inline-block;
-  flex: none;
-  padding: 2px var(--space-2);
-  border: var(--border-hairline) solid var(--color-border-card);
-  border-radius: 0;
-  font-size: var(--text-2xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  line-height: var(--leading-snug);
-  color: var(--color-text-secondary);
-  background: transparent;
-}
-
-.ok-tag[data-status='in_progress'] {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-contrast);
-}
-
-.ok-tag[data-status='done'] {
-  background: var(--color-success);
-  border-color: var(--color-success);
-  color: var(--color-success-contrast);
-}
-
-.ok-tag[data-status='blocked'],
-.ok-tag[data-severity='error'] {
-  background: var(--color-danger);
-  border-color: var(--color-danger);
-  color: var(--color-danger-contrast);
-}
-
-.ok-tag[data-severity='warning'] {
-  background: var(--color-warning);
-  border-color: var(--color-warning);
-  color: var(--color-warning-contrast);
-}
-
-.ok-tag[data-status='waiting'] {
-  border-style: dashed;
-  border-color: var(--color-border-strong);
-  color: var(--color-text);
-}
-
 /* ---- Status band: the beta band. (The TEST band is base.css .is-test-banner, unchanged.) Graphite fill and
         light text in BOTH surface modes (a band, not a surface: the ramp ends, not the semantic tokens), a 4px
         amber bottom edge (the stage warning tone), a small hazard stripe. Never the violet --color-test. ---- */
@@ -648,33 +601,6 @@
 
 .ok-phase-action {
   margin-top: auto;
-}
-
-/* Progress: an 8px bar; confirmed in the accent, then the in-progress part hatched. Words carry the numbers (a
-   screen-reader sentence beside it), so the bar is decoration. */
-.ok-bar {
-  display: flex;
-  inline-size: 100%;
-  block-size: 8px;
-  background: var(--color-surface-sunken);
-  border: var(--border-hairline) solid var(--color-border-card);
-  border-radius: 0;
-  box-sizing: content-box;
-  overflow: hidden;
-}
-
-.ok-bar-done {
-  background: var(--color-accent);
-}
-
-.ok-bar-active {
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--color-accent),
-    var(--color-accent) 2px,
-    transparent 2px,
-    transparent 4px
-  );
 }
 
 /* ---- Warnings: one list, a tag in words, the text, the fix. ---- */

@@ -85,6 +85,48 @@ describe('mountBrewPlanner', () => {
     ]);
   });
 
+  it('switches the cheat-sheet views through a real tablist (roving tabindex, arrow keys, a labelled panel)', () => {
+    openCheatSheet(memoryStorage());
+    const list = root.querySelector('[role="tablist"]');
+    expect(list.getAttribute('aria-label')).toBe('Cheat sheet sections');
+    const tabs = () => [...root.querySelectorAll('[role="tab"]')];
+    expect(tabs().filter((t) => t.getAttribute('aria-selected') === 'true')).toHaveLength(1);
+    expect(tabs().filter((t) => t.tabIndex === 0)).toHaveLength(1);
+    const panel = root.querySelector('[role="tabpanel"]');
+    expect(panel.getAttribute('aria-labelledby')).toBe(
+      tabs().find((t) => t.getAttribute('aria-selected') === 'true').id,
+    );
+    const before = root.querySelector('[role="tabpanel"]').textContent;
+    const first = tabs()[0];
+    first.focus();
+    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+    expect(root.querySelector('[role="tabpanel"]').textContent).not.toBe(before);
+    expect(root.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(
+      tabs()[1].id,
+    );
+  });
+
+  it('draws the step list as core steps: one current step, earlier steps done', () => {
+    openCheatSheet(memoryStorage());
+    const steps = root.querySelector('ol.steps');
+    const items = [...steps.children];
+    expect(items.map((li) => li.getAttribute('aria-current') === 'step')).toEqual([
+      false,
+      false,
+      false,
+      false,
+      true,
+    ]);
+    expect(items.map((li) => li.getAttribute('data-state') === 'done')).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
   it('falls back to the example when saved data is corrupt', () => {
     const storage = memoryStorage();
     storage.setItem('seduh-brew-planner-v1', '{bad');

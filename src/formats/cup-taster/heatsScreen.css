@@ -132,18 +132,6 @@
   gap: var(--space-3);
 }
 
-/* Per-heat status badge (2026-08-29 app-wiring pass) — the "Confirmed"
-   label heatActionLink() renders in place of a Timing/Scoring link once a
-   heat is done. Matches rosterScreen.css's `.roster-withdrawn-tag` shape;
-   --color-success (not color alone — real text, "Confirmed") since this is
-   a positive terminal state, unlike that tag's --color-danger. */
-.heat-status-done {
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  color: var(--color-success);
-}
-
 /* Finding #3: once heats exist the roster is a closed fold-out below them. The whole summary row is
    the tap target (not just the text). display:flex removes the native disclosure marker, so an
    explicit +/- is drawn (the same pattern as the results page); it is decorative, the open/closed

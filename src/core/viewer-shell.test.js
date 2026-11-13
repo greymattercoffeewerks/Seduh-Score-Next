@@ -220,16 +220,15 @@ describe('renderHoldingState', () => {
 });
 
 describe('renderChrome', () => {
-  it('shows a Live badge with the pulse dot when the session is active', () => {
+  it('shows a live status mark (the breathing blip is its own mark) when the session is active', () => {
     const node = renderChrome(session({ active: true }));
-    expect(node.querySelector('.viewer-badge-live')).not.toBeNull();
-    expect(node.querySelector('.status-live-dot')).not.toBeNull();
+    expect(node.querySelector('.status[data-state="live"]')).not.toBeNull();
     expect(node.textContent).toContain('Live');
   });
 
   it('shows a Not live badge when the session is inactive', () => {
     const node = renderChrome(session({ active: false }));
-    expect(node.querySelector('.viewer-badge-done')).not.toBeNull();
+    expect(node.querySelector('.status[data-state="queued"]')).not.toBeNull();
     expect(node.textContent).toContain('Not live');
   });
 
@@ -238,8 +237,8 @@ describe('renderChrome', () => {
     // own connection dropped; showing stale "Live" next to a
     // "Connection lost" body would read as contradictory (found in review).
     const node = renderChrome(session({ active: true }), true);
-    expect(node.querySelector('.viewer-badge-live')).toBeNull();
-    expect(node.querySelector('.viewer-badge-lost')).not.toBeNull();
+    expect(node.querySelector('.status[data-state="live"]')).toBeNull();
+    expect(node.querySelector('.status[data-state="offline"]')).not.toBeNull();
     expect(node.textContent).toContain('Reconnecting');
   });
 

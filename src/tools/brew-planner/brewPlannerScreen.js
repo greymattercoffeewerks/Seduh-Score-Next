@@ -3,6 +3,8 @@
 // from on the day. Lives under src/tools/ for the same reason the Timer does: it is a
 // general-purpose gift to the community, not part of any format. See src/tools/CLAUDE.md.
 import { brandMark, el, withFocusPreservation } from '../../core/dom.js';
+import { buildTablist } from '../../core/tablist.js';
+import { buildStat, statusMark } from '../../core/vocabulary.js';
 import {
   CAMBRO_MAX_FILL,
   FILTERS_PER_BATCH,
@@ -104,7 +106,7 @@ function section(title, hint, children) {
 }
 
 function pill(text, tone) {
-  return el('span', { className: `bp-pill bp-pill-${tone}`, text });
+  return statusMark(tone === 'ok' ? 'done' : 'failed', text);
 }
 
 function table(headers, rows, { numeric = [], label, wide = false } = {}) {
@@ -621,7 +623,7 @@ export function mountBrewPlanner(root, { storage } = {}) {
   function checkView(plan) {
     const { config } = state;
     const holdOk = plan.maxHoldMins <= config.holdLimitMins;
-    const stats = el('div', { className: 'bp-stats' }, [
+    const stats = el('div', { className: 'stats' }, [
       stat(
         'Fire up the machines',
         formatClock(plan.firstBrewMin),
@@ -699,11 +701,7 @@ export function mountBrewPlanner(root, { storage } = {}) {
   }
 
   function stat(label, value, detail, tone = '') {
-    return el('div', { className: `bp-stat${tone ? ` bp-stat-${tone}` : ''}` }, [
-      el('div', { className: 'bp-stat-label', text: label }),
-      el('div', { className: 'bp-stat-value bp-mono', text: value }),
-      el('div', { className: 'bp-hint', text: detail }),
-    ]);
+    return buildStat({ label, value, sub: detail, tone: tone || null });
   }
 
   function timelineView(plan) {
@@ -1078,27 +1076,21 @@ export function mountBrewPlanner(root, { storage } = {}) {
       ];
     }
     const plan = planBrews(state.config);
-    const tabs = el(
-      'div',
-      { className: 'bp-tabs', attrs: { role: 'group', 'aria-label': 'Cheat sheet sections' } },
-      VIEWS.map((view) => {
-        const tab = el('button', {
-          className: 'bp-tab',
-          text: VIEW_LABELS[view],
-          attrs: {
-            type: 'button',
-            'aria-pressed': String(state.view === view),
-            'data-focus-key': `view-${view}`,
-          },
-        });
-        tab.addEventListener('click', () => {
-          state.view = view;
-          persist();
-          render();
-        });
-        return tab;
-      }),
-    );
+    const { list: tabs, panelAttrs } = buildTablist({
+      idBase: 'bp-view',
+      label: 'Cheat sheet sections',
+      selected: state.view,
+      tabs: VIEWS.map((view) => ({
+        id: view,
+        label: VIEW_LABELS[view],
+        attrs: { 'data-focus-key': `view-${view}` },
+      })),
+      onSelect: (view) => {
+        state.view = view;
+        persist();
+        render();
+      },
+    });
     const views = {
       check: checkView,
       runsheet: runsheetView,
@@ -1108,7 +1100,7 @@ export function mountBrewPlanner(root, { storage } = {}) {
     };
     return [
       tabs,
-      ...views[state.view](plan),
+      el('div', { className: 'bp-tabpanel', attrs: panelAttrs }, views[state.view](plan)),
       el('div', { className: 'bp-row' }, [button('Edit the setup', { onClick: () => go(0) })]),
     ];
   }
@@ -1130,25 +1122,23 @@ export function mountBrewPlanner(root, { storage } = {}) {
   function stepper() {
     return el(
       'ol',
-      { className: 'bp-stepper', attrs: { 'aria-label': 'Steps' } },
+      { className: 'steps bp-stepper', attrs: { 'aria-label': 'Steps' } },
       STEPS.map((name, index) => {
-        const item = el('li', {});
-        const link = el(
-          'button',
-          {
-            className: 'bp-step',
-            attrs: {
-              type: 'button',
-              'data-focus-key': `step-${index}`,
-              ...(index === state.step ? { 'aria-current': 'step' } : {}),
-            },
+        const link = el('button', {
+          className: 'steps-link',
+          text: name,
+          attrs: {
+            type: 'button',
+            'data-focus-key': `step-${index}`,
           },
-          [
-            el('span', { className: 'bp-step-no bp-mono', text: String(index + 1) }),
-            el('span', { className: 'bp-step-name', text: name }),
-          ],
-        );
+        });
         link.addEventListener('click', () => go(index));
+        const item = el('li', {
+          attrs: {
+            ...(index === state.step ? { 'aria-current': 'step' } : {}),
+            ...(index < state.step ? { 'data-state': 'done' } : {}),
+          },
+        });
         item.append(link);
         return item;
       }),

@@ -205,8 +205,10 @@ describe('the overview', () => {
     expect(host.querySelector('.adm-key-id').textContent).toBe('btc_format');
     expect(text()).toContain('Off: nobody is restricted yet');
     expect(text()).toContain('On: in force');
-    expect(host.querySelector('.adm-badge--off').textContent).toBe('Off: nobody is restricted yet');
-    expect(host.querySelector('.adm-badge--on').textContent).toBe('On: in force');
+    expect(host.querySelector('.adm-badge[data-state="queued"]').textContent).toBe(
+      'Off: nobody is restricted yet',
+    );
+    expect(host.querySelector('.adm-badge[data-state="live"]').textContent).toBe('On: in force');
     // the note keeps its words and drops the decision code
     expect(text()).toContain('Creating a BTC event.');
     expect(text()).not.toContain('D-G17');
@@ -394,7 +396,7 @@ describe('one organisation', () => {
     expect(text()).toContain('Payment confirmed');
     expect(text()).toContain('2026-12-08 00:00 to 2026-12-13 00:00 Brunei time');
     expect(text()).toContain('Revoked');
-    expect(host.querySelector('.adm-badge--revoked').textContent).toBe('Revoked');
+    expect(host.querySelector('.adm-badge[data-state="failed"]').textContent).toBe('Revoked');
     expect(text()).toContain('Note: BND 18 cash');
     expect(text()).toContain('by 99999999');
     expect(text()).toContain('cup_taster · 2026-12-10 · 33333333');
@@ -417,12 +419,12 @@ describe('one organisation', () => {
     expect(rows.find((r) => r.startsWith('Cup Taster analytics'))).toContain('Allowed');
   });
 
-  it('marks a test event with the dedicated test badge', async () => {
+  it('marks a test event with the test status mark', async () => {
     const withTestEvent = structuredClone(PLAN);
     withTestEvent.events[0].is_test = true;
     mount({ admin_plan_org: ok(withTestEvent) });
     await flush();
-    expect(host.querySelector('.adm-badge--test').textContent).toBe('Test event');
+    expect(host.querySelector('.adm-badge[data-state="test"]').textContent).toBe('Test event');
   });
 
   it('draws only the fields it names (a field the function started returning later does not appear)', async () => {

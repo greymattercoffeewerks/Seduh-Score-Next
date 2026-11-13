@@ -152,7 +152,7 @@ describe('renderHeatsList', () => {
     ];
     const list = renderHeatsList(heatsWithEntries, new Map());
     expect(list.querySelector('a')).toBeNull();
-    expect(list.querySelector('.heat-status-done')).toBeNull();
+    expect(list.querySelector('.status')).toBeNull();
   });
 
   it('links a pending or timing heat to its Timing screen, a scoring heat to its Scoring screen, and marks a confirmed heat done with no link', () => {
@@ -171,7 +171,7 @@ describe('renderHeatsList', () => {
     expect(cards[2].querySelector('a').getAttribute('href')).toBe('#/events/ev1/heats/h3/scoring');
     expect(cards[2].querySelector('a').textContent).toBe('Score this heat');
     expect(cards[3].querySelector('a')).toBeNull();
-    expect(cards[3].querySelector('.heat-status-done').textContent).toBe('Confirmed');
+    expect(cards[3].querySelector('.status[data-state="done"]').textContent).toBe('Confirmed');
   });
 
   it('disambiguates each heat card action link with a per-heat aria-label, since the visible text repeats identically across cards', () => {

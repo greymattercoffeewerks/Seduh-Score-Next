@@ -138,9 +138,9 @@ describe('renderGroupedMatchList: a BTC-shaped list (matches by round)', () => {
     expect(r2.querySelector('.ok-group-heading').textContent).toBe('Round 2');
     expect(r2.querySelector('.ok-group-count').textContent).toBe('0 of 2 confirmed');
     expect(r2.querySelectorAll('.ok-row')).toHaveLength(2);
-    const tags = [...r2.querySelectorAll('.ok-row .ok-tag')].map((t) => t.textContent);
+    const tags = [...r2.querySelectorAll('.ok-row .status')].map((t) => t.textContent);
     expect(tags).toEqual(['Scheduled', 'Scoring']);
-    expect(r2.querySelector('.ok-group-header .ok-tag').dataset.status).toBe('in_progress');
+    expect(r2.querySelector('.ok-group-header .status').dataset.state).toBe('live');
   });
 
   it('honours an override both ways and reports the new state through onToggle', () => {
@@ -219,7 +219,7 @@ describe('renderGroupedMatchList: a Throwdown-shaped list (ties by knockout roun
 
   it('lets the format rename the header tag words', () => {
     const node = render({ ...opts, groupWords: { done: 'Finished' } });
-    expect(node.querySelectorAll('.ok-group-header .ok-tag')[1].textContent).toBe('Finished');
+    expect(node.querySelectorAll('.ok-group-header .status')[1].textContent).toBe('Finished');
   });
 
   describe('renderGroupedMatchList: rows that are not head-to-head', () => {

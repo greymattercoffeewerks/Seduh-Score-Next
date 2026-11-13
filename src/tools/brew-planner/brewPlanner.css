@@ -67,48 +67,6 @@ body {
   color: var(--color-text-secondary);
 }
 
-.bp-stepper {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.bp-step {
-  width: 100%;
-  min-height: var(--tap-target-min);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2);
-  border: var(--border-hairline) solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font: inherit;
-  font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-.bp-step-no {
-  flex: none;
-  font-weight: var(--font-weight-bold);
-}
-
-.bp-step-name {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.bp-step[aria-current='step'] {
-  border: var(--border-strong) solid var(--color-border-strong);
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  font-weight: var(--font-weight-bold);
-}
-
 /* ---------- panels, cards, fields ---------- */
 
 .bp-panel {
@@ -245,28 +203,6 @@ body {
   font-size: var(--text-sm);
 }
 
-/* ---------- pills, tags, chips, tabs ---------- */
-
-.bp-pill {
-  display: inline-block;
-  padding: 0 var(--space-2);
-  font-size: var(--text-2xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.bp-pill-ok {
-  background: var(--color-success);
-  color: var(--color-success-contrast);
-}
-
-.bp-pill-bad {
-  background: var(--color-danger);
-  color: var(--color-danger-contrast);
-}
-
 /* Coffee colours are told apart by lightness and pattern, and every block or tag also
    carries text, so colour is never the only cue (see design system checklist). */
 .bp-coffee-0 {
@@ -316,15 +252,13 @@ body {
 }
 
 .bp-legend,
-.bp-chips,
-.bp-tabs {
+.bp-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.bp-chip,
-.bp-tab {
+.bp-chip {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-3);
   border: var(--border-hairline) solid var(--color-border-strong);
@@ -335,8 +269,7 @@ body {
   cursor: pointer;
 }
 
-.bp-chip[aria-pressed='true'],
-.bp-tab[aria-pressed='true'] {
+.bp-chip[aria-pressed='true'] {
   background: var(--color-text);
   color: var(--color-canvas);
   font-weight: var(--font-weight-bold);
@@ -344,37 +277,13 @@ body {
 
 /* ---------- verdict ---------- */
 
-.bp-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: var(--space-4);
-}
+/* The verdict tiles are the core .stats / .stat (src/ui/tokens/vocabulary.css). */
 
-.bp-stat {
+.bp-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
   min-width: 0;
-  padding-left: var(--space-3);
-  border-left: var(--border-strong) solid var(--color-border);
-}
-
-.bp-stat-ok {
-  border-left-color: var(--color-success);
-}
-
-.bp-stat-warn {
-  border-left-color: var(--color-warning);
-}
-
-.bp-stat-label {
-  font-size: var(--text-2xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-}
-
-.bp-stat-value {
-  font-size: var(--text-xl);
-  line-height: 1.3;
 }
 
 .bp-beans {
@@ -606,19 +515,6 @@ body {
 @media (max-width: 640px) {
   .bp-panel {
     padding: var(--space-4);
-  }
-
-  .bp-stepper {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .bp-step {
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
-    padding: var(--space-1);
-    font-size: var(--text-2xs);
-    text-align: center;
   }
 }
 
