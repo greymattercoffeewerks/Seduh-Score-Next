@@ -1,26 +1,31 @@
-// Public format tour. It states the current truth: Cup Taster, BTC and
-// Throwdown are live, the remaining competition format is planned, and Community tools
-// are separate link-out utilities.
+// Public format tour. It states the current truth: Cup Taster, BTC and Throwdown are live, the rest is on the way,
+// and Community tools are separate link-out utilities.
 //
-// BTC (2026-09-23) — the app-wiring pass that routed BTC's screens into the
-// organiser console (src/main.js) made this page's own copy stale: it still
-// named BTC "BBTC" and listed it under "The next rounds" as not-yet-live.
-// That naming was already wrong before this fix too — the app itself
-// renamed the format from bbtc/ to btc/ back at the start of Phase T-BTC.2
-// (2026-09-18; BBTC is the Brunei-specific INSTANCE of the format, not the
-// format's own name), but this page was built independently against an
-// older design handoff and never got the correction. BTC has no real event
-// photography yet (unlike Cup Taster's genuine Girls Got Drip Vol. 0 photo),
-// so its own live section below is icon-only, text-first — reusing
-// buildCupTaster's typographic classes (.tour-cup/.tour-copy/.tour-note/
-// .tour-primary-link) without the photo column, rather than reaching for
-// one of the landing page's own atmospheric hero photos (hero-bracket.jpg
-// etc.) and implying it depicts a real BTC match, which it doesn't — see
-// this module's own CLAUDE.md "Fabricated content must stay hidden from
-// assistive tech" section for why that distinction matters here.
+// Refresh (2026-11-13, owner-approved draft v4): a format picker in the hero, a comparison table, a section per live
+// format, a shared "Built for the room" strip, an "On the way" pipeline and all four Community tools. Everything
+// format-shaped is read from ONE list (tourFormats.js), so a new format or mode is a list entry, not a page edit:
+// `mountTourScreen(root, { formats })` takes a different list for the tests. Only MEDIA below names a format (and the illustration data beside it).
+//
+// Fabricated content stays hidden from assistive tech (src/marketing/CLAUDE.md): the BTC and Throwdown boards are
+// illustrations with invented team and competitor names, labelled "Illustration" and `aria-hidden` on their outermost
+// element. Cup Taster's photo is a genuine event photo (Girls Got Drip Vol. 0); its set board is presentational.
+// BTC and Throwdown have no real event photography, so they get a board, never a photo.
+//
+// Static: no router, auth or Supabase, and nothing from src/formats/ or src/core/ beyond dom.js.
 import { el, svgEl } from '../core/dom.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
+import {
+  COMPARE_ROWS,
+  FORMATS,
+  STATUS_LABELS,
+  countLine,
+  countWord,
+  liveFormats,
+  onTheWay,
+  pickerFormats,
+  waysToPlay,
+} from './tourFormats.js';
 
 function icon(children, label) {
   const svg = svgEl('svg', {
@@ -73,6 +78,17 @@ const ICONS = {
       ],
       'Competition timer',
     ),
+  brew: () =>
+    icon([svgEl('path', { d: 'M6 3h12l-3 7H9zM9 10v8a3 3 0 0 0 6 0v-8M4 21h16' })], 'Brew'),
+  draw: () =>
+    icon(
+      [
+        svgEl('rect', { x: '3', y: '5', width: '8', height: '14' }),
+        svgEl('rect', { x: '13', y: '5', width: '8', height: '14' }),
+        svgEl('path', { d: 'M3 12h18' }),
+      ],
+      'Split-flap draw',
+    ),
   beans: () =>
     icon(
       [
@@ -84,11 +100,70 @@ const ICONS = {
     ),
 };
 
+// A format with an icon name the table does not know still renders (a plain frame), never throws.
+const iconFor = (name) => (ICONS[name] ?? ICONS.cup)();
+
 function arrow() {
   return el('span', { className: 'tour-arrow', text: '→', attrs: { 'aria-hidden': 'true' } });
 }
 
-function buildHero() {
+// The shared .tag, recoloured by status through --tag-edge/--tag-ink (tour.css); planned is the shared dashed tag.
+function stateTag(status) {
+  return el('span', {
+    className: `tag tour-state tour-state-${status}${status === 'planned' ? ' tag-dashed' : ''}${
+      status === 'live' ? ' tag-solid' : ''
+    }`,
+    text: STATUS_LABELS[status] ?? status,
+  });
+}
+
+function sectionLabel(number, text) {
+  return el('div', { className: 'tour-section-label' }, [
+    el('span', { className: 'icon-frame', text: number, attrs: { 'aria-hidden': 'true' } }),
+    el('span', { text }),
+  ]);
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+
+// ---------- hero and picker ----------
+
+function pickCard(format) {
+  const live = format.status === 'live';
+  return el(
+    'a',
+    {
+      className: `tour-pick panel${live ? '' : ' tour-pick-future'}`,
+      attrs: { href: live ? `#${format.id}` : '#next', 'data-format': format.id },
+    },
+    [
+      el('span', { className: 'tour-pick-top' }, [
+        stateTag(format.status),
+        el('span', { className: 'tour-pick-kind', text: format.kind }),
+      ]),
+      el('b', { className: 'tour-pick-name', text: format.name }),
+      el('small', { text: format.description }),
+      format.modes.length
+        ? el(
+            'span',
+            { className: 'tour-pick-modes' },
+            format.modes.map((mode) =>
+              el('span', {
+                className: `tag tour-mode-tag${mode.status === 'testing' ? ' tour-state-testing' : ''}`,
+                text:
+                  mode.status === 'live'
+                    ? mode.name
+                    : `${mode.name} · ${STATUS_LABELS[mode.status]}`,
+              }),
+            ),
+          )
+        : null,
+    ].filter(Boolean),
+  );
+}
+
+function buildHero(formats) {
+  const liveCount = liveFormats(formats).length;
   return el(
     'section',
     { className: 'tour-hero page-hero', attrs: { 'aria-labelledby': 'tour-title' } },
@@ -101,17 +176,68 @@ function buildHero() {
       ]),
       el('p', {
         className: 'page-hero-intro',
-        text: 'Competition formats for the serious work, plus small Community tools for everything around it.',
+        text: `${countWord(liveCount)} live competition formats in one organiser console, with live audience screens built in. Plus free Community tools for everything around the competition.`,
       }),
-      el('div', { className: 'tour-hero-status' }, [
-        el('span', { className: 'tour-status-mark icon-frame', text: '01' }),
-        el('span', {
-          text: 'Cup Taster, BTC and Throwdown are live now. More formats are on the way.',
-        }),
+      el('div', { className: 'tour-picker-head' }, [
+        el('span', { text: 'The formats' }),
+        el('span', { className: 'tour-picker-count', text: countLine(formats) }),
       ]),
+      el(
+        'nav',
+        { className: 'tour-picker', attrs: { 'aria-label': 'Formats' } },
+        pickerFormats(formats).map(pickCard),
+      ),
     ],
   );
 }
+
+// ---------- comparison table ----------
+
+function buildCompare(formats) {
+  const cols = liveFormats(formats).filter((f) => f.compare);
+  if (!cols.length) return null;
+  return el(
+    'section',
+    { className: 'tour-compare', attrs: { 'aria-labelledby': 'compare-title' } },
+    [
+      sectionLabel('?', 'Which format'),
+      el('h2', { id: 'compare-title', text: 'Pick the format for your day.' }),
+      el('p', {
+        className: 'tour-lede',
+        text: `All ${countWord(cols.length).toLowerCase()} run from the same console on a tablet or laptop. The difference is who competes and how a winner is decided.`,
+      }),
+      el(
+        'div',
+        {
+          className: 'tour-table-scroll panel',
+          attrs: { tabindex: '0', role: 'region', 'aria-labelledby': 'compare-title' },
+        },
+        [
+          el('table', { className: 'tour-table' }, [
+            el('thead', {}, [
+              el('tr', {}, [
+                el('th', { attrs: { scope: 'col' }, text: 'At a glance' }),
+                ...cols.map((f) => el('th', { attrs: { scope: 'col' }, text: f.name })),
+              ]),
+            ]),
+            el(
+              'tbody',
+              {},
+              COMPARE_ROWS.map((row) =>
+                el('tr', {}, [
+                  el('th', { attrs: { scope: 'row' }, text: row.label }),
+                  ...cols.map((f) => el('td', { text: f.compare[row.key] ?? '' })),
+                ]),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    ],
+  );
+}
+
+// ---------- illustrations (media) ----------
 
 function setBoard() {
   return el('div', { className: 'tour-set-board panel', attrs: { 'aria-hidden': 'true' } }, [
@@ -129,194 +255,392 @@ function setBoard() {
   ]);
 }
 
-function buildCupTaster() {
-  return el(
-    'section',
-    { className: 'tour-cup', attrs: { id: 'cup-taster', 'aria-labelledby': 'cup-title' } },
-    [
-      el('div', { className: 'tour-section-label' }, [
-        el('span', { className: 'icon-frame', text: '01' }),
-        el('span', { text: 'Live format' }),
+function cupTasterMedia() {
+  return el('div', { className: 'tour-cup-media panel' }, [
+    el('img', {
+      attrs: {
+        src: '/marketing/hero-cupping-bowls.jpg',
+        alt: 'Three cups of coffee on a wooden table.',
+        loading: 'eager',
+      },
+    }),
+    setBoard(),
+  ]);
+}
+
+// The BTC illustration follows the real scoring (src/formats/btc/scoring.js, not imported here): 15 preliminary
+// cups, each split from three tokens between the teams; the team with more tokens earns +5, the fastest team +2.
+// Fictional teams. The numbers are derived below, so the board cannot show a split that is not three tokens.
+export const BTC_BOARD = Object.freeze({
+  teams: ['Kopi Kaki', 'Roast Rangers'],
+  cups: [
+    [2, 1],
+    [3, 0],
+    [1, 2],
+    [2, 1],
+    [2, 1],
+    [3, 0],
+    [1, 2],
+    [2, 1],
+    [2, 1],
+    [1, 2],
+    [2, 1],
+    [1, 2],
+    [2, 1],
+    [1, 2],
+    [1, 2],
+  ],
+  moreTokensBonus: 5,
+  fastestBonus: 2,
+  fastestTeam: 1,
+});
+
+export function btcBoardTotals(board = BTC_BOARD) {
+  const tokens = [0, 0];
+  for (const [a, b] of board.cups) {
+    tokens[0] += a;
+    tokens[1] += b;
+  }
+  const moreTokens = tokens[0] === tokens[1] ? -1 : tokens[0] > tokens[1] ? 0 : 1;
+  const total = [...tokens];
+  if (moreTokens >= 0) total[moreTokens] += board.moreTokensBonus;
+  total[board.fastestTeam] += board.fastestBonus;
+  return { tokens, total, moreTokens };
+}
+
+function btcMedia() {
+  const { tokens, total, moreTokens } = btcBoardTotals();
+  const [teamA, teamB] = BTC_BOARD.teams;
+  return el('div', { className: 'tour-fmt-media' }, [
+    el('div', { className: 'tour-board panel', attrs: { 'aria-hidden': 'true' } }, [
+      el('div', { className: 'tour-board-head' }, [
+        el('span', { text: `Round 2 / match 3 · ${BTC_BOARD.cups.length} cups` }),
+        el('span', { className: 'tag', text: 'Illustration' }),
       ]),
-      el('div', { className: 'tour-cup-grid' }, [
-        el('div', { className: 'tour-cup-copy' }, [
-          el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
-            ICONS.cup(),
+      el('div', { className: 'tour-teams' }, [
+        el('div', { className: 'tour-team' }, [
+          el('b', { text: teamA }),
+          el('small', { text: 'Team A' }),
+        ]),
+        el('div', { className: 'tour-score' }, [
+          el('span', { text: String(total[0]) }),
+          el('em', { text: ':' }),
+          el('span', { text: String(total[1]) }),
+        ]),
+        el('div', { className: 'tour-team tour-team-right' }, [
+          el('b', { text: teamB }),
+          el('small', { text: 'Team B' }),
+        ]),
+      ]),
+      el(
+        'div',
+        { className: 'tour-cuprow' },
+        BTC_BOARD.cups.map(([a, b], i) =>
+          el('div', { className: `tour-cupcell${a > b ? ' tour-cupcell-a' : ''}` }, [
+            el('span', { text: `C${i + 1}` }),
+            el('b', { text: `${a}–${b}` }),
           ]),
-          el('p', { className: 'tour-kicker', text: 'Blind set sensory' }),
-          el('h2', { id: 'cup-title', text: 'Cup Taster.' }),
-          el('p', {
-            className: 'tour-copy',
-            text: 'Three cups. Two the same. Find the odd one before the clock runs out. Seduh Score keeps the heat moving, scores accuracy, and handles time as the tiebreaker.',
-          }),
-          el('p', {
-            className: 'tour-note',
-            text: 'Live in the organiser console. Sign in to set up and run an event.',
-          }),
-          el(
-            'a',
-            {
-              className: 'tour-primary-link action action-primary btn-bevel',
-              attrs: { href: '/app/#/events' },
-            },
-            [el('span', { text: 'Open Cup Taster' }), arrow()],
-          ),
-        ]),
-        el('div', { className: 'tour-cup-media panel' }, [
-          el('img', {
-            attrs: {
-              src: '/marketing/hero-cupping-bowls.jpg',
-              alt: 'Three cups of coffee on a wooden table.',
-              loading: 'eager',
-            },
-          }),
-          setBoard(),
-        ]),
-      ]),
-    ],
-  );
-}
-
-// Icon-only, text-first — no photo column, unlike buildCupTaster's bespoke
-// hero treatment. See this file's own header comment for why: no real BTC
-// event photography exists yet, and reaching for one of the landing page's
-// generic bracket photos here would misrepresent it as a real match.
-function buildBtc() {
-  return el(
-    'section',
-    { className: 'tour-cup', attrs: { id: 'btc', 'aria-labelledby': 'btc-title' } },
-    [
-      el('div', { className: 'tour-section-label' }, [
-        el('span', { className: 'icon-frame', text: '02' }),
-        el('span', { text: 'Live format' }),
-      ]),
-      // .tour-cup-solo, not .tour-cup-grid — buildCupTaster's own two-column grid
-      // exists to hold ITS photo column too; a single child inside that grid would
-      // still reserve empty space for the unused second track. This carries just
-      // the top margin .tour-cup-grid normally supplies (found missing live in
-      // review, ui-accessibility-reviewer: without it, the icon sat flush against
-      // the section label above with zero gap, at every viewport width).
-      el('div', { className: 'tour-cup-solo' }, [
-        el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
-          ICONS.team(),
-        ]),
-        el('p', { className: 'tour-kicker', text: 'Team head-to-head' }),
-        el('h2', { id: 'btc-title', text: 'BTC.' }),
-        el('p', {
-          className: 'tour-copy',
-          text: 'Two teams, one set of cups, scored cup-by-cup. A round-robin preliminary round seeds a full bracket — quarterfinals, semifinals, and a final — with standings and advancement handled automatically.',
-        }),
-        el('p', {
-          className: 'tour-note',
-          text: 'Live in the organiser console. Sign in to set up and run an event.',
-        }),
-        el(
-          'a',
-          {
-            className: 'tour-primary-link action action-primary btn-bevel',
-            attrs: { href: '/app/#/events' },
-          },
-          [el('span', { text: 'Open BTC' }), arrow()],
         ),
+      ),
+      el('div', { className: 'tour-board-result tour-board-result-wide' }, [
+        el('span', {
+          text: `Tokens ${tokens[0]}–${tokens[1]} · more tokens +${BTC_BOARD.moreTokensBonus} ${
+            moreTokens === 0 ? 'A' : 'B'
+          }`,
+        }),
+        el('span', {
+          text: `Fastest +${BTC_BOARD.fastestBonus} ${BTC_BOARD.fastestTeam === 0 ? 'A' : 'B'}`,
+        }),
       ]),
-    ],
-  );
+      el(
+        'div',
+        { className: 'tour-path' },
+        ['Round 1', 'Round 2', 'The cut', 'Top 8', 'Final'].map((step, i) =>
+          el('span', { className: i < 2 ? 'tour-path-on' : '', text: step }),
+        ),
+      ),
+    ]),
+  ]);
 }
 
-// Text-first like buildBtc: Throwdown has no real event photography yet.
-// Redemption and revival rounds are not built; they are named as coming
-// modules and nothing here claims them.
-function buildThrowdown() {
+// Fictional competitors. Each match: [name, score] for the winner first, then the loser.
+const BRACKET = Object.freeze({
+  quarters: [
+    [
+      ['Aina', 3],
+      ['Rizal', 0],
+    ],
+    [
+      ['Dino', 2],
+      ['Hana', 1],
+    ],
+    [
+      ['Wei', 2],
+      ['Syaf', 1],
+    ],
+    [
+      ['Iqbal', 3],
+      ['Nur', 0],
+    ],
+  ],
+  semis: [
+    [
+      ['Aina', 2],
+      ['Dino', 1],
+    ],
+    [
+      ['Iqbal', 2],
+      ['Wei', 1],
+    ],
+  ],
+  final: ['Aina', 'Iqbal'],
+  third: 'Dino v Wei',
+});
+
+function matchBox([winner, loser], extra = '') {
+  return el('div', { className: `tour-match${extra}` }, [
+    el('div', { className: 'tour-match-w' }, [
+      el('span', { text: winner[0] }),
+      el('span', { text: String(winner[1]) }),
+    ]),
+    el('div', { className: 'tour-match-l' }, [
+      el('span', { text: loser[0] }),
+      el('span', { text: String(loser[1]) }),
+    ]),
+  ]);
+}
+
+function throwdownMedia() {
+  return el('div', { className: 'tour-fmt-media' }, [
+    el('div', { className: 'tour-board panel', attrs: { 'aria-hidden': 'true' } }, [
+      el('div', { className: 'tour-board-head' }, [
+        el('span', { text: 'Bracket / 8 competitors' }),
+        el('span', { className: 'tag', text: 'Illustration' }),
+      ]),
+      el('div', { className: 'tour-bracket' }, [
+        el(
+          'div',
+          { className: 'tour-col tour-col-qf' },
+          BRACKET.quarters.map((m) => matchBox(m)),
+        ),
+        el(
+          'div',
+          { className: 'tour-col tour-col-sf' },
+          BRACKET.semis.map((m) => matchBox(m)),
+        ),
+        el('div', { className: 'tour-col' }, [
+          el('div', { className: 'tour-match tour-match-final' }, [
+            el('div', { className: 'tour-match-w' }, [
+              el('span', { text: BRACKET.final[0] }),
+              el('span', { text: '·' }),
+            ]),
+            el('div', {}, [el('span', { text: BRACKET.final[1] }), el('span', { text: '·' })]),
+          ]),
+          el('div', { className: 'tour-third', text: BRACKET.third }),
+        ]),
+      ]),
+    ]),
+  ]);
+}
+
+// The only place a format id is named: its picture. A live format with no entry here is a text-only section.
+const MEDIA = { 'cup-taster': cupTasterMedia, btc: btcMedia, throwdown: throwdownMedia };
+
+// ---------- live format sections ----------
+
+function modesList(format) {
+  const modes = waysToPlay(format);
+  if (!modes.length) return null;
+  return el('div', { className: 'tour-modes' }, [
+    el('span', { className: 'tour-modes-title', text: 'Ways to play' }),
+    el(
+      'ul',
+      { className: 'tour-modes-list' },
+      modes.map((mode) =>
+        el('li', { className: `tour-mode panel tour-mode-${mode.status}` }, [
+          el('b', { text: mode.name }),
+          stateTag(mode.status),
+          el('p', { text: mode.description }),
+        ]),
+      ),
+    ),
+  ]);
+}
+
+function buildFormat(format, number, index) {
+  const { section } = format;
+  const media = MEDIA[format.id]?.() ?? null;
+  const copy = el(
+    'div',
+    { className: 'tour-cup-copy' },
+    [
+      el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
+        iconFor(format.icon),
+      ]),
+      el('p', { className: 'tour-kicker', text: section.kicker }),
+      el('h2', { id: `${format.id}-title`, text: `${format.name}.` }),
+      el('p', { className: 'tour-copy', text: section.copy }),
+      section.gets?.length
+        ? el(
+            'ul',
+            { className: 'tour-gets' },
+            section.gets.map((line) => el('li', { text: line })),
+          )
+        : null,
+      modesList(format),
+      section.note ? el('p', { className: 'tour-note', text: section.note }) : null,
+      el(
+        'a',
+        {
+          className: 'tour-primary-link action action-primary btn-bevel',
+          attrs: { href: '/app/#/events' },
+        },
+        [el('span', { text: `Open ${format.name}` }), arrow()],
+      ),
+    ].filter(Boolean),
+  );
   return el(
     'section',
     {
       className: 'tour-cup',
-      attrs: { id: 'throwdown', 'aria-labelledby': 'throwdown-title' },
+      attrs: { id: format.id, 'aria-labelledby': `${format.id}-title` },
     },
     [
-      el('div', { className: 'tour-section-label' }, [
-        el('span', { className: 'icon-frame', text: '03' }),
-        el('span', { text: 'Live format' }),
-      ]),
-      el('div', { className: 'tour-cup-solo' }, [
-        el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
-          ICONS.bracket(),
+      sectionLabel(pad(number), 'Live format'),
+      media
+        ? el('div', { className: `tour-cup-grid${index % 2 ? ' tour-flip' : ''}` }, [copy, media])
+        : el('div', { className: 'tour-cup-solo' }, [copy]),
+    ],
+  );
+}
+
+// ---------- built for the room ----------
+
+// Each claim holds for all three live formats (checked in code 2026-11-13): both audience views (liveSurfaces.js),
+// the offline outbox, the TEST marking on the live payloads, and the organisation's team logins (core/team.js).
+const SHARED = [
+  {
+    title: 'Audience screens',
+    text: "A projector view for the venue and a phone view for the crowd, both with your organisation's link.",
+  },
+  {
+    title: 'Patchy Wi-Fi is fine',
+    text: 'Scores are saved on the device first and sent when the connection comes back.',
+  },
+  {
+    title: 'Test events look like tests',
+    text: 'A practice run is clearly marked TEST on the audience screens, so nobody mistakes it for the real thing.',
+  },
+  {
+    title: 'A team at the table',
+    text: 'Give each helper their own login for your organisation.',
+  },
+];
+
+function buildShared() {
+  return el('section', { className: 'tour-shared', attrs: { 'aria-labelledby': 'shared-title' } }, [
+    sectionLabel('+', 'In every format'),
+    el('h2', { id: 'shared-title', text: 'Built for the room.' }),
+    el(
+      'div',
+      { className: 'tour-shared-grid' },
+      SHARED.map((item) =>
+        el('article', {}, [el('h3', { text: item.title }), el('p', { text: item.text })]),
+      ),
+    ),
+  ]);
+}
+
+// ---------- on the way ----------
+
+function buildOnTheWay(formats, number) {
+  const rows = onTheWay(formats);
+  if (!rows.length) return null;
+  return el(
+    'section',
+    { className: 'tour-planned', attrs: { id: 'next', 'aria-labelledby': 'next-title' } },
+    [
+      sectionLabel(pad(number), 'On the way'),
+      el('h2', { id: 'next-title', text: "What's coming next." }),
+      el('p', {
+        className: 'tour-lede',
+        text: 'New formats and new ways to play an existing format move from planned, to testing at real events, to live.',
+      }),
+      el('div', { className: 'tour-pipe' }, [
+        el('div', { className: 'tour-pipe-legend', attrs: { 'aria-hidden': 'true' } }, [
+          stateTag('planned'),
+          el('span', { text: '→' }),
+          stateTag('testing'),
+          el('span', { text: '→' }),
+          stateTag('live'),
         ]),
-        el('p', { className: 'tour-kicker', text: '1v1 knockout' }),
-        el('h2', { id: 'throwdown-title', text: 'Throwdown.' }),
-        el('p', {
-          className: 'tour-copy',
-          text: 'Two competitors, one match at a time. Seed the bracket or draw it at random, let the judges vote, and follow the winners through to a final and a 3rd place match on a live audience view.',
-        }),
-        el('p', {
-          className: 'tour-note',
-          text: 'Live in the organiser console. Redemption and revival rounds are coming later as add-on modules.',
-        }),
-        el(
-          'a',
-          {
-            className: 'tour-primary-link action action-primary btn-bevel',
-            attrs: { href: '/app/#/events' },
-          },
-          [el('span', { text: 'Open Throwdown' }), arrow()],
+        ...rows.map((row) =>
+          el(
+            'article',
+            { className: 'tour-planned-card tour-next panel', attrs: { 'data-key': row.key } },
+            [
+              el(
+                'div',
+                {
+                  className: 'tour-icon icon-frame tour-icon-muted',
+                  attrs: { 'aria-hidden': 'true' },
+                },
+                [iconFor(row.icon)],
+              ),
+              el('div', {}, [
+                el('span', { className: 'tour-family', text: row.family }),
+                el('h3', { text: row.name }),
+                el('p', { text: row.text }),
+              ]),
+              stateTag(row.status),
+            ],
+          ),
         ),
       ]),
     ],
   );
 }
 
-function plannedFormat({ number, title, label, description, icon: iconName }) {
-  return el('article', { className: 'tour-planned-card panel' }, [
-    el('div', { className: 'tour-planned-top' }, [
-      el('span', { text: number }),
-      el('span', { className: 'tour-planned-status', text: 'Coming soon' }),
-    ]),
-    el(
-      'div',
-      { className: 'tour-icon icon-frame tour-icon-muted', attrs: { 'aria-hidden': 'true' } },
-      [ICONS[iconName]()],
-    ),
-    el('p', { className: 'tour-kicker', text: label }),
-    el('h3', { text: title }),
-    el('p', { text: description }),
-  ]);
-}
+// ---------- community ----------
 
-function buildPlannedFormats() {
-  return el(
-    'section',
-    { className: 'tour-planned', attrs: { 'aria-labelledby': 'planned-title' } },
-    [
-      el('div', { className: 'tour-planned-intro' }, [
-        el('div', {}, [
-          el('div', { className: 'tour-section-label' }, [
-            el('span', { className: 'icon-frame', text: '04' }),
-            el('span', { text: 'The format map' }),
-          ]),
-          el('h2', { id: 'planned-title', text: 'The next rounds.' }),
-        ]),
-        el('p', {
-          text: 'This format is part of the direction, not yet live in Seduh Score Next. Its legacy idea is here as a clear map of what is being carried forward.',
-        }),
-      ]),
-      el('div', { className: 'tour-planned-grid' }, [
-        plannedFormat({
-          number: '01',
-          title: 'Liga Seduh',
-          label: 'Round robin league',
-          description:
-            'A league format where a small field brews across rounds and the standings evolve as each result lands.',
-          icon: 'league',
-        }),
-      ]),
-    ],
-  );
-}
+// Descriptions follow each tool's own page (checked 2026-11-13). Guess the Bean keeps its existing line.
+const COMMUNITY_TOOLS = [
+  {
+    title: 'Competition Timer',
+    label: 'Keep the room moving',
+    description: 'A free timer for heats, brews and cupping rounds.',
+    href: '/tools/timer/',
+    icon: 'timer',
+  },
+  {
+    title: 'Brew Planner',
+    label: 'Plan the brews',
+    description:
+      'Plan the batches for a triangulation heat: how many, which machine, and when to start brewing.',
+    href: '/tools/brew-planner/',
+    icon: 'brew',
+  },
+  {
+    title: 'Random Selector',
+    label: 'Draw it fairly',
+    description: 'A split-flap draw for competition turns, prizes and community events.',
+    href: '/tools/random-selector/',
+    icon: 'draw',
+  },
+  {
+    title: 'Guess the Bean',
+    label: 'A little friendly suspense',
+    description:
+      'Set the jar, share the link, and let the room guess with a live display built in.',
+    href: '/guess-the-bean/',
+    icon: 'beans',
+  },
+];
 
 function communityCard({ title, label, description, href, icon: iconName }) {
   return el('a', { className: 'tour-community-card panel', attrs: { href } }, [
     el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
-      ICONS[iconName](),
+      iconFor(iconName),
     ]),
     el('p', { className: 'tour-kicker', text: label }),
     el('h3', { text: title }),
@@ -325,7 +649,7 @@ function communityCard({ title, label, description, href, icon: iconName }) {
   ]);
 }
 
-function buildCommunity() {
+function buildCommunity(number) {
   return el(
     'section',
     {
@@ -333,37 +657,17 @@ function buildCommunity() {
       attrs: { id: 'community', 'aria-labelledby': 'community-title' },
     },
     [
-      el('div', { className: 'tour-section-label' }, [
-        el('span', { className: 'icon-frame', text: '05' }),
-        el('span', { text: 'Community tools' }),
-      ]),
+      sectionLabel(pad(number), 'Community tools'),
       el('div', { className: 'tour-community-heading' }, [
         el('div', {}, [
           el('p', { className: 'tour-kicker', text: 'For the rest of the day' }),
           el('h2', { id: 'community-title', text: 'Useful beyond the heat.' }),
         ]),
         el('p', {
-          text: 'The Community shelf is where the simple, useful extras live: the things you reach for while setting up a room, running a booth, or bringing people in.',
+          text: 'Free tools for setting up a room, running a booth or bringing people in.',
         }),
       ]),
-      el('div', { className: 'tour-community-grid' }, [
-        communityCard({
-          title: 'Competition Timer',
-          label: 'Keep the room moving',
-          description:
-            'A clear, full-screen timer for heats, routines, brews and the moments everyone needs to see at once.',
-          href: '/tools/timer/',
-          icon: 'timer',
-        }),
-        communityCard({
-          title: 'Guess the Bean',
-          label: 'A little friendly suspense',
-          description:
-            'Set the jar, share the link, and let the room guess with a live display built in.',
-          href: '/guess-the-bean/',
-          icon: 'beans',
-        }),
-      ]),
+      el('div', { className: 'tour-community-grid' }, COMMUNITY_TOOLS.map(communityCard)),
       el(
         'a',
         { className: 'tour-community-link action action-primary', attrs: { href: '/community/' } },
@@ -373,20 +677,26 @@ function buildCommunity() {
   );
 }
 
-export function mountTourScreen(root) {
+export function mountTourScreen(root, { formats = FORMATS } = {}) {
+  const live = liveFormats(formats).filter((f) => f.section);
+  const hasNext = onTheWay(formats).length > 0;
   root.replaceChildren(
-    el('main', { className: 'tour-page', attrs: { 'data-surface': 'stage' } }, [
-      buildPublicHeader({ active: 'tour' }),
-      buildHero(),
-      buildCupTaster(),
-      buildBtc(),
-      buildThrowdown(),
-      buildPlannedFormats(),
-      buildCommunity(),
-      buildPublicFooter({
-        companionHref: '/community/',
-        companionText: 'Community Tools →',
-      }),
-    ]),
+    el(
+      'main',
+      { className: 'tour-page', attrs: { 'data-surface': 'stage' } },
+      [
+        buildPublicHeader({ active: 'tour', liveNames: live.map((f) => f.name) }),
+        buildHero(formats),
+        buildCompare(formats),
+        ...live.map((format, i) => buildFormat(format, i + 1, i)),
+        buildShared(),
+        buildOnTheWay(formats, live.length + 1),
+        buildCommunity(live.length + (hasNext ? 2 : 1)),
+        buildPublicFooter({
+          companionHref: '/community/',
+          companionText: 'Community Tools →',
+        }),
+      ].filter(Boolean),
+    ),
   );
 }

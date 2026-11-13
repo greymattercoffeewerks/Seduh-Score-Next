@@ -172,7 +172,9 @@ describe('the shared primitives exist once, in the layer every page loads', () =
     for (const name of ['tag', 'panel', 'icon-frame', 'menu-toggle', 'action']) {
       const rule = ruleBody(base, name);
       expect(rule, `.${name} in base.css`).not.toBeNull();
-      expect(rule, `.${name} radius`).toMatch(/border-radius: var\(--radius-(sm|md)\)/);
+      expect(rule, `.${name} radius`).toMatch(
+        /border-radius: var\(--radius-(sm|md|field|selector|box)\)/,
+      );
     }
   });
 

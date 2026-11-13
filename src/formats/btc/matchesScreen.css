@@ -260,3 +260,21 @@
 .btc-hand-section[open] .btc-hand-summary {
   margin-bottom: var(--space-3);
 }
+
+/* Compact density (tokens/density.css). The grouped match list and its cards are tightened by the shared rules; these
+   are this screen's own: the draw panel's stacked cards and the checkbox lists. Every row that holds a control keeps
+   its min-height (--tap-target-min), so only the space around it shrinks. */
+[data-density='compact'] .btc-draw-list,
+[data-density='compact'] .btc-draw-panel {
+  gap: var(--density-gap);
+}
+
+[data-density='compact'] .btc-draw-match {
+  padding: var(--density-gap);
+  gap: var(--density-row-pad-y);
+}
+
+[data-density='compact'] .btc-judge-fieldset,
+[data-density='compact'] .btc-draw-group {
+  padding: var(--density-gap);
+}

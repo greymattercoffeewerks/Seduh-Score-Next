@@ -745,6 +745,157 @@
         }
       </script>
 
+      <h2 class="guide-heading">Token layers and density (Petrol Kaizen P6)</h2>
+      <p>
+        Three layers: the <em>ramp</em> (<code>--clr-teal-700</code>, <code>--radius-md</code>), the
+        <em>semantic</em> layer (<code>--color-accent</code>, <code>--radius-sm</code>, flipped by
+        <code>data-surface</code>) and the <em>role</em> layer (<code>roles.css</code>), which names
+        what a part uses and holds no value of its own. The table below is read from the page's
+        computed styles, so it is what the browser resolves, in each surface.
+      </p>
+      <style>
+        .pv-roles {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+          gap: var(--space-4);
+          margin-top: var(--space-3);
+        }
+        .pv-roles-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: var(--text-sm);
+        }
+        .pv-roles-table th,
+        .pv-roles-table td {
+          text-align: left;
+          padding: var(--space-1) var(--space-2);
+          border-bottom: var(--border-hairline) solid var(--color-border);
+          vertical-align: middle;
+        }
+        .pv-roles-table code {
+          font-family: var(--font-mono);
+          font-size: var(--text-xs);
+        }
+        .pv-roles-sw {
+          display: inline-block;
+          inline-size: 1rem;
+          block-size: 1rem;
+          vertical-align: middle;
+          margin-inline-end: var(--space-1);
+          border: var(--border-hairline) solid var(--color-border-strong);
+        }
+        .pv-density {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+          gap: var(--space-4);
+          margin-top: var(--space-3);
+        }
+        .pv-density-cell {
+          background: var(--color-canvas);
+          color: var(--color-text);
+          padding: var(--space-3);
+          border: var(--border-hairline) solid var(--color-border-card);
+          border-radius: var(--radius-box);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+          min-width: 0;
+        }
+        .pv-density-cell .screen-container {
+          padding-inline: 0;
+          gap: var(--space-3);
+        }
+        .pv-density-readout {
+          font-family: var(--font-mono);
+          font-size: var(--text-xs);
+          color: var(--color-text-secondary);
+        }
+      </style>
+      <div class="pv-roles" id="pv-roles"></div>
+      <p>
+        <code>data-density="compact"</code> on a screen's root tightens padding, gaps and table
+        cells (here a round of three matches and a table). A control keeps its 44px target: the row
+        is shorter only by the padding around it. Opt-in per screen, no global switch. Normal on the
+        left of each pair.
+      </p>
+      <div class="pv-density" id="pv-density"></div>
+      <script type="module">
+        const ROLES = [
+          ['--btn-primary-bg', 'colour'],
+          ['--btn-primary-fg', 'colour'],
+          ['--btn-danger-bg', 'colour'],
+          ['--btn-outline-edge', 'colour'],
+          ['--field-edge', 'colour'],
+          ['--field-edge-error', 'colour'],
+          ['--box-edge', 'colour'],
+          ['--selected-bg', 'colour'],
+          ['--selected-edge', 'colour'],
+          ['--radius-field', 'length'],
+          ['--radius-selector', 'length'],
+          ['--radius-box', 'length'],
+          ['--radius-dialog', 'length'],
+        ];
+        const roles = document.getElementById('pv-roles');
+        for (const surface of ['paper', 'stage']) {
+          const holder = document.createElement('div');
+          holder.dataset.surface = surface;
+          holder.className = 'pv-density-cell';
+          holder.innerHTML = `<strong>${surface}</strong><table class="pv-roles-table"><tbody></tbody></table>`;
+          roles.appendChild(holder);
+          const body = holder.querySelector('tbody');
+          const style = getComputedStyle(holder);
+          for (const [name, kind] of ROLES) {
+            const value = style.getPropertyValue(name).trim();
+            const row = document.createElement('tr');
+            row.innerHTML =
+              `<td><code>${name}</code></td><td>` +
+              (kind === 'colour'
+                ? `<span class="pv-roles-sw" style="background:var(${name})"></span>`
+                : '') +
+              `<code>${value || 'not set'}</code></td>`;
+            body.appendChild(row);
+          }
+        }
+
+        const rowsHtml = (n) =>
+          [...Array(n)]
+            .map(
+              (_, i) => `<li class="ok-row">
+                <span class="ok-row-number">${i + 1}</span>
+                <span class="ok-row-info"><span class="ok-row-sides">Team A${i + 1} <span class="ok-row-vs">vs</span> Team B${i + 1}</span>
+                <span class="ok-row-meta">Round 1 · Judges J1 J2</span></span>
+                <span class="ok-row-actions"><a class="btn btn-outline" href="#">Score</a></span>
+              </li>`,
+            )
+            .join('');
+        const cellHtml = (surface, compact) => `
+          <div class="pv-density-cell" data-surface="${surface}">
+            <strong>${compact ? 'compact' : 'normal'} · ${surface}</strong>
+            <div class="screen-container"${compact ? ' data-density="compact"' : ''}>
+              <div class="card">
+                <ul class="ok-rows">${rowsHtml(3)}</ul>
+                <table class="ok-cut-table"><thead><tr><th>#</th><th>Team</th><th class="ok-cut-num">Pts</th></tr></thead>
+                <tbody>
+                  <tr><td class="ok-cut-cell">1</td><td class="ok-cut-cell">Team A1</td><td class="ok-cut-cell ok-cut-num">12</td></tr>
+                  <tr><td class="ok-cut-cell">2</td><td class="ok-cut-cell">Team B2</td><td class="ok-cut-cell ok-cut-num">9</td></tr>
+                </tbody></table>
+              </div>
+              <button class="btn btn-primary" type="button">Save</button>
+            </div>
+            <span class="pv-density-readout"></span>
+          </div>`;
+        const grid = document.getElementById('pv-density');
+        grid.innerHTML = ['paper', 'stage']
+          .flatMap((s) => [cellHtml(s, false), cellHtml(s, true)])
+          .join('');
+        for (const cell of grid.children) {
+          const row = cell.querySelector('.ok-row').getBoundingClientRect().height;
+          const btn = cell.querySelector('.ok-row .btn').getBoundingClientRect().height;
+          cell.querySelector('.pv-density-readout').textContent =
+            `row ${Math.round(row)}px · button ${Math.round(btn)}px (floor 44px)`;
+        }
+      </script>
+
       <h2 class="guide-heading">Type scale</h2>
       <div class="type-row">
         <div class="meta">display / 96px</div>
