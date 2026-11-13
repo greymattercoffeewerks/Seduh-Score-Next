@@ -6,19 +6,8 @@ const css = readFileSync(join(process.cwd(), 'src', 'admin', 'admin.css'), 'utf8
 const tokens = readFileSync(join(process.cwd(), 'src', 'ui', 'tokens', 'colors.css'), 'utf8');
 
 describe('admin badges', () => {
-  it('uses semantic tokens rather than colour literals for every badge state', () => {
-    const rules = [...css.matchAll(/\.adm-badge(?:--[a-z]+)?\s*\{([^}]*)\}/g)].map(
-      (match) => match[1],
-    );
-    expect(rules).toHaveLength(5);
-    for (const rule of rules) {
-      const token = rule.match(/color:\s*var\((--color-[a-z0-9-]+)\)/)?.[1];
-      expect(token).toBeTruthy();
-      // a typo'd token would silently render the inherited colour
-      expect(tokens).toContain(`${token}:`);
-      expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-      expect(rule).not.toMatch(/\brgb(?:a)?\(/i);
-    }
+  it('have no rule of their own (they are the core .status, so a state is a shape and not a local colour)', () => {
+    expect(css).not.toMatch(/\.adm-badge[-\w[\]='"]*\s*[,{]/);
   });
 });
 

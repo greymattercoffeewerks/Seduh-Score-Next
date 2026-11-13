@@ -24,7 +24,18 @@
    at occasionally (phone), so a color-blind audience member has no other
    context cue to notice the shift by. `outline`, not `border`, so the ring
    never changes this element's own box size. */
-.viewer-countdown[data-urgent='true'] {
+.viewer-countdown[data-urgent='true'],
+.countdown-cue[data-urgent='true'] {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  outline: var(--border-strong) solid var(--color-danger);
+  outline-offset: var(--space-3);
+}
+
+/* The same cue for a countdown that is not a .viewer-countdown (the organiser's timing screen, the standalone Timer):
+   add .countdown-cue beside its own class and it gets the urgent ring, and the steady ring once time has run out
+   (data-status='expired'), without a third copy of the rule. Size, blink and layout stay with the surface. */
+.countdown-cue[data-status='expired'] {
   color: var(--color-danger);
   font-weight: var(--font-weight-bold);
   outline: var(--border-strong) solid var(--color-danger);

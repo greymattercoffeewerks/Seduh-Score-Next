@@ -1,0 +1,361 @@
+/*
+ * Vocabulary parts — Petrol Kaizen P5. The small named shapes every screen used to draw for itself: a status mark, a
+ * tablist, a stat tile with a meter, and steps (written up in DESIGN.md, "Vocabulary").
+ *
+ *   .status   one state mark with a label. data-state = live | queued | done | attention | failed | offline | test.
+ *             Stroke by default, .status--light for a quiet tinted fill. The SHAPE says the state as well as the colour.
+ *   .tabs     role="tablist" (built by core/tablist.js, which owns roving tabindex and the arrow keys) with .tab buttons.
+ *   .stat     a tile: .stat-label, .stat-value (mono, tabular), .stat-sub. .stats is the grid that holds them.
+ *   .meter    role="meter", a bar with .meter-fill and an optional hatched .meter-active (core/vocabulary.js builds it).
+ *   .steps    an ordered list. data-state="done" gets a check, aria-current="step" gets a tint and a 2px accent edge.
+ *
+ * Imported by index.css, so every page that loads the tokens has them. Paper and stage come from the colour tokens (a
+ * data-surface="stage" ancestor flips every part with no extra rule). No shadows, Hybrid radii (--radius-sm for marks
+ * and tabs, --radius-md for tiles), no clip-path. Violet (--color-test) appears only in .status[data-state='test'].
+ */
+
+/* ---- .status ---- */
+.status {
+  --status-ink: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2) 2px 6px;
+  border: var(--border-hairline) solid currentColor;
+  border-radius: var(--radius-sm);
+  color: var(--status-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  line-height: var(--leading-snug);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The mark. Its glyph (a check, a bang, a cross) is decoration: the label beside it is the accessible name, so the
+   glyph is given an empty alt where the browser supports it. */
+.status::before {
+  content: '';
+  box-sizing: border-box;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-3xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.status[data-state='live'] {
+  --status-ink: var(--color-accent);
+}
+.status[data-state='live']::before {
+  background: currentColor;
+}
+
+/* queued: hollow, nothing has happened yet */
+.status[data-state='queued']::before {
+  border: var(--border-strong) solid currentColor;
+}
+
+.status[data-state='done'] {
+  --status-ink: var(--color-success);
+}
+.status[data-state='done']::before {
+  content: '✓';
+  content: '✓' / '';
+  background: var(--status-ink);
+  color: var(--color-success-contrast);
+}
+
+.status[data-state='attention'] {
+  --status-ink: var(--color-warning);
+}
+.status[data-state='attention']::before {
+  content: '!';
+  content: '!' / '';
+  background: var(--status-ink);
+  color: var(--color-warning-contrast);
+}
+
+.status[data-state='failed'] {
+  --status-ink: var(--color-danger);
+}
+.status[data-state='failed']::before {
+  content: '×';
+  content: '×' / '';
+  background: var(--status-ink);
+  color: var(--color-danger-contrast);
+}
+
+/* offline: a dashed hollow, the shape of a connection that is not there */
+.status[data-state='offline']::before {
+  border: var(--border-strong) dashed currentColor;
+}
+
+/* test: the ONLY violet in the vocabulary. Solid, so it reads in both variants, with a striped mark. */
+.status[data-state='test'] {
+  --status-ink: var(--color-test-contrast);
+  background: var(--color-test);
+  border-color: var(--color-test);
+}
+.status[data-state='test']::before {
+  border: var(--border-hairline) solid currentColor;
+  background: repeating-linear-gradient(45deg, currentColor 0 2px, transparent 2px 4px);
+}
+
+/* light: no edge, a quiet fill taken from the state's own colour. Use it on the surface colour only: on the
+   paper sunken fill the tint measures under 4.5:1 for live, done and attention. */
+.status--light:not([data-state='test']) {
+  border-color: transparent;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .status[data-state='live']::before {
+    /* base.css's slow breathe (opacity only): the same blip as .status-live-dot, so the two never disagree. */
+    animation: status-live-pulse 4s ease-in-out infinite;
+  }
+}
+
+/* Forced colours drops author backgrounds: keep the filled marks and the light variant's edge. */
+@media (forced-colors: active) {
+  .status--light {
+    border-color: currentColor;
+  }
+  .meter-fill,
+  .meter-active {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+  .status[data-state='live']::before,
+  .status[data-state='done']::before,
+  .status[data-state='attention']::before,
+  .status[data-state='failed']::before {
+    background: CanvasText;
+    color: Canvas;
+    forced-color-adjust: none;
+  }
+}
+
+/* ---- .tabs ---- */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  padding: var(--space-1);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.tab {
+  flex: none;
+  min-block-size: var(--tap-target-min);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-block-end: var(--border-strong) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+/* The selected tab is the surface it opens onto, with a 2px accent edge: an edge as well as a fill. */
+.tab[aria-selected='true'] {
+  background: var(--color-surface);
+  border-block-end-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+/* The ring sits inside: the tray scrolls sideways, which would clip an outside ring. */
+.tab:focus-visible {
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
+
+.tabpanel[hidden] {
+  display: none;
+}
+
+/* ---- .stat ---- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-3);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-radius: var(--radius-md);
+}
+
+/* A tone is an edge on the start side; the sub-line carries it in words, so colour is not the only cue. */
+.stat[data-tone='ok'] {
+  border-inline-start: var(--border-strong) solid var(--color-success);
+}
+.stat[data-tone='warn'] {
+  border-inline-start: var(--border-strong) solid var(--color-warning);
+}
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.stat-unit {
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+.stat-sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ---- .meter ---- */
+.meter {
+  display: flex;
+  inline-size: 100%;
+  block-size: 0.5rem;
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-radius: var(--radius-sm);
+  box-sizing: content-box;
+  overflow: hidden;
+}
+
+.meter-fill {
+  background: var(--color-accent);
+}
+
+/* The part still in progress is hatched, so "done" and "under way" differ by pattern, not only by tone. */
+.meter-active {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-accent),
+    var(--color-accent) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+}
+
+/* ---- .steps ---- */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: steps;
+}
+
+.steps > li {
+  counter-increment: steps;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.steps > li::before {
+  content: counter(steps);
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border: var(--border-strong) solid currentColor;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.steps > li[data-state='done']::before {
+  content: '✓';
+  content: '✓' / 'Done: ';
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-success-contrast);
+}
+
+/* The current step: a tint and a 2px accent edge (the extra pixel comes out of the padding, nothing shifts). */
+.steps > li[aria-current='step'] {
+  padding: calc(var(--space-1) - 1px) calc(var(--space-3) - 1px) calc(var(--space-1) - 1px)
+    calc(var(--space-1) - 1px);
+  background: var(--color-accent-tint);
+  border: var(--border-strong) solid var(--color-accent);
+  color: var(--color-accent-tint-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.steps > li[aria-current='step']::before {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+/* A step that is a button (navigation between steps): the button fills the item and carries the tap target. */
+.steps > li:has(> .steps-link) {
+  padding: 0;
+}
+
+.steps-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--tap-target-min);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}

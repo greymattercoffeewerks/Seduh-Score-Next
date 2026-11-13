@@ -17,6 +17,7 @@
 // The next-step card is chosen by `deriveNextStep` (below). Every state is said in words as well as colour.
 // Styled in components.css (`.ok-run*`, `.ok-next*`, `.ok-phase*`).
 import { el } from './dom.js';
+import { buildMeter, kitState, statusMark } from './vocabulary.js';
 import { kitId, safeHref } from './kitLink.js';
 
 export const PHASE_STATUSES = ['not_started', 'in_progress', 'done', 'blocked', 'waiting'];
@@ -101,23 +102,22 @@ export function deriveNextStep(phases) {
 }
 
 function statusTag(status) {
-  return el('span', {
-    className: 'ok-tag',
-    text: STATUS_LABELS[status],
-    attrs: { 'data-status': status },
-  });
+  return statusMark(kitState(status), STATUS_LABELS[status]);
 }
 
-function progressBar(progress) {
-  const bar = el('div', { className: 'ok-bar', attrs: { 'aria-hidden': 'true' } }, [
-    el('span', { className: 'ok-bar-done' }),
-    el('span', { className: 'ok-bar-active' }),
-  ]);
-  bar.children[0].style.width = `${progress.donePct}%`;
-  bar.children[1].style.width = `${progress.activePct}%`;
+// The bar is a role="meter": the sentence a screen reader says is the value text, so it is no longer a hidden span.
+function progressBar(progress, label) {
   const words = [`${progress.done} of ${progress.total} done`];
   if (progress.active > 0) words.push(`${progress.active} in progress`);
-  return [bar, el('span', { className: 'sr-only', text: `${words.join(', ')}.` })];
+  return [
+    buildMeter({
+      label: `${label} progress`,
+      done: progress.done,
+      total: progress.total,
+      active: progress.active,
+      valueText: words.join(', '),
+    }),
+  ];
 }
 
 function nextStepCard(next) {
@@ -170,7 +170,7 @@ function phaseCard(phase, isNext) {
     ]),
   ];
   if (phase.count) parts.push(el('p', { className: 'ok-phase-count', text: phase.count }));
-  if (phase.progress) parts.push(...progressBar(phase.progress));
+  if (phase.progress) parts.push(...progressBar(phase.progress, phase.label));
   if (reason) parts.push(el('p', { className: 'ok-phase-reason', text: phase.blockedReason }));
   // The featured phase's action is the big button above; the other cards keep their own, as a plain link-button.
   if (phase.nextAction && !isNext && phase.status !== 'done') {

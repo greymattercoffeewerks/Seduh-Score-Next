@@ -140,8 +140,7 @@ describe('mountEventDashboardScreen', () => {
     await mountEventDashboardScreen(root, { eventId: 'ev1', orgId: 'org1', client });
     const badge = root.querySelector('.event-live-status');
     expect(badge.textContent).toContain('Live now');
-    expect(badge.querySelector('.status-live-dot')).not.toBeNull();
-    expect(badge.classList.contains('event-live-status-live')).toBe(true);
+    expect(badge.querySelector('.status[data-state="live"]')).not.toBeNull();
   });
 
   it("asks about live sessions in the EVENT's own organisation, not whichever the console is working in", async () => {
@@ -190,9 +189,9 @@ describe('mountEventDashboardScreen', () => {
     });
     await mountEventDashboardScreen(root, { eventId: 'ev1', orgId: 'org1', client });
     const badge = root.querySelector('.event-live-status');
-    expect(badge.textContent).toBe('Not currently live — "Second Harvest Cup" is live instead');
-    expect(badge.querySelector('.status-live-dot')).toBeNull();
-    expect(badge.classList.contains('event-live-status-live')).toBe(false);
+    expect(badge.querySelector('.status').textContent).toBe('Not live');
+    expect(badge.textContent).toContain('"Second Harvest Cup" is live instead');
+    expect(badge.querySelector('.status[data-state="live"]')).toBeNull();
   });
 
   it('shows a bare "Not currently live" (no other event named) when the org has no active live_sessions row at all', async () => {
@@ -206,8 +205,8 @@ describe('mountEventDashboardScreen', () => {
     });
     await mountEventDashboardScreen(root, { eventId: 'ev1', orgId: 'org1', client });
     const badge = root.querySelector('.event-live-status');
-    expect(badge.textContent).toBe('Not currently live');
-    expect(badge.querySelector('.status-live-dot')).toBeNull();
+    expect(badge.textContent).toBe('Not live');
+    expect(badge.querySelector('.status[data-state="live"]')).toBeNull();
   });
 
   it('shows a "no stage plan yet" empty state pointing at Setup when there are no stages', async () => {

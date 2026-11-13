@@ -171,8 +171,8 @@
   display: none;
 }
 
-/* Same neutral, non-accent treatment as viewer-shell.css's own
-   .viewer-badge-done — this is the brand-only/idle state, not an error. */
+/* Same neutral, non-accent treatment as the viewer chrome's
+   queued status mark — this is the brand-only/idle state, not an error. */
 .splash-badge-generic {
   background: var(--color-surface-sunken);
   color: var(--color-text-secondary);
@@ -185,9 +185,8 @@
 }
 
 /* base.css's .status-live-dot is accent-colored by default, invisible on
-   this badge's own solid accent background — same override
-   viewer-shell.css's own .viewer-badge-live already needs, for the same
-   reason. */
+   this badge's own solid accent background — a
+   solid-accent pill needs the contrast colour for its dot. */
 .splash-badge-live .status-live-dot {
   background: var(--color-accent-contrast);
 }

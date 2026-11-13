@@ -8,6 +8,7 @@
 // future format might not have "stages" at all).
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
+import { statusMark } from '../../core/vocabulary.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { buildHomepageListingCard } from '../../core/homepageListingCard.js';
@@ -38,22 +39,18 @@ import { ordinalLabel } from '../../core/ordinal.js';
 // organiser exactly where to look, without them hunting through every event
 // on the Events list to find which one shows "Live now."
 function renderLiveStatusBadge(isLive, liveElsewhereEventName) {
+  // A short mark and the explanation beside it (the mark never wraps, so a sentence goes next to it, not in it).
   if (isLive) {
-    return el('p', { className: 'event-live-status event-live-status-live' }, [
-      el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } }),
-      el('span', { text: 'Live now — showing on Splash / Projector / Phone' }),
+    return el('p', { className: 'event-live-status' }, [
+      statusMark('live', 'Live now'),
+      el('span', { text: 'Showing on Splash / Projector / Phone' }),
     ]);
   }
+  const children = [statusMark('queued', 'Not live')];
   if (liveElsewhereEventName) {
-    return el('p', {
-      className: 'event-live-status',
-      text: `Not currently live — "${liveElsewhereEventName}" is live instead`,
-    });
+    children.push(el('span', { text: `"${liveElsewhereEventName}" is live instead` }));
   }
-  return el('p', {
-    className: 'event-live-status',
-    text: 'Not currently live',
-  });
+  return el('p', { className: 'event-live-status' }, children);
 }
 
 function stageStatusLine(stage) {

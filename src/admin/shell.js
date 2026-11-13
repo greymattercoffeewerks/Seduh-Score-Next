@@ -3,6 +3,7 @@
 // routes live in the URL hash (`#/orgs`, `#/orgs/<id>`), one panel at a time.
 import { el, brandLockup, setBusyDisabled } from '../core/dom.js';
 import { confirmDialog } from '../core/feedback.js';
+import { statusMark } from '../core/vocabulary.js';
 import { feedbackRegion, setFeedback, SIGN_OUT_FAILED } from './screenParts.js';
 
 // The panel a hash names: by its FIRST segment, so `#/orgs/<id>` is still the `orgs` panel (which then reads the
@@ -88,7 +89,7 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
     ]),
     el('div', { className: 'adm-who' }, [
       el('span', { className: 'adm-who-email', text: email }),
-      el('span', { className: 'adm-badge adm-badge--on', text: 'Verified (AAL2)' }),
+      statusMark('done', 'Verified (AAL2)', { className: 'adm-badge' }),
     ]),
     el('div', { className: 'adm-actions' }, [
       signOutButton('Sign out', () => onSignOut()),

@@ -523,6 +523,228 @@
         });
       </script>
 
+      <h2 class="guide-heading">Vocabulary (status, tabs, stat, meter, steps)</h2>
+      <p>
+        One status mark, one tablist, one stat tile and meter, one steps list (Petrol Kaizen P5).
+        The <em>shape</em> carries the state as well as the colour: filled and breathing (live),
+        hollow (queued), check, bang, cross, dashed (offline), stripes (test, the only violet).
+        Stroke on the first row, light on the second. Use the arrow keys, Home and End on the tabs.
+      </p>
+      <style>
+        .pv-vocab {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+          gap: var(--space-3);
+        }
+        .pv-vocab-col {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+          color: var(--color-text);
+          min-width: 0;
+        }
+        .pv-vocab-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+        }
+      </style>
+      <div class="pv-vocab">
+        <div class="pv-vocab-col" style="background: var(--color-canvas); padding: var(--space-4)">
+          <div class="pv-vocab-row">
+            <span class="status" data-state="live">Live</span
+            ><span class="status" data-state="queued">Queued</span
+            ><span class="status" data-state="done">Done</span
+            ><span class="status" data-state="attention">Needs check</span
+            ><span class="status" data-state="failed">Not saved</span
+            ><span class="status" data-state="offline">Offline</span
+            ><span class="status" data-state="test">Test event</span>
+          </div>
+          <div class="pv-vocab-row">
+            <span class="status status--light" data-state="live">Live</span
+            ><span class="status status--light" data-state="queued">Queued</span
+            ><span class="status status--light" data-state="done">Done</span
+            ><span class="status status--light" data-state="attention">Needs check</span
+            ><span class="status status--light" data-state="failed">Not saved</span
+            ><span class="status status--light" data-state="offline">Offline</span
+            ><span class="status status--light" data-state="test">Test event</span>
+          </div>
+          <div class="tabs" role="tablist" aria-label="Event view (paper)" id="pv-tabs-p">
+            <button
+              class="tab"
+              role="tab"
+              type="button"
+              id="pv-p-tab-a"
+              aria-selected="true"
+              aria-controls="pv-p-panel"
+              tabindex="0"
+            >
+              Overview
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              type="button"
+              id="pv-p-tab-b"
+              aria-selected="false"
+              aria-controls="pv-p-panel"
+              tabindex="-1"
+            >
+              Heats
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              type="button"
+              id="pv-p-tab-c"
+              aria-selected="false"
+              aria-controls="pv-p-panel"
+              tabindex="-1"
+            >
+              Cuppers
+            </button>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-label">Heats done</div>
+              <div class="stat-value tabular-nums">5<span class="stat-unit"> / 8</span></div>
+              <div
+                class="meter"
+                role="meter"
+                aria-label="Heats done"
+                aria-valuemin="0"
+                aria-valuemax="8"
+                aria-valuenow="5"
+                aria-valuetext="5 of 8 done"
+              >
+                <span class="meter-fill" style="width: 62%"></span
+                ><span class="meter-active" style="width: 12%"></span>
+              </div>
+            </div>
+            <div class="stat" data-tone="ok">
+              <div class="stat-label">Median time</div>
+              <div class="stat-value tabular-nums">4:21</div>
+              <div class="stat-sub">Fastest 3:58</div>
+            </div>
+          </div>
+          <ol class="steps" aria-label="Event setup">
+            <li data-state="done">Details</li>
+            <li data-state="done">Roster</li>
+            <li aria-current="step">Heats</li>
+            <li>Audience links</li>
+          </ol>
+        </div>
+        <div
+          class="pv-vocab-col"
+          data-surface="stage"
+          style="background: var(--color-canvas); padding: var(--space-4)"
+        >
+          <div class="pv-vocab-row">
+            <span class="status" data-state="live">Live</span
+            ><span class="status" data-state="queued">Queued</span
+            ><span class="status" data-state="done">Done</span
+            ><span class="status" data-state="attention">Needs check</span
+            ><span class="status" data-state="failed">Not saved</span
+            ><span class="status" data-state="offline">Offline</span
+            ><span class="status" data-state="test">Test event</span>
+          </div>
+          <div class="pv-vocab-row">
+            <span class="status status--light" data-state="live">Live</span
+            ><span class="status status--light" data-state="queued">Queued</span
+            ><span class="status status--light" data-state="done">Done</span
+            ><span class="status status--light" data-state="attention">Needs check</span
+            ><span class="status status--light" data-state="failed">Not saved</span
+            ><span class="status status--light" data-state="offline">Offline</span
+            ><span class="status status--light" data-state="test">Test event</span>
+          </div>
+          <div class="tabs" role="tablist" aria-label="Event view (stage)" id="pv-tabs-s">
+            <button
+              class="tab"
+              role="tab"
+              type="button"
+              id="pv-s-tab-a"
+              aria-selected="true"
+              aria-controls="pv-s-panel"
+              tabindex="0"
+            >
+              Overview
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              type="button"
+              id="pv-s-tab-b"
+              aria-selected="false"
+              aria-controls="pv-s-panel"
+              tabindex="-1"
+            >
+              Heats
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              type="button"
+              id="pv-s-tab-c"
+              aria-selected="false"
+              aria-controls="pv-s-panel"
+              tabindex="-1"
+            >
+              Cuppers
+            </button>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-label">Heats done</div>
+              <div class="stat-value tabular-nums">5<span class="stat-unit"> / 8</span></div>
+              <div
+                class="meter"
+                role="meter"
+                aria-label="Heats done"
+                aria-valuemin="0"
+                aria-valuemax="8"
+                aria-valuenow="5"
+                aria-valuetext="5 of 8 done"
+              >
+                <span class="meter-fill" style="width: 62%"></span
+                ><span class="meter-active" style="width: 12%"></span>
+              </div>
+            </div>
+            <div class="stat" data-tone="ok">
+              <div class="stat-label">Median time</div>
+              <div class="stat-value tabular-nums">4:21</div>
+              <div class="stat-sub">Fastest 3:58</div>
+            </div>
+          </div>
+          <ol class="steps" aria-label="Event setup">
+            <li data-state="done">Details</li>
+            <li data-state="done">Roster</li>
+            <li aria-current="step">Heats</li>
+            <li>Audience links</li>
+          </ol>
+        </div>
+      </div>
+      <script type="module">
+        import { buildTablist } from '../../core/tablist.js';
+        // Rebuild each static tablist through the real helper, so the preview exercises the keyboard behaviour.
+        for (const [ident, surface] of [
+          ['p', 'paper'],
+          ['s', 'stage'],
+        ]) {
+          const old = document.getElementById('pv-tabs-' + ident);
+          const { list } = buildTablist({
+            idBase: 'pv-' + ident,
+            label: 'Event view (' + surface + ')',
+            selected: 'a',
+            tabs: [
+              { id: 'a', label: 'Overview' },
+              { id: 'b', label: 'Heats' },
+              { id: 'c', label: 'Cuppers' },
+            ],
+          });
+          old.replaceWith(list);
+        }
+      </script>
+
       <h2 class="guide-heading">Type scale</h2>
       <div class="type-row">
         <div class="meta">display / 96px</div>

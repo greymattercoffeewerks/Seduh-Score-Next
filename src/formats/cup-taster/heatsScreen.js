@@ -21,6 +21,7 @@ import { findEvent } from '../../core/events.js';
 import { findStageById, stageKindLabel } from './setup.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
+import { statusMark } from '../../core/vocabulary.js';
 import { describeError } from '../../core/errors.js';
 
 // Live-event finding #3 (2026-10-04): the Roster card sat above the heats, so on every visit an
@@ -234,7 +235,7 @@ export function renderUpNext(heatsWithEntries, eventId, stageId) {
 function heatActionLink(eventId, heat) {
   if (!eventId) return null;
   if (heat.status === 'confirmed') {
-    return el('span', { className: 'heat-status-done', text: 'Confirmed' });
+    return statusMark('done', 'Confirmed');
   }
   const toScoring = heat.status === 'scoring';
   const label = toScoring ? 'Score this heat' : 'Time this heat';

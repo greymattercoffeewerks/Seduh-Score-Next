@@ -69,6 +69,7 @@
 // refresh, each still mutating its own now-detached DOM node forever.
 import { getSupabase } from './supabaseClient.js';
 import { el, brandLockup } from './dom.js';
+import { statusMark } from './vocabulary.js';
 import { findLatestEventForOrg } from './events.js';
 import { raceTimeout } from './timeout.js';
 import { applyBrandColors, normaliseBrand, renderBrandIdentity } from './brandSlot.js';
@@ -177,19 +178,15 @@ export function renderHoldingState(phase) {
 // organiser's name. The "Powered by Seduh Score" credit is the shell's footer, not part of this chrome.
 export function renderChrome(session, connectionLost = false, brand = null) {
   const branded = normaliseBrand(brand);
+  // One status mark in the chrome's second slot: Live (filled, breathing), Not live (hollow), Reconnecting (dashed).
+  // `viewer-badge` stays as the hook for the e2e specs and the chrome's own layout.
   let statusBadge;
   if (connectionLost) {
-    statusBadge = el('span', {
-      className: 'viewer-badge viewer-badge-lost',
-      text: 'Reconnecting…',
-    });
+    statusBadge = statusMark('offline', 'Reconnecting…', { className: 'viewer-badge' });
   } else if (session?.active) {
-    statusBadge = el('span', { className: 'viewer-badge viewer-badge-live' }, [
-      el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } }),
-      el('span', { text: 'Live' }),
-    ]);
+    statusBadge = statusMark('live', 'Live', { className: 'viewer-badge' });
   } else {
-    statusBadge = el('span', { className: 'viewer-badge viewer-badge-done', text: 'Not live' });
+    statusBadge = statusMark('queued', 'Not live', { className: 'viewer-badge' });
   }
 
   // The mark lives INSIDE the <h1>, as one more static child, not as a
