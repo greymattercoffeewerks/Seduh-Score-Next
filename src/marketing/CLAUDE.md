@@ -179,6 +179,13 @@ router, auth, Supabase, or a competition implementation. It uses the legacy tour
 historical reference while stating the current truth: Cup Taster, BTC and Throwdown are live;
 Liga Seduh is planned; Community is a separate final section.
 
+**Refresh (2026-11-13).** The Tour's format data is one list in `tourFormats.js` (pure, no DOM). Picker, comparison
+table, live sections, "Ways to play", "On the way" and numbering all read it; `tourScreen.js` takes
+`mountTourScreen(root, { formats })`, so tests can feed a different list. Add a format or mode there, not in the
+screen. `public: false` hides an entry everywhere, including the header's `liveNames`. The BTC and Throwdown boards
+are illustrations (`aria-hidden`, fictional names). BTC's numbers are restated in that file, not imported from
+`scoring.js`; a test does not tie them to it, so change them together by hand.
+
 ## Pricing page (2026-10-17)
 
 `pricing/index.html` is a public entry (`pricingMain.js`, `pricingScreen.js`, `pricingContent.js`,

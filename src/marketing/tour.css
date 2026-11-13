@@ -13,7 +13,9 @@ body {
 }
 .tour-header,
 .tour-hero,
+.tour-compare,
 .tour-cup,
+.tour-shared,
 .tour-planned,
 .tour-community,
 .tour-footer {
@@ -64,11 +66,12 @@ body {
 }
 /* The hero's spacing, headline, kicker, intro and grid are the shared .page-hero (tokens/base.css). */
 .tour-kicker,
-.tour-hero-status,
 .tour-section-label,
+.tour-picker-head,
 .tour-board-label,
-.tour-planned-top,
-.tour-planned-status,
+.tour-family,
+.tour-modes-title,
+.tour-pick-kind,
 .tour-footer {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -81,6 +84,9 @@ body {
   color: var(--color-accent);
 }
 .tour-cup h2,
+.tour-compare h2,
+.tour-shared h2,
+.tour-shared h3,
 .tour-planned h2,
 .tour-community h2,
 .tour-planned h3,
@@ -92,31 +98,30 @@ body {
   line-height: var(--leading-tight);
   text-transform: uppercase;
 }
-.tour-hero-status,
 .tour-section-label {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   color: var(--color-text-secondary);
 }
-.tour-hero-status {
-  margin-top: var(--space-8);
-}
 /* The frame (accent edge, 3px corner, centred) is the shared .icon-frame (tokens/base.css); only the size is here. */
-.tour-status-mark,
 .tour-section-label > span:first-child {
   width: 2rem;
   aspect-ratio: 1;
 }
+.tour-compare,
 .tour-cup,
+.tour-shared,
 .tour-planned,
 .tour-community {
   border-top: var(--border-hairline) solid var(--color-border);
 }
+.tour-compare,
 .tour-cup,
+.tour-shared,
 .tour-planned,
 .tour-community {
-  padding-block: clamp(4.5rem, 9vw, 8rem);
+  padding-block: clamp(3.5rem, 8vw, 6.5rem);
 }
 .tour-cup-grid {
   display: grid;
@@ -147,8 +152,9 @@ body {
 }
 .tour-copy,
 .tour-note,
-.tour-planned-intro > p,
-.tour-planned-card > p:last-child,
+.tour-lede,
+.tour-shared p,
+.tour-planned-card p,
 .tour-community-heading > p,
 .tour-community-card > p:not(.tour-kicker) {
   color: var(--color-text-secondary);
@@ -247,66 +253,452 @@ body {
 .tour-board-result span:last-child {
   grid-column: 1 / -1;
 }
-.tour-planned-intro,
-.tour-community-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(17rem, 1fr);
-  gap: clamp(1.5rem, 6vw, 6rem);
-  margin-top: clamp(2.5rem, 5vw, 4.5rem);
-}
-.tour-planned h2,
-.tour-community h2 {
-  font-size: clamp(2.75rem, 5vw, 4.75rem);
-}
-.tour-planned-intro > p,
-.tour-community-heading > p {
-  margin: 0;
-  font-size: var(--text-lg);
-}
-.tour-planned-grid,
-.tour-community-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4);
-  margin-top: clamp(2.5rem, 5vw, 4.5rem);
-}
-.tour-planned-card {
-  min-height: 22rem;
-  padding: var(--space-5);
-  background: var(--color-surface);
-  opacity: 0.68;
-}
-.tour-planned-top {
+/* ---- hero picker: one card per public format, from the list (tourFormats.js). Auto-fill, so a fifth or sixth
+   format just wraps; the card is the shared .panel, the status the shared .tag recoloured by --tag-edge/--tag-ink. */
+.tour-picker-head {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
   justify-content: space-between;
+  margin-top: clamp(2.25rem, 5vw, 3.5rem);
   color: var(--color-text-secondary);
 }
-.tour-planned-status {
-  color: var(--color-text-muted);
+.tour-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.tour-pick {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  min-height: 8.25rem;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.tour-pick:hover {
+  border-color: var(--color-accent);
+}
+.tour-pick-future {
+  border-style: dashed;
+  background: transparent;
+}
+.tour-pick-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.tour-pick-kind {
+  color: var(--color-text-secondary);
+}
+.tour-pick-name {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: 1;
+  text-transform: uppercase;
+}
+.tour-pick-future .tour-pick-name,
+.tour-pick-future small {
+  color: var(--color-text-secondary);
+}
+.tour-pick small {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.tour-pick-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+/* Status colours for the shared .tag: live is .tag-solid, planned is .tag-dashed and muted. */
+.tour-state-testing {
+  --tag-edge: var(--color-gold);
+  --tag-ink: var(--color-gold);
+}
+.tour-state-planned {
+  --tag-ink: var(--color-text-secondary);
+}
+@media (max-width: 420px) {
+  .tour-pick {
+    min-height: 0;
+  }
+}
+
+/* ---- comparison table: the wrapper scrolls sideways at a phone width; the table keeps its semantics ---- */
+.tour-compare h2,
+.tour-shared h2 {
+  font-size: clamp(2.25rem, 5vw, 3.75rem);
+}
+.tour-compare h2,
+.tour-shared h2,
+.tour-planned h2 {
+  margin-top: var(--space-6);
+}
+.tour-lede {
+  max-width: 38rem;
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-lg);
+}
+.tour-table-scroll {
+  background: var(--color-surface);
+  margin-top: var(--space-8);
+  overflow-x: auto;
+}
+.tour-table {
+  width: 100%;
+  min-width: 45rem;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.tour-table th,
+.tour-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+.tour-table thead th {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  text-transform: uppercase;
+}
+.tour-table thead th:first-child {
+  width: 22%;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
   font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+}
+.tour-table tbody th {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.tour-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+/* ---- format sections: what you get, ways to play, the flipped layout, the illustration boards ---- */
+.tour-gets {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 38rem;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.tour-gets li {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr);
+  gap: var(--space-2);
+}
+.tour-gets li::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.45rem;
+  background: var(--color-accent);
+}
+.tour-modes {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 38rem;
+  margin-top: var(--space-6);
+}
+.tour-modes-title {
+  color: var(--color-text-secondary);
+}
+.tour-modes-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tour-mode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+}
+.tour-mode-testing {
+  border-style: dashed;
+  background: transparent;
+}
+.tour-mode b {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  text-transform: uppercase;
+}
+.tour-mode p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.tour-flip .tour-cup-copy {
+  order: 2;
+}
+.tour-cup-copy,
+.tour-fmt-media {
+  min-width: 0;
+}
+.tour-board {
+  display: grid;
+  gap: var(--space-4);
+  padding: clamp(1.1rem, 3vw, 1.75rem);
+  background: var(--color-surface);
+}
+.tour-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.tour-teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--space-3);
+  align-items: center;
+}
+.tour-team {
+  display: grid;
+  gap: var(--space-1);
+}
+.tour-team b {
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.tour-team small {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+.tour-team-right {
+  text-align: right;
+}
+.tour-score {
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+.tour-score em {
+  padding-inline: var(--space-2);
+  color: var(--color-text-secondary);
+  font-style: normal;
+}
+.tour-cuprow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.tour-cupcell {
+  padding: var(--space-2) var(--space-1);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-selector);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-align: center;
+}
+.tour-cupcell b {
+  display: block;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+}
+.tour-cupcell-a b {
+  color: var(--color-accent);
+}
+.tour-board-result-wide span:last-child {
+  grid-column: auto;
+}
+.tour-path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.tour-path span {
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-selector);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.tour-path .tour-path-on {
+  border-radius: var(--radius-selector);
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+  color: var(--color-accent-tint-text);
+}
+.tour-bracket {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: center;
+}
+.tour-col {
+  display: grid;
+  gap: var(--space-3);
+}
+.tour-col-sf {
+  gap: 4rem;
+}
+.tour-match {
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-selector);
+  font-size: var(--text-xs);
+  overflow: hidden;
+}
+.tour-match > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+.tour-match > div + div {
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.tour-match-w {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
+.tour-match-l {
+  color: var(--color-text-secondary);
+}
+.tour-match-final {
+  border-color: var(--color-gold);
+}
+.tour-match-final .tour-match-w {
+  color: var(--color-gold);
+}
+.tour-third {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+.tour-third::before {
+  content: '3rd ';
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+@media (max-width: 420px) {
+  .tour-bracket {
+    grid-template-columns: 1fr 1fr;
+  }
+  .tour-col-qf {
+    display: none;
+  }
+  .tour-col-sf {
+    gap: var(--space-3);
+  }
+}
+
+/* ---- built for the room ---- */
+.tour-shared-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+}
+.tour-shared-grid article {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--color-accent);
+}
+.tour-shared h3 {
+  font-size: var(--text-xl);
+}
+.tour-shared p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* ---- on the way: planned, in testing, live ---- */
+.tour-pipe {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+.tour-pipe-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-secondary);
+}
+.tour-next {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-4) var(--space-6);
+  align-items: center;
+  padding: var(--space-5);
+  border-style: dashed;
+  background: var(--color-surface);
+}
+.tour-next .tour-icon {
+  margin: 0;
+}
+.tour-planned h3 {
+  font-size: var(--text-2xl);
+}
+.tour-next p {
+  max-width: 38rem;
+  margin: var(--space-2) 0 0;
+}
+.tour-family {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-text-secondary);
 }
 .tour-icon-muted {
   --frame-edge: var(--color-border);
   --frame-ink: var(--color-text-secondary);
-  margin: auto 0 var(--space-6);
 }
-.tour-planned-card h3,
-.tour-community-card h3 {
-  font-size: var(--text-2xl);
-}
-.tour-planned-card > p:last-child,
-.tour-community-card > p:not(.tour-kicker) {
-  margin: var(--space-3) 0 0;
-}
+
+/* ---- community ---- */
 .tour-community-heading {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.75fr);
   gap: clamp(1.5rem, 7vw, 7rem);
+  margin-top: clamp(2.5rem, 5vw, 4.5rem);
+}
+.tour-community-heading > p {
+  margin: 0;
+  font-size: var(--text-lg);
 }
 .tour-community-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: clamp(2.5rem, 5vw, 4.5rem);
 }
 .tour-community-card {
-  min-height: 22rem;
+  min-height: 19rem;
   display: flex;
   flex-direction: column;
   padding: var(--space-5);
@@ -315,6 +707,12 @@ body {
     border-color var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
+}
+.tour-community-card h3 {
+  font-size: var(--text-xl);
+}
+.tour-community-card > p:not(.tour-kicker) {
+  margin: var(--space-3) 0 0;
 }
 .tour-community-card:hover {
   border-color: var(--color-accent);
@@ -346,10 +744,21 @@ body {
   border-top: var(--border-hairline) solid var(--color-border);
   font-size: var(--text-2xs);
 }
+@media (max-width: 960px) {
+  .tour-community-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tour-shared-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-6) var(--space-4);
+  }
+}
 @media (max-width: 760px) {
   .tour-header,
   .tour-hero,
+  .tour-compare,
   .tour-cup,
+  .tour-shared,
   .tour-planned,
   .tour-community,
   .tour-footer {
@@ -360,15 +769,28 @@ body {
     font-size: var(--text-2xs);
   }
   .tour-cup-grid,
-  .tour-planned-intro,
   .tour-community-heading {
     grid-template-columns: 1fr;
   }
-  .tour-planned-grid {
-    grid-template-columns: 1fr;
+  .tour-flip .tour-cup-copy {
+    order: 0;
   }
-  .tour-planned-card {
-    min-height: 17rem;
+  .tour-cup-media {
+    min-height: 0;
+  }
+  .tour-cup-media img {
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+  .tour-set-board {
+    position: static;
+    width: auto;
+    margin: var(--space-3);
+  }
+}
+@media (max-width: 640px) {
+  .tour-next {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 520px) {
@@ -383,16 +805,16 @@ body {
     display: none;
   }
   .tour-copy,
-  .tour-planned-intro > p,
+  .tour-lede,
   .tour-community-heading > p {
     font-size: var(--text-base);
   }
-  .tour-cup-media,
-  .tour-cup-media img {
-    min-height: 23rem;
-  }
-  .tour-community-grid {
+  .tour-community-grid,
+  .tour-shared-grid {
     grid-template-columns: 1fr;
+  }
+  .tour-community-card {
+    min-height: 0;
   }
   .tour-footer {
     flex-direction: column;
@@ -400,7 +822,11 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tour-community-card {
+  .tour-community-card,
+  .tour-pick {
     transition: none;
+  }
+  .tour-community-card:hover {
+    transform: none;
   }
 }
