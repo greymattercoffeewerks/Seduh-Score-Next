@@ -168,3 +168,6 @@ state.json
 
 # Local scratch output (screenshots, helper scripts, drafts); never committed.
 brag-output/
+
+# Country-history load SQL holds real results (public repository, permission covers the Board only): never committed.
+scripts/country-history/out/
