@@ -16,7 +16,7 @@ body {
   margin-inline: auto;
 }
 .country-body {
-  padding-block: clamp(1.25rem, 4vw, 2.25rem);
+  padding-block: clamp(0.75rem, 2.5vw, 1.25rem);
 }
 .country-section-title {
   margin: 0 0 var(--space-4);
@@ -68,6 +68,9 @@ body {
 }
 
 /* ---- Hero of one country ---- */
+.country-hero-one {
+  padding-block: clamp(2rem, 5vw, 3rem) var(--space-3);
+}
 .country-identity {
   display: flex;
   align-items: center;
@@ -106,28 +109,34 @@ body {
   font-size: var(--text-sm);
 }
 
-/* ---- Totals ---- */
+/* ---- Summary: one compact row of totals, then the best finish on the gold tint ---- */
+.country-summary {
+  display: grid;
+  gap: var(--space-3);
+}
 .country-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* three across at 360px; packed to the left (not stretched across a wide screen) from there up */
+  grid-template-columns: repeat(3, minmax(0, 12rem));
   gap: var(--space-3);
-  padding-top: var(--space-4);
-  border-top: var(--border-hairline) solid var(--color-border);
 }
 .country-stat b {
   display: block;
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 7vw, 2.5rem);
+  font-size: clamp(1.25rem, 5vw, 1.75rem);
+  line-height: 1.1;
   color: var(--color-accent);
 }
 .country-stat span {
   color: var(--color-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
-
-/* ---- Best finish ---- */
 .country-best {
-  padding: var(--space-5);
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-gold-tint);
+  border-radius: var(--radius-box);
 }
 .country-best-label {
   margin: 0;
@@ -138,41 +147,44 @@ body {
   text-transform: uppercase;
 }
 .country-best-finish {
-  margin: var(--space-2) 0 0;
+  margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.75rem, 8vw, 3rem);
-  line-height: 1.05;
+  font-size: clamp(1.25rem, 4.5vw, 1.625rem);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
 }
 .country-best-detail {
-  margin: var(--space-1) 0 0;
+  margin: 0;
   color: var(--color-text-secondary);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
-/* ---- By championship ---- */
+/* ---- By championship: a short card each; round scores open per team ---- */
 .country-champ {
-  margin-bottom: var(--space-4);
-  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
 }
 .country-champ-head {
-  display: grid;
-  gap: var(--space-1);
-  margin-bottom: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-2);
 }
 .country-champ-head h3 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   overflow-wrap: anywhere;
 }
 .country-champ-where {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 .country-provenance {
-  justify-self: start;
-  margin: var(--space-1) 0 0;
+  margin: 0;
   --tag-edge: var(--color-accent);
   --tag-ink: var(--color-accent);
 }
@@ -184,22 +196,53 @@ body {
   list-style: none;
 }
 .country-team {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-1) var(--space-3);
-  align-items: baseline;
-  padding-block: var(--space-3);
   border-top: var(--border-hairline) solid var(--color-border);
 }
+.country-team-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--tap-target-min);
+}
 .country-team-name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
   font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
 }
+.country-team-stage {
+  flex: none;
+}
+/* The native disclosure: the whole summary row is the target, with its own cue (no default marker). */
+.country-team-details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.country-team-details > summary::-webkit-details-marker {
+  display: none;
+}
+.country-team-cue {
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-inline-end: 2px solid var(--color-text-secondary);
+  border-block-end: 2px solid var(--color-text-secondary);
+  transform: rotate(45deg);
+  margin-inline-end: var(--space-1);
+}
+.country-team-details[open] > summary .country-team-cue {
+  transform: rotate(-135deg);
+}
+.country-team-details > summary:hover .country-team-name {
+  text-decoration: underline;
+}
 .country-team-rounds {
-  grid-column: 1 / -1;
+  margin: 0;
+  padding-block-end: var(--space-3);
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
+  overflow-wrap: anywhere;
 }
 
 /* ---- Teams across years ---- */
@@ -282,7 +325,7 @@ body {
   min-block-size: var(--tap-target-min);
 }
 .country-source p {
-  max-inline-size: 60ch;
+  /* No reading cap of its own: prose follows the same column as the sections above (owner, 2026-11-14). */
   color: var(--color-text-secondary);
 }
 .country-source a {
@@ -296,15 +339,14 @@ body {
   .country-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .country-team {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
-  .country-team-rounds {
-    grid-column: auto;
-    text-align: end;
-  }
 }
 @media (min-width: 900px) {
+  /* The Teams list reads in two columns on a wide screen, so six teams are not a long strip */
+  .country-summary-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-8);
+  }
   .country-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
