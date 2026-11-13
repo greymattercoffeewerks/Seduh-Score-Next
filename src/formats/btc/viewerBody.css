@@ -143,6 +143,11 @@
   overflow-wrap: anywhere;
 }
 
+/* The country chip (core/countryChip.js, drawn only when the country pages are public) never shrinks or wraps. */
+.btc-phone-name-row > .country-flaglink {
+  flex: none;
+}
+
 .btc-phone-name-suffix {
   flex: none;
   white-space: pre;

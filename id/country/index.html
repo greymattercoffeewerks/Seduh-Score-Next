@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Countries — Seduh Score</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/marketing/publicHeader.css" />
+    <link rel="stylesheet" href="/src/marketing/country.css" />
+    <meta
+      name="description"
+      content="Each country's record at the ASEAN Barista Team Championship, built from the organiser's official results."
+    />
+    <!-- Seduh Score Next, Seduh ID country pages (T-CTY.3). The organiser's records were released for the Board
+         presentation ONLY, so every page is noindex and nothing on the public site links here
+         (core/countryPages.js, COUNTRY_PAGES_PUBLIC; spec CP4). Indexing is a separate, later decision.
+         This one file is the shell for /id/country/ and, copied by the build, for /id/country/<iso2>/. -->
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/marketing/countryMain.js"></script>
+  </body>
+</html>

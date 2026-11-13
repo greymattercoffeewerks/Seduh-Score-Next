@@ -1,11 +1,14 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import { countryPagesPlugin } from './tools/countryPagesPlugin.js';
 
 // Single config file for both Vite (dev/build) and Vitest (test) — vitest/config
 // re-exports Vite's defineConfig with the `test` key merged in. Importing
 // `defineConfig` from `vite` instead silently drops the whole `test` block
 // (handoff §10).
 export default defineConfig({
+  // Writes id/country/<iso2>/index.html for every ISO code after the build, and serves them in dev (T-CTY.3).
+  plugins: [countryPagesPlugin()],
   build: {
     rollupOptions: {
       // Seventeen HTML entries: the marketing landing page at root (index.html),
@@ -71,6 +74,9 @@ export default defineConfig({
         // /admin/ (T-ADM.D1): the platform operator's console. Unlinked, noindex, its own Supabase client — see
         // src/admin/CLAUDE.md.
         admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)),
+        // /id/country/ (T-CTY.3): the Seduh ID country pages. One shell; the build copies it to id/country/<iso2>/ for
+        // every ISO code (tools/countryPagesPlugin.js). noindex and unlinked until the owner decides (spec CP4).
+        idCountry: fileURLToPath(new URL('./id/country/index.html', import.meta.url)),
       },
     },
   },
@@ -104,6 +110,8 @@ export default defineConfig({
       'eslint-rules/**/*.test.js',
       // Build-output checks (tools/check-admin-bundle-leak.mjs): the scripts' own tests.
       'tools/*.test.js',
+      // The country-history import (scripts/country-history): fictional fixtures only.
+      'scripts/country-history/*.test.js',
     ],
     setupFiles: ['./src/testSetup.js'],
   },

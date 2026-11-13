@@ -20,6 +20,33 @@ import { createBtcViewerBody } from './formats/btc/viewerBody.js';
 import { createThrowdownProjectorBody } from './formats/throwdown/projectorBody.js';
 import { createThrowdownViewerBody } from './formats/throwdown/viewerBody.js';
 import { mountViewerBody, hasViewableContent } from './formats/cup-taster/viewerBody.js';
+import { COUNTRY_PAGES_PUBLIC, countryHubUrl } from './core/countryPages.js';
+import { buildQrBlock } from './core/qrBlock.js';
+
+// The BTC splash carries a QR code to every country's record. Switched off with the country pages (core/countryPages.js,
+// spec CP4): with the switch off, nothing is drawn and nothing is asked. The splash's own event read has no format
+// (public_event_summary returns none), so the format comes from the organisation's live session; with no live BTC session
+// yet there is no code. `enabled` and `lookupFormat` are for tests.
+export async function splashExtra(
+  event,
+  { enabled = COUNTRY_PAGES_PUBLIC, client, orgId, lookupFormat = findLiveFormat } = {},
+) {
+  if (!enabled || !event?.id) return null;
+  const live = await lookupFormat(orgId, client);
+  if (live?.eventId !== event.id || live.format !== 'btc') return null;
+  return buildQrBlock({ url: countryHubUrl(), caption: 'Every country’s record' });
+}
+
+async function findLiveFormat(orgId, client) {
+  const { data, error } = await client
+    .from('live_sessions')
+    .select('event_id, format')
+    .eq('org_id', orgId)
+    .eq('active', true)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { eventId: data.event_id, format: data.format } : null;
+}
 
 // A projector body factory is handed `{ brand }` (core/formatBody.js), so a body built after the brand arrived, for
 // the next event say, starts branded and a brand that arrives later reaches it through its `setBrand`.
@@ -145,7 +172,11 @@ export async function mountPhone(root, { orgId, client, signal, bodies = PHONE_B
 
 // The splash screen. It is synchronous (it never waits for anything), and so is this: the screen exists before the
 // first answer can possibly arrive, so unlike the other two there is no brand to catch up on after mounting.
-export function mountSplash(root, { orgId, client, signal } = {}) {
+// `countryPagesPublic` is for tests; production reads the one switch (core/countryPages.js).
+export function mountSplash(
+  root,
+  { orgId, client, signal, countryPagesPublic = COUNTRY_PAGES_PUBLIC } = {},
+) {
   let handle = null;
   const source = watchBrand({
     client,
@@ -159,6 +190,7 @@ export function mountSplash(root, { orgId, client, signal } = {}) {
       client,
       signal,
       onEvent: (event) => source.setEventId(event?.id),
+      extra: (event) => splashExtra(event, { client, orgId, enabled: countryPagesPublic }),
     });
   } catch (err) {
     source.stop();

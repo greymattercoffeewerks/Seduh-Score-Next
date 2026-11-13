@@ -334,6 +334,22 @@ marker resolved or removed, and `trustScreen.test.js` fails if a `[OWNER TO CONF
 - Privacy states what the code and schema really do. Change it in the same PR as any change to
   what personal data is held, who can read it, or which analytics run.
 
+## Seduh ID country pages (2026-11-13, T-CTY.3 to T-CTY.5)
+
+`/id/country/` (hub) and `/id/country/<iso2>/` (one country's record at the Barista Team Championship) are one entry:
+`id/country/index.html`, `countryMain.js` (reads the page from the path), `countryScreen.js`, `countryFormat.js` (pure
+words and order), `country.css`. `tools/countryPagesPlugin.js` copies the BUILT shell to `id/country/<iso2>/index.html`
+for every code in the app's country list (static hosting, no Worker) and serves the same paths in dev; a code with no
+shell gets Cloudflare's 404. Data is only `public_country_record` and `public_country_index` (`core/countryRecord.js`,
+which rebuilds every field), shown as text. **Every historical result says "From the organiser's records"**, and the page
+never claims Seduh Score recorded it. The pages are `noindex` and **nothing public links to them**: the owner's
+permission covers the Board presentation only. Every entry point (the header "Records" link, a country link on BTC team
+rows on the audience phone view and `/results/`, a QR code on the BTC splash and the printed BTC results sheet) reads the
+one constant `COUNTRY_PAGES_PUBLIC` in `core/countryPages.js`, false until the owner decides (spec CP4);
+`countryPages.test.js` fails if anything else reads it, or if it is true. The pages are not in the prerender list or the
+sitemap, on purpose. "Share to story" uses `core/storyCard.js` (reusable; Layer 2 will pass a person spec). Public pages
+stay dark (`stage`).
+
 ## Results sheet (2026-10-06)
 
 `/results/?sheet=<event id>` (same HTML entry, `resultsMain.js` picks it by query string — so no new

@@ -73,3 +73,14 @@ export function renderCountryFlag(code, { resolveUrl } = {}) {
   children.push(el('span', { className: 'ok-flag-code', text: normal }));
   return el('span', { className: 'ok-flag', attrs: { 'data-country': normal } }, children);
 }
+
+/**
+ * The address of a code's flag picture (a self-hosted SVG), or null when it has none. For a caller that draws the
+ * flag itself (a large tile, a canvas) instead of the 24 by 16 `renderCountryFlag`.
+ * @param {string|null|undefined} code
+ * @returns {Promise<string|null>}
+ */
+export async function loadFlagUrl(code) {
+  const path = flagPath(code);
+  return path ? FLAG_LOADERS[path]() : null;
+}

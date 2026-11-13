@@ -1,0 +1,48 @@
+/* A QR code with its address as text (core/qrBlock.js). The code is dark on a white quiet zone whatever the page's theme,
+   because a scanner needs that contrast. Colours of the text are inherited, so a printed sheet keeps its own ink. */
+.qr-block {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+  break-inside: avoid;
+}
+.qr-block-code svg {
+  display: block;
+  inline-size: 8rem;
+  block-size: auto;
+  padding: var(--space-2);
+  background: var(--clr-white);
+}
+.qr-block-code[hidden] {
+  display: none;
+}
+.qr-block-caption {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+.qr-block-url {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+/* On the splash (a stage screen) the block sits at the bottom centre. */
+.splash-extra-host {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: var(--space-5);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.splash-extra-host .qr-block {
+  justify-items: center;
+  margin-top: 0;
+  text-align: center;
+  color: var(--color-text);
+  pointer-events: auto;
+}
+.splash-extra-host:empty {
+  display: none;
+}

@@ -390,6 +390,65 @@ owner). It is **not scheduled** by the migration and `archive_tick` is not edite
 **Console:** `admin_seduh_id_counts()` adds four integers (`feed_queued`, `feed_processed`, `feed_rejected`, `feed_undone`); the Seduh ID screen shows them. Counts only.
 **A new function that writes `people.global_person_id`** must be added to the "only writers" list in test `062` (the feed's creating step and undo are there).
 
+### Country history: the owner's runbook (T-CTY.1 and T-CTY.2, 20261113120000)
+
+What it is: past results that a competition's organiser supplies (first source: the ASEAN Coffee Federation's BTC 2023
+to 2026), shown on public country pages as "From the organiser's records". The tables `app.historical_results` and
+`app.historical_round_scores` are platform data (`app` schema, no policy, no API grant, owner SQL only), not tenant
+tables, so `040` and `042` do not apply. The only readers are two anonymous doors, `public_country_record(code)` and
+`public_country_index()`: they return LISTED rows only, with `provenance = 'organiser_archive'`, no ids and no source or
+permission text; an unknown country gets an empty record, never an error. Counts, "best finish" and wins and losses are
+derived in the door, never stored. **Live BTC events are not read yet**: `public_country_record` has a marked empty
+branch (`v_live`, provenance `seduh_score`) for them, to be filled once `is_shadow` and the payload country exist.
+Shadow-run results must never appear.
+
+**The permission rule.** Loading is publishing: anyone holding the public anon key can call the doors, with or without
+a page. So no row exists without a `permission_ref` (the database refuses NULL and blank), and the ref says who allowed
+what and when (today: "ASEAN Coffee Federation, via the owner, 2026-11-13: approved for the Board presentation"). That
+permission covers the Board only. A wider listing, or search indexing of the pages, needs a further OK (spec CP4). **The
+real files and the generated SQL are never committed** (the repository is public): keep them outside the repo, or in
+`scripts/country-history/out/`, which is gitignored; never `git add -f`.
+
+**1. Preview** (changes nothing, connects to nothing):
+
+```bash
+node scripts/country-history/import.mjs --template <template.csv> --rounds <rounds.csv>   --permission-ref "<who allowed it, and when>" --supplied-on <YYYY-MM-DD>
+```
+
+It prints errors (they block a load), warnings (for you to decide) and the counts a load would give per year and per
+country. It checks: ISO country names and codes, the stage and round vocabularies, a year from 2000 to this year,
+R1 + R2 = the printed total, the bracket of each year (8 quarter-finalists, 4 semi-finalists, a final of 2 and a
+third-place match of 2, the quarter-finalists the top 8 of the preliminaries), every pairing the same on both sides, the
+stage and placement each team's rounds imply against the template, duplicate rows, and a missing `permission_ref`.
+Warnings: a name that looks like a person's (spec 6.2), two spellings that look like one team (a team is the same team
+only when the owner says so), a tie at the quarter-final cut. The template's `score_note` text is not loaded (the rounds
+are the source of truth). Unit tests use fictional data only (`scripts/country-history/lib.test.js`).
+
+**2. Load.** Add `--write-sql <file>`; it writes only when there are no errors. Read the file, then run it as owner SQL:
+locally (`docker exec -i supabase_db_seduh-score-next psql -U postgres -v ON_ERROR_STOP=1 < file.sql`, after
+`npm run db:reset`) to prove it; for the cloud, **only after the migration is merged and pushed, and only with the owner's
+approval**, by the same owner-approved route as other owner SQL (the Supabase MCP's `execute_sql`). It is one
+statement in one transaction and ends with a count per year: compare it with the preview.
+
+**3. Correct.** Fix the source CSV and run steps 1 and 2 again: the load upserts on `(competition, edition_year,
+country_code, team_name)` (a correction updates the row, never duplicates it), upserts the round scores, and deletes
+round rows of the loaded teams that the file no longer has (only when a rounds file is given: a template-only load never removes round scores). A team is a new team when its name changes. It never touches
+`listed`, so a row you unlisted stays unlisted when its file is loaded again.
+
+**4. Unlist** (a removal is never a delete; the row and its rounds stay, both doors stop showing them at once):
+
+```sql
+update app.historical_results set listed = false where competition = 'btc' and edition_year = 2024;               -- a year
+update app.historical_results set listed = false where competition = 'btc' and edition_year = 2024 and country_code = 'BN';
+update app.historical_results set listed = true  where competition = 'btc' and edition_year = 2024;               -- list again
+```
+
+Corrections and removals asked for by the organiser: acknowledge within 10 days, finish within 30 (CP7).
+**Adding a competition** (the database allows `btc` only, CP5) or a stage is a new migration, on purpose. A new
+`app` table here must be added to `050`'s pinned list (done for these two).
+
+**The pages on top (T-CTY.3 to T-CTY.5, v4.10.0).** `/id/country/` and `/id/country/<iso2>/` read the two doors; they are `noindex` and nothing public links to them. Every entry point is gated by the single constant `COUNTRY_PAGES_PUBLIC` (`src/core/countryPages.js`), false until the owner widens the permission (CP4). To look at the pages with real data: run the import above into the LOCAL stack only, then `npm run dev` and open `/id/country/bn/`. Never commit real data, generated SQL or screenshots of it.
+
 ### Archive pipeline: the tick (T-ARC.1, 20261101100000)
 
 `app.archive_events` (one row per event, bare uuids, no foreign key) and `app.archive_tick(p_enqueue_from)` are database-owned: no API role,

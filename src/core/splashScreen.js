@@ -30,9 +30,12 @@ const APP_NAME = 'Seduh Score';
 // badge, and carries "Powered by Seduh Score" in its own element at the top (outside the badge, which is hidden on a
 // test event, so the credit is never lost). `setBrand(brand)` changes or clears it later; it is never awaited.
 // `onEvent(event)` (optional) is called once the event line is filled, with the event the screen shows.
+// `extra(event)` (optional) returns one more element (or a promise of one, or null) for the foot of the screen once the event is known: the
+// composition file decides what, so this stays format-agnostic. Its host is outside the live region, so it is never
+// announced as a status change.
 export function mountSplashScreen(
   root,
-  { orgId, client = getSupabase(), signal, brand: initialBrand = null, onEvent } = {},
+  { orgId, client = getSupabase(), signal, brand: initialBrand = null, onEvent, extra } = {},
 ) {
   root.innerHTML = '';
   // This route shares its outlet (bareRoot, main.js) with #/live/projector
@@ -131,7 +134,8 @@ export function mountSplashScreen(
 
   // The one list both append and unmount() use, so a node added here can't
   // be forgotten there and leak into the shared root.
-  const ownNodes = [glowDrift, content, badgeHost, testBannerHost];
+  const extraHost = el('div', { className: 'splash-extra-host' });
+  const ownNodes = [glowDrift, content, badgeHost, testBannerHost, extraHost];
   root.append(...ownNodes);
 
   // ---- branding (see the comment above mountSplashScreen) ----
@@ -223,6 +227,13 @@ export function mountSplashScreen(
       latestEvent = event;
       fillEvent(eventLine, subLine, testBannerHost, event);
       paintBadge();
+      // May answer a promise (it can ask a question of its own); after unmount or a navigation it draws nothing.
+      Promise.resolve()
+        .then(() => extra?.(event))
+        .then((node) => {
+          if (node && !unmounted && !signal?.aborted) extraHost.replaceChildren(node);
+        })
+        .catch((err) => console.error('splashScreen: extra failed', err));
       // Told which event this is, so a caller can ask for that event's brand. Never allowed to break the screen.
       try {
         onEvent?.(event);

@@ -2,6 +2,7 @@
 // stays independent of the landing screen so Tour and Community can share the
 // same familiar sticky navigation without importing a whole page.
 import { brandLockup, el, svgEl } from '../core/dom.js';
+import { COUNTRY_HUB_PATH, COUNTRY_PAGES_PUBLIC } from '../core/countryPages.js';
 
 function menuIcon(close = false) {
   const lines = close
@@ -35,12 +36,19 @@ function navLink(text, href, active = false) {
 }
 
 // `liveNames`: the live formats the indicator names (the Tour passes its list; other pages keep the default).
-export function buildPublicHeader({ active, liveNames = ['Cup Taster', 'BTC', 'Throwdown'] }) {
+// `countryPagesPublic` is for tests; production reads the one switch (core/countryPages.js, spec CP4). While it is off
+// the header has no Records link, and nothing public points at the country pages.
+export function buildPublicHeader({
+  active,
+  liveNames = ['Cup Taster', 'BTC', 'Throwdown'],
+  countryPagesPublic = COUNTRY_PAGES_PUBLIC,
+}) {
   const links = [
     navLink('Formats', '/tour/', active === 'tour'),
     navLink('Pricing', '/pricing/', active === 'pricing'),
     navLink('Community Tools', '/community/', active === 'community'),
     navLink('Results', '/results/', active === 'results'),
+    ...(countryPagesPublic ? [navLink('Records', COUNTRY_HUB_PATH, active === 'records')] : []),
     navLink('Org login', '/#'),
   ];
   const mobileLinks = links.map((link) => link.cloneNode(true));
