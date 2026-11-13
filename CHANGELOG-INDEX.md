@@ -225,3 +225,7 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - Landing page cleanup, stage 3 of 3: the live now bar · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)
 - Seduh ID Layer 1 stage C closed out: People screen, live proof, admin counts, affiliations leak fix · 2026-10-31 → [`2026-10-H2-f`](docs/archive/changelog/2026-10-H2-f.md)
 - Seduh ID Layer 1 stage B closed out: identity tables, roster, link; cloud push and release · 2026-10-31 → [`2026-10-H2-f`](docs/archive/changelog/2026-10-H2-f.md)
+- T-ARC.3: the archive tick box, the soft unpublish record and the operator's counts (built dark, not in the cloud) · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- T-ARC.2: the organiser's browser stages the podium snapshot (built dark, not in the cloud) · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- T-ARC.1: the archive pipeline's state and tick (built dark, not in the cloud) · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- Seduh ID Layer 1 closed out: C4 wording drafts and T-ID.Z verification · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)

@@ -234,44 +234,52 @@ function statsRow(record) {
   );
 }
 
+// The best finish, on the gold tint (--color-gold-tint: DESIGN.md "Gold tint"). A card inside the summary section, not a
+// section of its own, so the totals and the highlight read as one compact block.
 function bestFinishCard(best) {
   if (!best) return null;
   return el(
-    'section',
-    { className: 'country-body', attrs: { 'aria-labelledby': 'country-best-title' } },
+    'div',
+    {
+      className: 'country-best',
+      attrs: { role: 'group', 'aria-labelledby': 'country-best-title' },
+    },
     [
-      el('div', { className: 'country-best panel' }, [
-        el('h2', {
-          id: 'country-best-title',
-          className: 'country-best-label',
-          text: 'Best finish',
-        }),
-        el('p', { className: 'country-best-finish', text: finishText(best.stage, best.placement) }),
-        el('p', { className: 'country-best-detail', text: `${best.teamName} · ${best.year}` }),
-      ]),
+      el('h2', { id: 'country-best-title', className: 'country-best-label', text: 'Best finish' }),
+      el('p', { className: 'country-best-finish', text: finishText(best.stage, best.placement) }),
+      el('p', { className: 'country-best-detail', text: `${best.teamName} · ${best.year}` }),
     ],
   );
 }
 
+// A team's row: its name and stage always, its round scores only on request (a native <details>: keyboard and screen-reader
+// accessible, a visible open/closed cue, no script). A team with no published scores is a plain row.
 function teamRow(team) {
   const rounds = roundsText(team.rounds);
-  return el(
-    'li',
-    { className: 'country-team' },
-    [
-      el('span', { className: 'country-team-name', text: team.teamName }),
-      el('span', {
-        className: 'country-team-stage tag',
-        text: finishText(team.stage, team.placement),
-      }),
-      rounds
-        ? el('span', { className: 'country-team-rounds tabular-nums' }, [
-            el('span', { attrs: { 'aria-hidden': 'true' }, text: rounds }),
-            el('span', { className: 'sr-only', text: roundsSpoken(team.rounds) }),
-          ])
-        : null,
-    ].filter(Boolean),
-  );
+  const head = [
+    el('span', { className: 'country-team-name', text: team.teamName }),
+    el('span', {
+      className: 'country-team-stage tag',
+      text: finishText(team.stage, team.placement),
+    }),
+  ];
+  if (!rounds)
+    return el('li', { className: 'country-team' }, [
+      el('div', { className: 'country-team-head' }, head),
+    ]);
+  return el('li', { className: 'country-team' }, [
+    el('details', { className: 'country-team-details' }, [
+      el('summary', { className: 'country-team-head' }, [
+        ...head,
+        el('span', { className: 'country-team-cue', attrs: { 'aria-hidden': 'true' } }),
+        el('span', { className: 'sr-only', text: ' round scores' }),
+      ]),
+      el('p', { className: 'country-team-rounds tabular-nums' }, [
+        el('span', { attrs: { 'aria-hidden': 'true' }, text: rounds }),
+        el('span', { className: 'sr-only', text: roundsSpoken(team.rounds) }),
+      ]),
+    ]),
+  ]);
 }
 
 function championshipSection(champ, index) {
@@ -521,10 +529,11 @@ export async function mountCountryPage(
       root,
       'records',
       countryHero(upper, name, buildShareControl(record, upper, share)),
-      el('section', { className: 'country-body', attrs: { 'aria-label': 'Totals' } }, [
-        statsRow(record),
-      ]),
-      bestFinishCard(record.stats.bestFinish),
+      el(
+        'section',
+        { className: 'country-body country-summary', attrs: { 'aria-label': 'Summary' } },
+        [statsRow(record), bestFinishCard(record.stats.bestFinish)],
+      ),
       el(
         'section',
         { className: 'country-body', attrs: { 'aria-labelledby': 'country-champs-title' } },

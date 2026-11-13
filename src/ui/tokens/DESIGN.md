@@ -71,6 +71,11 @@ Every pairing below is checked against WCAG 2.1 contrast minimums (4.5:1 normal 
 | `--color-accent` as text on `--color-accent-tint` (paper)   | 7.2:1  |
 | `--color-accent-tint-text` on `--color-accent-tint` (stage) | 7.8:1  |
 | `--color-text` on `--color-accent-tint` (stage)             | 13.4:1 |
+| `--color-gold` as text on `--color-gold-tint` (paper)       | 4.6:1  |
+| `--color-text` on `--color-gold-tint` (paper)               | 17.5:1 |
+| `--color-gold` as text on `--color-gold-tint` (stage)       | 6.8:1  |
+| `--color-text` on `--color-gold-tint` (stage)               | 14.4:1 |
+| `--color-text-secondary` on `--color-gold-tint` (stage)     | 5.8:1  |
 
 `--color-text-muted` on stage sits right at the 4.5:1 floor — same tightness Cherry's own
 table had for a couple of pairings. Don't push it any lighter; if a future accent tweak
@@ -176,6 +181,10 @@ under reduce at all (the existing pattern); the global rule covers whatever slip
 table above). A selected or active row uses the tint, not the grey sunken surface. The
 symmetry rule holds: paper tint is light with dark text, stage tint is dark with light text.
 The classes that apply it are `.is-selected` / `.selectable` (see "Component states").
+
+## Gold tint (the highlight card)
+
+`--clr-gold-100` (paper) and `--clr-gold-900` (stage) feed `--color-gold-tint`, the ground of a ceremonial highlight card (the country page's best finish; a champion). `--color-gold` is the label that sits on it and `--color-text` the body, in both modes (rows in the contrast table above). Same symmetry rule as the accent tint: paper tint is light, stage tint is dark. Gold stays fill and label, never a long run of text.
 
 ## `is_test` is violet, and only violet is `is_test` — unchanged
 

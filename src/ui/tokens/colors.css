@@ -61,15 +61,17 @@
 
   /* Gold — secondary, ceremonial accent (podium, champion, finals). Carried
      forward unchanged in role from Cherry; hue nudged only enough to sit
-     comfortably on the graphite ramp instead of the old bottle-green. Still
-     fill-only, never a text color (see DESIGN.md). This is also the one
+     comfortably on the graphite ramp instead of the old bottle-green. Fill, and a short label
+     on its own tint (--color-gold-tint, DESIGN.md "Gold tint"); never a long run of text. This is also the one
      "gold" value anywhere in this codebase — the marketing page's pricing
      tier label uses this same token rather than a second, slightly
      different hand-picked hex (found in the handoff review: the design
      reference's own gold label color, #d8c48f, didn't match this token, and
      the handoff explicitly flagged reconciling to one value). */
+  --clr-gold-100: #faf3de;
   --clr-gold-500: #cfa53b;
   --clr-gold-700: #8a6a1f;
+  --clr-gold-900: #2a2312;
 
   /* Semantic hue ramps — one text-safe shade per surface mode. Danger/
      success/warning are re-hued off the new teal accent so none of them sit
@@ -134,6 +136,8 @@
 
   --color-gold: var(--clr-gold-700);
   --color-gold-contrast: #ffffff;
+  /* The ceremonial highlight's card ground (a best finish, a champion): --color-gold is the label on it, --color-text the body. */
+  --color-gold-tint: var(--clr-gold-100);
 
   --color-danger: var(--clr-danger-500);
   --color-danger-contrast: #ffffff;
@@ -175,6 +179,7 @@
 
   --color-gold: var(--clr-gold-500);
   --color-gold-contrast: var(--clr-petrol-950);
+  --color-gold-tint: var(--clr-gold-900);
 
   --color-danger: var(--clr-danger-300);
   --color-danger-contrast: var(--clr-petrol-950);
