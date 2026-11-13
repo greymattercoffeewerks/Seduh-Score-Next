@@ -31,8 +31,8 @@ select is(
   (select string_agg(c.relname, ', ' order by c.relname)
      from pg_class c
     where c.relnamespace = 'app'::regnamespace and c.relkind in ('r', 'p', 'f')),
-  'admin_audit_log, archive_events, entitlement_caps, entitlement_keys, entitlement_tiers, person_link_blocks, platform_admins, seduh_feed_mode, seduh_feed_queue, seduh_identities, seduh_identity_merges',
-  'the tables in app are exactly the admin console''s two, the three entitlement tables, the three Seduh ID tables (the identities, their merge ledger and the per-person link block), the archive pipeline''s ledger (T-ARC.1) and the two tables of the Seduh ID archive feed (its mode and its review queue, T-ID.D1), so every check below covers each of them (a new table must be added here on purpose)');
+  'admin_audit_log, archive_events, entitlement_caps, entitlement_keys, entitlement_tiers, historical_results, historical_round_scores, person_link_blocks, platform_admins, seduh_feed_mode, seduh_feed_queue, seduh_identities, seduh_identity_merges',
+  'the tables in app are exactly the admin console''s two, the three entitlement tables, the three Seduh ID tables (the identities, their merge ledger and the per-person link block), the archive pipeline''s ledger (T-ARC.1) and the two tables of the Seduh ID archive feed (its mode and its review queue, T-ID.D1) and the two historical-results tables behind the country pages (T-CTY.1), so every check below covers each of them (a new table must be added here on purpose)');
 
 select is(
   (select coalesce(string_agg(c.relname, ', ' order by c.relname), 'none')

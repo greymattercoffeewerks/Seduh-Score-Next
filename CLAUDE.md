@@ -225,7 +225,8 @@ below are enforced by tests that fail CI, not by memory; the "how to add a tenan
   `app.refuse_non_member(...)`, so a non-member gets the standard 42501 whatever ids they guess (test `045`'s catalog
   guard fails otherwise).
 - **Anonymous people reach data only through narrow `SECURITY DEFINER` doors** (`public_org_by_slug`,
-  `public_event_summary`, `get_scoring_record`, `submit_guess`, the Guess the Bean feed), never a table read:
+  `public_event_summary`, `get_scoring_record`, `submit_guess`, the Guess the Bean feed, and the two country-page doors
+  `public_country_record` / `public_country_index`, which read only LISTED rows of `app.historical_results`, T-CTY.1), never a table read:
   `events` is closed to anon, and `live_sessions` shows anon only ACTIVE rows (D6, `038`).
 - **Audience links name the organiser** (`#/live/<slug>/projector|phone|splash`). A slug can never be changed (it is in
   printed and QR links). The old slug-less links are a legacy shim that shows the one organisation named by

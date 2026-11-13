@@ -104,6 +104,8 @@ export default defineConfig({
       'eslint-rules/**/*.test.js',
       // Build-output checks (tools/check-admin-bundle-leak.mjs): the scripts' own tests.
       'tools/*.test.js',
+      // The country-history import (scripts/country-history): fictional fixtures only.
+      'scripts/country-history/*.test.js',
     ],
     setupFiles: ['./src/testSetup.js'],
   },
