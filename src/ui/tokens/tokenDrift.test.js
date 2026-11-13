@@ -419,6 +419,13 @@ const SQUARE_ALLOWLIST = [
   ...SQUARE(LANDING, 'no-corner', ['.petrol-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/pricing.css', 'no-corner', ['.pricing-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/results.css', 'no-corner', ['.results-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/country.css', 'no-corner', ['.country-page'], PAGE_ROOT),
+  ...SQUARE(
+    'src/marketing/country.css',
+    'no-corner',
+    ['.country-tile', '.country-tile-code'],
+    'a flag tile and its code label: a fixed-proportion flag image, not a UI box (like the footer flag glyph)',
+  ),
   ...SQUARE('src/marketing/tour.css', 'no-corner', ['.tour-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/bts.css', 'no-corner', ['.bts'], PAGE_ROOT),
   ...SQUARE('src/marketing/trust.css', 'no-corner', ['.trust-page'], PAGE_ROOT),

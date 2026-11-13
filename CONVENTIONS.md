@@ -447,6 +447,8 @@ Corrections and removals asked for by the organiser: acknowledge within 10 days,
 **Adding a competition** (the database allows `btc` only, CP5) or a stage is a new migration, on purpose. A new
 `app` table here must be added to `050`'s pinned list (done for these two).
 
+**The pages on top (T-CTY.3 to T-CTY.5, v4.10.0).** `/id/country/` and `/id/country/<iso2>/` read the two doors; they are `noindex` and nothing public links to them. Every entry point is gated by the single constant `COUNTRY_PAGES_PUBLIC` (`src/core/countryPages.js`), false until the owner widens the permission (CP4). To look at the pages with real data: run the import above into the LOCAL stack only, then `npm run dev` and open `/id/country/bn/`. Never commit real data, generated SQL or screenshots of it.
+
 ### Archive pipeline: the tick (T-ARC.1, 20261101100000)
 
 `app.archive_events` (one row per event, bare uuids, no foreign key) and `app.archive_tick(p_enqueue_from)` are database-owned: no API role,

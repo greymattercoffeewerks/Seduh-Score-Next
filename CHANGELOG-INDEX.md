@@ -223,3 +223,5 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - Seduh ID phone work closed out: client checker, cloud push, database checked against the shared cases · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)
 - Landing page: proof photo full bleed · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)
 - Landing page cleanup, stage 3 of 3: the live now bar · 2026-10-30 → [`2026-10-H2-e`](docs/archive/changelog/2026-10-H2-e.md)
+- Seduh ID Layer 1 stage C closed out: People screen, live proof, admin counts, affiliations leak fix · 2026-10-31 → [`2026-10-H2-f`](docs/archive/changelog/2026-10-H2-f.md)
+- Seduh ID Layer 1 stage B closed out: identity tables, roster, link; cloud push and release · 2026-10-31 → [`2026-10-H2-f`](docs/archive/changelog/2026-10-H2-f.md)

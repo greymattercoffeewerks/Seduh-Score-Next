@@ -17,6 +17,8 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
 import { formatDate, formatLabel, scoreCell } from './resultsScreen.js';
+import { COUNTRY_PAGES_PUBLIC, countryHubUrl } from '../core/countryPages.js';
+import { buildQrBlock } from '../core/qrBlock.js';
 
 const PUBLISHED_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -149,7 +151,8 @@ function formatPublished(publishedAt) {
   return Number.isNaN(date.getTime()) ? null : PUBLISHED_FORMAT.format(date);
 }
 
-export function buildResultsSheet(event) {
+// `countryPagesPublic` is for tests; production reads the one switch (core/countryPages.js, spec CP4).
+export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PUBLIC } = {}) {
   const content = sheetContentFor(event);
   const title = cleanText(event.eventName) || 'Results';
   const organiser = publishedOrgName(event);
@@ -255,6 +258,10 @@ export function buildResultsSheet(event) {
           `${published ? `Published ${published} · ` : ''}seduhscore.com/results — how results are ` +
           'recorded and corrected is described on that page.',
       }),
+      // BTC only: a QR code to every country's record. Off with the country pages (CP4); nothing is printed then.
+      countryPagesPublic && event.format === 'btc'
+        ? buildQrBlock({ url: countryHubUrl(), caption: 'Every country’s record' })
+        : null,
     ].filter(Boolean),
   );
 }
