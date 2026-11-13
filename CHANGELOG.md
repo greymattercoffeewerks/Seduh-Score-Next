@@ -8,6 +8,32 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Public Tour refresh (`/tour/`, draft v4) · 2026-11-13
+
+**Task:** public `/tour/` refresh, built from the owner-approved draft v4 (2026-11-13). Branch `claude/tour-refresh-a65d91` in its own worktree. **Version 4.9.0, a minor** (visible redesign; `docs/versioning.md`), already set in `package.json` (and `package-lock.json`) before this entry; not re-bumped. No migration, no cloud change, no scoring, ranking or timing code, no format module touched. Uncommitted (the main session commits). **Not final:** see Owed below.
+
+- **What.** The Tour now reads one list of formats. New `src/marketing/tourFormats.js` (pure data and pure functions, no DOM) holds each format and each mode with `status` (`live` / `testing` / `planned`) and a `public` flag. From that list the page builds: the hero picker (auto-fill grid, live then testing then planned, mode chips with "In testing" in gold, a computed count line such as "3 live · 1 mode in testing · 1 planned"); the comparison table (one column per live format); a section per live format, with "Ways to play" only when a format has two or more public modes; the "On the way" pipeline (every public non-live format or mode); and the section numbering. `public: false` hides an entry everywhere, including the header's live-format names.
+- **New on the page.** A BTC illustration board (15 cups split from 3 tokens; 26 to 19 tokens; 31:21 total with "+5 more tokens" and "+2 fastest"). A Throwdown illustration bracket. Both are `aria-hidden` and labelled "Illustration", with fictional names. A "Built for the room" strip. All four Community tools (Timer, Brew Planner, Random Selector, plus Guess the Bean).
+- **Spoons Out!** shown as a Cup Taster mode, "In testing". Its rules are not all locked, so its copy stays at the approved draft's level and adds no rule detail. A test compares the exact approved text.
+- **Changes from the draft, after checking each claim against the code.** The Community lede no longer says "no sign-in" (Guess the Bean needs sign-in). Brew Planner, Timer and Random Selector descriptions follow each tool's own page. Throwdown results are a printable organiser page, not a "public" feature (the public archive is TD.2). The 3rd place match is described as optional. The TEST claim is limited to the audience screens. BTC's draw wording: round 1 is random; round 2 is random or by results.
+- **Header.** `buildPublicHeader` in `publicHeader.js` takes an optional `liveNames`, so the header's live-format names come from the same list.
+- **Tokens.** `tokenDrift.test.js` loses three stale `LEFT_AS_IS` names (`tour-hero-status`, `tour-planned-status`, `tour-status-mark`): the Tour's status marks now use the shared vocabulary.
+- **Why.** The old page hand-wrote each format's picker card, table column and section, so a new mode or a format moving from planned to live meant editing four places and drifting. One list, one place to change, and `public: false` lets a format be hidden without a code change. The BTC and Throwdown illustrations show what the formats look like without a photo.
+- **Tests.** `tourScreen.test.js` rewritten against `mountTourScreen(root, { formats })`, so a test can feed a different list. Covers the count line, the mode chips, the "Ways to play" threshold, the pipeline, `public: false` hiding everywhere, the BTC tie rule, the table, and the approved Spoons Out! text.
+- **Browser.** Checked at 360px, then desktop: no horizontal overflow; the comparison table scrolls inside its own wrapper.
+- **Reviews** (how each ended):
+  - `module-boundary-checker`: 0 Important. Nit, accepted and documented: the BTC numbers are restated locally in `tourFormats.js` with no test tying them to `scoring.js`. Nit fixed: the header comment overstated "one list".
+  - `ui-accessibility-reviewer`: 2 Important, both fixed. The muted text token was under 4.5:1 on the stage surface, so it now uses `text-secondary`. The scrollable table was not keyboard-reachable and had no name, so it now has `tabindex`, `role="region"` and `aria-labelledby`. Nit fixed: the decorative index glyphs were read aloud, so they are `aria-hidden`.
+  - `test-auditor`: 1 Important, fixed. `public: false` did not hide the header's live-format names; `liveNames` fixed it and a test was added. Nits fixed: a BTC tie-rule test added; the Spoons Out! guard compares the exact approved text.
+  - `code-reviewer`: 1 Important, fixed. The Throwdown "public results page" claim was false; it is now a printable organiser page. Nits fixed: the 3rd place match is optional; timer wording.
+  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor` (no scoring or standings code), `offline-sync-auditor` (no sync code).
+- **Owed (the entry is not final until these are done):**
+  - **Re-review.** The Important fixes above (the 2 from `ui-accessibility-reviewer`, and the header and table fixes from `test-auditor`) were checked mechanically and by new tests. They have not been re-run by the reviewers that raised them, nor by a fresh-context checker. Protocol step 6 requires that re-run on the new diff.
+  - **Build.** `npm run build` and the `/tour/` prerender are not verified locally: `libphonenumber-js` is missing from the shared `node_modules`, which is unrelated to this change. CI must confirm the `/tour/` prerender.
+  - **Real-device check** of the 360px layout on the Honor phone and tablet (the primary devices), and of the table's keyboard path.
+
+---
+
 ## Petrol Kaizen P6: token roles and compact density · 2026-11-13
 
 **Task:** Petrol Kaizen P6 ("token roles"), the last Kaizen phase. Branch `claude/petrol-kaizen-p6-f3656c`, cut from `dev` at `0a439a6` (P4 live as 4.6.0, P5 merged); PR into `dev`. No migration, no cloud change, no scoring logic. **No version bump** (the main session sets the release number).

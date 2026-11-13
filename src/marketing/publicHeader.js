@@ -34,7 +34,8 @@ function navLink(text, href, active = false) {
   });
 }
 
-export function buildPublicHeader({ active }) {
+// `liveNames`: the live formats the indicator names (the Tour passes its list; other pages keep the default).
+export function buildPublicHeader({ active, liveNames = ['Cup Taster', 'BTC', 'Throwdown'] }) {
   const links = [
     navLink('Formats', '/tour/', active === 'tour'),
     navLink('Pricing', '/pricing/', active === 'pricing'),
@@ -101,7 +102,7 @@ export function buildPublicHeader({ active }) {
           className: 'public-header-live-dot status-live-dot',
           attrs: { 'aria-hidden': 'true' },
         }),
-        document.createTextNode('Live — Cup Taster, BTC, Throwdown'),
+        document.createTextNode(`Live — ${liveNames.join(', ')}`),
       ]),
       el('span', { className: 'public-header-secondary', text: 'No install · no wifi dependency' }),
       el('div', { className: 'public-header-desktop' }, [

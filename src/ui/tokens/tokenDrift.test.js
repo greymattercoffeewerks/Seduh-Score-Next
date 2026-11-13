@@ -750,9 +750,6 @@ const LEFT_AS_IS = [
     'rs-board-status',
     'rs-status-dot',
     'standings-status',
-    'tour-hero-status',
-    'tour-planned-status',
-    'tour-status-mark',
   ),
   ...LEFT(
     'an interactive control or a filter/toggle chip (a button that does something), not a state label',
