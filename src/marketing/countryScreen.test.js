@@ -40,7 +40,11 @@ describe('the country page', () => {
   it('shows derived stats and the best finish', async () => {
     await mount();
     const stats = [...root.querySelectorAll('.country-stat')].map((n) => n.textContent);
-    expect(stats).toEqual(['2championships', '2teams sent', '1–1matches won–lost']);
+    // won–lost is deliberately absent (the organiser publishes only the final pairings): totals only
+    expect(stats).toEqual(['2championships', '2teams sent', '3entries']);
+    expect(text()).not.toMatch(/won/i);
+    // nor in any attribute (the totals group's accessible name, a title)
+    expect(root.innerHTML).not.toMatch(/won/i);
     expect(root.querySelector('.country-best-finish').textContent).toBe('3rd place');
     expect(root.querySelector('.country-best-detail').textContent).toBe('Alpha Brew · 2025');
   });
@@ -177,6 +181,9 @@ describe('Share to story', () => {
     expect(spec.tile).toBe('BN');
     expect(spec.address).toBe('seduhscore.com/id/country/bn');
     expect(spec.highlight.text).toBe('3rd place');
+    // three numbers, none of them won–lost (only the final pairings are published)
+    expect(spec.stats.map((x) => x.label)).toEqual(['championships', 'teams sent', 'entries']);
+    expect(JSON.stringify(spec)).not.toMatch(/won/i);
     expect(spec.provenance).toContain('organiser’s records');
     expect(render.mock.calls[0][1].qrUrl).toBe('https://www.seduhscore.com/id/country/bn/');
     expect(share.mock.calls[0][0]).toBe(blob);

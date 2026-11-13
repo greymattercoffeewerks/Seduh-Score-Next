@@ -217,14 +217,15 @@ function statBlock(value, label) {
   ]);
 }
 
+// Matches won and lost are NOT shown (owner decision, 2026-11-13): the organiser publishes opponents only for the two
+// final matches, so the door's matches_won/matches_lost badly understate every country. The figure can return once full
+// pairings exist (public_country_record is unchanged and still returns it).
 function statsRow(record) {
   const { stats } = record;
   const blocks = [
     statBlock(stats.championships, stats.championships === 1 ? 'championship' : 'championships'),
     statBlock(stats.teams, stats.teams === 1 ? 'team sent' : 'teams sent'),
-    stats.matchesWon + stats.matchesLost > 0
-      ? statBlock(`${stats.matchesWon}–${stats.matchesLost}`, 'matches won–lost')
-      : statBlock(stats.entries, stats.entries === 1 ? 'entry' : 'entries'),
+    statBlock(stats.entries, stats.entries === 1 ? 'entry' : 'entries'),
   ];
   return el(
     'div',
@@ -357,9 +358,7 @@ function storySpec(record, code) {
         label: stats.championships === 1 ? 'championship' : 'championships',
       },
       { value: String(stats.teams), label: stats.teams === 1 ? 'team sent' : 'teams sent' },
-      stats.matchesWon + stats.matchesLost > 0
-        ? { value: `${stats.matchesWon}–${stats.matchesLost}`, label: 'matches won–lost' }
-        : { value: String(stats.entries), label: stats.entries === 1 ? 'entry' : 'entries' },
+      { value: String(stats.entries), label: stats.entries === 1 ? 'entry' : 'entries' },
     ],
     highlight: stats.bestFinish
       ? {
