@@ -10,7 +10,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## Public site: three small backlog fixes · 2026-11-14
 
-**Task:** three open items from `docs/backlog/public-site.md`, picked as small and unblocked. Branch `claude/marketing-backlog-smalls` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
+**Task:** three open items from `docs/backlog/public-site.md`, picked as small and unblocked. Branch `claude/marketing-backlog-smalls` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Released in 4.10.3** (patch). No database, RPC or payload change.
 
 - **Landing format numbers now pass contrast.** `.petrol-format-index` moves from `--clr-petrol-500` (2.67:1 on the stage canvas) to `--color-text-secondary` (petrol-300 on this stage page): 7.2:1 on the canvas, 7.0:1 on the even-row tint, unchanged under the dimmed rows' grayscale filter. petrol-400 was considered and rejected at 4.46:1. Live rows keep the accent.
 - **`/results/` has a page heading while loading and after a failure.** Both states now render `<h1 id="results-title">Results</h1>` and the section is `aria-labelledby` it, like the success and empty states. `renderMain` replaces the page each time, so the id is never duplicated.
@@ -24,7 +24,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## Public header links: one list for every public page (fix) · 2026-11-14
 
-**Task:** a fix found on the public site, not a numbered build task. Branch `fix/public-header-links` (worktree `C:/Dev/seduh-header-links`, off `origin/dev`). **Uncommitted**: not final until committed and its PR into `dev` lands. **Patch-level, no version bump** (the version is set at release).
+**Task:** a fix found on the public site, not a numbered build task. Branch `fix/public-header-links` (worktree `C:/Dev/seduh-header-links`, off `origin/dev`). Merged as #471. **Released in 4.10.3** (patch).
 
 - **The defect.** The landing nav and the shared public header disagreed. The landing sent Formats and Pricing to same-page anchors (`#formats`, `#pricing`); the shared header (Tour, Pricing, Community, Results, trust pages, country pages) sent them to `/tour/` and `/pricing/`. The shared header also sent Org login and Start free to `/#` (back to the homepage), while the landing sent them to `/app/` and `/app/#/events`. Where a click landed depended on the page it was clicked from.
 - **The fix.** `src/marketing/publicHeader.js` exports `publicNavItems()` (Formats, Pricing, Community Tools, Results, Records when country pages are public, Org login) and `START_FREE_HREF`. `buildPublicHeader()` and the landing's `buildNav()` both build from them. Every public page now goes Formats to `/tour/`, Pricing to `/pricing/`, Org login to `/app/`, Start free to `/app/#/events`. The landing's `#formats` and `#pricing` sections stay as scroll previews.
