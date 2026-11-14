@@ -403,7 +403,7 @@ real links to `/tour/`; Community Tools links to `/community/`; and Cup Taster l
 **Update (2026-09-24, site critique pass):** "Start free" now points to `/app/#/events` and
 "Org login" to `/app/` — there is still no separate sign-up flow (`loginScreen.js` is
 sign-in only; D14's real access control is still a stub), so both land in the console.
-"Formats" and "Pricing" in the landing page's own nav are real same-page anchors (`#formats`, `#pricing`; the shared public header's Pricing link goes to `/pricing/`);
+**Superseded 2026-11-14:** every public header, the landing page's own nav included, now reads one list (`publicNavItems()` in `publicHeader.js`): "Formats" goes to `/tour/`, "Pricing" to `/pricing/`, "Org login" to `/app/`, "Start free" to `/app/#/events` (the shared header used to send the last two to `/#`). The landing page's `#formats` / `#pricing` sections stay as previews, reached by scrolling;
 "Timer" is a real link (`/tools/timer/`). Cup Taster's and BTC's own "Open X →" links (2026-09-23: BTC's row
 went live alongside Cup Taster's, once the app itself routed all 5 of BTC's screens —
 see "BTC goes live" above) both point at the same real authenticated-app destination

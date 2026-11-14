@@ -8,6 +8,37 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Public site: three small backlog fixes · 2026-11-14
+
+**Task:** three open items from `docs/backlog/public-site.md`, picked as small and unblocked. Branch `claude/marketing-backlog-smalls` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Released in 4.10.3** (patch). No database, RPC or payload change.
+
+- **Landing format numbers now pass contrast.** `.petrol-format-index` moves from `--clr-petrol-500` (2.67:1 on the stage canvas) to `--color-text-secondary` (petrol-300 on this stage page): 7.2:1 on the canvas, 7.0:1 on the even-row tint, unchanged under the dimmed rows' grayscale filter. petrol-400 was considered and rejected at 4.46:1. Live rows keep the accent.
+- **`/results/` has a page heading while loading and after a failure.** Both states now render `<h1 id="results-title">Results</h1>` and the section is `aria-labelledby` it, like the success and empty states. `renderMain` replaces the page each time, so the id is never duplicated.
+- **The Privacy page discloses the homepage "live now" line.** A bullet under "Who can see it" in `trustContent.js` and the owner-edited `design/copy/privacy-page-draft.md`: opt-in per event (off by default), shows the event and organiser names and links to the audience view, no competitor data, gone once the event ends or after 12 quiet hours. **Owner sign-off of the wording is owed at PR review.** `PRIVACY_UPDATED` is not changed (owner's call).
+- **Tests.** `resultsScreen.test.js`: one h1 on the error state (labelling its section) and on the loading state (never-answering client, fake timers so the load timeout cannot fire late). `trustScreen.test.js`: the bullet is present and quotes the opt-in label exactly as `homepageListingCard.js` has it. Reverting any fix fails its test. `src/marketing` 308 tests pass; `countryScreen.test.js` "Share to story" fails intermittently with and without this change (pre-existing flake, not touched).
+- **Not done:** no browser run (the reviews reasoned from CSS and code; contrast computed from the token hex values).
+- **Reviews:**
+  - `code-reviewer`: no 🔴. Checked every Privacy claim against the migration and `landingScreen.js`; the first wording ("and the format") was untrue and was already fixed. One nit, fixed: the bar is fetched once per page load, so "goes away" became "no longer appears once".
+  - `ui-accessibility-reviewer`: no 🔴; contrast and heading clean at 360px. The same two Privacy-wording nits (already fixed) and one more, fixed: sync `design/copy/privacy-page-draft.md`. 🟣 The results error state has no retry control; logged in `docs/backlog/public-site.md`.
+  - `test-auditor`: no 🔴. One nit, fixed: the loading-state test left a real 10 s timer armed (now fake timers). 🟣 The `countryScreen` flake, noted above.
+
+## Public header links: one list for every public page (fix) · 2026-11-14
+
+**Task:** a fix found on the public site, not a numbered build task. Branch `fix/public-header-links` (worktree `C:/Dev/seduh-header-links`, off `origin/dev`). Merged as #471. **Released in 4.10.3** (patch).
+
+- **The defect.** The landing nav and the shared public header disagreed. The landing sent Formats and Pricing to same-page anchors (`#formats`, `#pricing`); the shared header (Tour, Pricing, Community, Results, trust pages, country pages) sent them to `/tour/` and `/pricing/`. The shared header also sent Org login and Start free to `/#` (back to the homepage), while the landing sent them to `/app/` and `/app/#/events`. Where a click landed depended on the page it was clicked from.
+- **The fix.** `src/marketing/publicHeader.js` exports `publicNavItems()` (Formats, Pricing, Community Tools, Results, Records when country pages are public, Org login) and `START_FREE_HREF`. `buildPublicHeader()` and the landing's `buildNav()` both build from them. Every public page now goes Formats to `/tour/`, Pricing to `/pricing/`, Org login to `/app/`, Start free to `/app/#/events`. The landing's `#formats` and `#pricing` sections stay as scroll previews.
+- **Why one list.** Two hand-written copies of the nav had already drifted (the `/#` links). Records is now added in one place when country pages go public, and both headers get it.
+- **Files.** `src/marketing/publicHeader.js`, `src/marketing/landingScreen.js`, `src/marketing/publicHeader.test.js`, `src/marketing/CLAUDE.md` (the 2026-09-24 note describing the old split, now marked superseded), `docs/backlog/public-site.md`, `docs/backlog/README.md`, `CHANGELOG.md`.
+- **Tests.** `publicHeader.test.js` pins the desktop and mobile hrefs on every shared-header page and on the landing nav, plus Records' ordering and href. Mutation check: reverting Formats to `#formats` fails the tests. The file passes locally (26 tests in the two files run; the one failure below is in another file).
+- **Browser** (worktree dev server): `/`, `/tour/`, `/pricing/`, `/community/`, `/results/`, `/about/`, `/privacy/`, `/id/country/` all show identical links; mobile matches desktop; `aria-current` is correct on each.
+- **Reviews:**
+  - `code-reviewer`: no 🔴. Three nits, all fixed: the stale note in `src/marketing/CLAUDE.md`; an unneeded `ORG_LOGIN_HREF` export (now module-private); a comment in the wrong place.
+  - `test-auditor`: no 🔴. Two nits: Records' href and mobile links were not asserted (fixed); the landing was never tested with Records on (accepted: the landing reads the same `publicNavItems()`, and the header tests cover it with Records on).
+  - `module-boundary-checker`: clean.
+  - `ui-accessibility-reviewer`: clean. 🟣 Pre-existing: the shared header's mobile toggle has no Escape handler (the landing's does). Logged in `docs/backlog/public-site.md`, not fixed here.
+- **Pre-existing, not caused by this change:** `tools/check-doc-budgets.test.js` (`brokenLinks`) fails on `dev` too on this Windows machine. Its fixture `exists` checks `p.endsWith('/real.md')`, but `brokenLinks` builds its paths with `path.resolve`, which uses backslashes on Windows, so `real.md` is reported as a broken link too. Test-only defect. Open follow-up: normalise separators in the fixture (or compare the basename). No backlog area covers tooling, so it is recorded here until one is chosen.
+
 ## Country pages: a compact pass (owner visual feedback) · 2026-11-14
 
 **Task:** the owner's four points on the live pages (4.10.1), relayed by the planning session. Branch `claude/country-pages-compact`, PR into `dev`. **Version 4.10.2, a patch** (a visual pass, no new capability). No database, RPC or payload change. The reference is the concept's "A country" view, built from Petrol tokens.

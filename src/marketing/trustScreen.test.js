@@ -166,6 +166,17 @@ describe('mountTrustScreen', () => {
     expect(text).toContain('Random Selector share links');
   });
 
+  it('discloses the homepage live listing, quoting the organiser opt-in exactly as the dashboard card words it', () => {
+    const text = mount('privacy').textContent;
+    const optIn = 'List this event on the Seduh Score homepage while it is live';
+    // The quote must stay in step with the real checkbox label, or the Privacy page names a tick-box nobody sees.
+    expect(read('src/core/homepageListingCard.js')).toContain(`'${optIn}'`);
+    expect(text).toContain('“live now” line on our homepage');
+    expect(text).toContain(`“${optIn}”`);
+    expect(text).toContain('It is off unless they do');
+    expect(text).toContain('no competitor names, scores or contact details');
+  });
+
   it('does not put a pricing figure or claim in the Terms', () => {
     const text = mount('terms').textContent;
     expect(text).toContain('not part of these terms');

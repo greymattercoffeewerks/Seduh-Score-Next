@@ -305,6 +305,36 @@ describe('mountResultsScreen', () => {
     expect(root.textContent).toContain('Something went wrong loading results');
   });
 
+  it('gives the error state a page heading that names its section', async () => {
+    const client = fakeClient({ data: null, error: new Error('network error') });
+    await mountResultsScreen(root, { client });
+    const headings = root.querySelectorAll('h1');
+    expect(headings).toHaveLength(1);
+    expect(headings[0].textContent).toBe('Results');
+    expect(headings[0].closest('section').getAttribute('aria-labelledby')).toBe(headings[0].id);
+  });
+
+  it('gives the loading state a page heading before the query answers', () => {
+    const pending = {
+      from() {
+        const builder = { select: () => builder, order: () => builder, then: () => {} };
+        return builder;
+      },
+    };
+    // Fake timers so the load timeout armed by the never-answering client cannot fire after this test ends.
+    vi.useFakeTimers();
+    try {
+      mountResultsScreen(root, { client: pending });
+      const headings = root.querySelectorAll('h1');
+      expect(headings).toHaveLength(1);
+      expect(headings[0].textContent).toBe('Results');
+      expect(root.textContent).toContain('Loading results');
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it('omits cafe entirely for a podium finisher with none on record, rather than showing an empty label', async () => {
     const rows = [
       {
