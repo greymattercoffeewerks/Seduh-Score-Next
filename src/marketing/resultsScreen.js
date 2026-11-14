@@ -343,24 +343,39 @@ function buildEmptyState() {
   );
 }
 
+// Loading and error states still need a page title, so a screen reader landing here hears where it is.
+function buildStateTitle() {
+  return el('h1', { id: 'results-title', text: 'Results' });
+}
+
 function buildLoadingState() {
-  return el('section', { className: 'results-hero page-hero' }, [
-    el('div', {
-      className: 'screen-feedback',
-      text: 'Loading results…',
-      attrs: { role: 'status', 'aria-live': 'polite' },
-    }),
-  ]);
+  return el(
+    'section',
+    { className: 'results-hero page-hero', attrs: { 'aria-labelledby': 'results-title' } },
+    [
+      buildStateTitle(),
+      el('div', {
+        className: 'screen-feedback',
+        text: 'Loading results…',
+        attrs: { role: 'status', 'aria-live': 'polite' },
+      }),
+    ],
+  );
 }
 
 function buildErrorState(message) {
-  return el('section', { className: 'results-hero page-hero' }, [
-    el('div', {
-      className: 'screen-feedback',
-      text: message,
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    }),
-  ]);
+  return el(
+    'section',
+    { className: 'results-hero page-hero', attrs: { 'aria-labelledby': 'results-title' } },
+    [
+      buildStateTitle(),
+      el('div', {
+        className: 'screen-feedback',
+        text: message,
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      }),
+    ],
+  );
 }
 
 function toEventPayload(row) {

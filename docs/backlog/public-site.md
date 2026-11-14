@@ -8,7 +8,7 @@ findings for this area here, not to `ROADMAP.md`.** Section index: [`README.md`]
 
 Stage 1 (format rows on a phone, the proof cards removed) is in the CHANGELOG entry of the same date. Stage 2 (the latest-event card wired to the published-results archive) is built, see its CHANGELOG entry of the same date; stage 3 (a live info bar behind a per-event opt-in) is built too, see the CHANGELOG entry of 2026-10-30 and "Known open items from the landing page cleanup (stage 3, 2026-10-30)" below.
 
-- **Contrast fails on the format numbers.** `.petrol-format-index` uses `--clr-petrol-500` (#4a5a57), 2.67:1 on the stage canvas. That fails 4.5:1 for the number at normal size, and 3:1 for the large-text size on desktop. Pre-existing, found by `ui-accessibility-reviewer`; not changed in stage 1. (landing page cleanup)
+- **Contrast fails on the format numbers.** `.petrol-format-index` uses `--clr-petrol-500` (#4a5a57), 2.67:1 on the stage canvas. That fails 4.5:1 for the number at normal size, and 3:1 for the large-text size on desktop. Pre-existing, found by `ui-accessibility-reviewer`; not changed in stage 1. (landing page cleanup) **CLOSED (2026-11-14):** now `--color-text-secondary` (petrol-300 on the stage page), 7.2:1 on the canvas and 7.0:1 on the even-row tint (`src/marketing/landing.css`; CHANGELOG "Public site: three small backlog fixes").
 - **Screen readers hear the tier last on a phone.** The DOM order is index, main, status, but at 640px and below the tier pill is visually first. Fixing it means reordering the DOM, which also changes the desktop grid. Sequencing only, raised by `ui-accessibility-reviewer`; not changed in stage 1. (landing page cleanup)
 
 ## Known open items from the landing page cleanup (stage 3, 2026-10-30)
@@ -16,7 +16,7 @@ Stage 1 (format rows on a phone, the proof cards removed) is in the CHANGELOG en
 Stage 3 (the live now bar behind a per-event opt-in) is in the CHANGELOG entry of the same date. Its migration `20261029100000_homepage_live_listing.sql` is not yet pushed to the cloud project. Not verified in a real browser: the organiser opt-in card. (landing page cleanup, stage 3)
 
 - **Browser check of the organiser opt-in card, and a Playwright test that mounts both dashboards.** The card (`src/core/homepageListingCard.js`) is on the Cup Taster and BTC event dashboards and has unit tests only: not rendered in a browser, not traversed by keyboard or screen reader. Owed before the task is closed. (landing page cleanup, stage 3)
-- **Privacy page wording for the homepage listing.** The bar publishes an event name and an organiser name for any event the organiser opted in. The Privacy page does not say so yet. (landing page cleanup, stage 3)
+- **Privacy page wording for the homepage listing.** The bar publishes an event name and an organiser name for any event the organiser opted in. The Privacy page does not say so yet. (landing page cleanup, stage 3) **CLOSED (2026-11-14):** a "live now" bullet under "Who can see it" in `src/marketing/trustContent.js` and `design/copy/privacy-page-draft.md`, quoting the opt-in label (pinned by `trustScreen.test.js`); owner sign-off of the wording owed at PR review.
 - **Registration rows on the bar.** Needs the D-G16 "Competitor login and claim, registration page" spec and its own security pass. The typed `kind` column in `public_live_now()` leaves room for a `registration` kind; nothing claims registration today. (landing page cleanup, stage 3)
 - **Admin override and moderation of listed names.** Organiser-controlled names appear on a public homepage, rendered as text and capped, with no moderation. An admin cannot unlist an event or rename it today (the console cannot change events). (landing page cleanup, stage 3; `security-reviewer` nit)
 - **Heartbeat or explicit end signal instead of the 12 hour window.** `public_live_now()` treats a live session as live while `live_sessions.updated_at` is within 12 hours, because there is no heartbeat. A stale but still active session is hidden only after 12 hours, and an organiser touching their own session keeps the bar up. (landing page cleanup, stage 3)
@@ -45,7 +45,8 @@ The `/bts/` page is now a one-chapter reader (CHANGELOG entry of the same date).
 
 The shared `.page-hero` on Tour, Community hub, Pricing and Results (CHANGELOG entry of the same date). One item came out of it.
 
-- **Results loading and error states have no `<h1>`.** While `/results/` is loading or when it fails, the page shows no headline, so a screen reader gets no page title there. Pre-existing: the loading and error markup predates the shared hero. Found by `ui-accessibility-reviewer`; logged, not fixed in that change.
+- **Results loading and error states have no `<h1>`.** While `/results/` is loading or when it fails, the page shows no headline, so a screen reader gets no page title there. Pre-existing: the loading and error markup predates the shared hero. Found by `ui-accessibility-reviewer`; logged, not fixed in that change. **CLOSED (2026-11-14):** both states now carry `<h1 id="results-title">Results</h1>` with the section `aria-labelledby` it (`src/marketing/resultsScreen.js`, two tests in `resultsScreen.test.js`).
+- **The results error state says "please try again" but has no retry control.** The only recovery is a reload, and its `tabindex="-1"` status region is never focused. Pre-existing, found by `ui-accessibility-reviewer` (2026-11-14); logged, not fixed.
 
 ## Known open items from the public header links fix (2026-11-14)
 

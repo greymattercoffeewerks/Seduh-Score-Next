@@ -8,6 +8,20 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Public site: three small backlog fixes · 2026-11-14
+
+**Task:** three open items from `docs/backlog/public-site.md`, picked as small and unblocked. Branch `claude/marketing-backlog-smalls` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
+
+- **Landing format numbers now pass contrast.** `.petrol-format-index` moves from `--clr-petrol-500` (2.67:1 on the stage canvas) to `--color-text-secondary` (petrol-300 on this stage page): 7.2:1 on the canvas, 7.0:1 on the even-row tint, unchanged under the dimmed rows' grayscale filter. petrol-400 was considered and rejected at 4.46:1. Live rows keep the accent.
+- **`/results/` has a page heading while loading and after a failure.** Both states now render `<h1 id="results-title">Results</h1>` and the section is `aria-labelledby` it, like the success and empty states. `renderMain` replaces the page each time, so the id is never duplicated.
+- **The Privacy page discloses the homepage "live now" line.** A bullet under "Who can see it" in `trustContent.js` and the owner-edited `design/copy/privacy-page-draft.md`: opt-in per event (off by default), shows the event and organiser names and links to the audience view, no competitor data, gone once the event ends or after 12 quiet hours. **Owner sign-off of the wording is owed at PR review.** `PRIVACY_UPDATED` is not changed (owner's call).
+- **Tests.** `resultsScreen.test.js`: one h1 on the error state (labelling its section) and on the loading state (never-answering client, fake timers so the load timeout cannot fire late). `trustScreen.test.js`: the bullet is present and quotes the opt-in label exactly as `homepageListingCard.js` has it. Reverting any fix fails its test. `src/marketing` 308 tests pass; `countryScreen.test.js` "Share to story" fails intermittently with and without this change (pre-existing flake, not touched).
+- **Not done:** no browser run (the reviews reasoned from CSS and code; contrast computed from the token hex values).
+- **Reviews:**
+  - `code-reviewer`: no 🔴. Checked every Privacy claim against the migration and `landingScreen.js`; the first wording ("and the format") was untrue and was already fixed. One nit, fixed: the bar is fetched once per page load, so "goes away" became "no longer appears once".
+  - `ui-accessibility-reviewer`: no 🔴; contrast and heading clean at 360px. The same two Privacy-wording nits (already fixed) and one more, fixed: sync `design/copy/privacy-page-draft.md`. 🟣 The results error state has no retry control; logged in `docs/backlog/public-site.md`.
+  - `test-auditor`: no 🔴. One nit, fixed: the loading-state test left a real 10 s timer armed (now fake timers). 🟣 The `countryScreen` flake, noted above.
+
 ## Public header links: one list for every public page (fix) · 2026-11-14
 
 **Task:** a fix found on the public site, not a numbered build task. Branch `fix/public-header-links` (worktree `C:/Dev/seduh-header-links`, off `origin/dev`). **Uncommitted**: not final until committed and its PR into `dev` lands. **Patch-level, no version bump** (the version is set at release).
