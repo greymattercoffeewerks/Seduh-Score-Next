@@ -35,6 +35,24 @@ function navLink(text, href, active = false) {
   });
 }
 
+export const START_FREE_HREF = '/app/#/events';
+const ORG_LOGIN_HREF = '/app/';
+
+// The one list of public-site nav targets. This header and the landing page's own nav both read it, so Formats,
+// Pricing, Org login and Start free go to the same place from every public page (Formats and Pricing are the full
+// /tour/ and /pricing/ pages, never the landing page's #formats/#pricing preview sections). `key` is the `active`
+// value that marks the link as the current page; Org login has none.
+export function publicNavItems({ countryPagesPublic = COUNTRY_PAGES_PUBLIC } = {}) {
+  return [
+    { key: 'tour', text: 'Formats', href: '/tour/' },
+    { key: 'pricing', text: 'Pricing', href: '/pricing/' },
+    { key: 'community', text: 'Community Tools', href: '/community/' },
+    { key: 'results', text: 'Results', href: '/results/' },
+    ...(countryPagesPublic ? [{ key: 'records', text: 'Records', href: COUNTRY_HUB_PATH }] : []),
+    { key: null, text: 'Org login', href: ORG_LOGIN_HREF },
+  ];
+}
+
 // `liveNames`: the live formats the indicator names (the Tour passes its list; other pages keep the default).
 // `countryPagesPublic` is for tests; production reads the one switch (core/countryPages.js, spec CP4). While it is off
 // the header has no Records link, and nothing public points at the country pages.
@@ -43,14 +61,9 @@ export function buildPublicHeader({
   liveNames = ['Cup Taster', 'BTC', 'Throwdown'],
   countryPagesPublic = COUNTRY_PAGES_PUBLIC,
 }) {
-  const links = [
-    navLink('Formats', '/tour/', active === 'tour'),
-    navLink('Pricing', '/pricing/', active === 'pricing'),
-    navLink('Community Tools', '/community/', active === 'community'),
-    navLink('Results', '/results/', active === 'results'),
-    ...(countryPagesPublic ? [navLink('Records', COUNTRY_HUB_PATH, active === 'records')] : []),
-    navLink('Org login', '/#'),
-  ];
+  const links = publicNavItems({ countryPagesPublic }).map((item) =>
+    navLink(item.text, item.href, item.key !== null && active === item.key),
+  );
   const mobileLinks = links.map((link) => link.cloneNode(true));
   const panelId = `public-header-menu-${active}`;
   const panel = el('div', { className: 'public-header-mobile-panel', id: panelId }, [
@@ -59,7 +72,7 @@ export function buildPublicHeader({
       el('a', {
         className: 'public-header-action action action-primary',
         text: 'Start free',
-        attrs: { href: '/#' },
+        attrs: { href: START_FREE_HREF },
       }),
     ]),
   ]);
@@ -118,7 +131,7 @@ export function buildPublicHeader({
         el('a', {
           className: 'public-header-action action action-primary',
           text: 'Start free',
-          attrs: { href: '/#' },
+          attrs: { href: START_FREE_HREF },
         }),
       ]),
       toggle,

@@ -41,6 +41,7 @@ import { revealOnScroll } from '../core/scrollReveal.js';
 import { cleanOrgName } from '../core/orgLabel.js';
 import { TIERS } from './pricingContent.js';
 import { buildPublicFooter } from './publicFooter.js';
+import { publicNavItems, START_FREE_HREF } from './publicHeader.js';
 
 function icon(children, { className = 'petrol-icon' } = {}) {
   const svg = svgEl('svg', {
@@ -106,14 +107,15 @@ function liveDot() {
   return el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } });
 }
 
-// "Org login" goes to the console root, "Start free" to its events list (no
-// separate sign-up flow exists — loginScreen.js is sign-in only, D14's real
-// access control is still a stub). "Formats"/"Pricing" are same-page anchors.
+// The nav's targets come from publicHeader.js's publicNavItems(), the same list every other public page's header
+// uses: "Formats"/"Pricing" go to the full /tour/ and /pricing/ pages (not this page's #formats/#pricing preview
+// sections), "Org login" to the console root, "Start free" to its events list (no separate sign-up flow exists —
+// loginScreen.js is sign-in only, D14's real access control is still a stub).
 function navLink(text, href) {
   return el('a', { className: 'petrol-nav-link', text, attrs: { href } });
 }
 
-function actionLink(text, { primary = false, outline = false, href = '/app/#/events' } = {}) {
+function actionLink(text, { primary = false, outline = false, href = START_FREE_HREF } = {}) {
   const classes = ['petrol-action', 'action'];
   if (primary) classes.push('action-primary', 'btn-bevel');
   if (outline) classes.push('action-outline');
@@ -140,22 +142,16 @@ function buildNav() {
     text: 'No install · no wifi dependency',
   });
 
-  const links = el('div', { className: 'petrol-nav-links' }, [
-    navLink('Formats', '#formats'),
-    navLink('Pricing', '#pricing'),
-    navLink('Community Tools', '/community/'),
-    navLink('Results', '/results/'),
-    navLink('Org login', '/app/'),
-  ]);
+  const links = el(
+    'div',
+    { className: 'petrol-nav-links' },
+    publicNavItems().map((item) => navLink(item.text, item.href)),
+  );
   const desktopCta = actionLink('Start free', { primary: true });
   const desktopGroup = el('div', { className: 'petrol-nav-desktop' }, [links, desktopCta]);
 
   const mobileLinks = el('div', { className: 'petrol-nav-mobile-links' }, [
-    navLink('Formats', '#formats'),
-    navLink('Pricing', '#pricing'),
-    navLink('Community Tools', '/community/'),
-    navLink('Results', '/results/'),
-    navLink('Org login', '/app/'),
+    ...publicNavItems().map((item) => navLink(item.text, item.href)),
     actionLink('Start free', { primary: true }),
   ]);
   const mobilePanel = el('div', { className: 'petrol-nav-mobile-panel', id: 'petrol-nav-panel' }, [
