@@ -525,9 +525,11 @@ a {
 .petrol-format-row-live:hover {
   background: color-mix(in srgb, var(--clr-teal-500) 8%, transparent);
 }
+/* --color-text-secondary is petrol-300 on this stage page: 7.2:1 on the canvas (7.0:1 on the even-row tint).
+   petrol-500 was 2.67:1 and petrol-400 4.46:1, both under the 4.5:1 floor for the phone size. */
 .petrol-format-index {
   font-size: var(--text-xl);
-  color: var(--clr-petrol-500);
+  color: var(--color-text-secondary);
 }
 .petrol-format-row-live .petrol-format-index {
   color: var(--color-accent);
