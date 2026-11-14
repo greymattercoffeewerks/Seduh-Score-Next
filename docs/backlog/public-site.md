@@ -46,3 +46,9 @@ The `/bts/` page is now a one-chapter reader (CHANGELOG entry of the same date).
 The shared `.page-hero` on Tour, Community hub, Pricing and Results (CHANGELOG entry of the same date). One item came out of it.
 
 - **Results loading and error states have no `<h1>`.** While `/results/` is loading or when it fails, the page shows no headline, so a screen reader gets no page title there. Pre-existing: the loading and error markup predates the shared hero. Found by `ui-accessibility-reviewer`; logged, not fixed in that change.
+
+## Known open items from the public header links fix (2026-11-14)
+
+The shared public header and the landing nav now read one list (CHANGELOG entry of the same date). One item came out of it.
+
+- **The shared header's mobile menu has no Escape handler.** The landing page's mobile toggle closes on Escape; the shared header's toggle (Tour, Pricing, Community, Results, trust pages, country pages) does not. Pre-existing: the shared header's toggle predates this change. Found by `ui-accessibility-reviewer`; logged, not fixed in that change.

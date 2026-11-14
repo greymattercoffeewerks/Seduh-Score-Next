@@ -68,6 +68,7 @@ Every section moved out of `ROADMAP.md`'s open-items run, by heading, with the f
 - Known open items from the landing page cleanup (stage 3, 2026-10-30) → [`public-site.md`](public-site.md)
 - Known open items from the landing proof photo (full bleed, 2026-10-30) → [`public-site.md`](public-site.md)
 - Known open items from the Behind the Seduh reader rebuild (v4.0.0, 2026-11-09) → [`public-site.md`](public-site.md)
+- Known open items from the public header links fix (2026-11-14) → [`public-site.md`](public-site.md)
 
 ## Triage, 2026-11-07
 
