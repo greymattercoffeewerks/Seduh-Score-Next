@@ -16,7 +16,7 @@ export const PROFILE_SHELL_PATH = '/id/';
 // (the handle migration) is the authority for what may be CLAIMED; this is only what the EDGE must not shadow. `country`
 // is the one that matters: /id/country (no trailing slash) is not covered by the Worker's run_worker_first exclusion
 // "/id/country/*", so the Worker meets it and has to hand it back to the static assets.
-const NOT_A_HANDLE = new Set(['country']);
+const NOT_A_HANDLE = new Set(['country', 'claim']);
 
 // One path segment of letters, digits, hyphen and underscore, up to 64 long. Deliberately wider than a real handle (3 to
 // 30, lower case): a too-short, too-long or upper-case name must reach the same shell and be answered as "no such Seduh
@@ -32,4 +32,22 @@ export function isProfilePath(pathname) {
 /** Pure. The shell's path for a request path that is a person page, else null (the Vite dev middleware uses this). */
 export function profileShellFor(pathname) {
   return isProfilePath(pathname) ? `${PROFILE_SHELL_PATH}index.html` : null;
+}
+
+/** Where the built claim page lives (id/claim/index.html in the build output). */
+export const CLAIM_SHELL_PATH = '/id/claim/';
+
+// The claim page (T-ID2.B3b): /id/claim and /id/claim/ in any case. `claim` is a reserved handle in the database, so no
+// person page can ever have this path; the person's claim token rides in the URL FRAGMENT, which no request carries, so the
+// Worker never sees it.
+const CLAIM_PATH = /^\/id\/claim\/?$/i;
+
+/** Pure. True for the claim page's own path and nothing else. */
+export function isClaimPath(pathname) {
+  return CLAIM_PATH.test(pathname);
+}
+
+/** Pure. The claim shell's path for a request path that is the claim page, else null (the Vite dev middleware uses this). */
+export function claimShellFor(pathname) {
+  return isClaimPath(pathname) ? `${CLAIM_SHELL_PATH}index.html` : null;
 }

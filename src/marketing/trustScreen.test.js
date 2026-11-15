@@ -237,3 +237,43 @@ describe('public trust pages are wired into the build', () => {
     },
   );
 });
+
+// T-ID2.B3b: claiming a Seduh ID. The Privacy page and Terms change in the same release as the capability they describe.
+describe('claiming a Seduh ID (T-ID2.B3b wording)', () => {
+  it('Privacy says what claiming collects, what becomes public, and is honest that settings are not built yet', () => {
+    const privacy = mount('privacy').textContent;
+    expect(privacy).toContain('Claiming your Seduh ID');
+    expect(privacy).toContain('you are 18 or over');
+    expect(privacy).toContain('it can never be changed');
+    expect(privacy).toContain('We keep the email address only so you can sign in');
+    expect(privacy).toContain(
+      'We do not show it on your page, give it to organisers or other people, or use it for marketing',
+    );
+    expect(privacy).toContain('Claiming makes part of your Seduh ID public');
+    expect(privacy).toContain('Your phone number and email address are never shown');
+    // the settings screen does not exist yet: the page must not promise it as if it did
+    expect(privacy).toContain('settings, which are coming soon');
+    expect(privacy).toContain('email us and we will hide any part of it');
+    expect(privacy).not.toMatch(/you can hide .* in (your )?settings\./i);
+    // closing, and the sign-in, are manual: "on request", never automatic
+    expect(privacy).toContain('Closing your Seduh ID after you have claimed it');
+    expect(privacy).toContain('on request, delete your sign-in');
+    expect(privacy).toContain('Your handle and founding number are never given to anyone else');
+    expect(privacy).toContain(
+      'The email address you sign in with is kept while your Seduh ID is claimed',
+    );
+  });
+  it('Privacy no longer says the Seduh ID record is shown on no page without saying "until it is claimed"', () => {
+    const privacy = mount('privacy').textContent;
+    expect(privacy).toContain('Until it is claimed (see below), its contents are shown on no page');
+    expect(privacy).toContain('The Seduh ID record is private until you claim it');
+  });
+  it('Terms say claiming is optional, 18 or over, for yourself, once, and that a handle is permanent', () => {
+    const terms = mount('terms').textContent;
+    expect(terms).toContain('Claiming a Seduh ID is optional');
+    expect(terms).toContain('only if you are 18 or over and only for yourself');
+    expect(terms).toContain('A claim link is for one person and works once');
+    expect(terms).toContain('A handle is permanent');
+    expect(terms).not.toContain('It is not an account, a profile');
+  });
+});

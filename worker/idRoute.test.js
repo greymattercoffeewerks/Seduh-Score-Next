@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRY_HUB_PATH } from '../src/core/countryPages.js';
-import { isProfilePath, PROFILE_SHELL_PATH, profileShellFor } from './idRoute.js';
+import {
+  CLAIM_SHELL_PATH,
+  claimShellFor,
+  isClaimPath,
+  isProfilePath,
+  PROFILE_SHELL_PATH,
+  profileShellFor,
+} from './idRoute.js';
 
 describe('isProfilePath', () => {
   it('is true for one segment under /id/, with or without a trailing slash, in any case', () => {
@@ -74,5 +81,31 @@ describe('the country pages and the edge agree', () => {
     expect(COUNTRY_HUB_PATH).toBe('/id/country/');
     expect(isProfilePath(COUNTRY_HUB_PATH)).toBe(false);
     expect(isProfilePath(COUNTRY_HUB_PATH.replace(/\/$/, ''))).toBe(false);
+  });
+});
+
+describe('the claim page', () => {
+  it('is its own path, in any case, and is never a person page', () => {
+    for (const yes of ['/id/claim', '/id/claim/', '/id/Claim/', '/id/CLAIM']) {
+      expect(isClaimPath(yes), yes).toBe(true);
+      expect(isProfilePath(yes), yes).toBe(false);
+    }
+    expect(CLAIM_SHELL_PATH).toBe('/id/claim/');
+    expect(claimShellFor('/id/claim/')).toBe('/id/claim/index.html');
+  });
+
+  it('is nothing else: not a longer path, a file, a neighbour or a country page', () => {
+    for (const no of [
+      '/id/claims/',
+      '/id/claim/x',
+      '/id/claim.html',
+      '/id/country/bn/',
+      '/id/',
+      '/id/syafiqah/',
+      '/claim/',
+    ]) {
+      expect(isClaimPath(no), no).toBe(false);
+      expect(claimShellFor(no), no).toBeNull();
+    }
   });
 });

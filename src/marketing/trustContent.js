@@ -12,8 +12,8 @@
 export const CONTACT_EMAIL = 'hello@seduhscore.com';
 const EMAIL = `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL})`;
 
-export const PRIVACY_UPDATED = '3 November 2026';
-export const TERMS_UPDATED = '1 November 2026';
+export const PRIVACY_UPDATED = '16 November 2026';
+export const TERMS_UPDATED = '16 November 2026';
 
 export const TRUST_PAGES = [
   {
@@ -134,8 +134,21 @@ export const TRUST_PAGES = [
           'It is created only when you are named in a published, non-test result, or by us on request. Rehearsal (“test”) events never create one.',
           'When you are named in the podium or the full standings of a result published on a Seduh Score results page, we create a Seduh ID record, after a review by us, for the phone number your organiser entered for you, or use the record that number already has.',
           'It is linked to the entry for you in each organiser’s own registry, so the same phone number is recognised as the same person. If an organiser changes the phone number on your entry, the link is removed and checked again.',
-          'It holds no email address, no results, no scores and no sign-in. Its contents are shown on no page, public or private. An organiser’s own people list shows only whether a person is linked.',
+          'It holds no email address, no results, no scores and no sign-in. Until it is claimed (see below), its contents are shown on no page, public or private. An organiser’s own people list shows only whether a person is linked.',
           'An organiser can also record, for its own people, that someone is staff or affiliated with it.',
+        ],
+      },
+      {
+        type: 'p',
+        text: '**Claiming your Seduh ID** (optional, and only if an organiser who has you in their registry sends you a claim link)',
+      },
+      {
+        type: 'ul',
+        items: [
+          'To claim, you must tell us you are 18 or over, choose a handle (the name in your page address, for example seduhscore.com/id/your-handle; it can never be changed), and give an email address.',
+          'We create a sign-in for that email address and send you a one-time code each time you sign in. We keep the email address only so you can sign in and so we can send that code. We do not show it on your page, give it to organisers or other people, or use it for marketing.',
+          'We also keep a record of when you claimed, when you confirmed you are 18 or over, which organiser’s link you used, and your founding number (the order in which people claimed; it is never given to anyone else).',
+          'A claim link works once, for one person, for 72 hours. Whoever holds the link can claim that Seduh ID, so an organiser sends it only to the person it is for.',
         ],
       },
       { type: 'p', text: '**Organisers and staff**' },
@@ -182,7 +195,8 @@ export const TRUST_PAGES = [
           '**The “live now” line on our homepage** names an event while it is running, but only if its organiser ticked “List this event on the Seduh Score homepage while it is live”. It is off unless they do. The line shows the event’s name and the organiser’s name, and links to the live audience view. It shows no competitor names, scores or contact details. It no longer appears once the event ends, or after 12 hours with no activity.',
           '**If you take part in an event run on the Community plan**, your placing, name and cafe appear in the public archive about 24 hours after the event ends, if you are on the podium. Your phone number, email and set-by-set marks are never published. On the paid plans, the organiser decides whether results are listed. If you want your name removed or changed in a published result, see “Asking us to remove or correct your data” below.',
           '**Can the organiser stop it?** On Community, the organiser can take a published result down. We count how often that happens, and the result is not published again automatically. Publication is a condition of the Community plan (see the [Terms](/terms/)). If you are a competitor and want something removed, you do not need to rely on the organiser: ask us, as below.',
-          '**The Seduh ID record is private.** No organiser, competitor or member of the public can read it, and no page shows what is in it. An organiser sees only its own registry and its own entries; one organiser cannot see another organiser’s records, or what another organiser holds about you.',
+          '**The Seduh ID record is private until you claim it.** No organiser, competitor or member of the public can read it, and no page shows what is in it. An organiser sees only its own registry and its own entries; one organiser cannot see another organiser’s records, or what another organiser holds about you.',
+          '**Claiming makes part of your Seduh ID public.** From the moment you claim it, your name, your country, your Seduh ID number and the results already shown on public results pages are public, at your own page address (the page itself is still being built, so for now it shows little). Your phone number and email address are never shown. You will be able to hide each part, and the page itself, in settings, which are coming soon. Until they arrive, email us and we will hide any part of it, or the whole page.',
           '**Staff and affiliate lists** are kept by an organiser about its own people (for example, that someone is staff). Only members of that organisation can see them. They are not shown to other organisers or to the public.',
           '**Our operator view shows totals only**: how many records exist and in what state. It does not show names, phone numbers or which organiser anyone belongs to. Direct access to the database stays with one person, as described below.',
           '**Set-by-set marks and the full change log** go only to the organiser, who may hand them over on request (the dispute pack). The pack contains names, cafes and bib numbers but not phone numbers or emails.',
@@ -208,6 +222,10 @@ export const TRUST_PAGES = [
         type: 'p',
         text: 'A Seduh ID record has no automatic deletion either. It stays until we delete it.',
       },
+      {
+        type: 'p',
+        text: 'The email address you sign in with is kept while your Seduh ID is claimed. If you ask us to close your Seduh ID, we delete the sign-in on request, which removes the email address from it.',
+      },
       { type: 'h2', text: 'Asking us to remove or correct your data' },
       {
         type: 'p',
@@ -221,6 +239,7 @@ export const TRUST_PAGES = [
           '**Past results keep the name as it was entered for that event.** Each event entry stores the name and cafe as they were on the day, so a result is not rewritten later. If you want a name removed or changed from a past published result, tell us and we will handle it with the organiser.',
           `**Asking us to take your name off a published result, or to stop publishing yours.** Email our Data Protection Officer, Grey Matter Coffee Werks (D29, Bangunan Lim Eng Ming, Kg Kiulap, Brunei Darussalam), at ${EMAIL}. We will acknowledge your request within 10 days. We will tell you what we can do and what the consequence is: for example, we can remove your name from the public archive entry, but we cannot change the organiser’s own record of the event. If you took part in a Community event, tell us which one.`,
           '**Asking us to stop using your Seduh ID record.** Email us and we will acknowledge your request within 10 days and complete it within 30 days of receiving it. We will mark your record as opted out, remove the name from it and stop using it. **We keep the phone number on that record** so that we can recognise it and honour your request; without it, a later result with the same number would create the record again. It is used for nothing else. Organisers’ own registries are separate: ask the organiser, or us, to remove those as above.',
+          '**Closing your Seduh ID after you have claimed it.** Email us and we will acknowledge your request within 10 days and complete it within 30 days of receiving it. We will hide your page and stop showing your results on it, and, on request, delete your sign-in. Your handle and founding number are never given to anyone else, so the handle stays retired. Organisers’ own registries and published results pages are separate: ask the organiser, or us, to change those.',
           'Guess the Bean sessions can be ended or reset by whoever created them, which permanently removes the guesses and contact details. If you took part and want yours removed, email us.',
         ],
       },
@@ -284,7 +303,9 @@ export const TRUST_PAGES = [
       {
         type: 'ul',
         items: [
-          'Seduh ID is a private record that recognises the same person, by phone number, across the organisers who use Seduh Score. It is not an account, a profile or a ranking, and it does not change any result.',
+          'Seduh ID is a record that recognises the same person, by phone number, across the organisers who use Seduh Score. Until you claim it, it is private. It is not a ranking, and it does not change any result.',
+          'Claiming a Seduh ID is optional. It gives you a public page and a sign-in (see the [Privacy page](/privacy/) for what is shown). You may claim a Seduh ID only if you are 18 or over and only for yourself. A claim link is for one person and works once, so do not share it.',
+          'A handle is permanent. It cannot be changed or transferred, and a handle that has been used is never given to anyone else.',
           'A match is made on the phone number only. It does not prove who a person is, and a number that has been reused or shared can match the wrong person. If a record is wrong, email us and we will correct it.',
           'You can ask us to stop using your record at any time (see the [Privacy page](/privacy/)).',
         ],
