@@ -20,6 +20,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
   - `schema-guardian`: clean (rollback run in a transaction, ACL, indexes).
   - `code-reviewer`: one finding, fixed: an impossible payload date (`2026-02-30`) passed the shape check and made the door raise; the date now comes from the event row.
   - `security-reviewer`: no leak found. Two design findings, put to the owner: the Throwdown read widening (fixed: the read was removed, re-reviewed below) and the organiser-asserted link (accepted as built; "This isn't mine" report in Phase C). Two nits fixed: a podium row no longer shows a round or time, and a score needs both figures.
+  - `security-reviewer`, second pass on the knockout removal only: clean (no `td_*` read left, shape unchanged).
   - `test-auditor`: no 🔴; 29 of 37 mutants killed. Gaps closed by new fixtures: closed, merged, opted-out and identity-hidden opponents, pool and level matches, wrong-cafe and duplicate-row results, a partial score. Not covered: the `limit 10` on opponents, a missing settings row, the payload-versus-live event name.
   - Guard `062` (functions touching the identity tables) needed the new door added: done.
 - **Guards:** `037` door list, `080` (door shape, privileges, no table access, every visibility setting, results from two organisations, unpublished/test/duplicate/renamed/BTC exclusions, knockout counts and opponent naming, identical empty shapes, JSON text scan for phone, email and uuid). `041` needs no entry (the door takes text).
