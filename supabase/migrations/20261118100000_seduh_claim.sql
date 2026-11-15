@@ -35,8 +35,14 @@
 --
 -- DECISION C, who may issue. Any member of the person's organisation (owner or organiser), like link_person_identity. The
 -- organisation is DERIVED from the person (app.org_id_for_person_internal), then app.refuse_non_member runs: a missing person,
--- another organisation's person and a NULL id are ONE 42501. With no signed-in caller (owner SQL, the service role) the gate is
+-- another organisation's person and a NULL id are ONE 42501. With no signed-in caller (owner SQL; the function is not granted to the service role) the gate is
 -- skipped as everywhere else, issued_by is NULL and the audit actor is NULL.
+--
+-- DECISION C2, links are IDENTITY-wide. An identity may be linked to a person in two organisations (T-ID.B3), and the index allows
+-- one open link per identity, so issue and revoke act on the identity's open link whichever organisation issued it: a member of
+-- organisation B can replace or cancel a link organisation A issued for the same person (audited under B). Nothing is disclosed
+-- (status shows only that a link is open and until when). Accepted: the alternative, per-organisation links, would let two
+-- organisations hold live links to one identity.
 --
 -- DECISION D, rate limits. (1) Nobody can email a code without a VALID, OPEN token (seduh_claim_begin checks it first, so the
 -- function cannot be used to mail strangers or to burn the project's hourly email limit). (2) Each link can have at most 6
@@ -155,7 +161,8 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  -- once consumed a reservation is history: it cannot be changed or removed (the number is retired with the account)
+  -- once consumed a reservation is history: it cannot be changed or removed by row (an owner TRUNCATE of seduh_accounts that cascades
+  -- here is the same honest owner-only limit as A2)
   if old.consumed_at is not null then
     raise exception 'seduh_reserved_numbers: a consumed reservation cannot be changed or removed' using errcode = '23001';
   end if;
@@ -413,6 +420,7 @@ declare
   v_acct      uuid;
   v_number    integer;
   v_reserved  boolean := false;
+  v_constraint text;
 begin
   if v_uid is null then
     raise exception 'Sign in first.' using errcode = '42501';
@@ -487,12 +495,16 @@ begin
       returning id, founding_number into v_acct, v_number;
     end if;
   exception when unique_violation then
-    -- a concurrent claim won the handle (or the login): say which, from the constraint
+    -- a concurrent claim won the handle (or the login): say which, from the constraint. Anything else (the founding number,
+    -- when the owner inserted number 1 by hand while a reservation was open) is NOT a handle problem: re-raise it unchanged.
+    get stacked diagnostics v_constraint = constraint_name;
     perform set_config('app.seduh_owner_assignment', '', true);
-    if exists (select 1 from app.seduh_accounts a where a.user_id = v_uid) then
+    if v_constraint = 'seduh_accounts_user_id_key' then
       raise exception 'This login already has a Seduh ID.' using errcode = 'P0001', hint = 'account_exists';
+    elsif v_constraint = 'seduh_accounts_handle_key' then
+      raise exception 'That handle is taken.' using errcode = 'P0001', hint = 'handle_taken';
     end if;
-    raise exception 'That handle is taken.' using errcode = 'P0001', hint = 'handle_taken';
+    raise;
   end;
 
   if v_reserved then

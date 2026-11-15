@@ -97,7 +97,7 @@ export async function handleRequest(request, deps) {
 
   const token = typeof body.token === 'string' ? body.token : '';
   if (!TOKEN_RE.test(token)) {
-    return json(404, { error: REFUSALS.invalid[1], hint: 'link_invalid' });
+    return json(404, { error: REFUSALS.invalid[1], hint: REFUSALS.invalid[2] });
   }
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
@@ -106,7 +106,8 @@ export async function handleRequest(request, deps) {
 
   const admin = deps.createAdminClient();
 
-  // (1) the token, with the database
+  // (1) the token, with the database. A successful begin counts one of the link's six emailed codes BEFORE the login and the
+  // email are attempted, so a failed send still uses a slot (conservative on purpose); an organiser's re-issue resets the count.
   let begin;
   try {
     const { data, error } = await admin.rpc('seduh_claim_begin', { p_token: token });
