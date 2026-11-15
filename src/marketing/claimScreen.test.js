@@ -98,7 +98,7 @@ describe('step 2, email', () => {
     type(m.root, '#claim-email', 'nope');
     await submit(m.root);
     expect(text(m.root, '#claim-email-status')).toBe(describeClaimHint('bad_email'));
-    expect(m.root.querySelector('#claim-email-status').getAttribute('role')).toBe('alert');
+    expect(m.root.querySelector('#claim-email-status').getAttribute('role')).toBe('status');
     expect(m.root.querySelector('#claim-email').getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(m.root.querySelector('#claim-email'));
     expect(m.api.sendCode).not.toHaveBeenCalled();

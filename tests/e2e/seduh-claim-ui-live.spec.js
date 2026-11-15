@@ -183,7 +183,7 @@ test.describe('claiming a Seduh ID through the screens (real app, real local Sup
     await expect(row).toContainText('Send it only to that person');
     const claimUrl = await urlBox.inputValue();
     expect(claimUrl).toMatch(/\/id\/claim\/#[A-Za-z0-9_-]{43}$/);
-    await expect(row.getByRole('link', { name: /Share .* on WhatsApp/ })).toHaveAttribute(
+    await expect(row.getByRole('link', { name: /Share on WhatsApp/ })).toHaveAttribute(
       'href',
       /^https:\/\/wa\.me\/\?text=/,
     );
@@ -203,14 +203,14 @@ test.describe('claiming a Seduh ID through the screens (real app, real local Sup
     await row.getByRole('button', { name: /^Done/ }).click();
     await expect(page.locator(`#people-claim-url-${person}`)).toHaveCount(0);
     await expect(row).toContainText('Claim link sent. It works until');
-    await expect(row.getByRole('button', { name: /Cancel the claim link/ })).toBeVisible();
+    await expect(row.getByRole('button', { name: /Cancel link/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.outerHTML)).not.toContain(
       claimUrl.split('#')[1],
     );
     await shot(page, 'people-3-link-open');
 
     // revoke, then issue again: the first link is dead (the database proves it; the claim page shows it below)
-    await row.getByRole('button', { name: /Cancel the claim link/ }).click();
+    await row.getByRole('button', { name: /Cancel link/ }).click();
     await expect(row).toContainText('Not claimed yet.');
     await shot(page, 'people-4-revoked');
     await row.getByRole('button', { name: `Send claim link, ${name}` }).click();

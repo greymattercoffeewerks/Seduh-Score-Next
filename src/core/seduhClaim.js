@@ -4,7 +4,8 @@
 //
 // The raw token is a bearer secret. `issueClaimLink` returns it ONCE; nothing here stores, logs or caches it, and the link
 // puts it after the `#`, which a browser never sends to a server (so it is in no access log). A caller shows it once and lets
-// it go.
+// it go. (The WhatsApp share is the one exception, by the organiser's own choice: wa.me receives the message text, so the
+// People screen says so beside the button.)
 import { getSupabase } from './supabaseClient.js';
 
 // seduh_claim_statuses refuses more than 500 ids in one call.
@@ -106,3 +107,6 @@ export function describeClaimError(error) {
 export const CLAIM_LINK_WARNING =
   'This link works once, for one person, and lets whoever holds it claim this Seduh ID. ' +
   'Send it only to that person. It stops working after 72 hours, and it cannot be shown again.';
+
+export const WHATSAPP_NOTE =
+  'Sharing on WhatsApp opens WhatsApp with the link in the message, so WhatsApp receives it. Copying it does not.';

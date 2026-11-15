@@ -19,8 +19,6 @@ function hintFromFailure(error) {
   if (error?.timedOut) return 'timeout';
   if (error?.offline) return 'offline';
   if (typeof error?.hint === 'string' && HINT.test(error.hint)) return error.hint;
-  if (error?.status === 404 || error?.status === 401 || error?.status === 403)
-    return 'server_error';
   return 'server_error';
 }
 

@@ -27,6 +27,7 @@ import { buildQrBlock } from './qrBlock.js';
 import {
   CLAIM_LINK_WARNING,
   CLAIM_STATE_TEXT,
+  WHATSAPP_NOTE,
   claimLinkUrl,
   describeClaimError,
   fetchClaimStatuses,
@@ -119,7 +120,8 @@ export async function mountPeopleScreen(
       );
       claimCheckFailed = false;
     } catch {
-      claimStatuses = null;
+      // keep what was last known: a link that was just made must stay on screen (it cannot be shown again), and a row's
+      // state is better slightly old than gone. With nothing known yet there are simply no claim controls.
       claimCheckFailed = true;
     }
   }
@@ -335,13 +337,13 @@ export async function mountPeopleScreen(
         claimButton(person, {
           id: 'people-claim-issue',
           text: 'Make a new link',
-          label: 'Make a new claim link (the old one stops working)',
+          label: 'Make a new link',
           onClick: () => handleIssue(person),
         }),
         claimButton(person, {
           id: 'people-claim-revoke',
           text: 'Cancel link',
-          label: 'Cancel the claim link',
+          label: 'Cancel link',
           onClick: () => handleRevoke(person),
         }),
       );
@@ -369,6 +371,7 @@ export async function mountPeopleScreen(
         readonly: '',
         value: issued.url,
         'aria-label': `Claim link for ${person.displayName}`,
+        'aria-describedby': `people-claim-warning-${person.id}`,
         autocomplete: 'off',
         spellcheck: 'false',
       },
@@ -395,7 +398,7 @@ export async function mountPeopleScreen(
         href: whatsappShareUrl(issued.url, firstNameOf(person.displayName)),
         target: '_blank',
         rel: 'noopener noreferrer',
-        'aria-label': `Share the claim link for ${person.displayName} on WhatsApp`,
+        'aria-label': `Share on WhatsApp, ${person.displayName} (opens in a new tab)`,
       },
     });
     const done = el('button', {
@@ -419,10 +422,15 @@ export async function mountPeopleScreen(
         attrs: { role: 'group', 'aria-label': `Claim link for ${person.displayName}` },
       },
       [
-        el('p', { className: 'people-claim-warning', text: CLAIM_LINK_WARNING }),
+        el('p', {
+          className: 'people-claim-warning',
+          id: `people-claim-warning-${person.id}`,
+          text: CLAIM_LINK_WARNING,
+        }),
         input,
         el('div', { className: 'people-actions' }, [copy, whatsapp, done]),
         copyStatus,
+        el('p', { className: 'stage-meta', text: WHATSAPP_NOTE }),
         buildQrBlock({
           url: issued.url,
           caption: 'Or let them scan this code',
@@ -598,6 +606,7 @@ export async function mountPeopleScreen(
       await revokeClaimLink(person.id, client);
       if (issued?.personId === person.id) issued = null;
       pendingSuccess = `The claim link for ${person.displayName} was cancelled.`;
+      focusAfterRender = `#people-claim-issue-${person.id}`;
     } catch (err) {
       pendingError = describeClaimError(err);
     }

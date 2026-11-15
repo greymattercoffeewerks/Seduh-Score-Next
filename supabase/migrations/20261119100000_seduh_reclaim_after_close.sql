@@ -15,8 +15,9 @@
 --     Each function body is B3a's, with only those predicates changed.
 --
 -- ROLLBACK restores the plain unique constraint and FAILS, on purpose, if any identity has been re-claimed (two rows): do not roll
--- back a populated database. The four functions need no rollback: with the plain unique back they behave as B3a's did (a duplicate
--- identity insert raises unique_violation, which claim_seduh_id re-raises unchanged).
+-- back a populated database. The four functions are not restored by it: with the plain unique back they still work, but a database
+-- that holds a CLOSED account keeps this migration's behaviour (a new link can be issued, and the claim then fails with a raw
+-- unique violation instead of B3a's up-front hint). To go back fully, re-run the four function bodies of 20261118100000.
 -- rollback:
 --   drop index if exists app.seduh_accounts_identity_open_key;
 --   alter table app.seduh_accounts add constraint seduh_accounts_identity_id_key unique (identity_id);

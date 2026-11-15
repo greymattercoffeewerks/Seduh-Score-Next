@@ -216,6 +216,26 @@ describe('sending a link', () => {
   });
 });
 
+describe('a failed status refresh', () => {
+  it('does not hide a link that was just made', async () => {
+    const client = fakeClient({ states: { a: { state: 'can_issue' } } });
+    const original = client.rpc.getMockImplementation();
+    let statusCalls = 0;
+    client.rpc.mockImplementation(async (name, args) => {
+      if (name === 'seduh_claim_statuses' && (statusCalls += 1) > 1) {
+        return { data: null, error: { code: 'XX' } };
+      }
+      return original(name, args);
+    });
+    const root = await mount(client);
+    row(root, 'a').querySelector('#people-claim-issue-a').click();
+    await flush();
+    expect(root.querySelector('#people-claim-url-a').value).toContain('/id/claim/#');
+    expect(root.querySelector('#people-claim-copy-a')).not.toBeNull();
+    expect(root.querySelector('.qr-block')).not.toBeNull();
+  });
+});
+
 describe('cancelling a link', () => {
   it('revokes, says so, and goes back to "Not claimed yet" with the send button', async () => {
     const client = fakeClient({

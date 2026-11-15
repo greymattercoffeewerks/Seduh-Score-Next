@@ -74,14 +74,13 @@ export function mountClaimScreen(root, { api, token, checkDelayMs = HANDLE_CHECK
   function statusLine(id) {
     return el('p', {
       className: 'claim-feedback',
-      attrs: { id, role: 'status', 'aria-live': 'polite' },
+      attrs: { id, role: 'status' },
     });
   }
   function setStatus(node, message, tone) {
     node.textContent = message ?? '';
     if (tone) node.dataset.tone = tone;
     else delete node.dataset.tone;
-    node.setAttribute('role', tone === 'error' ? 'alert' : 'status');
   }
 
   function field({ id, label, input, hint, status }) {
@@ -256,6 +255,7 @@ export function mountClaimScreen(root, { api, token, checkDelayMs = HANDLE_CHECK
       }
       busy([submit], false);
       setStatus(status, describeClaimHint(result.hint), 'error');
+      input.focus();
     });
     show([hero({ title: 'Your email address' }), body([form])], '#claim-title');
     if (message) setStatus(main.querySelector('#claim-email-status'), message, 'error');
@@ -329,6 +329,7 @@ export function mountClaimScreen(root, { api, token, checkDelayMs = HANDLE_CHECK
       busy([confirm, again, change], false);
       if (result.ok) setStatus(status, 'A new code is on its way. Use the newest one.');
       else setStatus(status, describeClaimHint(result.hint), 'error');
+      again.focus();
     });
     change.addEventListener('click', () => showEmail());
     show([hero({ title: 'Enter your code' }), body([form])]);
@@ -458,6 +459,8 @@ export function mountClaimScreen(root, { api, token, checkDelayMs = HANDLE_CHECK
       if (result.hint?.startsWith('handle_')) {
         handleInput.setAttribute('aria-invalid', 'true');
         handleInput.focus();
+      } else {
+        submit.focus();
       }
     });
 

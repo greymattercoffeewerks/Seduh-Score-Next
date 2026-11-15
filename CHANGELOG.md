@@ -8,6 +8,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, B3b: the claim screens and re-claim after undo · 2026-11-16
+
+**Task:** T-ID2.B3b. Branch `claude/l2-b3b-claim-screens-97485f`, PR into `dev`. Migration `20261119100000_seduh_reclaim_after_close.sql`, pgTAP `083` (new). **Minor bump to 4.11.0** (a person can now claim a Seduh ID). **Not pushed to the cloud; B3a's migration, this one and the `seduh-claim` function are all still to push and deploy by hand.**
+
+- **People screen:** one claim line per person from `seduh_claim_statuses` (`no_identity` says why, `can_issue` has "Send claim link", `link_open` says until when with "Make a new link" and "Cancel link", `claimed` links `@handle`). The link is shown once with its warning, Copy, a WhatsApp share (with a note that WhatsApp receives it) and a QR; it is in memory only until Done. A failed status read leaves the roster working and never hides a link that was just made. `src/core/seduhClaim.js`.
+- **Claim page** `/id/claim/#<token>` (`src/marketing/claim*.js`): welcome, email (`seduh-claim`), code (`verifyOtp`), handle with live availability + 18+ + claim, "Seduh ID #NNNN". Token in the fragment, taken out of the address bar at once, memory only; its own Supabase client and storage key (never touches an organiser's or the admin session; signed out locally after the claim); every refusal hint in plain words; noindex. The Worker serves it with `noindex`, `no-referrer`, `no-store`; `claim` is kept out of the person-page shell. The welcome step cannot show the person's name (only `seduh-claim` returns it, after the email), so it appears from the code step.
+- **Migration:** only an OPEN account blocks a claim (partial unique `seduh_accounts_identity_open_key`); close then re-claim gives a NEW handle and number; handle and number never reissued; closed rows never deleted; the four B3a functions changed only in that predicate. Undo runbook updated in `CONVENTIONS.md`.
+- **Privacy and Terms** updated in the same release (claiming, what becomes public, closing and sign-in deletion "on request", settings "coming soon").
+- **Tests:** unit (every step and every hint), pgTAP `083` (full suite passes after `db:reset`), Playwright `seduh-claim-ui-live.spec.js` (whole flow at 360px with Mailpit, session isolation, re-claim, routing) and a claim case in `id-routing.spec.js` against the real Worker. Also archived the three oldest CHANGELOG entries (budget).
+- **Reviews:** `code-reviewer`: one 🔴 fixed (a failed status refresh hid a just-issued link; now the last known statuses are kept, with a test), nits fixed (dead branch, focus after cancel, comment). `schema-guardian`: no 🔴; nit fixed (rollback header now says the functions are not restored). `security-reviewer`: no 🔴; nits: WhatsApp sends the link to wa.me (kept, as asked; the screen now says so), Privacy now names Resend and the claim date; a CSP/frame-ancestors header for the claim page is not added (low value). `module-boundary-checker`: no 🔴; nits left: the tab-storage shim is duplicated from the admin client, the handle regex appears three times (a shared core primitive is a follow-up). `ui-accessibility-reviewer`: one 🔴 (label in name on three People buttons) fixed and covered by the e2e names, no independent re-check was run; nits fixed (focus after an error, warning tied to the link field, live-region roles). `test-auditor`: see the PR.
+
+---
+
 ## Seduh ID Layer 2, B3a: the claim backend (issue, redeem, #0001) · 2026-11-18
 
 **Task:** T-ID2.B3a. Branch `claude/l2-b3a-claim-backend-58f386`, PR into `dev`. Migration `20261118100000_seduh_claim.sql`, Edge Function `seduh-claim` (new), pgTAP `082` (new) and `037`, `041`, `050`, `062`, `079` updated. **Patch bump to 4.10.7** (groundwork nobody can use yet: no screen reaches it until B3b). **Not pushed to the cloud; the function is not deployed.**

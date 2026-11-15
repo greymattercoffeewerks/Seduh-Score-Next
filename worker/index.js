@@ -2,7 +2,8 @@
 // a fixed list (see worker/idRoute.js). wrangler.jsonc sends only /id/* (minus /id/country and /id/country/*) here with
 // `run_worker_first`; every other request on the site is served by the static assets without running this code.
 //
-// The claim page (/id/claim/) is served from its own built page. A person page request gets the shell (the built id/index.html) with status 200. Anything else that reaches the Worker
+// The claim page (/id/claim/) is served from its own built page.
+// A person page request gets the shell (the built id/index.html) with status 200. Anything else that reaches the Worker
 // (for example /id/favicon.ico, or /id/country with no slash) is handed to the assets unchanged, so it behaves exactly as
 // it did before this Worker existed (a redirect or Cloudflare's own 404).
 import { CLAIM_SHELL_PATH, isClaimPath, isProfilePath, PROFILE_SHELL_PATH } from './idRoute.js';
