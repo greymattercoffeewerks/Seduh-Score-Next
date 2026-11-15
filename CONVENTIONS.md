@@ -671,6 +671,71 @@ locally 2026-10-15 with `wrangler dev` (headers present on `/admin/` and `/admin
 the first production response is checked at rollout (spec section 8). The Vite dev server does not apply this
 file, so a dev-server run shows no such headers.
 
+### Seduh ID profile door: `public.public_seduh_profile(p_handle text)` (T-ID2.B1, 20261116100000)
+
+The ONE anonymous door behind `/id/<handle>/` (Phase C1 builds the page on it). `SECURITY DEFINER`, `STABLE`, empty
+`search_path`, executable by `anon` and `authenticated` only; takes text, no uuid (so the `041` matrix has no entry; `037`
+pins the door list; `080` pins the door). Derives everything on read, stores nothing, never errors on input.
+
+**The invariant: a profile never shows a result the public results pages do not already show.** A result must come from a
+`public_results` row (the published payload: full `standings` if the organiser published them, else the `podium`) of a
+non-test event. A payload row belongs to a person only by the archive feed's rule (exactly one roster entry of the event has that
+name and cafe, with a person linked to the identity; the same name and cafe twice in one publication names nobody). Anything
+else is left off, so a renamed roster entry hides a result rather than guessing. **Known trust limit (owner decision, security review 2026-11-16):** the identity link is organiser-asserted (matched by phone, never verified) and the payload is not validated, so an organisation member could publish a result naming a roster entry whose phone is a stranger's; it would then show on that stranger's claimed page labelled `seduh_score`. This is the archive feed's existing rule made public. Mitigations today: the owner's queue review, and a person can hide recorded results. Softening the label or requiring the person's confirmation is a later decision. `is_shadow` does not exist: the marked seam in the
+migration (two places) is where `and e.is_shadow is not true` goes the day it does.
+
+```jsonc
+{
+  "has_profile": true, // false for EVERY non-page (unknown, closed, merged, opted out, reserved, malformed, NULL)
+  "handle": "syafiqah", // null when has_profile is false; the input is never echoed
+  "identity": {
+    // all null when vis_identity is hidden, and for a non-page
+    "display_name": "…",
+    "country_code": "BN", // ISO alpha-2 or null
+    "founding_number": 7,
+    "claimed_on": "2026-11-20",
+    "photo_url": null, // SEAM Phase C2
+  },
+  "recorded_results": [
+    // newest first; [] when hidden, 'organisers', or none
+    {
+      "event_name": "…",
+      "format": "cup_taster",
+      "organiser_name": "…",
+      "event_date": "2026-03-01" /* or null */,
+      "placing": 4 /* int or null */,
+      "stage": "Final" /* or null */,
+      "correct": 3,
+      "total": 6,
+      "time_secs": 133, // each int or null
+      "provenance": "seduh_score",
+    },
+  ],
+  "knockout_record": {
+    // zeros and [] when hidden or none: a hidden part looks like an empty one
+    "won": 2,
+    "lost": 2,
+    "opponents": [{ "handle": "…", "display_name": "…", "matches": 2, "won": 1, "lost": 1 }], // seam: filled later, top 10, named only if that
+  }, // opponent is claimed, open, active and public for BOTH vis_identity and vis_knockout_record
+  "organiser_records": [], // SEAM Phase C: team links (spec 14.5)
+  "self_reported": [], // SEAM Phase C
+  "judging_roles": [], // SEAM: needs a judge-to-identity link (BTC judges have no people row)
+  "cafe_affiliations": [], // SEAM: two-sided acceptance is not modelled
+}
+```
+
+- **Visibility.** `public` shows a part; `organisers` is hidden for an anonymous caller (an organiser-scoped view is later); `hidden`
+  is hidden. A hidden part keeps its keys, with zeros, `[]` or nulls. `has_profile` stays true for a claimed, open, attested,
+  `active` account whose every part is hidden, so a printed QR code never breaks.
+- **Formats.** Cup Taster returns results (from the payload). Throwdown returns **nothing**, and `knockout_record` is always
+  `{won: 0, lost: 0, opponents: []}`: Throwdown has no results payload and its match outcomes are not on `/results/`, so
+  (owner decision 2026-11-16) the door does not read `td_matches`. It gets filled from a Throwdown results payload only, once one is
+  published; the migration header lists what that reader must enforce (payload only; decided two-competitor matches; an opponent
+  named only if claimed, open, active and public for both identity and knockout record). BTC returns nothing: teams and judges
+  have no person link. Never added to the door: phone, email, any uuid, `org_id`, the token hash, a hidden part's setting, or an
+  unpublished, test or shadow result (`080` scans the JSON text for all of these).
+- **To change the contract**, add a migration (`create or replace`), keep the keys (C1 reads them), and extend `080`.
+
 ### Seduh ID #0001: assign the owner's founding number (T-ID2.A2, 20261115120000)
 
 What it is: claimed Seduh IDs live in `app.seduh_accounts` (owner-only, like the identities; also `app.seduh_profile_settings`

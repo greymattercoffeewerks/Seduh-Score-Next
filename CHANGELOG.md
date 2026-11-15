@@ -8,6 +8,23 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, B1: the profile door `public_seduh_profile(handle)` · 2026-11-16
+
+**Task:** T-ID2.B1. Branch `claude/l2-b1-profile-door-b6d900`, PR into `dev`. Migration `20261116100000_public_seduh_profile.sql`, pgTAP `080`. **Patch bump to 4.10.5** (database only: a door with no page behind it yet). **Not pushed to the cloud.**
+
+- **What:** the one anonymous door behind `/id/<handle>/` (`SECURITY DEFINER`, `STABLE`, empty `search_path`, `anon` and `authenticated`). It applies a claimed person's privacy settings in SQL and returns one stable JSON object (contract in `CONVENTIONS.md`, "Seduh ID profile door"). Every figure is derived on read; nothing is stored. A claimed page with every part hidden still returns its handle (`has_profile` true); every other input (unknown, closed, merged, opted out, reserved, malformed, NULL) gets one identical empty shape.
+- **Core invariant:** a profile never shows a result `/results/` does not show. Results are read from the published `public_results` payload (standings, else podium) of non-test events, matched to a person by the archive feed's name-and-cafe rule; nothing is read from the live scoring tables for a result.
+- **Formats:** Cup Taster returns results. Throwdown returns nothing: `knockout_record` is always zeros until Throwdown publishes a results payload (owner decision, see below). BTC returns nothing (teams and judges have no person link). Seams, empty and named for their phase: `photo_url` (C2), `organiser_records` and `self_reported` (C), `judging_roles` (needs a judge link), `cafe_affiliations` (two-sided acceptance), `is_shadow` (flag does not exist yet).
+- **Owner decisions flagged:** (1) Throwdown knockout: the first draft read the live match tables for a published event (beyond `/results/`, gate easy to satisfy); **decided: nothing until Throwdown publishes a payload**, so the read was removed and `080` pins zeros; (2) the identity link is organiser-asserted, so a published result can land on a stranger's page labelled `seduh_score`: **accepted as built**; the Phase C answer is a "This isn't mine" report on the profile (the planning session adds it to the spec; no code here). Both in `CONVENTIONS.md`.
+- **Reviews:**
+  - `schema-guardian`: clean (rollback run in a transaction, ACL, indexes).
+  - `code-reviewer`: one finding, fixed: an impossible payload date (`2026-02-30`) passed the shape check and made the door raise; the date now comes from the event row.
+  - `security-reviewer`: no leak found. Two design findings, put to the owner: the Throwdown read widening (fixed: the read was removed, re-reviewed below) and the organiser-asserted link (accepted as built; "This isn't mine" report in Phase C). Two nits fixed: a podium row no longer shows a round or time, and a score needs both figures.
+  - `security-reviewer`, second pass on the knockout removal only: clean (no `td_*` read left, shape unchanged).
+  - `test-auditor`: no 🔴; 29 of 37 mutants killed. Gaps closed by new fixtures: closed, merged, opted-out and identity-hidden opponents, pool and level matches, wrong-cafe and duplicate-row results, a partial score. Not covered: the `limit 10` on opponents, a missing settings row, the payload-versus-live event name.
+  - Guard `062` (functions touching the identity tables) needed the new door added: done.
+- **Guards:** `037` door list, `080` (door shape, privileges, no table access, every visibility setting, results from two organisations, unpublished/test/duplicate/renamed/BTC exclusions, knockout counts and opponent naming, identical empty shapes, JSON text scan for phone, email and uuid). `041` needs no entry (the door takes text).
+
 ## CI: pin the Supabase CLI to 2.115.0 · 2026-11-15
 
 **Why:** the two CI jobs that start a local Supabase stack ("Playwright e2e" and "Migrations from scratch + pgTAP")
