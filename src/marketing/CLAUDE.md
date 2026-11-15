@@ -383,6 +383,22 @@ behave exactly as before.
   `wrangler deploy`), that the deployed edge honours the negative `run_worker_first` patterns exactly as `wrangler dev`
   does, and that `/id/country/...` still serves from assets on the live host.
 
+## The claim page: `/id/claim/#<token>` (2026-11-16, Layer 2 task B3b)
+
+Where a person claims a Seduh ID with the link an organiser sent (`id/claim/index.html`, `claimMain.js`, `claimScreen.js`,
+`claimFlow.js` pure words and checks, `claimApi.js` the calls, `claimClient.js` its own Supabase client, `claim.css`). The
+contract and the rules (token in the fragment and out of the address bar, a separate competitor session, every refusal a
+hint in words, 360px first) are in `CONVENTIONS.md`, "Seduh ID claim". Three things specific to this folder:
+
+- **`claim` is not a handle.** The database reserves it, `worker/idRoute.js` keeps it out of the person-page shell, and the Worker
+  answers `/id/claim` and `/id/claim/` from the built page (noindex, no referrer, no cache). `/id/country/...` and
+  `/id/<handle>/` are untouched; `tests/e2e/seduh-claim-ui-live.spec.js` and `id-routing.spec.js` pin both.
+- **Form controls are styled here.** `components.css` is not linked on public pages, so `claim.css` styles its inputs from
+  tokens (44px, `--field-edge`), and the hero, `panel` and `action` classes are the shared primitives.
+- **Privacy and Terms were changed in the same release** (`trustContent.js`, "Claiming your Seduh ID", "Closing your Seduh ID
+  after you have claimed it", Terms "Seduh ID"). The Privacy page says the settings screen is "coming soon" and closing and
+  deleting the sign-in are "on request": change those sentences when the Phase C settings and close arrive, not before.
+
 ## Results sheet (2026-10-06)
 
 `/results/?sheet=<event id>` (same HTML entry, `resultsMain.js` picks it by query string — so no new

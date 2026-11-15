@@ -232,3 +232,6 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - T-ARC.4: the organiser's archive panel, tick box and take-down; stub-tolerant results pages (built dark, no migration) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.4b: `my_entitlements` reports `enforced` for the archive key (built dark, not in the cloud) · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.6: archive pipeline wording drafted for the owner (docs only, nothing published) · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- Privacy and Terms: archive and Seduh ID Layer 1a wording published to `dev` (owner-approved, live only on release to `main`) · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- T-ARC.5: live proof of the archive pipeline, API level and browser level (tests only, nothing in the cloud) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- T-ARC.4c: `archive_event_status`, a member-readable archive status; the panel stops guessing (built dark, not in the cloud) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)

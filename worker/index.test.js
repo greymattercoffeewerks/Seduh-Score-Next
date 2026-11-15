@@ -15,6 +15,7 @@ function fakeAssets() {
         seen.push({ url: new URL(request.url).pathname, method: request.method });
         const { pathname } = new URL(request.url);
         if (pathname === '/id/') return new Response('<title>shell</title>', { status: 200 });
+        if (pathname === '/id/claim/') return new Response('<title>claim</title>', { status: 200 });
         return new Response('from assets', { status: 404 });
       },
     },
@@ -35,6 +36,32 @@ describe('worker', () => {
       expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
       expect(env.seen.map((s) => s.url)).toEqual(['/id/']);
     }
+  });
+
+  it('serves the claim page from its own built page, never as a person page, with no index, no cache and no referrer', async () => {
+    for (const path of ['/id/claim/', '/id/claim', '/id/Claim/']) {
+      const env = fakeAssets();
+      const res = await call(env, path);
+      expect(res.status, path).toBe(200);
+      expect(await res.text(), path).toBe('<title>claim</title>');
+      expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+      expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(env.seen.map((s) => s.url)).toEqual(['/id/claim/']);
+    }
+  });
+
+  it('hands a write method on the claim page back untouched, and still serves a person page and the country pages as before', async () => {
+    const env = fakeAssets();
+    const res = await call(env, '/id/claim/', { method: 'POST', body: 'x' });
+    // handed to the assets untouched (the Worker adds nothing of its own to a write)
+    expect(env.seen).toEqual([{ url: '/id/claim/', method: 'POST' }]);
+    expect(res.headers.get('referrer-policy')).toBeNull();
+    const person = await call(fakeAssets(), '/id/syafiqah/');
+    expect(await person.text()).toBe('<title>shell</title>');
+    const country = fakeAssets();
+    expect((await call(country, '/id/country/bn/')).status).toBe(404);
+    expect(country.seen.map((s) => s.url)).toEqual(['/id/country/bn/']);
   });
 
   it('makes no outbound call and gives every handle the same status and body', async () => {
