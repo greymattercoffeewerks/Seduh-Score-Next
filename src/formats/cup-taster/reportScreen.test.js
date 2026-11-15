@@ -1388,15 +1388,15 @@ describe('mountReportScreen', () => {
       const lookupCount = (client) =>
         client.calls.filter(([kind, table]) => kind === 'in' && table === 'event_entries').length;
 
-      it('offers podium only by default, and lists both levels as real radio choices, each described by its own explanation', async () => {
+      it('offers the full standings by default, and lists both levels as real radio choices, each described by its own explanation', async () => {
         const root = document.createElement('div');
         const client = fakeClient({ tables: completeEventTables() });
         await mountReportScreen(root, { eventId: 'ev1', client });
         await flush();
 
         expect(radios(root).map((input) => input.value)).toEqual(['podium', 'full']);
-        expect(radioFor(root, 'podium').checked).toBe(true);
-        expect(radioFor(root, 'full').checked).toBe(false);
+        expect(radioFor(root, 'full').checked).toBe(true);
+        expect(radioFor(root, 'podium').checked).toBe(false);
         // A radio's name is its label alone; the explanation is its description, so a screen reader
         // announces "Full standings" and then what that means.
         const label = root.querySelector('label[for="public-results-scope-full"]');
@@ -1408,9 +1408,13 @@ describe('mountReportScreen', () => {
         expect(root.querySelector('.report-public-results-scope legend').textContent).toBe(
           'What to publish',
         );
-        const note = root.querySelector(
-          `#${root.querySelector('.report-public-results-scope').getAttribute('aria-describedby')}`,
-        );
+        const note = root.querySelector('#public-results-scope-note');
+        expect(
+          root
+            .querySelector('.report-public-results-scope')
+            .getAttribute('aria-describedby')
+            .split(' '),
+        ).toContain('public-results-scope-note');
         expect(note.textContent).toContain(
           'Phone numbers, emails and set-by-set marks are never published.',
         );
@@ -1418,13 +1422,53 @@ describe('mountReportScreen', () => {
         expect(note.textContent).toContain('reload it first');
       });
 
-      it('publishes the podium only when the default is left alone — no standings go out, and only the podium’s three are looked up', async () => {
+      it('says in one line, next to the choice, that every competitor’s name, café and result will be public — and the line follows the choice', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({ tables: completeEventTables() });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        const fieldset = root.querySelector('.report-public-results-scope');
+        const notice = root.querySelector('#public-results-scope-notice');
+        expect(notice.textContent).toBe('Every competitor’s name, café and result will be public.');
+        // read with the group's other description, so it is announced when focus reaches the choice
+        expect(fieldset.getAttribute('aria-describedby').split(' ')).toContain(notice.id);
+        expect(fieldset.contains(notice)).toBe(true);
+
+        choose(root, 'podium');
+        expect(notice.textContent).toBe(
+          'Only the podium’s names, cafés and results (the top three, plus any tie for third) will be public.',
+        );
+        choose(root, 'full');
+        expect(notice.textContent).toBe('Every competitor’s name, café and result will be public.');
+      });
+
+      it('publishes the full standings when the default is left alone — every competitor’s placing goes out, café looked up in chunks', async () => {
         const root = document.createElement('div');
         const client = largeField(120, {
           rpc: { publish_event_results: { data: null, error: null } },
         });
         await mountReportScreen(root, { eventId: 'ev1', client });
         await flush();
+        const before = lookupCount(client);
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        expect(publishedPayload(client).standings).toHaveLength(120);
+        expect(lookupsMadeAfter(client, before).map((ids) => ids.length)).toEqual([50, 50, 20]);
+        expect(root.textContent).toContain('(full standings)');
+        expect(root.textContent).toContain('It shows the full standings.');
+      });
+
+      it('still publishes the podium only when the organiser chooses it — no standings go out, and only the podium’s three are looked up', async () => {
+        const root = document.createElement('div');
+        const client = largeField(120, {
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        choose(root, 'podium');
         const before = lookupCount(client);
 
         root.querySelector('.report-public-results button').click();
@@ -1641,7 +1685,7 @@ describe('mountReportScreen', () => {
         expect(note().textContent).toBe('');
       });
 
-      it('starts again from the podium after Unpublish, so a retraction never leaves the wider choice pre-selected', async () => {
+      it('starts again from the default (full standings, with its notice) after Unpublish, whatever was chosen before', async () => {
         const root = document.createElement('div');
         const client = fakeClient({
           tables: completeEventTables({
@@ -1659,9 +1703,13 @@ describe('mountReportScreen', () => {
         await flush();
         expect(radioFor(root, 'full').checked).toBe(true);
 
+        choose(root, 'podium');
         buttonLabelled(root, 'Unpublish').click();
         await flush();
-        expect(radioFor(root, 'podium').checked).toBe(true);
+        expect(radioFor(root, 'full').checked).toBe(true);
+        expect(root.querySelector('#public-results-scope-notice').textContent).toBe(
+          'Every competitor’s name, café and result will be public.',
+        );
 
         root.querySelector('.report-public-results button').click();
         await flush();
@@ -1669,7 +1717,7 @@ describe('mountReportScreen', () => {
           publishedPayload({
             calls: client.calls.filter(([, name]) => name === 'publish_event_results'),
           }),
-        ).not.toHaveProperty('standings');
+        ).toHaveProperty('standings');
       });
 
       it('links to the public results sheet for this event, with its id encoded, only once it is published', async () => {
@@ -1736,7 +1784,8 @@ describe('mountReportScreen', () => {
         await mountReportScreen(root, { eventId: 'ev1', client });
         await flush();
 
-        root.querySelector('.report-public-results button').click(); // podium, the default
+        choose(root, 'podium');
+        root.querySelector('.report-public-results button').click();
         await flush();
         choose(root, 'full'); // a change event that slips in while the request is pending
         release();
@@ -1756,7 +1805,8 @@ describe('mountReportScreen', () => {
         let release;
         client.holdLookups(new Promise((resolve) => (release = resolve)));
 
-        root.querySelector('.report-public-results button').click(); // podium, the default
+        choose(root, 'podium');
+        root.querySelector('.report-public-results button').click();
         await flush(); // the lookup is now in flight
         choose(root, 'full');
         release();

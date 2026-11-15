@@ -40,6 +40,7 @@ import { isPersonLinked, requestPersonLink, LINKED_LABEL } from '../../core/iden
 import { el, labeledField } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { findPublishedResultForEvent } from '../../core/publicResults.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import {
   listEntries,
@@ -114,6 +115,41 @@ export function validateDraft(draft) {
   const phone = parsePhone(draft.phone, { country: draft.phoneCountry ?? DEFAULT_COUNTRY });
   return phone.ok ? null : phoneErrorMessage(phone.code);
 }
+
+// Seduh ID matches a published result to a person by the entry's trimmed name and café (the public
+// payload carries no ids), so editing either of them on an entry that is NAMED in the published results
+// drops that result from the person's profile until the results are published again (T-ID2.B2, fix 3).
+// Pure. `payload` is a public_results payload (or null); true when its podium or full standings name this
+// entry exactly. A stub, an unpublished event and an entry the published results do not name are all false.
+export function isEntryInPublishedResults(payload, entry) {
+  if (!payload || !entry) return false;
+  const name = (entry.display_name ?? '').trim();
+  const cafe = (entry.cafe ?? '').trim();
+  return ['podium', 'standings'].some(
+    (key) =>
+      Array.isArray(payload[key]) &&
+      payload[key].some(
+        (row) =>
+          row &&
+          typeof row.name === 'string' &&
+          row.name.trim() === name &&
+          (typeof row.cafe === 'string' ? row.cafe.trim() : '') === cafe,
+      ),
+  );
+}
+
+// True when the draft's name or café differs from the entry's saved one (compared trimmed, as the match is).
+export function matchFieldsChanged(draft, entry) {
+  return (
+    (draft.displayName ?? '').trim() !== (entry.display_name ?? '').trim() ||
+    (draft.cafe ?? '').trim() !== (entry.cafe ?? '').trim()
+  );
+}
+
+export const PUBLISHED_EDIT_ADVISORY =
+  'This person is in the published results. Their Seduh ID record is matched by name and café, so if you change either, republish the results afterwards.';
+export const PUBLISHED_EDIT_WARNING =
+  'Changing the name or café drops this person’s result from their Seduh ID profile until you republish the results.';
 
 // The edit form's starting values: this event's entry for name/cafe/bib, the person's profile for
 // phone/email (an entry with no profile — a walk-up — has none).
@@ -328,6 +364,21 @@ export function renderRegistrationForm(draft, { disabled }) {
 // onEditInput) so a re-render rebuilds the form from what has been typed. A problem with a field
 // is tied to it (aria-invalid + aria-describedby) and shown in an always-present role=alert line.
 function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onCancelEdit }) {
+  // Only for an entry the published results name. Always shown; it turns into the stronger warning, and is announced
+  // as a status, the moment the name or café is changed.
+  const publishedNote = editing.inPublishedResults
+    ? el('p', {
+        id: `roster-edit-published-${entry.id}`,
+        className: 'stage-meta roster-edit-published',
+        text: matchFieldsChanged(editing.draft, entry)
+          ? PUBLISHED_EDIT_WARNING
+          : PUBLISHED_EDIT_ADVISORY,
+        attrs: { role: 'status' },
+      })
+    : null;
+  if (publishedNote && matchFieldsChanged(editing.draft, entry)) {
+    publishedNote.dataset.tone = 'warning';
+  }
   const errorId = `roster-edit-error-${entry.id}`;
   const inputs = {};
 
@@ -387,6 +438,14 @@ function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onC
   for (const [key, input] of Object.entries(inputs)) {
     input.addEventListener('input', () => {
       onEditInput(key, input.value);
+      if (publishedNote) {
+        const changed = matchFieldsChanged(editing.draft, entry);
+        const next = changed ? PUBLISHED_EDIT_WARNING : PUBLISHED_EDIT_ADVISORY;
+        // only when the sentence changes, so a screen reader does not repeat it on every keystroke
+        if (publishedNote.textContent !== next) publishedNote.textContent = next;
+        if (changed) publishedNote.dataset.tone = 'warning';
+        else delete publishedNote.dataset.tone;
+      }
       errorLine.textContent = '';
       for (const other of Object.values(inputs)) {
         other.removeAttribute('aria-invalid');
@@ -420,6 +479,7 @@ function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onC
     },
     [
       el('p', { className: 'roster-edit-title', text: `Editing ${entry.display_name}` }),
+      publishedNote,
       errorLine,
       el(
         'div',
@@ -523,12 +583,28 @@ export function renderRosterEntries(
             meta ? el('span', { className: 'stage-meta', text: meta }) : null,
             contact ? el('span', { className: 'stage-meta roster-contact', text: contact }) : null,
             savedNote?.entryId === entry.id
-              ? el('p', {
-                  id: `roster-saved-${entry.id}`,
-                  className: 'roster-saved',
-                  text: savedNote.message,
-                  attrs: { role: 'status', tabindex: '-1' },
-                })
+              ? el(
+                  'p',
+                  {
+                    id: `roster-saved-${entry.id}`,
+                    className: 'roster-saved',
+                    attrs: { role: 'status', tabindex: '-1' },
+                  },
+                  [
+                    document.createTextNode(savedNote.message),
+                    savedNote.republishHref
+                      ? el('span', {}, [
+                          document.createTextNode(' '),
+                          el('a', {
+                            className: 'roster-republish-link',
+                            text: 'Republish the results',
+                            attrs: { href: savedNote.republishHref },
+                          }),
+                          document.createTextNode('.'),
+                        ])
+                      : null,
+                  ].filter(Boolean),
+                )
               : null,
             entry.withdrawn
               ? el('span', { className: 'roster-withdrawn-tag', text: 'Withdrawn' })
@@ -562,6 +638,8 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
   let entries = [];
   // person id -> people row: where each entry's phone and email live.
   let people = new Map();
+  // The event's published results payload, or null (not published, a stub, or the read failed: the warning then stays quiet).
+  let publishedPayload = null;
   // The one open edit form: { entryId, linked, draft, error, errorField }.
   let editing = null;
   // The confirmation for the last saved edit, shown in that cupper's own row (and focused there) so
@@ -589,10 +667,19 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     } catch {
       // The roster still renders, without contact lines; Edit explains why it cannot open.
     }
+    // Only to warn before an edit that would drop a result off a Seduh ID profile; failing to read it must not
+    // take the roster down, so it is best effort.
+    let published = null;
+    try {
+      published = (await findPublishedResultForEvent(eventId, client))?.payload ?? null;
+    } catch {
+      // no warning rather than no roster
+    }
     return {
       event: ev,
       entries: evEntries,
       people: new Map(profiles.map((profile) => [profile.id, profile])),
+      published,
     };
   }
 
@@ -600,6 +687,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     event = persisted.event;
     entries = persisted.entries;
     people = persisted.people;
+    publishedPayload = persisted.published ?? null;
   }
 
   function setFeedback(feedback, message, tone) {
@@ -866,6 +954,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       entryId: entry.id,
       linked: Boolean(entry.person_id),
       storedPhone: person?.phone ?? null,
+      inPublishedResults: isEntryInPublishedResults(publishedPayload, entry),
       draft: initialEditDraft(entry, person),
       error: null,
       errorField: null,
@@ -915,6 +1004,9 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     });
     const detailsChanged =
       fields.displayName !== entry.display_name || fields.cafe !== (entry.cafe ?? null);
+    // The result stays on their Seduh ID profile only while the published name and café still match the roster's.
+    const dropsPublishedResult =
+      editing.inPublishedResults && matchFieldsChanged(editing.draft, entry);
 
     try {
       await updateRosterEntry(event.org_id, entry.id, fields, client);
@@ -935,10 +1027,13 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
         savedNote = {
           entryId: entry.id,
           message: `${fields.displayName} updated.${
-            detailsChanged
-              ? ' The audience view and any published results show the new details the next time they are published.'
-              : ''
+            dropsPublishedResult
+              ? ' Their published result still shows the old name or café, so it is not on their Seduh ID profile until you republish.'
+              : detailsChanged
+                ? ' The audience view and any published results show the new details the next time they are published.'
+                : ''
           }`,
+          republishHref: dropsPublishedResult ? `#/events/${event.id}/report` : null,
         };
         focusAfterRender = `#roster-saved-${entry.id}`;
       } else {
