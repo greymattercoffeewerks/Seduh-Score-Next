@@ -135,6 +135,7 @@ test('an organiser issues a link; a person with no login redeems it by emailed c
   expect(done.body.handle).toBe(handle);
   expect(done.body.founding_number).toBeGreaterThanOrEqual(2);
   expect(done.body.profile_path).toBe(`/id/${handle}/`);
+  expect(Object.keys(done.body).sort()).toEqual(['founding_number', 'handle', 'profile_path']);
 
   // the door the public page reads
   const profile = await rpc('public_seduh_profile', { p_handle: handle }, { token: null });
@@ -202,6 +203,7 @@ test('a token that cannot be redeemed sends NO email and creates NO login', asyn
     token: serviceRoleKey(),
     headers: { apikey: serviceRoleKey() },
   });
+  expect(users.status).toBe(200);
   expect((users.body.users ?? []).some((u) => u.email === email)).toBe(false);
   // the revoked token cannot be claimed either, by a valid session
   const lone = await createLoneUser('claim-revoked');
@@ -210,7 +212,7 @@ test('a token that cannot be redeemed sends NO email and creates NO login', asyn
   expect(r.body.hint).toBe('link_revoked');
 });
 
-test('a bad email is refused before the database is asked; each link has a cap on emailed codes', async () => {
+test('a bad email is a 400; each link has a cap on emailed codes', async () => {
   const person = await addPerson(w.tokenA, w.a.orgId, `Capped ${tag}`);
   const token = await issue(w.tokenA, person);
   const bad = await seduhClaim({ token, email: 'not-an-email' });
@@ -265,16 +267,7 @@ test('the organiser doors refuse another organisation, a stranger and anon; the 
   );
   expect(unknown.status).toBe(403);
   expect(unknown.body.code).toBe('42501');
-  // the claim tables are not reachable by name
-  for (const table of [
-    'seduh_claim_links',
-    'seduh_accounts',
-    'seduh_claim_audit',
-    'seduh_reserved_numbers',
-  ]) {
-    const r = await rest(`${table}?select=*`, { token: w.tokenA });
-    expect([401, 403, 404, 406], table).toContain(r.status);
-  }
+  // (the claim tables' privileges are pinned by pgTAP 082: they are not in the exposed schema, so an HTTP probe proves nothing)
   // no token ever appears in any answer the organiser can read
   const people = await rest(`people?id=eq.${person}&select=*`, { token: w.tokenA });
   expect(JSON.stringify(people.body)).not.toMatch(/token/i);
@@ -301,19 +294,19 @@ test('two parallel claims of one link make exactly one account; a second account
   const two = await createLoneUser('claim-par2');
   const s1 = (await signInPassword(one)).token;
   const s2 = (await signInPassword(two)).token;
-  const results = await Promise.all([
-    claim(s1, token, `parallel-a-${tag}`),
-    claim(s2, token, `parallel-b-${tag}`),
-  ]);
+  const users = [s1, s2, s1, s2, s1, s2, s1, s2];
+  const results = await Promise.all(
+    users.map((session, i) => claim(session, token, `parallel-${i}-${tag}`)),
+  );
   const ok = results.filter((r) => r.status === 200);
   const refused = results.filter((r) => r.status !== 200);
   expect(ok, JSON.stringify(results.map((r) => r.body))).toHaveLength(1);
-  expect(refused).toHaveLength(1);
-  expect(refused[0].body.hint).toBe('link_used');
+  expect(refused).toHaveLength(7);
+  for (const r of refused) expect(['link_used', 'account_exists']).toContain(r.body.hint);
   expect((await statusOf(w.tokenA, person)).state).toBe('claimed');
 
   // the winner's login already holds an account: a link for ANOTHER person is refused with account_exists, and stays open
-  const winner = results[0].status === 200 ? s1 : s2;
+  const winner = users[results.findIndex((r) => r.status === 200)];
   const other = await addPerson(w.tokenA, w.a.orgId, `Second ${tag}`);
   const otherToken = await issue(w.tokenA, other);
   const second = await claim(winner, otherToken, `second-${tag}`);

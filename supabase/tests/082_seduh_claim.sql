@@ -19,7 +19,7 @@
 --   * ACL AND CATALOG: who may execute what; every new public function is SECURITY DEFINER with search_path pinned; the rollback
 --     block removes everything it added.
 begin;
-select plan(134);
+select plan(138);
 
 create schema t082;
 grant usage on schema t082 to anon, authenticated, service_role;
@@ -134,7 +134,7 @@ set local role anon;
 select is(t082.attempt('select public.issue_seduh_claim_link(' || quote_literal(t082.u(8401)) || ')'), '42501/', 'anon: refused at the door');
 reset role;
 select is((select count(*)::int from app.seduh_claim_links where identity_id = t082.u(8301)), 0, 'none of the refusals made a link');
-select is((select count(*)::int from app.seduh_claim_audit), 0, '...or an audit row');
+select is((select count(*)::int from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313)), 0, '...or an audit row');
 
 -- ============ ISSUE: the happy path ============
 set local role authenticated;
@@ -152,7 +152,7 @@ select ok((select expires_at - created_at from app.seduh_claim_links where ident
   'it expires in 72 hours');
 select is((select issued_by from app.seduh_claim_links where identity_id = t082.u(8301)), t082.u(8201), 'issued_by is the organiser');
 select is((select org_id from app.seduh_claim_links where identity_id = t082.u(8301)), t082.u(8210), 'and the organisation is derived from the person');
-select is((select count(*)::int from app.seduh_claim_audit where action = 'claim_link.issue' and actor_id = t082.u(8201)
+select is((select count(*)::int from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim_link.issue' and actor_id = t082.u(8201)
              and org_id = t082.u(8210) and identity_id = t082.u(8301) and link_id is not null), 1, 'one audit row for the issue');
 
 -- re-issue: the open link is revoked, still one open link, a different token
@@ -164,7 +164,7 @@ select ok(current_setting('t082.tok1b') <> current_setting('t082.tok1'), 're-iss
 select is((select count(*)::int from app.seduh_claim_links where identity_id = t082.u(8301) and used_at is null and revoked_at is null), 1,
   'still exactly one open link');
 select is((select count(*)::int from app.seduh_claim_links where identity_id = t082.u(8301) and revoked_at is not null), 1, 'and the first one is revoked');
-select is((select detail ->> 'replaced_open_links' from app.seduh_claim_audit where action = 'claim_link.issue' order by id desc limit 1), '1',
+select is((select detail ->> 'replaced_open_links' from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim_link.issue' order by id desc limit 1), '1',
   'the audit row records that one open link was replaced');
 -- an expired-but-open link is revoked by issue (identity 7)
 set local role authenticated;
@@ -173,7 +173,7 @@ select is(t082.run('select public.issue_seduh_claim_link(' || quote_literal(t082
 reset role;
 select is((select count(*)::int from app.seduh_claim_links where identity_id = t082.u(8307) and used_at is null and revoked_at is null), 1,
   'the expired open link was revoked: one open link');
-select is((select count(*)::int from app.seduh_claim_audit where action = 'claim_link.issue'), 3, 'three issues, three audit rows (refusals wrote none)');
+select is((select count(*)::int from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim_link.issue'), 3, 'three issues, three audit rows (refusals wrote none)');
 
 -- ============ STATUS ============
 set local role authenticated;
@@ -209,7 +209,7 @@ select is(t082.attempt('select public.revoke_seduh_claim_link(gen_random_uuid())
 select set_config('t082.tok2', public.issue_seduh_claim_link(t082.u(8402)), false);
 select is(t082.run('select public.revoke_seduh_claim_link(' || quote_literal(t082.u(8402)) || ')'), 'ok', 'an organiser revokes an open link');
 reset role;
-select is((select count(*)::int from app.seduh_claim_audit where action = 'claim_link.revoke' and identity_id = t082.u(8302)), 1, 'one audit row for the revoke');
+select is((select count(*)::int from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim_link.revoke' and identity_id = t082.u(8302)), 1, 'one audit row for the revoke');
 set local role authenticated;
 select t082.as_user(8204);
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok2'), 'revoked-one')), 'P0001/link_revoked',
@@ -248,11 +248,11 @@ set local role authenticated;
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok1b'), 'happy-82')), '42501/', 'signed in with no user id: 42501');
 reset role;
 set local role anon;
-select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok1b'), 'happy-82')), '42501/', 'anon: refused at the door');
+select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok1b'), 'happy-82')), '42501/', 'anon: refused (the function''s own sign-in check; the grant is pinned in the catalog checks below)');
 reset role;
 select is((select count(*)::int from app.seduh_accounts where identity_id = t082.u(8301)), 0, 'none of the refusals made an account');
 select is((select count(*)::int from app.seduh_claim_links where identity_id = t082.u(8301) and used_at is null and revoked_at is null), 1, '...and the link is still open');
-select is((select count(*)::int from app.seduh_claim_audit where action = 'claim.complete'), 0, '...and no claim was audited');
+select is((select count(*)::int from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim.complete'), 0, '...and no claim was audited');
 
 -- ============ CLAIM: the happy path ============
 set local role authenticated;
@@ -262,17 +262,20 @@ reset role;
 select is(current_setting('t082.res1')::jsonb ->> 'handle', 'happy-82', 'the claim returns the (normalised) handle');
 select ok((current_setting('t082.res1')::jsonb ->> 'founding_number')::int >= 2, 'and a founding number from the sequence (2 or more)');
 select is(current_setting('t082.res1')::jsonb ->> 'profile_path', '/id/happy-82/', 'and the profile path');
+select is((select string_agg(k, ',' order by k) from jsonb_object_keys(current_setting('t082.res1')::jsonb) k), 'founding_number,handle,profile_path',
+  'the claim response has exactly those three keys');
+select is(position(current_setting('t082.tok1b') in current_setting('t082.res1')), 0, 'and does not contain the token');
 select is((select count(*)::int from app.seduh_accounts where identity_id = t082.u(8301) and user_id = t082.u(8204) and handle = 'happy-82'
              and claim_method = 'organiser_link' and adult_attested_at is not null and closed_at is null), 1, 'the account exists, attested, via organiser_link');
 select is((select count(*)::int from app.seduh_profile_settings s join app.seduh_accounts a on a.id = s.account_id where a.handle = 'happy-82'), 1, 'its settings row exists');
 select is((select count(*)::int from app.seduh_claim_links l join app.seduh_accounts a on a.id = l.account_id
             where l.identity_id = t082.u(8301) and l.used_at is not null and a.handle = 'happy-82'), 1, 'the link is used and names the account');
-select is((select count(*)::int from app.seduh_claim_audit where action = 'claim.complete' and identity_id = t082.u(8301) and actor_id = t082.u(8204) and account_id is not null), 1,
+select is((select count(*)::int from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim.complete' and identity_id = t082.u(8301) and actor_id = t082.u(8204) and account_id is not null), 1,
   'one claim.complete audit row');
 set local role anon;
 select is((select public.public_seduh_profile('happy-82') ->> 'has_profile'), 'true', 'the profile door now answers has_profile (as anon)');
 reset role;
-select is((select count(*)::int from app.seduh_claim_audit a where a.detail::text like '%' || current_setting('t082.tok1b') || '%' or a.detail::text ~* '(@|\+673)'), 0,
+select is((select count(*)::int from app.seduh_claim_audit a where a.identity_id between t082.u(8301) and t082.u(8313) and a.detail::text like '%' || current_setting('t082.tok1b') || '%' or a.detail::text ~* '(@|\+673)'), 0,
   'no audit row holds the token, an email or a phone');
 
 -- reuse
@@ -342,7 +345,7 @@ select is((select count(*)::int from app.seduh_reserved_numbers where identity_i
 select is(coalesce(current_setting('app.seduh_owner_assignment', true), ''), '', 'the owner-assignment flag is cleared after the claim');
 select is(t082.attempt($$ update app.seduh_reserved_numbers set note = 'x' $$), '23001/', 'a consumed reservation cannot be changed');
 select is(t082.attempt($$ delete from app.seduh_reserved_numbers $$), '23001/', '...or removed');
-select is((select detail ->> 'reserved_number' from app.seduh_claim_audit where action = 'claim.complete' and identity_id = t082.u(8306)), 'true', 'the audit row says the number was reserved');
+select is((select detail ->> 'reserved_number' from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim.complete' and identity_id = t082.u(8306)), 'true', 'the audit row says the number was reserved');
 select is(t082.attempt($$ insert into app.seduh_accounts (identity_id, user_id, handle, founding_number, claim_method, adult_attested_at)
   values ('00000000-0000-0000-0000-000000008313', '00000000-0000-0000-0000-000000008208', 'dup-one-82', 1, 'organiser_link', now()) $$), '42501/',
   'number 1 cannot be inserted by hand without the flag, even by the owner (the guard comes before the unique constraint)');
@@ -351,10 +354,13 @@ select is(t082.attempt($$ insert into app.seduh_accounts (identity_id, user_id, 
 select is((select public.seduh_claim_begin(t082.fake(99)) ->> 'status'), 'invalid', 'begin: an unknown token is invalid');
 select is((select public.seduh_claim_begin('short') ->> 'status'), 'invalid', 'begin: a malformed token is invalid');
 select is((select public.seduh_claim_begin(null) ->> 'status'), 'invalid', 'begin: NULL is invalid');
+select is((select t082.st(8410)), 'can_issue', 'status: an expired open link counts as none (can_issue)') from (select t082.as_user(8201)) x;
 select is((select public.seduh_claim_begin(t082.fake(10)) ->> 'status'), 'expired', 'begin: an expired link');
 select is((select public.seduh_claim_begin(current_setting('t082.tok1b')) ->> 'status'), 'used', 'begin: a used link');
 select is((select public.seduh_claim_begin(current_setting('t082.tok1')) ->> 'status'), 'revoked', 'begin: a revoked link');
 select is((select public.seduh_claim_begin(t082.fake(9)) ->> 'status'), 'unavailable', 'begin: an opted-out identity is unavailable');
+select is((select coalesce(sum(code_sends), 0)::int from app.seduh_claim_links where identity_id in (t082.u(8309), t082.u(8310), t082.u(8301))), 0,
+  'a refused begin counts no emailed code');
 select is((select public.seduh_claim_begin(current_setting('t082.tok3'))), jsonb_build_object('status', 'ok', 'display_name', 'T082 Person 3'),
   'begin: a usable link answers ok with the display name and NOTHING else (no id, phone or hash)');
 select is((select code_sends from app.seduh_claim_links where identity_id = t082.u(8303) and used_at is null), 1::smallint, 'and counts one emailed code');
@@ -371,7 +377,7 @@ select is(t082.run($u$ with closed as (
   'the undo runbook runs as written');
 select is(public.public_seduh_profile('happy-82') ->> 'has_profile', 'false', 'an undone claim: the profile door answers the empty shape');
 select is(public.seduh_handle_available('happy-82'), 'taken', '...and its handle stays retired');
-select is((select count(*)::int from app.seduh_claim_audit where action = 'claim.undo'), 1, '...with its audit row');
+select is((select count(*)::int from app.seduh_claim_audit where identity_id between t082.u(8301) and t082.u(8313) and action = 'claim.undo'), 1, '...with its audit row');
 set local role authenticated;
 select t082.as_user(8201);
 select set_config('t082.tok10', public.issue_seduh_claim_link(t082.u(8410)), false);
@@ -387,9 +393,9 @@ select is(t082.attempt($$ truncate app.seduh_claim_audit $$), '42501/', '...or t
 select is(t082.attempt($$ insert into app.seduh_claim_audit (action, detail) values ('claim.complete', '{"email": "a@b.c"}') $$), '23514/', 'a secret-looking detail key is refused');
 select is(t082.attempt($$ insert into app.seduh_claim_audit (action, detail) values ('made.up', '{}') $$), '23514/', 'an unknown action is refused');
 select is((select count(*)::int from (values ('anon'), ('authenticated'), ('service_role'), ('public')) r(role),
-            unnest(array['app.seduh_claim_audit', 'app.seduh_reserved_numbers']) t(tbl)
+            unnest(array['app.seduh_claim_audit', 'app.seduh_reserved_numbers', 'app.seduh_claim_links', 'app.seduh_accounts']) t(tbl)
             where has_table_privilege(case r.role when 'public' then 'public' else r.role end, t.tbl, 'select,insert,update,delete')), 0,
-  'no API role has any privilege on the audit table or the reservation table');
+  'no API role has any privilege on the audit, reservation, claim link or account table');
 
 -- ============ ACL and catalog ============
 select is((select coalesce(string_agg(p.proname || ':' || r, ', ' order by p.proname, r), 'none')
