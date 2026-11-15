@@ -25,20 +25,19 @@
 --
 -- FORMATS (verified 2026-11-16):
 --   * Cup Taster: results, read from the published payload as above. Key figures: correct, total, time_secs.
---   * Throwdown: no results list (its publish path writes no payload: only Cup Taster builds one today), but a KNOCKOUT
---     RECORD from td_matches, see below.
+--   * Throwdown: nothing (its publish path writes no payload: only Cup Taster builds one today); see KNOCKOUT RECORD below.
 --   * BTC: NOTHING. BTC competitors are btc_teams rows and judges are btc_judges rows; neither has a person or identity link
 --     (the team's members are not modelled as people; judges are a name on an event). BTC also has no payload that names
 --     people. Returned nothing for it, on purpose; judging_roles stays an empty seam for the same reason.
 --
--- KNOCKOUT RECORD (vis_knockout_record = public): won and lost counts over the person's Throwdown matches that were decided
--- by votes or a walkover with a winner (td_match_results is the ONE place a winner is computed), between two named
--- competitors in a 'pair' round, in a non-test event that has a public_results row. Byes, undecided matches, level votes
--- and pool rounds count for neither side. DESIGN CHOICE, FLAGGED FOR THE OWNER: Throwdown does not publish a payload, so
--- unlike results this reads the live match tables for a PUBLISHED event; the match outcome is therefore not on /results/
--- today. The gate is "the event has a public_results row". To switch the knockout record off entirely, make the
--- v_knockout block return zeros (one place). An opponent is NAMED only when that opponent is also a claimed, open,
--- 18-attested, active account with BOTH vis_identity and vis_knockout_record public; otherwise only the counts include them.
+-- KNOCKOUT RECORD: RETURNS NOTHING YET (owner decision 2026-11-16, "nothing until published"). Throwdown publishes no
+-- results payload, and match outcomes are not on /results/, so a profile showing them would show more than the public pages do.
+-- knockout_record is always {won: 0, lost: 0, opponents: []}, and the live td_* tables are NOT read. SEAM: once Throwdown
+-- publishes a results payload, fill it from THAT PAYLOAD ONLY (published, non-test, non-shadow). The future reader must enforce:
+-- (1) read the payload, never td_matches or td_match_results; (2) count only matches the payload shows as decided between two
+-- named competitors (no byes, level or undecided matches, pool rounds); (3) name an opponent only if that opponent is a claimed,
+-- open, 18-attested, active account with BOTH vis_identity and vis_knockout_record public, otherwise counts only; (4) a hidden
+-- vis_knockout_record gives the same zeros. (An earlier draft of this migration read td_matches; it was removed before merge.)
 --
 -- VISIBILITY: 'public' shows a part. 'organisers' means "only organisers I competed for", an organiser-scoped view that does
 -- not exist for an anonymous caller, so it is treated as hidden here, as is 'hidden'. A hidden part looks exactly like a part
@@ -196,52 +195,8 @@ begin
       ) r;
   end if;
 
-  -- ============ knockout record (Throwdown matches of published events) ============
-  if v_vis_ko = 'public' then
-    with mine as (
-      select s.id as slot_id, s.match_id, s.event_id
-        from public.td_slots s
-        join public.event_entries en on en.id = s.entry_id
-        join public.people pe on pe.id = en.person_id
-       where pe.global_person_id = v_identity
-    ),
-    played as (
-      select m.slot_id, mr.winner_slot_id, os.entry_id as opp_entry
-        from mine m
-        join public.td_matches tm on tm.id = m.match_id
-        join public.td_rounds tr on tr.id = tm.round_id and tr.kind = 'pair'
-        join public.td_match_results mr on mr.match_id = tm.id
-        join public.td_slots os on os.match_id = tm.id and os.id <> m.slot_id and os.entry_id is not null
-        join public.events e on e.id = m.event_id
-       where tm.confirmed_at is not null
-         and mr.result_kind in ('votes', 'walkover')
-         and mr.winner_slot_id is not null
-         and e.is_test is not true
-         -- SEAM is_shadow: and e.is_shadow is not true
-         and exists (select 1 from public.public_results pr where pr.event_id = e.id)
-    ),
-    named as (
-      select p.winner_slot_id = p.slot_id as won, oa.handle, oi.display_name
-        from played p
-        join public.event_entries oen on oen.id = p.opp_entry
-        join public.people ope on ope.id = oen.person_id
-        join app.seduh_accounts oa on oa.identity_id = ope.global_person_id
-        join app.seduh_identities oi on oi.id = oa.identity_id
-        join app.seduh_profile_settings os2 on os2.account_id = oa.id
-       where oa.closed_at is null and oa.adult_attested_at is not null and oi.status = 'active'
-         and os2.vis_identity = 'public' and os2.vis_knockout_record = 'public'
-         and oa.identity_id <> v_identity
-    )
-    select (select count(*) filter (where p.winner_slot_id = p.slot_id) from played p)::integer,
-           (select count(*) filter (where p.winner_slot_id <> p.slot_id) from played p)::integer,
-           coalesce((select jsonb_agg(jsonb_build_object('handle', g.handle, 'display_name', g.display_name,
-                                                         'matches', g.n, 'won', g.w, 'lost', g.n - g.w)
-                                      order by g.n desc, g.handle)
-                       from (select n.handle, n.display_name, count(*) as n, count(*) filter (where n.won) as w
-                               from named n group by n.handle, n.display_name order by count(*) desc, n.handle limit 10) g),
-                    '[]'::jsonb)
-      into v_won, v_lost, v_opps;
-  end if;
+  -- ============ knockout record: SEAM (see the header). Nothing is read; v_won, v_lost and v_opps stay at their zero values. ============
+  -- v_vis_ko is kept for the seam: when it is filled, a value other than 'public' must keep these zeros.
 
   return jsonb_build_object(
     'has_profile', true,

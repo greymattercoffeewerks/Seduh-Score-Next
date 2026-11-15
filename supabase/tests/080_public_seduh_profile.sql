@@ -7,16 +7,16 @@
 --   * THE CORE INVARIANT: results of an unpublished event, of a test event (flagged after publishing), of a non-Cup-Taster
 --     format, of an ambiguous (duplicate) name, and of a roster name edited after publishing never appear, while a published
 --     one does, from BOTH organisations, with the payload's own figures and the provenance 'seduh_score';
---   * the knockout record counts only decided, two-competitor matches of published, non-test events, never byes, undecided
---     matches or unpublished events, and names an opponent only when that opponent is claimed and public for both identity and
---     knockout record;
+--   * the knockout record is ALWAYS zeros for now: Throwdown matches of a published event (decided, with claimed public opponents,
+--     byes, pool and level matches in the fixtures) contribute nothing, because the door never reads the live match tables
+--     (owner decision 2026-11-16; the fixtures stay so the future payload-based reader can be tested against them);
 --   * an unknown, closed, merged, opted-out, reserved, malformed, NULL or hostile handle all get ONE identical empty shape with
 --     no error and no echo; a claimed one is found whatever its case or padding;
 --   * no phone, email or uuid appears anywhere in the output (the JSON text is scanned), and no hidden setting is returned.
 -- Not testable here: an account without adult_attested_at (the column is NOT NULL, so none can exist; its NOT NULL is asserted)
 -- and a shadow event (events.is_shadow does not exist: the migration marks the seam).
 begin;
-select plan(81);
+select plan(79);
 
 create schema t080;
 grant usage on schema t080 to anon, authenticated;
@@ -262,14 +262,13 @@ select is((select jsonb_array_length(r -> 'organiser_records') + jsonb_array_len
 select is((select jsonb_typeof(r -> 'organiser_records') || jsonb_typeof(r -> 'self_reported') || jsonb_typeof(r -> 'judging_roles') || jsonb_typeof(r -> 'cafe_affiliations') from t80_a),
   'arrayarrayarrayarray', 'each seam is an array, not null');
 
--- the knockout record: wins over bravo (2:1) and the unclaimed competitor (walkover); losses to charlie (1:2) and bravo (0:3);
--- the bye, the undecided match, the match without alpha, the unpublished TD2 and the test TD3 count for nothing
-select is((select r -> 'knockout_record' ->> 'won' from t80_a), '6', 'knockout: six wins (two in TD1, four in TD4); the pool and level matches count for nothing');
-select is((select r -> 'knockout_record' ->> 'lost' from t80_a), '2', 'knockout: two losses');
-select is((select jsonb_array_length(r -> 'knockout_record' -> 'opponents') from t80_a), 1,
-  'only one opponent is named: bravo (charlie hides the knockout record, the unclaimed competitor has no account, and foxtrot, golf, hotel and india are identity-hidden, closed, merged and opted out)');
-select is((select r -> 'knockout_record' -> 'opponents' -> 0 from t80_a),
-  '{"handle":"bravo-t80","display_name":"T080 Person 2","matches":2,"won":1,"lost":1}'::jsonb, 'the named opponent, head to head');
+-- the knockout record returns NOTHING until Throwdown publishes a results payload (owner decision 2026-11-16): alpha has decided
+-- Throwdown matches in published, non-test events (TD1 and TD4: wins, losses, named-opponent candidates) and all her settings are
+-- public, yet the door shows zeros and no opponent, and so does bravo (a public opponent); it never reads td_matches
+select is((select r -> 'knockout_record' from t80_a), '{"won":0,"lost":0,"opponents":[]}'::jsonb,
+  'Throwdown matches of a published event contribute NOTHING to the knockout record');
+select is((select public.public_seduh_profile('bravo-t80') -> 'knockout_record'), '{"won":0,"lost":0,"opponents":[]}'::jsonb,
+  'nor to a public opponent''s');
 
 -- ============ every setting hides its section; "organisers" is hidden for an anonymous caller ============
 
