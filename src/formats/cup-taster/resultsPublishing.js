@@ -57,7 +57,8 @@ export const DEFAULT_PUBLISH_SCOPE = 'full';
 
 // What the dialog says is public for each choice (one line, shown next to the choice and read as part of its description).
 export const PUBLISH_SCOPE_NOTICE = {
-  podium: 'Only the top three’s names, cafés and results will be public.',
+  podium:
+    'Only the podium’s names, cafés and results (the top three, plus any tie for third) will be public.',
   full: 'Every competitor’s name, café and result will be public.',
 };
 

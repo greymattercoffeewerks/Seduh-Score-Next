@@ -606,7 +606,7 @@ describe('the publish default (T-ID2.B2)', () => {
     expect(PUBLISH_SCOPE_NOTICE.full).toBe(
       'Every competitor’s name, café and result will be public.',
     );
-    expect(PUBLISH_SCOPE_NOTICE.podium).toContain('top three');
+    expect(PUBLISH_SCOPE_NOTICE.podium).toContain('tie for third');
   });
   it('leaves the builder’s own default at the smaller amount: a caller that does not say publishes the podium only', () => {
     const event = { format: 'cup_taster', name: 'E' };

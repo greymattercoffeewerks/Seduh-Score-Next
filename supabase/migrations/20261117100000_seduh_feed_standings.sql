@@ -37,9 +37,9 @@
 -- re-queued only by a changed payload (the owner may insert a queue row with SQL). The cloud holds one such result and its
 -- people are already linked (B2 audit, 2.3).
 --
--- rollback (verified in a transaction in test 071b, which re-runs the three definitions below from the files that hold them;
--- the review function is restored by re-running section (7) of 20261103100000_seduh_feed.sql, whose
--- `podium_results_not_queued` is podium only):
+-- rollback (the three definitions below are restored and checked in a transaction in test 081; the review function, a read-only
+-- count, is restored by re-running section (7) of 20261103100000_seduh_feed.sql, whose `podium_results_not_queued` is podium only,
+-- and that part is not exercised by a test):
 --   create or replace function app.enqueue_seduh_feed() ...          (section (3) of 20261103100000_seduh_feed.sql)
 --   create or replace function app.seduh_feed_slots_internal(uuid[]) ... (section (4) of the same file)
 --   create or replace function app.archive_snapshot_payload(jsonb) ...   (20261101100000_archive_tick.sql, "the key whitelist")
@@ -211,6 +211,7 @@ declare
   v_standings jsonb;
   v_n         integer;
   v_s         integer;
+  v_out       jsonb;
 begin
   if p is null or jsonb_typeof(p) <> 'object' or octet_length(p::text) > 65536 then
     return null;
@@ -273,7 +274,13 @@ begin
     v_top := v_top - 'notListed';
   end if;
 
-  return v_top || jsonb_build_object('podium', v_podium)
-               || case when v_standings is not null then jsonb_build_object('standings', v_standings) else '{}'::jsonb end;
+  v_out := v_top || jsonb_build_object('podium', v_podium)
+                 || case when v_standings is not null then jsonb_build_object('standings', v_standings) else '{}'::jsonb end;
+  -- the rebuilt rows carry a key for every field (null when absent), so the output can be longer than the input: the 64 KB cap is
+  -- checked on the OUTPUT as well (the staged column has the same CHECK), and an over-long ranking is dropped whole, never cut
+  if v_standings is not null and octet_length(v_out::text) > 65536 then
+    v_out := (v_out - 'standings' - 'notListed');
+  end if;
+  return v_out;
 end;
 $$;

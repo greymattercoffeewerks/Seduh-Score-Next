@@ -15,7 +15,7 @@
 --     unusable row is dropped whole and the podium still publishes; the stub is unchanged and names nobody;
 --   * the migration's rollback (the three previous definitions, restored here) brings back the podium-only behaviour.
 begin;
-select plan(71);
+select plan(73);
 
 create schema t081;
 grant usage on schema t081 to anon, authenticated, service_role;
@@ -118,7 +118,8 @@ insert into public_results (org_id, event_id, published_at, payload) values
   (t081.u(9001), t081.u(1), '2026-02-01 10:00+00', jsonb_build_object('format', 'cup_taster', 'eventName', 'T081 E1',
      'podium', t081.rows_of(101, 103, 'rank'), 'standings', t081.rows_of(101, 105, 'place'), 'notListed', 1)),
   (t081.u(9001), t081.u(2), '2026-02-02 10:00+00', jsonb_build_object('format', 'cup_taster', 'podium', t081.rows_of(201, 203, 'rank'))),
-  (t081.u(9001), t081.u(3), '2026-02-03 10:00+00', jsonb_build_object('format', 'cup_taster', 'standings', t081.rows_of(301, 302, 'place'))),
+  (t081.u(9001), t081.u(3), '2026-02-03 10:00+00', jsonb_build_object('format', 'cup_taster', 'standings',
+     jsonb_build_array(jsonb_build_object('place', 1, 'name', ' T081 P301'), t081.rows_of(302, 302, 'place') -> 0))),
   (t081.u(9001), t081.u(4), '2026-02-04 10:00+00', jsonb_build_object('format', 'cup_taster', 'standings', jsonb_build_array(
      jsonb_build_object('place', 1, 'name', 'T081 P401', 'cafe', 'Cafe T'),
      jsonb_build_object('place', 2, 'name', 'T081 Twin', 'cafe', 'Cafe T'),
@@ -131,6 +132,8 @@ insert into public_results (org_id, event_id, published_at, payload) values
   (t081.u(9001), t081.u(6), '2026-02-06 10:00+00', jsonb_build_object('format', 'cup_taster', 'eventName', 'T081 E6', 'listing', 'named_only')),
   (t081.u(9001), t081.u(7), '2026-02-07 10:00+00', jsonb_build_object('format', 'cup_taster', 'podium', t081.rows_of(701, 703, 'rank')));
 update events set is_test = true where id = t081.u(5);
+-- E3's first entry is padded and has a blank cafe; the published row has an unpadded-by-one name and no cafe key: the match is by TRIMMED name and café
+update event_entries set display_name = '  T081 P301 ', cafe = '  ' where id = t081.u(801);
 
 select is((select string_agg(e.n::text || '=' || coalesce(t081.qstate(e.n), 'none'), ',' order by e.n) from unnest(array[1, 2, 3, 4, 5, 6, 7, 8]) e(n)),
   '1=queued,2=queued,3=queued,4=queued,5=queued,6=none,7=queued,8=none',
@@ -169,7 +172,7 @@ select is((select (x ->> 'identities_to_create') || '/' || (x ->> 'skipped_bad_p
   '...E4 would create 1 and skip 1 bad phone');
 select is((select (x ->> 'identities_to_create')::int from review, jsonb_array_elements(r -> 'queued_results') x where x ->> 'result_id' = t081.rid(5)::text), 0, '...E5 (test) would create none');
 select is((select r::text ~ '\+[0-9]{6}' or r::text ~* 't081' from review), false, '...and the review holds no phone and no name');
-select is((select (r -> 'queue' ->> 'queued')::int from review) >= 5, true, '...and the queue counts still read');
+select is((select (r -> 'queue' ->> 'queued')::int from review) >= 6, true, '...and the queue counts still read');
 
 -- ============ the owner's run ============
 
@@ -257,6 +260,13 @@ select is(app.archive_snapshot_payload(jsonb_build_object('standings', t081.std(
 select is(octet_length(app.archive_snapshot_payload(jsonb_build_object('podium', t081.pod(3), 'standings', t081.std(200)))::text) < 65536, true, 'a full 200-row snapshot stays under the 64 KB cap');
 select is(t081.keys(app.archive_stub_payload(t081.u(6))), 'eventName,format,listing', 'the stub is unchanged: names nobody (no podium, no standings)');
 select is(app.archive_snapshot_payload(null), null, 'a null snapshot is unusable');
+select is(
+  (select app.archive_snapshot_payload(jsonb_build_object('podium', t081.pod(3), 'standings',
+     (select jsonb_agg(jsonb_build_object('name', repeat('n', 120), 'cafe', repeat('c', 120))) from generate_series(1, 200)))) ? 'standings'),
+  false, 'an input under 64 KB whose rebuilt output would exceed it drops the standings whole (the staged column has the same cap)');
+select is(octet_length(app.archive_snapshot_payload(jsonb_build_object('podium', t081.pod(3), 'standings',
+  (select jsonb_agg(jsonb_build_object('name', repeat('n', 120), 'cafe', repeat('c', 120))) from generate_series(1, 200))))::text) <= 65536, true,
+  '...and the output stays within 64 KB');
 
 -- ============ the migration's rollback: the three previous definitions come back ============
 

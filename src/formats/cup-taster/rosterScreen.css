@@ -166,3 +166,23 @@
   letter-spacing: var(--tracking-wide);
   color: var(--color-text-muted);
 }
+
+/* The published-results advisory in the edit form; it gains a left rule (not colour alone: the sentence changes too) once the name or café changes. */
+.roster-edit-published {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.roster-edit-published[data-tone='warning'] {
+  border-left: 4px solid var(--color-warning);
+  padding-left: var(--space-2, 8px);
+  font-weight: 600;
+}
+
+/* The republish link after a save: a 44px tap target on its own line at 360px. */
+.roster-republish-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-accent);
+  text-decoration: underline;
+}

@@ -397,15 +397,15 @@ and nothing outside the fixed public fields (no phone, email, set-by-set marks) 
   payload (rows published before that have none and show nothing). The archive page shows the same name
   on the latest result and under each event; both go through `publishedOrgName` (core/publicResults.js).
 - What it prints depends on the organiser's choice at publish time (the report screen's "What to
-  publish" radios): the **podium** (default) or the **full standings** — the payload carries
-  `standings` only in the second case (`src/formats/cup-taster/resultsPublishing.js`).
+  publish" radios): the **full standings** (the default since T-ID2.B2) or the **podium** — the payload carries
+  `standings` only in the first case (`src/formats/cup-taster/resultsPublishing.js`).
 - "Save as PDF" is the browser's own print dialog (no PDF library — same stance as the organiser's
   report). The sheet is a white page with its own ink colours on purpose: the surrounding page is the
   dark stage surface, and a printed copy must not depend on background printing.
 - Its screen-reader-only text sits inside a table scroll region that is `position: relative`. Without
   that, the absolutely-positioned `.sr-only` spans escape the region's clipping and widen the whole
   page on a phone (found while building it).
-- Who is listed: the podium (default) is the top three by the placing the stage resolution decided; the
+- Who is listed: the podium is the top three by the placing the stage resolution decided; the
   full standings leave out anyone with no scores and any competitor who withdrew (never the podium),
   and never renumber — a tie reads 2nd, 2nd, 4th on the podium and in the standings alike.
 - The sheet's ink colours (`#111`, `#4a4a4a`, `#b5b5b5`, `#fff`, set as `--sheet-*` in `results.css`) are a

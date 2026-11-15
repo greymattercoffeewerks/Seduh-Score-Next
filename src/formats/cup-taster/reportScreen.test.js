@@ -1437,7 +1437,7 @@ describe('mountReportScreen', () => {
 
         choose(root, 'podium');
         expect(notice.textContent).toBe(
-          'Only the top three’s names, cafés and results will be public.',
+          'Only the podium’s names, cafés and results (the top three, plus any tie for third) will be public.',
         );
         choose(root, 'full');
         expect(notice.textContent).toBe('Every competitor’s name, café and result will be public.');

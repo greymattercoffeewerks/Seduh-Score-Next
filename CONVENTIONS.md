@@ -324,9 +324,9 @@ on conflict (phone_e164) do nothing;                 -- reuses one that already 
 select set_config('app.seduh_link_write', 'on', true);
 update public.people p set global_person_id = i.id
   from app.seduh_identities i
- where p.id = '<owner person uuid>' and i.phone_e164 = p.phone and p.global_person_id is null;
+ where p.id = '<owner person uuid>' and i.phone_e164 = p.phone and i.status <> 'merged' and p.global_person_id is null;
 select set_config('app.seduh_link_write', '', true);
-select p.global_person_id from public.people p where p.id = '<owner person uuid>';   -- must be one uuid
+select p.global_person_id from public.people p where p.id = '<owner person uuid>';   -- must be one uuid; if null the identity is a merged tombstone: link to its merged_into target instead
 commit;
 ```
 

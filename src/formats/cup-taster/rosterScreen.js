@@ -440,7 +440,9 @@ function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onC
       onEditInput(key, input.value);
       if (publishedNote) {
         const changed = matchFieldsChanged(editing.draft, entry);
-        publishedNote.textContent = changed ? PUBLISHED_EDIT_WARNING : PUBLISHED_EDIT_ADVISORY;
+        const next = changed ? PUBLISHED_EDIT_WARNING : PUBLISHED_EDIT_ADVISORY;
+        // only when the sentence changes, so a screen reader does not repeat it on every keystroke
+        if (publishedNote.textContent !== next) publishedNote.textContent = next;
         if (changed) publishedNote.dataset.tone = 'warning';
         else delete publishedNote.dataset.tone;
       }

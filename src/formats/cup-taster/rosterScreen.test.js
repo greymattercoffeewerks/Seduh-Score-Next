@@ -104,6 +104,9 @@ function fakeClient(initialDb, { errorOn, writeError = null } = {}) {
         return Promise.resolve({ data: rows[0] ?? null, error: null });
       },
       maybeSingle() {
+        if (fails(table, 'select')) {
+          return Promise.resolve({ data: null, error: new Error('select failed') });
+        }
         const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
         return Promise.resolve({ data: rows[0] ?? null, error: null });
       },
@@ -2087,6 +2090,18 @@ describe('editing an entry of an event whose results are published (T-ID2.B2)', 
       'not on their Seduh ID profile until you republish',
     );
     expect(q(root, '#roster-saved-e1 a').getAttribute('href')).toBe('#/events/ev1/report');
+  });
+
+  it('saving a changed name on an entry the published results do not name shows no republish prompt', async () => {
+    const root = await mount(
+      mk(published({ standings: [{ name: 'Someone Else', cafe: 'Grey Matter' }] })),
+    );
+    q(root, '#roster-edit-btn-e1').click();
+    type(q(root, '#roster-edit-e1-displayName'), 'Alicia Tan');
+    q(root, '.roster-edit-form button[type="submit"]').click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    expect(q(root, '#roster-saved-e1 a')).toBeNull();
+    expect(q(root, '#roster-saved-e1').textContent).not.toContain('Seduh ID profile');
   });
 
   it('a change to bib or phone only keeps the ordinary note and no republish link', async () => {
