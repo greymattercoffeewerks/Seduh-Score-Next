@@ -9,6 +9,9 @@ import {
   renderRegistrationForm,
   renderRosterEntries,
   mountRosterScreen,
+  isEntryInPublishedResults,
+  PUBLISHED_EDIT_ADVISORY,
+  PUBLISHED_EDIT_WARNING,
 } from './rosterScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { phoneErrorMessage } from '../../core/phone.js';
@@ -1990,5 +1993,111 @@ describe('Seduh ID on the roster (T-ID.C1)', () => {
     q(root, '.roster-edit-form button[type="submit"]').click();
     await flush();
     expect(linkCalls(client)).toHaveLength(0);
+  });
+});
+
+describe('editing an entry of an event whose results are published (T-ID2.B2)', () => {
+  const published = (payload) => [
+    { event_id: 'ev1', payload, published_at: '2026-11-01T00:00:00Z' },
+  ];
+  const mk = (publicResults) =>
+    fakeClient({
+      events: [baseEvent],
+      people: [person()],
+      event_entries: [entry()],
+      public_results: publicResults,
+    });
+  async function mount(client) {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+    return root;
+  }
+  const q = (root, s) => root.querySelector(s);
+  const type = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  it('isEntryInPublishedResults: true only when the podium or standings name the entry by trimmed name and café', () => {
+    const e = { display_name: ' Cupper One ', cafe: 'Grey Matter' };
+    const row = { name: 'Cupper One', cafe: 'Grey Matter ' };
+    expect(isEntryInPublishedResults({ podium: [row] }, e)).toBe(true);
+    expect(isEntryInPublishedResults({ standings: [row] }, e)).toBe(true);
+    expect(isEntryInPublishedResults({ standings: [{ ...row, cafe: 'Other' }] }, e)).toBe(false);
+    expect(isEntryInPublishedResults({ standings: [{ name: 'Cupper One' }] }, e)).toBe(false);
+    expect(
+      isEntryInPublishedResults({ standings: [{ name: 'Cupper One' }] }, { ...e, cafe: null }),
+    ).toBe(true);
+    expect(isEntryInPublishedResults({ listing: 'named_only' }, e)).toBe(false);
+    expect(isEntryInPublishedResults(null, e)).toBe(false);
+  });
+
+  it('shows the advisory, then the stronger warning as soon as the name or café changes, and back when restored', async () => {
+    const root = await mount(
+      mk(published({ standings: [{ name: 'Cupper One', cafe: 'Grey Matter' }] })),
+    );
+    q(root, '#roster-edit-btn-e1').click();
+    const note = q(root, '#roster-edit-published-e1');
+    expect(note.textContent).toBe(PUBLISHED_EDIT_ADVISORY);
+    expect(note.getAttribute('role')).toBe('status');
+    type(q(root, '#roster-edit-e1-displayName'), 'Cupper Won');
+    expect(note.textContent).toBe(PUBLISHED_EDIT_WARNING);
+    expect(note.dataset.tone).toBe('warning');
+    type(q(root, '#roster-edit-e1-displayName'), 'Cupper One');
+    expect(note.textContent).toBe(PUBLISHED_EDIT_ADVISORY);
+    type(q(root, '#roster-edit-e1-cafe'), 'New Cafe');
+    expect(note.textContent).toBe(PUBLISHED_EDIT_WARNING);
+  });
+
+  it('shows nothing for an unpublished event, a stub, an entry the results do not name, or when the read fails', async () => {
+    for (const rows of [
+      [],
+      published({ listing: 'named_only' }),
+      published({ standings: [{ name: 'Someone Else', cafe: 'X' }] }),
+    ]) {
+      const root = await mount(mk(rows));
+      q(root, '#roster-edit-btn-e1').click();
+      expect(q(root, '#roster-edit-published-e1')).toBeNull();
+    }
+    const failing = fakeClient(
+      {
+        events: [baseEvent],
+        people: [person()],
+        event_entries: [entry()],
+        public_results: [],
+      },
+      { errorOn: 'public_results.select' },
+    );
+    const root = await mount(failing);
+    expect(q(root, '#roster-row-e1')).not.toBeNull();
+    q(root, '#roster-edit-btn-e1').click();
+    expect(q(root, '#roster-edit-published-e1')).toBeNull();
+  });
+
+  it('after saving a changed name it says the result is off the profile and links to the report to republish', async () => {
+    const root = await mount(
+      mk(published({ standings: [{ name: 'Cupper One', cafe: 'Grey Matter' }] })),
+    );
+    q(root, '#roster-edit-btn-e1').click();
+    type(q(root, '#roster-edit-e1-displayName'), 'Alicia Tan');
+    q(root, '.roster-edit-form button[type="submit"]').click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    expect(q(root, '#roster-saved-e1').textContent).toContain(
+      'not on their Seduh ID profile until you republish',
+    );
+    expect(q(root, '#roster-saved-e1 a').getAttribute('href')).toBe('#/events/ev1/report');
+  });
+
+  it('a change to bib or phone only keeps the ordinary note and no republish link', async () => {
+    const root = await mount(
+      mk(published({ standings: [{ name: 'Cupper One', cafe: 'Grey Matter' }] })),
+    );
+    q(root, '#roster-edit-btn-e1').click();
+    type(q(root, '#roster-edit-e1-bib'), '99');
+    q(root, '.roster-edit-form button[type="submit"]').click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    expect(q(root, '#roster-saved-e1 a')).toBeNull();
+    expect(q(root, '#roster-saved-e1').textContent).not.toContain('Seduh ID');
   });
 });

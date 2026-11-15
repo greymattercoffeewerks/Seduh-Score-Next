@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildResultsPayload } from './resultsPublishing.js';
+import {
+  buildResultsPayload,
+  DEFAULT_PUBLISH_SCOPE,
+  PUBLISH_SCOPE_NOTICE,
+} from './resultsPublishing.js';
 import { computeEventSummary } from './analytics.js';
 
 // Same two-stage fixture shape as analytics.test.js's own computeEventSummary
@@ -593,5 +597,32 @@ describe('buildResultsPayload — the podium is places, not rows', () => {
   it('shows a smaller field in full, and never invents rows', () => {
     expect(podiumFor([1, 2]).map((row) => row.rank)).toEqual([1, 2]);
     expect(podiumFor([])).toEqual([]);
+  });
+});
+
+describe('the publish default (T-ID2.B2)', () => {
+  it('is full standings, with a notice for each level that says whose names are public', () => {
+    expect(DEFAULT_PUBLISH_SCOPE).toBe('full');
+    expect(PUBLISH_SCOPE_NOTICE.full).toBe(
+      'Every competitor’s name, café and result will be public.',
+    );
+    expect(PUBLISH_SCOPE_NOTICE.podium).toContain('top three');
+  });
+  it('leaves the builder’s own default at the smaller amount: a caller that does not say publishes the podium only', () => {
+    const event = { format: 'cup_taster', name: 'E' };
+    const row = {
+      entryId: 'a',
+      displayName: 'A',
+      totalSetsScored: 1,
+      rounds: [
+        { finalPosition: 1, numCorrect: 1, setsScored: 1, totalElapsedSecs: 9, stageOrdinal: 1 },
+      ],
+    };
+    const payload = buildResultsPayload({
+      event,
+      stageReports: [{ ranked: [row] }],
+      summary: [row],
+    });
+    expect(payload).not.toHaveProperty('standings');
   });
 });

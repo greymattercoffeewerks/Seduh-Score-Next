@@ -50,14 +50,25 @@ function standingsEntry(row, cafeByEntryId, roundLabelByOrdinal) {
   };
 }
 
+// What the publish dialog preselects (owner decision 2026-11-15, T-ID2.B2: a profile can only show what is published, and a
+// podium-only default gave three rows of N). The organiser may still choose 'podium'. buildResultsPayload's own default below
+// stays 'podium': a caller that does not say publishes the smaller amount.
+export const DEFAULT_PUBLISH_SCOPE = 'full';
+
+// What the dialog says is public for each choice (one line, shown next to the choice and read as part of its description).
+export const PUBLISH_SCOPE_NOTICE = {
+  podium: 'Only the top three’s names, cafés and results will be public.',
+  full: 'Every competitor’s name, café and result will be public.',
+};
+
 // `cafeByEntryId` is a caller-supplied lookup (built from the event_entries rows the screen
 // fetches — just the podium's three for a podium-only publish, every competitor's for the full
 // standings; no need to thread cafe through analytics.js's whole pipeline) — missing entries fall
 // back to null, same "honest no data" convention this codebase already uses throughout
 // (analytics.js's own avgCorrect/accuracy handling).
 //
-// `scope` is the organiser's own choice at publish time: 'podium' (the default, and what any
-// unrecognised value means) publishes the top three only; 'full' also publishes every
+// `scope` is the organiser's own choice at publish time: 'podium' (what any unrecognised value means, and this
+// function's own default) publishes the top three only; 'full' also publishes every
 // competitor's placing as `standings`, which the public results sheet prints. Whichever was
 // chosen is recorded by the payload itself (`standings` present or not), so the page, the sheet
 // and the organiser's own card always agree about what is public.

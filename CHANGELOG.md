@@ -8,6 +8,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, B2: record coverage (the feed reads full standings) · 2026-11-17
+
+**Task:** T-ID2.B2. Branch `claude/l2-b2-coverage-c31161`, PR into `dev`. Migration `20261117100000_seduh_feed_standings.sql`, pgTAP `081` (new), `066`, `067`, `071` updated. **Patch bump to 4.10.6** (a changed publish default and a warning: polish on existing screens, nothing new to use). **Not pushed to the cloud.**
+
+- **Feed (fix 1):** a published result with `standings` is queued like a podium; `app.seduh_feed_slots_internal` reads `podium` union `standings` (the same slots as B4's backfill, so the two plans are now equal). Match and phone rules, the forgery-gap protection and the owner's review (`queue` mode) are unchanged; a stub and a test event are never queued; an identical re-save and a repeat run queue and create nothing twice; a podium-only result widened later is queued again and creates only the added people. `app.seduh_feed_review()`'s `podium_results_not_queued` also counts standings results. The admin counts read the queue only and are unchanged.
+- **Publish default (fix 2):** the Public results card preselects "Full standings" (also after Unpublish) with a one-line notice that follows the choice ("Every competitor's name, café and result will be public."). `archive_snapshot_payload` now carries `standings` (at most 200 rows, only the keys the results page reads) and `notListed`; an unusable or oversized standings array is dropped whole and the podium still publishes; the 64 KB cap stays; the stub stays names-only. **The browser's archive snapshot still stages the podium only**: the archive pipeline is dark, and making it auto-publish every competitor is a separate owner decision.
+- **Protect name and café (fix 3):** on the roster, an entry the published results name shows an advisory in its edit form, which becomes a warning as soon as the name or café changes; after saving, the row says the result is off their Seduh ID profile until republished, with a link to the report. **UI only, no RPC refusal**: a refusal would block legitimate typo fixes before a republish, and the republish is a different screen.
+- **Runbooks (fix 4):** `CONVENTIONS.md`, "Seduh ID: the owner's own identity (#0001) and a phone correction".
+- **Privacy (trust page):** `trustContent.js` and `design/copy/seduh-id-wording-DRAFT.md` now say competitors in the podium or full standings of a published result enter Seduh ID, after a review by us (before: "named on a podium"). Must ship in the same release as the migration reaching the cloud.
+- **Audit corrections:** the B4 backfill already read both arrays, so the feed's change makes it equal to B4's rather than a new rule; the audit's "snapshot carries standings" only works once the browser stages them (not done, see above).
+- **Reviews:** see the PR (reviewers, findings and how each ended).
+
 ## Seduh ID Layer 2, B1: the profile door `public_seduh_profile(handle)` · 2026-11-16
 
 **Task:** T-ID2.B1. Branch `claude/l2-b1-profile-door-b6d900`, PR into `dev`. Migration `20261116100000_public_seduh_profile.sql`, pgTAP `080`. **Patch bump to 4.10.5** (database only: a door with no page behind it yet). **Not pushed to the cloud.**

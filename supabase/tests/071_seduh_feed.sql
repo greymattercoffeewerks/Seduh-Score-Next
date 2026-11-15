@@ -11,12 +11,12 @@
 --   * the trigger is an AFTER ROW trigger (test 045's guard targets BEFORE ROW definer triggers and does not match it);
 --   * the owner's run creates, for a person NAMED in a published non-test podium, an identity (source archive, status active, the
 --     published name cut to 120, a valid country) and links them; it creates NOTHING for: a test event, a bad phone, an owner-blocked
---     person, an ambiguous name slot, a walk-up entry, a renamed entry, a roster-only person, a person named only in the full
---     standings (the deliberate difference from B4: podium only), a stub; it reuses an opted_out identity (inert, still nameless),
+--     person, an ambiguous name slot, a walk-up entry, a renamed entry, a roster-only person, a stub; it DOES create for a person
+--     named only in the full standings (T-ID2.B2: the feed reads podium and standings); it reuses an opted_out identity (inert, still nameless),
 --     a merged tombstone (the kept identity) and an active one (name and country never overwritten); it leaves a person linked
 --     elsewhere alone; two organisations holding one phone share ONE identity;
---   * CONTRACT with B4: for the same podium results the feed's plan equals B4's plan except for the person named only in the
---     standings, and the identities and links a run leaves equal B4's, row for row;
+--   * CONTRACT with B4: for the same results the feed's plan equals B4's plan (both read podium and standings), and the
+--     identities and links a run leaves equal B4's, row for row;
 --   * `off` refuses the owner's run; a null or empty list is refused (there is no "all"); an id not in the queue is counted, not run;
 --   * idempotent; an identical re-save does not re-queue; a changed payload re-queues what was already processed and keeps the
 --     lists undo needs; a phone change nulls the link (existing guard) and a processed result is not re-run, so nothing re-links;
@@ -76,16 +76,15 @@ create function t071.podium_of(event_n int, k int) returns jsonb language sql im
               from generate_series(1, k) i))
 $$;
 -- everything this file's runs leave behind, as one text (identities of the +673971 numbers, then the links of 'T071 ' people),
--- leaving out the one person who is named only in a standings array and so is outside the feed by design
 create function t071.snapshot() returns text language sql stable as $$
   select coalesce((select string_agg(i.phone_e164 || '|' || coalesce(i.display_name, '~') || '|' || coalesce(i.country, '~') || '|'
                                       || i.source || '|' || i.status, ';' order by i.phone_e164)
                      from app.seduh_identities i
-                    where i.phone_e164 like '+673971%' and i.phone_e164 <> '+6739710010'), '')
+                    where i.phone_e164 like '+673971%'), '')
          || '#' ||
          coalesce((select string_agg(p.display_name || '>' || coalesce(i.phone_e164, '~'), ';' order by p.display_name)
                      from public.people p left join app.seduh_identities i on i.id = p.global_person_id
-                    where p.display_name like 'T071 %' and p.display_name <> 'T071 Juliet'), '')
+                    where p.display_name like 'T071 %'), '')
 $$;
 -- run a statement, take a snapshot, and undo it all: returns the snapshot (a function-local rollback, via an exception)
 create function t071.snap_after(stmt text) returns text language plpgsql as $$
@@ -266,13 +265,13 @@ $$;
 grant execute on function t071.rv(int, text) to authenticated;
 select is(t071.rv(7201, 'identities_to_create') || '/' || t071.rv(7201, 'skipped_bad_phone') || '/' || t071.rv(7201, 'skipped_blocked'), '1/1/1',
   'E1 would create 1 (Alpha), skips 1 bad phone and 1 owner-blocked person; the ambiguous Twin slot names nobody');
-select is(t071.rv(7202, 'identities_to_create') || '/' || t071.rv(7202, 'identities_reused') || '/' || t071.rv(7202, 'people_linked_elsewhere'), '0/3/1',
-  'E2 would create 0, reuse 3 identities (opted_out, the tombstone''s kept one, the active one) and finds 1 person linked elsewhere; Juliet (standings only) is not read');
+select is(t071.rv(7202, 'identities_to_create') || '/' || t071.rv(7202, 'identities_reused') || '/' || t071.rv(7202, 'people_linked_elsewhere'), '1/3/1',
+  'E2 would create 0, reuse 3 identities (opted_out, the tombstone''s kept one, the active one) and finds 1 person linked elsewhere; Juliet (standings only) is read, so 1 identity would be created');
 select is(t071.rv(7203, 'identities_to_create') || '/' || t071.rv(7203, 'people_to_link'), '0/0', 'E3 (a walk-up and a renamed entry) would create nothing');
 select is(t071.rv(7204, 'identities_to_create'), 0, 'E4 (the event is now a test event) would create nothing');
 select is(t071.rv(7205, 'identities_to_create'), 2, 'E5 would create 2 (Oscar, and Papa who holds the phone Alpha will get)');
 select is((select (x ->> 'identities_to_create')::int from reports r, jsonb_array_elements(r.r -> 'by_org') x
-            where r.kind = 'review' and x ->> 'org_id' = t071.u(7110)::text), 1, 'per organisation: A would create 1');
+            where r.kind = 'review' and x ->> 'org_id' = t071.u(7110)::text), 2, 'per organisation: A would create 2 (Alpha, and Juliet from the standings)');
 select is((select (x ->> 'identities_to_create')::int from reports r, jsonb_array_elements(r.r -> 'by_org') x
             where r.kind = 'review' and x ->> 'org_id' = t071.u(7111)::text), 2, '...B would create 2');
 select is((select count(*)::int from reports r where r.kind = 'review' and (r.r::text ~ '\+[0-9]{6}' or r.r::text ~* 't071' or r.r::text like '%555-01%')), 0,
@@ -284,14 +283,14 @@ select is((select count(*)::int from app.seduh_identities where phone_e164 like 
 create temp table ids_ab on commit drop as
   select array_agg(id order by id) as ids from public_results where event_id in (t071.u(7201), t071.u(7202), t071.u(7203), t071.u(7204), t071.u(7205));
 select is(t071.plan_diff('app.seduh_backfill_plan_internal((select ids from ids_ab))', 'app.seduh_feed_plan_internal((select ids from ids_ab))'),
-  t071.u(7610)::text, 'B4''s plan has exactly one row the feed''s does not: the person named only in the standings (the deliberate difference)');
+  'none', 'B4''s plan has no row the feed''s lacks (T-ID2.B2: both read podium and standings)');
 select is(t071.plan_diff('app.seduh_feed_plan_internal((select ids from ids_ab))', 'app.seduh_backfill_plan_internal((select ids from ids_ab))'),
   'none', '...and the feed''s plan has nothing B4''s lacks: same class, same rank, same name, same identity, same link');
-select is((select count(*)::int from app.seduh_feed_plan_internal((select ids from ids_ab)) where class = 'eligible'), 7,
-  'the plan found seven eligible people (Alpha, Echo, Foxtrot, Golf, Hotel, Oscar, Papa; B4 would add an eighth, Juliet)');
+select is((select count(*)::int from app.seduh_feed_plan_internal((select ids from ids_ab)) where class = 'eligible'), 8,
+  'the plan found eight eligible people (Alpha, Echo, Foxtrot, Golf, Hotel, Juliet, Oscar, Papa)');
 select isnt(t071.snap_after('select app.seduh_identity_backfill(true, (select ids from ids_ab))'), t071.snapshot(), 'a B4 run changes the snapshot (the comparison below compares something)');
 select is(t071.snap_after('select app.seduh_identity_feed((select ids from ids_ab))'), t071.snap_after('select app.seduh_identity_backfill(true, (select ids from ids_ab))'),
-  'THE CONTRACT: the identities and links an owner run of the feed leaves are exactly the ones B4 leaves for the same podiums (name, country, source, status, every link)');
+  'THE CONTRACT: the identities and links an owner run of the feed leaves are exactly the ones B4 leaves for the same results (name, country, source, status, every link)');
 select is(t071.snapshot(), t071.snap_after('select 1'), '...and both of those runs were rolled back (the snapshot is unchanged)');
 
 -- ============ refusals before any run ============
@@ -304,7 +303,7 @@ select is(t071.attempt('select app.seduh_identity_feed(array[]::uuid[])'), '2202
 insert into reports select 'run', app.seduh_identity_feed(array[t071.rid(7201), t071.rid(7202), t071.rid(7203), t071.rid(7204), t071.rid(7205), t071.rid(7206), t071.rid(7207), t071.u(1)]);
 select is((select r ->> 'results_processed' from reports where kind = 'run'), '5', 'the run processed the five queued results');
 select is((select r ->> 'results_not_queued' from reports where kind = 'run'), '3', '...and counted the three ids that were not queued (the stub, the one published while off, an unknown id) without running them');
-select is((select r ->> 'identities_created' from reports where kind = 'run'), '2', 'it created 2 identities (Alpha, Oscar; Papa holds the phone of Alpha and creates none)');
+select is((select r ->> 'identities_created' from reports where kind = 'run'), '3', 'it created 3 identities (Alpha, Juliet, Oscar; Papa holds the phone of Alpha and creates none)');
 select is((select source || '/' || status || '/' || display_name || '/' || country from app.seduh_identities where phone_e164 = '+6739710001'), 'archive/active/T071 Alpha/Brunei',
   'Alpha, named in a published non-test podium, got an identity: source archive, status active, the published name, the trimmed country');
 select is(t071.gpi(7601), t071.identity_for('+6739710001'), '...and is linked to it');
@@ -322,8 +321,9 @@ select is(t071.identity_for('+6739710003'), null, 'nothing for an owner-blocked 
 select is(t071.identity_for('+6739710021') is null and t071.gpi(7620) is null, true, 'nothing for a WRONG-ORGANISATION person: an entry of this event whose person belongs to another organisation (Cross)');
 select is(t071.gpi(7603), null, '...who stays unlinked');
 select is((select count(*)::int from app.seduh_identities where phone_e164 in ('+6739710004', '+6739710005')), 0, 'nothing for two entries the podium cannot tell apart (Delta and Delta2)');
-select is(t071.identity_for('+6739710010'), null, 'NOTHING for a person named only in the full standings (Juliet): the feed is podium only');
-select is(t071.gpi(7610), null, '...and Juliet is not linked');
+select is((select source || '/' || status || '/' || display_name from app.seduh_identities where phone_e164 = '+6739710010'), 'archive/active/T071 Juliet',
+  'a person named only in the full standings (Juliet) got an identity: the feed reads standings as well as the podium');
+select is(t071.gpi(7610), t071.identity_for('+6739710010'), '...and Juliet is linked to it');
 select is((select count(*)::int from people where id in (t071.u(7613), t071.u(7614)) and global_person_id is not null), 0, 'nothing for a roster-only person (Lima) or a renamed entry (Mike)');
 select is(t071.identity_for('+6739710020'), null, 'nothing for a podium published while the mode was off (Quebec): it was never queued');
 
@@ -341,8 +341,8 @@ select is((select state || '/' || processed_via || '/' || (processed_at is not n
   'a processed queue row says so, and who ran it');
 select is((select cardinality(created_identity_ids) || '/' || cardinality(linked_person_ids) from app.seduh_feed_queue where result_id = t071.rid(7201)), '1/1',
   'the row records the identity it created and the person it linked (what undo uses)');
-select is((select cardinality(created_identity_ids) || '/' || cardinality(linked_person_ids) from app.seduh_feed_queue where result_id = t071.rid(7202)), '0/3',
-  '...a row that only reused identities records no created identity and the three people it linked');
+select is((select cardinality(created_identity_ids) || '/' || cardinality(linked_person_ids) from app.seduh_feed_queue where result_id = t071.rid(7202)), '1/4',
+  '...the standings row records the one identity it created (Juliet''s) and the four people it linked (Echo, Foxtrot, Golf, Juliet)');
 select is((select count(*)::int from reports where kind = 'run' and (r::text ~ '\+[0-9]{6}' or r::text ~* 't071' or r::text like '%555-01%')), 0, 'the run''s report holds counts and uuids only');
 
 -- idempotent
