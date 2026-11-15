@@ -17,6 +17,9 @@ import { defineConfig } from '@playwright/test';
 // first tried. So both servers DO start for either project, even though
 // 'dev-harnesses' never touches port 4173 — an incidental coupling, not a
 // real dependency, but not avoidable at this Playwright version.
+// Port for `wrangler dev` (id-routing.spec.js). Overridable so a stale server from another checkout on 8787 can be avoided.
+const WORKER_PORT = Number(process.env.WORKER_PORT ?? 8787);
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -37,8 +40,21 @@ export default defineConfig({
       port: 5273,
       reuseExistingServer: !process.env.CI,
     },
+    {
+      // The real edge Worker in front of dist/ (wrangler.jsonc), for id-routing.spec.js. Run `npm run build` first.
+      command: `npx wrangler dev --port ${WORKER_PORT} --ip 127.0.0.1`,
+      port: WORKER_PORT,
+      // Never reuse: a wrangler dev left by another checkout would be tested instead of this build (see WORKER_PORT).
+      reuseExistingServer: false,
+    },
   ],
   projects: [
+    {
+      // id-routing.spec.js: Seduh ID person-page routing against the built site under `wrangler dev` (port 8787).
+      name: 'built-worker',
+      testMatch: /id-routing\.spec\.js/,
+      use: { baseURL: `http://127.0.0.1:${WORKER_PORT}` },
+    },
     {
       name: 'built-app',
       testMatch: /smoke\.spec\.js/,

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seduh ID profile — Seduh Score</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/marketing/publicHeader.css" />
+    <link rel="stylesheet" href="/src/marketing/profile.css" />
+    <meta
+      name="description"
+      content="A Seduh ID profile: a person's record across Seduh Score competitions."
+    />
+    <!-- Seduh Score Next, Seduh ID person pages (Layer 2, T-ID2.4 routing spike). One shell for EVERY /id/<handle>/ path:
+         handles are not a fixed list, so the edge Worker (worker/index.js) answers any one-segment path under /id/ with
+         this file and the page reads its handle from the path. noindex and linked from nowhere until the owner decides.
+         Placeholder only for now: no data calls. The country pages have their own shell and are not served by this one. -->
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/marketing/profileMain.js"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+/* Seduh ID person page shell (Layer 2). Own class prefix, shared tokens only: no :root block, no colour or corner of its
+   own. Phone first: written for 360px. */
+body {
+  min-width: 320px;
+}
+.profile-page {
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+.profile-hero {
+  width: min(100% - 2rem, 1160px);
+  margin-inline: auto;
+}

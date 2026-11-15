@@ -21,7 +21,15 @@
   // truth for deployment state instead.
   "name": "seduh-score-next",
   "compatibility_date": "2026-08-21",
+  // The edge Worker exists only for Seduh ID person pages, /id/<handle>/ (worker/index.js, worker/idRoute.js). Handles are
+  // not a fixed list, so they cannot have a build-time shell the way /id/country/<iso2>/ does. `run_worker_first` sends
+  // ONLY /id/* here; everything else (the whole site, /id/country and /id/country/*, real 404s) is served by the static
+  // assets without running the Worker, exactly as before. Negative patterns win over positive ones. `not_found_handling`
+  // stays at its default ("none"): a single-page fallback would turn every real 404 on the site into a 200.
+  "main": "worker/index.js",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/id/*", "!/id/country", "!/id/country/*"],
   },
 }
