@@ -8,6 +8,20 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, Phase A2: the schema for claimed Seduh IDs · 2026-11-15
+
+**Task:** T-ID2.A2 (Layer 2 fast track, `SEDUH-ID-LAYER2-SPEC-DRAFT.md` section 14). Branch `claude/l2-a2-schema-36703f`, PR into `dev`. Migration `20261115120000_seduh_accounts.sql`, pgTAP `079`. Tables, constraints and triggers only: **no function a person can call, no front-end change, no version bump** (the gate runs on the release PR). **Not pushed to the cloud.**
+
+- **`app.seduh_accounts`** (owner-only, in `app`, like the identities): one row per claimed identity, `identity_id` and `user_id` unique, `claim_method` (`organiser_link`; `sms` reserved), `adult_attested_at` NOT NULL (L2-7), `closed_at`. Rows are never deleted or truncated; a closed account stays closed and keeps its handle and number; deleting a closed account's login leaves the row (`user_id` ON DELETE SET NULL).
+- **Handle on the account, not the identity** (most identities never claim): lower case, 3 to 30, letters and digits with single hyphens, unique, frozen by trigger. Reserved words (the 18 asked for, plus about thirty more) live in one function, `app.seduh_handle_reserved`.
+- **Founding number:** a sequence starting at 2, so a default claim never gets 1; an explicit 1 is refused unless the transaction sets `app.seduh_owner_assignment = 'on'` (runbook in `CONVENTIONS.md`, "Seduh ID #0001"); unique, frozen, never reissued. No cohort columns (L2-6).
+- **`app.seduh_profile_settings`:** one row per account, made by an insert trigger, one column per part of spec section 4, L2-1 defaults (everything public, country-page listing off), each inside its own vocabulary (identity, café, knockout take no `organisers`).
+- **`app.seduh_claim_links`:** SHA-256 hash only (a raw token is refused by shape), 72-hour window, one open link per identity, used and revoked exclusive and one-way, an account made by at most one link. **Treated as tenant data where it matters:** `org_id` frozen like any tenant parent, plus identity, hash and expiry; still outside matrices `040`/`041` (not in `public`, no policy, no grant, no function).
+- **`app.seduh_identities.country_code`:** nullable ISO alpha-2, upper case. Free-text `country` stays.
+- **Guards:** `050` pins the three new tables. `033`, `040`, `042` look at `public` only and need nothing.
+- **Left for Phase B:** the claim function must check the identity is active and unmerged; the merge function must refuse an identity that holds an account; the issuing function must prove the person is on the issuing organisation's roster.
+- **Reviews:** (filled in below)
+
 ## Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15
 
 **Task:** three open items, picked as small and unblocked. Branch `claude/small-fixes-2` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
