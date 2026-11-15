@@ -21,7 +21,10 @@ describe('seduh accounts rollback block', () => {
     const to = migration.indexOf('-- ============ ISO country');
     const fromMigration = lines(migration.slice(from, to)).map((l) => l.replace(/^--\s*/, ''));
     const start = pgtap.indexOf('savepoint rollback_block;') + 'savepoint rollback_block;'.length;
-    const end = pgtap.indexOf('select is((select count(*)::int from pg_class where relnamespace', start);
+    const end = pgtap.indexOf(
+      'select is((select count(*)::int from pg_class where relnamespace',
+      start,
+    );
     const fromTest = lines(pgtap.slice(start, end));
     expect(fromMigration.length).toBeGreaterThan(5);
     expect(fromTest).toEqual(fromMigration);
