@@ -14,7 +14,8 @@ describe('overBudget', () => {
 });
 
 describe('brokenLinks', () => {
-  const exists = (p) => p.endsWith('/real.md');
+  // path.resolve uses backslashes on Windows; compare with forward slashes so the fixture works on every OS.
+  const exists = (p) => p.replaceAll('\\', '/').endsWith('/real.md');
   it('flags a relative link to nothing and ignores urls, anchors and real files', () => {
     const text = '[a](real.md) [b](gone.md#x) [c](https://x.test/y) [d](#top) [e](mailto:a@b.c)';
     expect(brokenLinks('/r/CLAUDE.md', text, exists)).toEqual([

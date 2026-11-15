@@ -64,7 +64,8 @@ See `android/guess-the-bean-widget/CLAUDE.md`.
 
 ## Known open items from Petrol Kaizen P4 (feedback ladder, 2026-11-13)
 
-- **`.gtb-input` has no `aria-invalid` edge.** Guess the Bean does not load `components.css`, so the field-state rules from the kit do not reach it. The core `.form-field-error` message is in `feedback.css`, which GTB does load. Either load the field rules or copy the edge into GTB's own CSS.
+- **`.gtb-input` has no `aria-invalid` edge.** Guess the Bean does not load `components.css`, so the field-state rules from the kit do not reach it. The core `.form-field-error` message is in `feedback.css`, which GTB does load. Either load the field rules or copy the edge into GTB's own CSS. **CLOSED (2026-11-15):** `.gtb-input[aria-invalid='true']` in `src/community/guess-the-bean/shared.css` copies the kit edge (2px `--field-edge-error`), pinned by `sharedStyles.test.js`.
+- **The normal `.gtb-input` edge fails 3:1.** `border: var(--border-hairline) solid var(--color-border)` (petrol-300 in paper mode) is 2.09:1 on the canvas fill and 2.47:1 on the card, under WCAG 1.4.11. Using `--color-border-input` (petrol-400, as the kit does) would fix it. Pre-existing, found by `ui-accessibility-reviewer` (2026-11-15); logged, not fixed.
 - **Reset data and End session show their errors through the 1.5 s in-screen toast** (pre-existing; `ui-accessibility-reviewer`). Errors belong inline by the action.
 - **The setup screen's in-screen toast** should move to core `toast()` for success and an inline line for errors (see the BTC section of this kit's follow-ups).
 - **The Reset and End session dialogs** are built (`confirmDialog`) but have had no real-tablet check. Owed.

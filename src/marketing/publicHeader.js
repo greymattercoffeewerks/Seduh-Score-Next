@@ -100,6 +100,10 @@ export function buildPublicHeader({
     toggle.classList.toggle('public-header-toggle-open', isOpen);
     toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   });
+  // Escape closes the menu from the toggle too (focus stays on it), as the landing nav does.
+  toggle.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu();
+  });
   panel.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       closeMenu();
