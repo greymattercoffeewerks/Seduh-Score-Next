@@ -378,6 +378,15 @@ select is((select count(*)::int from app.seduh_claim_links where org_id = t079.u
 
 -- ============ the migration's rollback block ============
 
+-- a later migration (20261118100000, T-ID2.B3a) depends on these tables, so ITS rollback block runs first, inside its own
+-- savepoint (tools/seduh-accounts-rollback-sync.test.js pins THIS migration's block, which follows unchanged)
+savepoint later_migrations;
+drop function if exists public.seduh_claim_begin(text);
+drop function if exists public.claim_seduh_id(text, text, boolean);
+drop table if exists app.seduh_reserved_numbers;
+drop table if exists app.seduh_claim_audit;
+alter table app.seduh_claim_links drop column if exists last_code_sent_at;
+alter table app.seduh_claim_links drop column if exists code_sends;
 savepoint rollback_block;
 drop table if exists app.seduh_claim_links;
 drop table if exists app.seduh_profile_settings;
@@ -399,6 +408,7 @@ select is((select count(*)::int from app.seduh_identities where id = t079.u(7901
 rollback to savepoint rollback_block;
 select is((select count(*)::int from pg_class where relnamespace = 'app'::regnamespace and relname in ('seduh_accounts', 'seduh_profile_settings', 'seduh_claim_links')), 3,
   '(the test rolls the rollback block back: the tables are there again)');
+rollback to savepoint later_migrations;
 
 select * from finish();
 rollback;

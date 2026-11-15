@@ -102,6 +102,8 @@ const SERVICE_ONLY = {
     p_role: 'owner',
   }),
   org_set_role: (w) => ({ p_org_id: w.a.orgId, p_user_id: w.a.userId, p_role: 'organiser' }),
+  // T-ID2.B3a: the claim Edge Function's token check (it counts an emailed code against a claim link): service role only
+  seduh_claim_begin: () => ({ p_token: 'z'.repeat(43) }),
 };
 
 // A refusal, by status, SQLSTATE and hint, with the name of what was attacked in the failure message.

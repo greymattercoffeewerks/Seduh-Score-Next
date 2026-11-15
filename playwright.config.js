@@ -145,12 +145,12 @@ export default defineConfig({
     },
     {
       // identity-link-live.spec.js (T-ID.B2), seduh-feed-live.spec.js (T-ID.D1) and affiliations-live.spec.js (T-ID.C2) call the real local PostgREST
-      // with real JWTs and no browser; people-screen-live.spec.js (T-ID.C2) drives the People screen and the
+      // with real JWTs and no browser; seduh-claim-live.spec.js (T-ID2.B3a) is the claim flow over HTTP with the Edge Function and the mail catcher; people-screen-live.spec.js (T-ID.C2) drives the People screen and the
       // roster in a browser on the dev server. Last, for the same shared-backend reason; each creates its own
       // organisations and identities.
       name: 'dev-identity',
       testMatch:
-        /(identity-link-live|seduh-feed-live|affiliations-live|affiliations-id-oracle-live|people-screen-live)\.spec\.js/,
+        /(identity-link-live|seduh-feed-live|affiliations-live|affiliations-id-oracle-live|people-screen-live|seduh-claim-live)\.spec\.js/,
       dependencies: ['dev-gating'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },

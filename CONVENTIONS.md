@@ -330,7 +330,7 @@ select p.global_person_id from public.people p where p.id = '<owner person uuid>
 commit;
 ```
 
-(3) Later, when a claim path is live, assign founding number 1 with the "Seduh ID #0001" runbook below (`insert into app.seduh_accounts ... founding_number = 1`).
+(3) Then reserve number 1 and claim, by "Seduh ID claim" below (the owner's full path; B3a replaced the hand `insert into app.seduh_accounts`).
 A roster-only person with no published result has no record to show: the profile is the owner's self-reported entries (Phase C).
 
 **(b) Re-creating or re-linking after a phone correction.** A change to `people.phone` sets `global_person_id` to null (the guard trigger), and
@@ -782,7 +782,7 @@ Only an explicit `founding_number = 1` can, and a trigger refuses it unless the 
 `app.seduh_owner_assignment` to `on`. The unique constraint makes 1 single-use for ever. This guards against a slip or a
 buggy claim function; it is not a security boundary (nobody but the owner role reaches the table).
 
-**The step (owner SQL, once, after the owner's identity exists and a claim path is live).** The identity is the owner's
+**(Superseded by "Seduh ID claim" below, T-ID2.B3a: reserve the number and claim through `claim_seduh_id`. The direct insert still works and is the fallback.)** **The step (owner SQL, once, after the owner's identity exists).** The identity is the owner's
 roster row (Layer 2 spec 14.4); the login is a competitor login, a different email from the platform-admin login:
 
 ```sql
@@ -804,3 +804,50 @@ Claim links hold only a SHA-256 hash (64 hex characters) of the token and expire
 identity is open at a time (issuing a new one means revoking the old, and that includes an expired one: the index cannot see the clock); a used or revoked link cannot be reopened. They
 carry the issuing `org_id`, frozen like any tenant parent. Phase B's issuing function must call `app.refuse_non_member`
 for that organisation, and any policy ever added must use `app.is_org_member`.
+
+### Seduh ID claim: issuing, redeeming, #0001 and undoing a claim (T-ID2.B3a, 20261118100000)
+
+The backend of claiming; the screens are B3b. **Contract B3b builds on** (all `SECURITY DEFINER`, empty `search_path`; refusals are `P0001` with a snake_case `hint` the page translates, PostgREST answers 400; a non-member or a missing id is one `42501`, 403):
+
+| Door | Who | Returns |
+| --- | --- | --- |
+| `issue_seduh_claim_link(p_person_id uuid)` | an organiser of the person's organisation (org derived from the person) | the RAW token, a 43-character URL-safe string (256 bits), exactly once. B3b builds the link (put the token in the URL fragment, which never reaches a server log). Only its SHA-256 is stored; 72 hours; it revokes every open link of that identity first, expired ones included |
+| `revoke_seduh_claim_link(p_person_id uuid)` | same | nothing; hint `no_open_link` if none |
+| `seduh_claim_statuses(p_org_id uuid, p_person_ids uuid[])` | a member of `p_org_id` | rows `(person_id, state, expires_at, handle)`; `state` is `no_identity` (also an opted-out identity: nobody learns who objected), `unavailable` (a merged tombstone), `can_issue`, `link_open` (with `expires_at`), `claimed` (with the public `handle`). An id that is not a person of that organisation refuses the whole call. Never a token, a hash or a user. At most 500 ids |
+| `seduh_handle_available(p_handle text)` | anyone (anon) | `available`, `taken` (any case; a closed account's handle stays taken), `reserved` or `invalid`; stable and cheap |
+| `claim_seduh_id(p_token text, p_handle text, p_adult boolean)` | the signed-in person | `{handle, founding_number, profile_path}` |
+| `seduh_claim_begin(p_token text)` | SERVICE ROLE ONLY (the Edge Function) | `{status, display_name?}`, status `ok`, `invalid`, `used`, `revoked`, `expired`, `unavailable` or `too_many`; an `ok` counts one emailed code against the link (six at most) |
+
+Hints: `no_identity`, `identity_unavailable`, `identity_claimed`, `no_open_link`, `bad_input` (issue, revoke, statuses); `link_invalid`, `link_used`, `link_revoked`, `link_expired`, `identity_unavailable`, `identity_claimed`, `handle_invalid`, `handle_reserved`, `handle_taken`, `adult_required`, `account_exists`, `admin_cannot_claim` (claim). Claim refuses a platform-admin login, a login that already has an account, and anything but `p_adult = true`; the handle is trimmed and lower-cased; a lost race for a handle or a login gives the same hint as a plain refusal. A refusal writes nothing.
+
+**How a person with no login gets one.** The Edge Function `seduh-claim` (POST `{token, email}`, the project's anon key as the bearer; `supabase/functions/seduh-claim/`): checks the token with `seduh_claim_begin` FIRST (a bad token sends no email and makes no login), finds or creates the login with the service role (`createUser({email, email_confirm: true})`, no password; an existing email is fine and answers the same), then `signInWithOtp({email, options: {shouldCreateUser: false}})` emails a 6-digit code through Auth. The page then calls `verifyOtp({email, token: code, type: 'email'})` in the browser and `claim_seduh_id` with the new session. Responses: 200 `{ok, display_name}`; otherwise `{error, hint}` with 404 `link_invalid`, 410 `link_used` / `link_revoked` / `link_expired` / `identity_unavailable`, 429 `too_many_codes` / `email_rate_limited`, 400 `bad_email`, 502 `email_send_failed`. **This does not need public email signup.** Note that Guess the Bean's `signInWithOtp` creates a login for any address, so the cloud's email signup is probably ON already (check the dashboard before relying on either).
+
+**Cloud rollout (manual, after merge; none of it is automatic).** (1) Push migration `20261118100000`. (2) Deploy the function: `deploy_edge_function` `seduh-claim` with `verify_jwt: true` (it needs only the three variables Supabase gives every function: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`; no secret to set). (3) Edit the dashboard's Magic Link email template to carry the code: use the body of `supabase/templates/magic_link.html` (it keeps the link, so Guess the Bean is unchanged; `{{ .Token }}` is the code). The default template has NO code, so without this step the person gets a link and no code. (4) The hourly email limit is 30 (Resend); each claim sends one email. (5) Check `list_migrations` that the migration is really there.
+
+**The owner's full path to #0001.** The owner uses TWO logins: the platform-admin login, and a competitor email that is not it (claim refuses an admin login, `admin_cannot_claim`). (a) Add yourself to the Grey Matter Coffee Werks roster with your real phone (a test event is fine). (b) Create and link your identity ("Seduh ID: the owner's own identity", above). (c) Reserve number 1 for it, owner SQL:
+
+```sql
+insert into app.seduh_reserved_numbers (founding_number, identity_id, note)
+values (1, (select global_person_id from public.people where id = '<your person uuid>'), 'owner');
+```
+
+(d) Issue a claim link to yourself: the People screen's button (B3b), or owner SQL now: `select public.issue_seduh_claim_link('<your person uuid>');` (the token prints once; `issued_by` is null). (e) Redeem it with the competitor email: the claim page (B3b), or by hand: POST `{token, email}` to `<project>/functions/v1/seduh-claim`, read the code from the email, POST `{type: 'email', email, token: <code>}` to `/auth/v1/verify`, then call `claim_seduh_id` with the returned `access_token`. The account gets founding number **1**: `claim_seduh_id` finds the reservation for that identity and, only then, sets `app.seduh_owner_assignment` for that one insert; every other claim takes the sequence (2 and up), and the table accepts only the number 1 as a reservation. (f) Check: `select handle, founding_number from app.seduh_accounts where founding_number = 1;` and `select * from app.seduh_reserved_numbers;` (consumed, names the account).
+
+**Undo a claim (owner SQL, one transaction, audited by hand).** For a wrong person claiming, an account to withdraw, or a test:
+
+```sql
+begin;
+with closed as (
+  update app.seduh_accounts set closed_at = now(), user_id = null
+   where handle = '<handle>' and closed_at is null
+  returning id, identity_id, founding_number)
+insert into app.seduh_claim_audit (action, identity_id, account_id, detail)
+select 'claim.undo', identity_id, id, jsonb_build_object('founding_number', founding_number, 'reason', '<short reason>') from closed;
+commit;
+```
+
+Closing hides the page at once (the profile door answers the empty shape), retires the handle and the number for ever (never reissued), and clears `user_id` so the login is free to claim a different identity; the login itself stays (delete it from Auth separately if it was made only for the claim). **Known limit: the identity cannot be claimed again.** `seduh_accounts.identity_id` is unique and rows are never deleted (A2), so a person who lost their identity to a wrong claim cannot re-claim it. Relaxing the unique constraint to a partial index on open accounts is a small migration; it is not built, on purpose, until the owner decides (it changes the A2 contract and `079`). A person who simply wants out uses the PDPO close (C4), not this.
+
+**Audit:** `app.seduh_claim_audit` (its own table, not the admin audit log: that one is admin-gated, the console reads it, and `047` pins its writers). Written by issue, revoke and claim in the same transaction; append-only by `ENABLE ALWAYS` triggers (the table owner could still drop them: the admin log's honest limit); ids and short codes only, never a token, an email or a phone (`app.admin_audit_detail_ok` refuses those key names); refusals write nothing. Read it as the owner: `select * from app.seduh_claim_audit order by id desc limit 50;`.
+
+**Security notes.** The link is a bearer secret: whoever holds it and reads a mailbox can claim, once, within 72 hours (an organiser sends it privately; a person who sees a name that is not theirs stops). The cloud OTP has Auth's own per-address frequency limit and verification rate limit, and each link allows six emailed codes. Two parallel claims of one link make exactly one account (issue, revoke and claim all lock the identity row first: one lock order). `claim_seduh_id` never trusts a user id from the client: it uses `auth.uid()`.
