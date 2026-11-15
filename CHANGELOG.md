@@ -8,6 +8,21 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15
+
+**Task:** three open items, picked as small and unblocked. Branch `claude/small-fixes-2` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
+
+- **`tools/check-doc-budgets.test.js` passes on Windows.** Its `exists` fixture matched `/real.md`, but `brokenLinks` builds paths with `path.resolve`, which gives backslashes on Windows, so a real file was reported broken. The fixture now normalises separators. Test-only; the checker is unchanged. (Follow-up from the "Public header links" entry, 2026-11-14.)
+- **Guess the Bean fields show the error edge.** GTB does not load `components.css`, so `.gtb-input[aria-invalid='true']` in `src/community/guess-the-bean/shared.css` now copies the kit's 2px `--field-edge-error` edge, giving 1px back in the side padding so the field does not grow. 8.0:1 against the input fill. The `.form-field-error` message (with its glyph) stays the non-colour cue.
+- **The shared header's phone menu closes on Escape from the toggle.** It already closed on Escape inside the panel; now Escape on the toggle closes it too, with focus left on the toggle, as the landing nav does (`src/marketing/publicHeader.js`).
+- **Tests.** `publicHeader.test.js`: Escape on the toggle closes the menu and keeps focus there; other keys do not. `sharedStyles.test.js` (new): the GTB error edge equals the kit's (`components.css`), so the copy cannot drift, and the padding gives back 1px. Reverting either fix fails its test.
+- **Not done:** no browser run.
+- **Reviews:**
+  - `code-reviewer`: clean.
+  - `module-boundary-checker`: no 🔴. Two nits: the GTB test did not compare against the kit (fixed: now a parity test); `guess-the-bean/CLAUDE.md` "Own CSS" does not list the error-edge copy (left for the owner: CLAUDE.md files are not edited on a reviewer's request). 🟣 The toggle and menu logic is duplicated between `landingScreen.js` and `publicHeader.js` (pre-existing, not logged as a task).
+  - `test-auditor`: no 🔴. Nits: no focus assertion (fixed); the "2px" test name (gone with the parity rewrite).
+  - `ui-accessibility-reviewer`: no 🔴. One nit, fixed: the padding compensation is now asserted. 🟣 The normal `.gtb-input` edge is 2.09:1 (under 3:1); logged in `docs/backlog/guess-the-bean.md`.
+
 ## Public site: three small backlog fixes · 2026-11-14
 
 **Task:** three open items from `docs/backlog/public-site.md`, picked as small and unblocked. Branch `claude/marketing-backlog-smalls` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Released in 4.10.3** (patch). No database, RPC or payload change.
