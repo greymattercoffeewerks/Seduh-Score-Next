@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { test, expect as baseExpect } from '@playwright/test';
 import { createTenant } from './support/tenants.js';
 import { sqlAsOwner } from './support/admins.js';
-import { rest, signInPassword } from './support/api.js';
+import { rest, rpc, signInPassword } from './support/api.js';
 
 // T-ID2.B3b: the claim SCREENS, in a real browser against the real app and the real local Supabase stack (B3a's
 // seduh-claim-live.spec.js proves the same contract over HTTP). An organiser sends a claim link from the People screen; the
@@ -230,6 +230,14 @@ test.describe('claiming a Seduh ID through the screens (real app, real local Sup
     ).toBeFocused();
     await expect(claimPage.getByText('The organiser cancelled this link.')).toBeVisible();
     await shot(claimPage, 'claim-0-cancelled-link');
+    // the dead link sent NO email
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const mailed = await (
+      await fetch(
+        `${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:dead-${tag}@local.test`)}`,
+      )
+    ).json();
+    expect(mailed.messages ?? []).toHaveLength(0);
 
     // the real one
     const email = `claimant-${tag}@local.test`;
@@ -288,9 +296,11 @@ test.describe('claiming a Seduh ID through the screens (real app, real local Sup
     expect(number).not.toBe(state.firstNumber);
     expect(Number(number.slice(1))).toBeGreaterThan(Number(state.firstNumber.slice(1)));
 
-    // the retired handle shows nothing; the new one answers; the organiser sees the NEW handle
-    await fresh.goto(`/id/${state.handle}/`);
-    await expect(fresh.getByRole('heading', { level: 1 })).toBeVisible();
+    // the retired handle answers as an empty profile, the new one has a profile (the door the page reads); the organiser sees the NEW handle
+    const profileOf = async (h) =>
+      (await rpc('public_seduh_profile', { p_handle: h }, { token: null })).body.has_profile;
+    expect(await profileOf(state.handle)).toBe(false);
+    expect(await profileOf(handle)).toBe(true);
     await page.reload();
     await expect(page.locator(`#people-row-${person}`)).toContainText(`Claimed @${handle}`);
     await fresh.context().close();
@@ -305,7 +315,7 @@ test.describe('claiming a Seduh ID through the screens (real app, real local Sup
     await page.goto('/id/claim');
     await expect(page.getByRole('heading', { name: 'This link is incomplete' })).toBeVisible();
     await page.goto('/id/country/bn/');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.locator('main.country-page')).toBeVisible();
     expect(await page.title()).not.toMatch(/Claim/);
     await page.goto('/id/someone-else/');
     await expect(page.getByRole('heading', { name: 'Seduh ID profile' })).toBeVisible();

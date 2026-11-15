@@ -173,7 +173,14 @@ describe('step 3, the code', () => {
     expect(h1(m.root)).toBe('Choose your handle');
   });
   it('says a wrong or expired code is wrong, and each other failure in its own words', async () => {
-    for (const hint of ['otp_invalid', 'too_many_attempts', 'offline', 'timeout']) {
+    for (const hint of [
+      'otp_invalid',
+      'too_many_attempts',
+      'offline',
+      'timeout',
+      'server_error',
+      'bad_request',
+    ]) {
       const m = mount(fakeApi({ verifyCode: vi.fn(async () => ({ ok: false, hint })) }));
       await toCode(m);
       type(m.root, '#claim-code', '123456');
@@ -368,6 +375,18 @@ describe('step 4, handle, 18+ and claim', () => {
       type(m.root, '#claim-handle', 'abcdef');
       await submit(m.root);
       expect(text(m.root, '#claim-form-status'), hint).toContain('may already have gone through');
+      document.body.replaceChildren();
+    }
+  });
+  it('words a server fault on the claim step in its own sentence', async () => {
+    for (const hint of ['server_error', 'bad_request']) {
+      const m = mount(fakeApi({ claim: vi.fn(async () => ({ ok: false, hint })) }));
+      await toHandle(m);
+      m.root.querySelector('#claim-adult').checked = true;
+      type(m.root, '#claim-handle', 'abcdef');
+      await submit(m.root);
+      expect(text(m.root, '#claim-form-status'), hint).toBe(describeClaimHint(hint));
+      expect(m.root.querySelector('#claim-submit').disabled, hint).toBe(false);
       document.body.replaceChildren();
     }
   });

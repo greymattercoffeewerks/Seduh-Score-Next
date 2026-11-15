@@ -11,7 +11,7 @@
 --   * #0001: a reserved identity that is closed and re-claimed gets a sequence number, never 1 again.
 --   * the rollback block restores the plain unique (and refuses, on purpose, once an identity has two rows).
 begin;
-select plan(33);
+select plan(35);
 
 create schema t083;
 grant usage on schema t083 to anon, authenticated, service_role;
@@ -114,7 +114,9 @@ reset role;
 
 -- ============ undo, then re-claim ============
 select is(t083.undo('first-83'), 'ok', 'the undo runbook closes the account');
-select is(t083.attempt($$ delete from app.seduh_accounts where handle = 'first-83' $$) <> 'ok', true, 'a closed row is still never deleted');
+select is(t083.attempt($$ delete from app.seduh_accounts where handle = 'first-83' $$), '42501/', 'a closed row is still never deleted');
+select is((select count(*)::int from app.seduh_accounts where handle = 'first-83'), 1, '...and it is still there');
+select is(app.seduh_handle_reserved('claim'), true, '"claim" is a reserved handle (the claim page owns /id/claim/)');
 select is(t083.attempt($$ update app.seduh_accounts set closed_at = null where handle = 'first-83' $$), '23001/', 'a closed account still cannot be reopened');
 set local role authenticated;
 select t083.as_user(8301);
