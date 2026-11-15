@@ -204,7 +204,8 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+email_sent = 100
+# (Raised from 2 for the claim flow's live proof, T-ID2.B3a: it sends a code per run. The cloud limit is set in the dashboard, 30 an hour.)
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -250,6 +251,13 @@ otp_expiry = 3600
 # pass = "env(SENDGRID_API_KEY)"
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
+
+# The magic-link email carries the one-time CODE as well as the link (T-ID2.B3a): Seduh ID claiming signs a person in by typing
+# the 6-digit code. Guess the Bean's magic link still works from the same email. The CLOUD template is edited by hand in the
+# dashboard (Authentication, Email templates, Magic Link) to the same content: see CONVENTIONS.md, Seduh ID claim.
+[auth.email.template.magic_link]
+subject = "Your Seduh Score sign-in code"
+content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -413,6 +421,11 @@ verify_jwt = true
 # The platform-admin console's one login-creating function (T-ADM.C2). The gateway checks the caller's JWT; the
 # function then asks the database (admin_can_provision) whether they are a platform admin at aal2 with a fresh TOTP.
 [functions.admin-accounts]
+verify_jwt = true
+
+# Seduh ID claiming (T-ID2.B3a): step one for a person with no login yet. The gateway checks the caller holds the project's key;
+# the function checks the claim token with the database BEFORE any email is sent (see its handler.js).
+[functions.seduh-claim]
 verify_jwt = true
 
 [analytics]

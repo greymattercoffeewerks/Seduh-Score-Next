@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(92);
+select plan(98);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -134,6 +134,9 @@ insert into e1.rpc (name, sql, org_only) values
   ('my_entitlements', 'select public.my_entitlements(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('team_remove_member', 'select public.team_remove_member(e1.u(''@'',100), ''00000000-0000-0000-0000-000000000003''::uuid)', true),
   ('link_person_identity', 'select public.link_person_identity(e1.u(''@'',100), e1.u(''%'',17))', false),
+  ('issue_seduh_claim_link', 'select public.issue_seduh_claim_link(e1.u(''%'',17))', false),
+  ('revoke_seduh_claim_link', 'select public.revoke_seduh_claim_link(e1.u(''%'',17))', false),
+  ('seduh_claim_statuses', 'select * from public.seduh_claim_statuses(e1.u(''@'',100), array[e1.u(''%'',17)])', false),
   ('stage_archive_payload', 'select public.stage_archive_payload(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',1), ''{"podium":[{"name":"A"}]}''::jsonb)', false),
   ('set_archive_listing', 'select public.set_archive_listing(e1.u(''@'',100), e1.u(''%'',1), true)', false),
   ('archive_event_status', 'select * from public.archive_event_status(e1.u(''@'',100), array[e1.u(''%'',1)])', false),
@@ -144,7 +147,7 @@ insert into e1.rpc (name, sql, org_only) values
   ('td_confirm_match', 'select public.td_confirm_match(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62))', false),
   ('td_record_walkover', 'select public.td_record_walkover(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), e1.u(''%'',63))', false);
 
-update e1.rpc set org_arg = false where name = 'create_btc_match';
+update e1.rpc set org_arg = false where name in ('create_btc_match', 'issue_seduh_claim_link', 'revoke_seduh_claim_link');
 -- Where the organisation's own call is stopped by a LATER rule of the function (the fixture is a pending heat, an
 -- unscored cupper, a bracket that exists, ...), the rule is named here, so the own call is shown to pass the
 -- organisation check and stop at exactly that rule, not for some unrelated reason.
@@ -160,8 +163,10 @@ update e1.rpc set own_expect = case name
   when 'record_btc_tiebreak'         then 'P0001: record_btc_tiebreak: a tie-break applies to knockout matches only'
   when 'record_heat_time'            then 'P0002: CONFLICT: heat .* is pending now, expected timing'
   when 'td_confirm_match'            then 'P0001: td_confirm_match: the votes are level'
+  when 'issue_seduh_claim_link'      then 'P0001: This person has no Seduh ID yet'
+  when 'revoke_seduh_claim_link'     then 'P0001: There is no open claim link for this person'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 37, 'the matrix covers 37 RPCs');
+select is((select count(*)::int from e1.rpc), 40, 'the matrix covers 40 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
@@ -222,7 +227,7 @@ reset role;
 -- the function's own guard speaking (and not an argument error, a missing row of the fixture, or success)
 create function e1.is_guard(code text, rpc text) returns boolean language sql immutable as $$
   select code ~ '^(42501|P0001): ' and code ~* ('(not found|does not belong|only an owner'
-    || case when rpc = 'link_person_identity' then '|row-level security policy for table "people"'
+    || case when rpc in ('link_person_identity', 'issue_seduh_claim_link', 'revoke_seduh_claim_link', 'seduh_claim_statuses') then '|row-level security policy for table "people"'
                            when rpc = 'archive_event_status' then '|row-level security policy for table "archive_events"' else '' end || ')')
 $$;
 

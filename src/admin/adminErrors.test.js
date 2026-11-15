@@ -130,6 +130,22 @@ const NOT_FOR_THE_CONSOLE = {
   td_match_not_ready: 'Throwdown format',
   td_votes_level: 'Throwdown format',
   td_leader_changed: 'Throwdown format',
+  // Seduh ID claiming (T-ID2.B3a): the organiser's and the competitor's own screens (B3b); never an admin console call.
+  no_identity: 'Seduh ID claim',
+  identity_unavailable: 'Seduh ID claim',
+  identity_claimed: 'Seduh ID claim',
+  no_open_link: 'Seduh ID claim',
+  bad_input: 'Seduh ID claim',
+  link_invalid: 'Seduh ID claim',
+  link_used: 'Seduh ID claim',
+  link_revoked: 'Seduh ID claim',
+  link_expired: 'Seduh ID claim',
+  handle_invalid: 'Seduh ID claim',
+  handle_reserved: 'Seduh ID claim',
+  handle_taken: 'Seduh ID claim',
+  adult_required: 'Seduh ID claim',
+  account_exists: 'Seduh ID claim',
+  admin_cannot_claim: 'Seduh ID claim',
 };
 
 describe('the hint copy covers every hint the console can meet', () => {
