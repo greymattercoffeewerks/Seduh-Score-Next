@@ -8,6 +8,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## CI: pin the Supabase CLI to 2.115.0 · 2026-11-15
+
+**Why:** the two CI jobs that start a local Supabase stack ("Playwright e2e" and "Migrations from scratch + pgTAP")
+installed the CLI with `supabase/setup-cli@v1` and `version: latest`. That asks GitHub's API for the newest release on
+every run, and on shared runners it failed twice on 2026-11-15 with "Failed to resolve latest Supabase CLI release: rate
+limit exceeded", before any test ran (PR #478). **Change:** both jobs now pin `version: 2.115.0`, the version
+`package-lock.json` already installs locally, so CI and local runs use the same CLI and no release lookup is made.
+Upgrading the CLI is now a deliberate one-line change in `.github/workflows/ci.yml`, kept in step with
+`package-lock.json`. CI configuration only; no app, database or version change.
+
 ## Seduh ID Layer 2, A1: how `/id/<handle>/` is served (a Worker for `/id/*`) · 2026-11-15
 
 **Task:** Layer 2 fast-track task A1 (routing spike) plus the March plan amendment. Branch `claude/l2-a1-profile-routing-25c4d7`, PR into `dev`. **Patch bump to 4.10.4** (groundwork nobody can use yet: a `noindex` placeholder, linked from nowhere). No database change, no cloud change.
