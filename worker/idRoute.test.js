@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest';
+import { COUNTRY_HUB_PATH } from '../src/core/countryPages.js';
+import { isProfilePath, PROFILE_SHELL_PATH, profileShellFor } from './idRoute.js';
+
+describe('isProfilePath', () => {
+  it('is true for one segment under /id/, with or without a trailing slash, in any case', () => {
+    for (const ok of [
+      '/id/syafiqah',
+      '/id/syafiqah/',
+      '/id/Syafiqah/',
+      '/id/a',
+      '/id/ab',
+      '/id/some-one_2',
+      `/id/${'x'.repeat(64)}`,
+    ]) {
+      expect(isProfilePath(ok), ok).toBe(true);
+    }
+  });
+
+  it('answers the same for a handle that is too short, too long or the wrong case as for a good one', () => {
+    // A different answer would say which handles exist. Shape rules (3 to 30, lower case) belong to the database.
+    expect(isProfilePath('/id/ab')).toBe(isProfilePath('/id/abc'));
+    expect(isProfilePath(`/id/${'x'.repeat(31)}`)).toBe(isProfilePath(`/id/${'x'.repeat(30)}`));
+    expect(isProfilePath('/id/ABC')).toBe(isProfilePath('/id/abc'));
+  });
+
+  it('never claims the country pages, in any spelling', () => {
+    for (const no of [
+      '/id/country',
+      '/id/country/',
+      '/id/Country',
+      '/id/COUNTRY/',
+      '/id/country/bn',
+      '/id/country/bn/',
+    ]) {
+      expect(isProfilePath(no), no).toBe(false);
+    }
+  });
+
+  it('is false for the bare /id/ page, deeper paths, files and anything outside /id/', () => {
+    for (const no of [
+      '/id',
+      '/id/',
+      '/id//',
+      '/id/a/b',
+      '/id/favicon.ico',
+      '/id/index.html',
+      '/id/a%2Fb',
+      '/id/a b',
+      `/id/${'x'.repeat(65)}`,
+      '/identity/someone',
+      '/app/someone',
+      '/results/',
+      '/',
+      '',
+    ]) {
+      expect(isProfilePath(no), no).toBe(false);
+    }
+  });
+});
+
+describe('profileShellFor', () => {
+  it('names the built shell for a person page and nothing otherwise', () => {
+    expect(PROFILE_SHELL_PATH).toBe('/id/');
+    expect(profileShellFor('/id/syafiqah/')).toBe('/id/index.html');
+    expect(profileShellFor('/id/country/bn/')).toBeNull();
+    expect(profileShellFor('/nope/')).toBeNull();
+  });
+});
+
+describe('the country pages and the edge agree', () => {
+  it('the edge never claims the word the country hub path is built from', () => {
+    // The Worker cannot import src/core (it is bundled alone), so this pins its hard-coded word to the hub path.
+    expect(COUNTRY_HUB_PATH).toBe('/id/country/');
+    expect(isProfilePath(COUNTRY_HUB_PATH)).toBe(false);
+    expect(isProfilePath(COUNTRY_HUB_PATH.replace(/\/$/, ''))).toBe(false);
+  });
+});

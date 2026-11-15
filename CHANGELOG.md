@@ -8,6 +8,24 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, A1: how `/id/<handle>/` is served (a Worker for `/id/*`) · 2026-11-15
+
+**Task:** Layer 2 fast-track task A1 (routing spike) plus the March plan amendment. Branch `claude/l2-a1-profile-routing-25c4d7`, PR into `dev`. **Patch bump to 4.10.4** (groundwork nobody can use yet: a `noindex` placeholder, linked from nowhere). No database change, no cloud change.
+
+- **Decision:** a small edge Worker in front of the assets, for `/id/*` only (`wrangler.jsonc`: `main`, an `ASSETS` binding, `run_worker_first: ["/id/*", "!/id/country", "!/id/country/*"]`). Any one-segment `/id/<x>` gets the shell at 200, the same for a real handle and an unknown one (no existence leak); the rest of the site and all of `/id/country/...` never run Worker code. Rejected: `not_found_handling: single-page-application` (turns every real 404 on the site into a 200 and serves one shell for all), and `/id/?h=` or a hash (not the QR-stable link). Reasons and limits are in `src/marketing/CLAUDE.md`.
+- **Built:** `worker/index.js` and `worker/idRoute.js` (the one path rule, shared with the Vite dev middleware), the `id/index.html` shell with a placeholder page (`profileMain.js`, `profileScreen.js`, `profile.css`; no data call), a Vite entry, `tests/e2e/id-routing.spec.js` under a new `built-worker` Playwright project that runs `wrangler dev` (port 8787, `WORKER_PORT` overrides, never reuses a running server).
+- **Plan amendment:** `MARCH-2027-BOARD-PLAN.md` section 1.5 (Layer 2 risk) amended and one row added to section 4.
+- **Proved locally** (`wrangler dev` over the built site): handle paths 200 with `X-Robots-Tag`, `/id/country/` and `/id/country/bn/` unchanged, `/id/country` still redirects, `/id/favicon.ico`, `/id/a/b` and `/nope/` still 404, no overflow at 360px. **Not proven until production:** the Workers Builds deploy command is `wrangler deploy`; the deployed edge honours the negative `run_worker_first` patterns; `/id/country/...` still comes from assets live; the Worker is not run for other paths (only behaviour was checked, not invocation counts).
+- **Tests:** `worker/idRoute.test.js`, `worker/index.test.js` (fake `ASSETS`, no outbound call, a pin on `wrangler.jsonc`), `src/marketing/profileScreen.test.js`, a `tokenDrift` allowlist entry for `profile.css`.
+- **Reviews:**
+  - `code-reviewer`: no 🔴. One nit, fixed: a dead `index.html` entry in the not-a-handle set.
+  - `module-boundary-checker`: no 🔴. One nit, fixed: a test now pins the edge's `country` word to `COUNTRY_HUB_PATH`.
+  - `ui-accessibility-reviewer` (shell only): no 🔴. Fixed: header and footer moved beside `<main>` so they are landmarks; a dead `outline: none` rule removed. 🟣 Tour has the same nesting (`tourScreen.js`), not fixed here.
+  - `test-auditor`: no 🔴. Five nits, all fixed: the existence test now stubs `fetch` and asserts no outbound call, the e2e no-data check covers same-origin API paths and `/id/`, a jsdom test mounts the placeholder, the Worker webServer never reuses a running server, and the config pin parses the JSONC instead of matching text.
+  - Full vitest run: three failures on the first pass (two guards this change tripped, now fixed; one `countryScreen` timing test that fails only under load and passes alone).
+
+---
+
 ## Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15
 
 **Task:** three open items, picked as small and unblocked. Branch `claude/small-fixes-2` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
