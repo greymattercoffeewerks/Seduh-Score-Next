@@ -60,11 +60,35 @@ function snapshot(label) {
       },
       { rank: 3, name: `Third ${label} ${tag}`, correct: 3, total: 6 },
     ],
-    standings: [{ rank: 4, name: `Fourth ${label} ${tag}`, correct: 2, total: 6 }],
+    // T-ID2.B2: standings are carried (capped, whitelisted per row); the phone and the note on this row must not be
+    standings: [
+      {
+        place: 4,
+        name: `Fourth ${label} ${tag}`,
+        cafe: 'Cafe Four',
+        round: 'Final',
+        correct: 2,
+        total: 6,
+        timeSecs: 300,
+        phone: PHONE,
+        internalNote: 'standings-secret',
+      },
+    ],
     notListed: [{ name: `Hidden ${label} ${tag}` }],
     secretExtra: 'must not be copied',
   };
 }
+
+// what the whitelist keeps of the fixture's standings row (the phone and the note are dropped)
+const standingsRow = (label) => ({
+  place: 4,
+  name: `Fourth ${label} ${tag}`,
+  cafe: 'Cafe Four',
+  round: 'Final',
+  correct: 2,
+  total: 6,
+  timeSecs: 300,
+});
 
 const w = {};
 const mine = {}; // events by name
@@ -148,17 +172,19 @@ test('the tick publishes the staged podium exactly once, whitelisted, and not be
   // whitelisted at STAGE time: nothing the archive may not carry is even stored
   const stored = JSON.stringify(before.staged_payload);
   for (const forbidden of [
-    'standings',
     'notListed',
     'secretExtra',
+    'standings-secret',
     PHONE,
     EMAIL,
-    'Fourth',
     'Hidden',
   ]) {
     expect(stored, `staged payload must not carry ${forbidden}`).not.toContain(forbidden);
   }
   expect(before.staged_payload.podium).toHaveLength(3);
+  // the standings ARE carried now, within the cap and with only the whitelisted keys per row
+  expect(before.staged_payload.standings).toHaveLength(1);
+  expect(before.staged_payload.standings[0]).toEqual(standingsRow('once'));
 
   await finish(w.tCom, w.com.orgId, id);
   runTick(null); // the tick learns the due time of a row an organiser RPC made early
@@ -184,14 +210,16 @@ test('the tick publishes the staged podium exactly once, whitelisted, and not be
     `Third once ${tag}`,
   ]);
   expect(row.payload.listing).toBeUndefined();
+  // the 200-row cap itself is pinned in pgTAP 081; here the row's keys AND values survive the whitelist
+  expect(row.payload.standings).toHaveLength(1);
+  expect(row.payload.standings[0]).toEqual(standingsRow('once'));
   const published = JSON.stringify(row.payload);
   for (const forbidden of [
-    'standings',
     'notListed',
     'secretExtra',
+    'standings-secret',
     PHONE,
     EMAIL,
-    'Fourth',
     'Hidden',
   ]) {
     expect(published, `public payload must not carry ${forbidden}`).not.toContain(forbidden);
@@ -399,7 +427,8 @@ test('the paid tiers choose: unlisted is still named, with no podium; listed pub
     expect(row, 'an unlisted event is still named in the archive').not.toBeNull();
     expect(row.payload.listing).toBe('named_only');
     expect(row.payload.podium).toBeUndefined();
-    expect(JSON.stringify(row.payload)).not.toMatch(/Champion|Second|Third/);
+    expect(JSON.stringify(row.payload)).not.toMatch(/Champion|Second|Third|Fourth/);
+    expect(row.payload.standings).toBeUndefined();
     expect(ledgerRow(id)).toMatchObject({
       state: 'stubbed',
       outcome_via: 'auto',

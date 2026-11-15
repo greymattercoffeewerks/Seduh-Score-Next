@@ -51,7 +51,12 @@ import {
   computeEventSummary,
   computeAvgSecsPerSet,
 } from './analytics.js';
-import { buildResultsPayload, podiumRowsOf } from './resultsPublishing.js';
+import {
+  buildResultsPayload,
+  podiumRowsOf,
+  DEFAULT_PUBLISH_SCOPE,
+  PUBLISH_SCOPE_NOTICE,
+} from './resultsPublishing.js';
 import { stageArchiveSnapshot } from './archiveSnapshot.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { ordinalLabel } from '../../core/ordinal.js';
@@ -1157,7 +1162,7 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
     // What the organiser has chosen to publish ('podium' | 'full'), and what is published right now
     // (null until known, or while unpublished). They differ while the organiser is part-way through
     // changing their mind; "Update published results" is what makes them agree again.
-    let scope = 'podium';
+    let scope = DEFAULT_PUBLISH_SCOPE;
     let publishedScope = null;
     let busy = null; // null | 'publishing' | 'unpublishing'
 
@@ -1181,7 +1186,14 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
         className: 'stage-meta report-public-results-pending',
         attrs: { role: 'status' },
       });
+      // One line saying what the chosen level makes public; updated in place with the radio, and read as part of the group's description.
+      const publicNotice = el('p', {
+        className: 'stage-meta report-public-results-notice',
+        id: 'public-results-scope-notice',
+        text: PUBLISH_SCOPE_NOTICE[scope],
+      });
       function syncPendingNote() {
+        publicNotice.textContent = PUBLISH_SCOPE_NOTICE[scope];
         pendingNote.textContent =
           published && scope !== publishedScope
             ? 'Not applied yet — press “Update published results” to change what is public.'
@@ -1227,7 +1239,7 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
         'fieldset',
         {
           className: 'report-public-results-scope',
-          attrs: { 'aria-describedby': 'public-results-scope-note' },
+          attrs: { 'aria-describedby': 'public-results-scope-notice public-results-scope-note' },
         },
         [
           el('legend', { text: 'What to publish' }),
@@ -1241,6 +1253,7 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
             'Full standings',
             'Every competitor’s placing, name and café, and their score and time in the last round they reached, with a printable results sheet.',
           ),
+          publicNotice,
           el('p', {
             className: 'stage-meta',
             id: 'public-results-scope-note',
@@ -1407,9 +1420,9 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
         if (signal?.aborted) return;
         published = false;
         publishedScope = null;
-        // Publishing again starts from the podium: a retraction must not leave the wider choice
-        // pre-selected for the next, possibly hasty, Publish click.
-        scope = 'podium';
+        // Publishing again starts from the default choice, with its notice in view; a retraction must not
+        // leave a choice the organiser made for a different reason pre-selected.
+        scope = DEFAULT_PUBLISH_SCOPE;
         setFeedback('Removed from the public results archive.', 'success');
       } catch (err) {
         if (signal?.aborted) return;

@@ -306,6 +306,40 @@ following (owner decision 7: counts only); each is owner SQL, in ONE transaction
 - **Accepted signals (spec 3.3):** a member can learn that an identity exists for a phone they type in (a published non-test
   result exists); a member of two organisations sees the same uuid for the same person.
 
+### Seduh ID: the owner's own identity (#0001) and a phone correction (T-ID2.B2, owner SQL, no code)
+
+Adding a person to a roster does NOT create an identity (`link_person_identity` only finds one); only the feed does, from a published,
+non-test result. Two cases need owner SQL. Each is ONE transaction, run locally first, in the cloud only with the owner's approval. Never put
+a phone or a name in a note.
+
+**(a) Creating the owner's #0001 identity.** The owner has no published event. (1) In the owner's own organisation, add them to a roster (any
+event, a test event is fine) with their real phone in international format; that gives a `people` row. (2) Create the identity and link it:
+
+```sql
+begin;
+insert into app.seduh_identities (phone_e164, display_name, country, source, status)
+select p.phone, p.display_name, nullif(btrim(p.country), ''), 'archive', 'active'
+  from public.people p where p.id = '<owner person uuid>' and app.is_e164(p.phone)
+on conflict (phone_e164) do nothing;                 -- reuses one that already exists
+select set_config('app.seduh_link_write', 'on', true);
+update public.people p set global_person_id = i.id
+  from app.seduh_identities i
+ where p.id = '<owner person uuid>' and i.phone_e164 = p.phone and i.status <> 'merged' and p.global_person_id is null;
+select set_config('app.seduh_link_write', '', true);
+select p.global_person_id from public.people p where p.id = '<owner person uuid>';   -- must be one uuid; if null the identity is a merged tombstone: link to its merged_into target instead
+commit;
+```
+
+(3) Later, when a claim path is live, assign founding number 1 with the "Seduh ID #0001" runbook below (`insert into app.seduh_accounts ... founding_number = 1`).
+A roster-only person with no published result has no record to show: the profile is the owner's self-reported entries (Phase C).
+
+**(b) Re-creating or re-linking after a phone correction.** A change to `people.phone` sets `global_person_id` to null (the guard trigger), and
+nothing re-links on its own: the new number has no identity until one is created. `link_person_identity` re-links only if an identity for the new
+number already exists (the roster's own phone-edit asks it to, best effort). If none exists: run the same statement as (a) for that person
+(`app.is_e164` guards the number); if the old identity is now wrong, unlink or merge by the "Seduh ID link" runbook above. A result published
+before the correction still reaches the new link, because the door matches by name and café, not by phone. Check afterwards that the person's
+`global_person_id` is the identity for the new number, and that the old number's identity is not left with nobody (the weekly review lists orphans).
+
 ### Seduh ID backfill: the owner's runbook (T-ID.B4, 20261031100000)
 
 The one-time step that creates identities. `app.seduh_identity_backfill(p_apply boolean)` (owner only: no API role, `service_role`
@@ -334,7 +368,7 @@ listed. A new function that writes `people.global_person_id` must be added to th
 
 ### Seduh ID feed: the owner's runbook (T-ID.D1, 20261103100000 and 20261103110000)
 
-The archive feed (Layer 1b) is how an identity gets created from a published podium after the one-time B4 backfill. It is **review-queue
+The archive feed (Layer 1b) is how an identity gets created from a published podium or full standings after the one-time B4 backfill (T-ID2.B2, 20261117100000: the feed reads `standings` as well as `podium`). It is **review-queue
 first**: a publish only puts the result's id on a queue, and the owner decides what runs. Everything is in the `app` schema, owned by the
 database owner; no API role (`service_role` included) can read or write the queue or the mode or call a feed function, and each function
 also refuses an API session by name (as B4's does).
@@ -342,17 +376,16 @@ also refuses an API session by name (as B4's does).
 - **`app.seduh_feed_mode`** (one row): `off` (the default; nothing is queued and the run is refused), `queue` (the first live mode) or `auto`
   (built, off), plus `org_daily_cap` (8) and `global_daily_cap` (40) for `auto`. Change it with owner SQL (`supabase/scripts/seduh_feed_mode.sql`)
   and record the change in the CHANGELOG or a note: nothing writes an audit row for it.
-- **`app.seduh_feed_queue`**: one row per published podium of a non-test event (`result_id`, `org_id`, `state` = `queued` / `processed` /
+- **`app.seduh_feed_queue`**: one row per published result of a non-test event that names people (a podium or full standings) (`result_id`, `org_id`, `state` = `queued` / `processed` /
   `rejected` / `undone`, times, and after a run the uuids of the identities created and the people linked). Ids only: no phone, name, cafe
   or free text (`last_error` is a SQLSTATE). A changed payload on a result already dealt with puts it back in the queue (the lists undo needs are kept);
-  an identical re-save does not. A result with no `podium` (a stub) is never queued. There is no foreign key, so the row outlives the result.
+  an identical re-save does not. A result with neither a `podium` nor `standings` (a stub) is never queued. A podium-only result later widened to full standings is a changed payload, so it is queued again and the next run creates only the added people. There is no foreign key, so the row outlives the result.
 - **The trigger** `trg_public_results_seduh_feed` is an **AFTER ROW** trigger on insert and on update of `payload`, `SECURITY DEFINER`,
   `search_path ''`, and **fail open**: its body swallows every error, so a publish never fails because of the feed. It is AFTER, not BEFORE, so
   test `045`'s guard (SECURITY DEFINER BEFORE ROW triggers, which run ahead of row-level security) does not match it; `045` is run to confirm.
-  Because an error is swallowed silently, `app.seduh_feed_review()` reports `podium_results_not_queued`.
-- **The creating rules are B4's, podium only** (`app.seduh_feed_slots_internal` / `app.seduh_feed_plan_internal` are B4's matching with the
-  `standings` array left out; B4's functions are pushed and unedited). Test `071` pins that the two plans agree for the same podium, and
-  that the leftover identities and links of a run are the same as B4's for the same podiums. Same skips (test event, bad phone, owner-blocked,
+  Because an error is swallowed silently, `app.seduh_feed_review()` reports `podium_results_not_queued` (it also counts a standings result; the key keeps its old name).
+- **The creating rules are B4's, podium and standings** (`app.seduh_feed_slots_internal` reads `podium` union `standings`, the same slots as B4's; since T-ID2.B2 the two plans are equal for every result). Test `071` pins that the two plans agree, and
+  that the leftover identities and links of a run are the same as B4's for the same results; `081` pins the standings behaviour. In `auto` mode the default caps (8 per organisation, 40 in all per 24 hours) hold a full event of more than 8 new people queued: that is why the owner reviews and runs it in `queue` mode. Same skips (test event, bad phone, owner-blocked,
   merge cycle, ambiguous or unmatched name), same reuse (an `opted_out` identity is linked but inert and never un-opted; a tombstone resolves
   to the kept identity; an existing identity is never overwritten), same refusal to overwrite a link. A phone change after creation nulls the
   link (the existing guard) and nothing here re-links by itself: a processed result is not run again unless a changed payload re-queues it, and then the
@@ -670,6 +703,71 @@ with other pages (the hashed `/assets/` files serve every entry), and do not use
 locally 2026-10-15 with `wrangler dev` (headers present on `/admin/` and `/admin`, absent on `/community/`);
 the first production response is checked at rollout (spec section 8). The Vite dev server does not apply this
 file, so a dev-server run shows no such headers.
+
+### Seduh ID profile door: `public.public_seduh_profile(p_handle text)` (T-ID2.B1, 20261116100000)
+
+The ONE anonymous door behind `/id/<handle>/` (Phase C1 builds the page on it). `SECURITY DEFINER`, `STABLE`, empty
+`search_path`, executable by `anon` and `authenticated` only; takes text, no uuid (so the `041` matrix has no entry; `037`
+pins the door list; `080` pins the door). Derives everything on read, stores nothing, never errors on input.
+
+**The invariant: a profile never shows a result the public results pages do not already show.** A result must come from a
+`public_results` row (the published payload: full `standings` if the organiser published them, else the `podium`) of a
+non-test event. A payload row belongs to a person only by the archive feed's rule (exactly one roster entry of the event has that
+name and cafe, with a person linked to the identity; the same name and cafe twice in one publication names nobody). Anything
+else is left off, so a renamed roster entry hides a result rather than guessing. **Known trust limit (owner decision, security review 2026-11-16):** the identity link is organiser-asserted (matched by phone, never verified) and the payload is not validated, so an organisation member could publish a result naming a roster entry whose phone is a stranger's; it would then show on that stranger's claimed page labelled `seduh_score`. This is the archive feed's existing rule made public. Mitigations today: the owner's queue review, and a person can hide recorded results. Softening the label or requiring the person's confirmation is a later decision. `is_shadow` does not exist: the marked seam in the
+migration (two places) is where `and e.is_shadow is not true` goes the day it does.
+
+```jsonc
+{
+  "has_profile": true, // false for EVERY non-page (unknown, closed, merged, opted out, reserved, malformed, NULL)
+  "handle": "syafiqah", // null when has_profile is false; the input is never echoed
+  "identity": {
+    // all null when vis_identity is hidden, and for a non-page
+    "display_name": "…",
+    "country_code": "BN", // ISO alpha-2 or null
+    "founding_number": 7,
+    "claimed_on": "2026-11-20",
+    "photo_url": null, // SEAM Phase C2
+  },
+  "recorded_results": [
+    // newest first; [] when hidden, 'organisers', or none
+    {
+      "event_name": "…",
+      "format": "cup_taster",
+      "organiser_name": "…",
+      "event_date": "2026-03-01" /* or null */,
+      "placing": 4 /* int or null */,
+      "stage": "Final" /* or null */,
+      "correct": 3,
+      "total": 6,
+      "time_secs": 133, // each int or null
+      "provenance": "seduh_score",
+    },
+  ],
+  "knockout_record": {
+    // zeros and [] when hidden or none: a hidden part looks like an empty one
+    "won": 2,
+    "lost": 2,
+    "opponents": [{ "handle": "…", "display_name": "…", "matches": 2, "won": 1, "lost": 1 }], // seam: filled later, top 10, named only if that
+  }, // opponent is claimed, open, active and public for BOTH vis_identity and vis_knockout_record
+  "organiser_records": [], // SEAM Phase C: team links (spec 14.5)
+  "self_reported": [], // SEAM Phase C
+  "judging_roles": [], // SEAM: needs a judge-to-identity link (BTC judges have no people row)
+  "cafe_affiliations": [], // SEAM: two-sided acceptance is not modelled
+}
+```
+
+- **Visibility.** `public` shows a part; `organisers` is hidden for an anonymous caller (an organiser-scoped view is later); `hidden`
+  is hidden. A hidden part keeps its keys, with zeros, `[]` or nulls. `has_profile` stays true for a claimed, open, attested,
+  `active` account whose every part is hidden, so a printed QR code never breaks.
+- **Formats.** Cup Taster returns results (from the payload). Throwdown returns **nothing**, and `knockout_record` is always
+  `{won: 0, lost: 0, opponents: []}`: Throwdown has no results payload and its match outcomes are not on `/results/`, so
+  (owner decision 2026-11-16) the door does not read `td_matches`. It gets filled from a Throwdown results payload only, once one is
+  published; the migration header lists what that reader must enforce (payload only; decided two-competitor matches; an opponent
+  named only if claimed, open, active and public for both identity and knockout record). BTC returns nothing: teams and judges
+  have no person link. Never added to the door: phone, email, any uuid, `org_id`, the token hash, a hidden part's setting, or an
+  unpublished, test or shadow result (`080` scans the JSON text for all of these).
+- **To change the contract**, add a migration (`create or replace`), keep the keys (C1 reads them), and extend `080`.
 
 ### Seduh ID #0001: assign the owner's founding number (T-ID2.A2, 20261115120000)
 

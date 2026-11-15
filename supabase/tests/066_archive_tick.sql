@@ -6,7 +6,7 @@
 --   * enforced: due events are worked once. A double tick publishes once (the next tick finds nothing pending); a Community
 --     event publishes its staged podium only when the snapshot is valid AND fresh (else a named-only stub whose last_error
 --     says why); a paid-tier organiser's listing_choice decides (null/named_only stub, list podium); the whitelist drops
---     standings, notListed, unknown keys and a podium row's extra keys; the staged snapshot is cleared once used;
+--     unknown keys and a podium row's extra keys (standings are carried since T-ID2.B2, see test 081); the staged snapshot is cleared once used;
 --   * is_test is re-read at the moment of publish: an event flipped to a test event after its row was made is skipped;
 --   * an existing public_results row is NEVER overwritten (the organiser published first, before or after due_at); a
 --     result removed after the tick is not published again (every state but pending is terminal);
@@ -192,8 +192,8 @@ select is(app.archive_snapshot_payload('{"podium": [{"name": "A"}, {"rank": 2}]}
 select is(app.archive_snapshot_payload(jsonb_build_object('pad', repeat('x', 70000), 'podium', jsonb_build_array(jsonb_build_object('name', 'A')))),
   null, 'snapshot: over 64 KB is unusable');
 select is(t066.keys(app.archive_snapshot_payload(t066.snap('Alice'))),
-  'city,competitors,eventDate,eventName,format,podium,rounds,venue,winningTimeSecs',
-  'snapshot whitelist: standings, notListed and unknown keys are dropped');
+  'city,competitors,eventDate,eventName,format,podium,rounds,standings,venue,winningTimeSecs',
+  'snapshot whitelist: the standings are carried (T-ID2.B2); a notListed that is not a number and unknown keys are dropped');
 select is(t066.keys(app.archive_snapshot_payload(t066.snap('Alice')) #> '{podium,0}'), 'cafe,correct,name,rank,total',
   'snapshot whitelist: a podium row keeps rank, name, cafe, correct, total only (no phone, no email)');
 select is(length(app.archive_snapshot_payload(jsonb_build_object('podium', jsonb_build_array(jsonb_build_object('name', repeat('n', 300))))) #>> '{podium,0,name}'),
@@ -213,7 +213,7 @@ select is((select count(*)::int from app.archive_events where event_id = t066.u(
 
 -- E1: the Community podium, whitelisted
 select is(t066.arch(1001, 'state') || '|' || t066.arch(1001, 'outcome_via') || '|' || coalesce(t066.arch(1001, 'last_error'), 'null'), 'published|auto|null', 'E1: published by the tick');
-select is(t066.keys(t066.pub(1001)), 'city,competitors,eventDate,eventName,format,org_name,org_slug,podium,rounds,venue,winningTimeSecs',
+select is(t066.keys(t066.pub(1001)), 'city,competitors,eventDate,eventName,format,org_name,org_slug,podium,rounds,standings,venue,winningTimeSecs',
   'E1: the public payload carries only the whitelisted keys plus the table''s own org stamp');
 select is(t066.keys(t066.pub(1001) #> '{podium,0}'), 'cafe,correct,name,rank,total', 'E1: podium rows carry no phone or email');
 select is(t066.pub(1001) #>> '{podium,0,name}', 'Alice', 'E1: the champion is the staged one');

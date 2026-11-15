@@ -132,7 +132,7 @@ export const TRUST_PAGES = [
         items: [
           'A phone number in international format, the name it was published under, and, if the organiser entered one, a country.',
           'It is created only when you are named in a published, non-test result, or by us on request. Rehearsal (“test”) events never create one.',
-          'When you are named on a podium published on a Seduh Score results page, we create a Seduh ID record for the phone number your organiser entered for you, or use the record that number already has.',
+          'When you are named in the podium or the full standings of a result published on a Seduh Score results page, we create a Seduh ID record, after a review by us, for the phone number your organiser entered for you, or use the record that number already has.',
           'It is linked to the entry for you in each organiser’s own registry, so the same phone number is recognised as the same person. If an organiser changes the phone number on your entry, the link is removed and checked again.',
           'It holds no email address, no results, no scores and no sign-in. Its contents are shown on no page, public or private. An organiser’s own people list shows only whether a person is linked.',
           'An organiser can also record, for its own people, that someone is staff or affiliated with it.',

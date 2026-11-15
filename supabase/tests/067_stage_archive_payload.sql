@@ -5,7 +5,7 @@
 --   * WHO: a member stages for their own organisation's event. A stranger (a member of another organisation), a member naming
 --     another organisation, a two-organisation member mixing the two, a signed-in caller who belongs to nobody, a NULL
 --     organisation, a missing event and anon all get ONE refusal (42501 'event not found') and leave no trace;
---   * WHAT IS STORED: only the whitelisted keys (the same function the tick uses): no standings, no notListed, no unknown key,
+--   * WHAT IS STORED: only the whitelisted keys (the same function the tick uses): standings and notListed (T-ID2.B2) but no unknown key,
 --     no phone or email in a podium row; staged_at is the SERVER's now() whatever clock the client sent;
 --   * MALFORMED: null, non-object, no podium, empty podium, nine rows, a nameless champion, a non-text name, more than 64 KB,
 --     a NULL operation id: refused with a stable hint, nothing stored;
@@ -156,11 +156,11 @@ update app.entitlement_keys set enforced = true where key = 'results_archive_opt
 select is(t067.call_as('authenticated', t067.u(1), t067.stage(1, 100, 1001, t067.snap('Alice'), now() - interval '1 hour')), t067.r(null, true),
   'enforced: a member stages for their organisation''s event');
 select is(t067.rows(), 1, 'one ledger row was made');
-select is(t067.keys(t067.arch(1001, 'staged_payload')::jsonb), 'city,competitors,eventDate,eventName,format,podium,rounds,venue,winningTimeSecs',
-  'the stored snapshot carries the whitelisted keys only (no standings, notListed or unknown key)');
+select is(t067.keys(t067.arch(1001, 'staged_payload')::jsonb), 'city,competitors,eventDate,eventName,format,notListed,podium,rounds,standings,venue,winningTimeSecs',
+  'the stored snapshot carries the whitelisted keys only (standings and notListed since T-ID2.B2, but no unknown key)');
 select is(t067.keys((t067.arch(1001, 'staged_payload')::jsonb) #> '{podium,0}'), 'cafe,correct,name,rank,total', 'a podium row keeps rank, name, cafe, correct, total only');
-select is(t067.arch(1001, 'staged_payload') !~* '(6737|example\.test|standings|notListed|internalNote|Standings Person)', true,
-  'no phone, email, id, standings or unknown value reached the stored snapshot');
+select is(t067.arch(1001, 'staged_payload') !~* '(6737|example\.test|internalNote)', true,
+  'no phone, email, id or unknown value reached the stored snapshot');
 select is(t067.arch(1001, 'staged_at')::timestamptz = now(), true, 'staged_at is the server''s now(), not the client''s clock');
 select is(t067.arch(1001, 'staged_built_at')::timestamptz = now() - interval '1 hour', true, 'staged_built_at is the client''s build time');
 select is(t067.arch(1001, 'state') || '|' || (t067.arch(1001, 'due_at')::timestamptz = (select ended_at + interval '24 hours' from events where id = t067.u(1001)))::text,
@@ -264,7 +264,7 @@ select is(app.archive_tick(now() - interval '3 days'), jsonb_build_object('dark'
 select is(t067.arch(1001, 'state') || '|' || (t067.pub(1001) #>> '{podium,0,name}'), 'published|Eve', 'A1: the latest staged podium was published');
 select is(t067.arch(1003, 'state') || '|' || (t067.arch(1003, 'due_at')::timestamptz = (select ended_at + interval '24 hours' from events where id = t067.u(1003)))::text,
   'published|true', 'A3: the tick filled in the due_at the row had no value for when it was staged, and published');
-select is(t067.keys(t067.pub(1006)), 'city,competitors,eventDate,eventName,format,org_name,org_slug,podium,rounds,venue,winningTimeSecs', 'A6: the public payload carries the whitelisted keys plus the table''s own stamp');
+select is(t067.keys(t067.pub(1006)), 'city,competitors,eventDate,eventName,format,notListed,org_name,org_slug,podium,rounds,standings,venue,winningTimeSecs', 'A6: the public payload carries the whitelisted keys plus the table''s own stamp');
 select is(t067.keys(t067.pub(1006) #> '{podium,0}'), 'cafe,correct,name,rank,total', 'A6: and a podium row has no phone, email or id');
 select is(t067.pub(1006) #>> '{podium,0,name}', 'Frank', 'A6: the champion is the staged one');
 select is(t067.arch(1005, 'state') || '|' || t067.arch(1005, 'last_error'), 'stubbed|stale_snapshot', 'A5: a score changed after staging gives a stub, reason stale_snapshot');

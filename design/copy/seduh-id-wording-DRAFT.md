@@ -108,7 +108,7 @@ only that a record is created when a person is named on a published podium. It g
 the other: as a bullet in 1a (the "What we hold" block, after the bullet that begins "It is created only when you are
 named"), and the Terms "Seduh ID" section (2b) points to the Privacy page for it.
 
-> When you are named on a podium published on a Seduh Score results page, we create a Seduh ID record for the phone
+> When you are named in the podium or the full standings of a result published on a Seduh Score results page, we create a Seduh ID record, after a review by us, for the phone
 > number your organiser entered for you, or use the record that number already has.
 
 What it rests on and what it leaves out:
