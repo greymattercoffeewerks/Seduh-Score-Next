@@ -670,3 +670,39 @@ with other pages (the hashed `/assets/` files serve every entry), and do not use
 locally 2026-10-15 with `wrangler dev` (headers present on `/admin/` and `/admin`, absent on `/community/`);
 the first production response is checked at rollout (spec section 8). The Vite dev server does not apply this
 file, so a dev-server run shows no such headers.
+
+### Seduh ID #0001: assign the owner's founding number (T-ID2.A2, 20261115120000)
+
+What it is: claimed Seduh IDs live in `app.seduh_accounts` (owner-only, like the identities; also `app.seduh_profile_settings`
+and `app.seduh_claim_links`). The **handle** is on the account (not the identity: most identities never claim), frozen
+once set, and a closed account keeps its row, so its handle and **founding number** are retired, never reissued. Rows are
+never deleted. The reserved handles are in one function, `app.seduh_handle_reserved`; to add a word, a new migration does
+`create or replace function` with the longer list (it stops new claims only, handles being frozen).
+
+**Why #0001 is a runbook step.** The number comes from a sequence that starts at **2**, so no ordinary claim can get 1.
+Only an explicit `founding_number = 1` can, and a trigger refuses it unless the transaction sets
+`app.seduh_owner_assignment` to `on`. The unique constraint makes 1 single-use for ever. This guards against a slip or a
+buggy claim function; it is not a security boundary (nobody but the owner role reaches the table).
+
+**The step (owner SQL, once, after the owner's identity exists and a claim path is live).** The identity is the owner's
+roster row (Layer 2 spec 14.4); the login is a competitor login, a different email from the platform-admin login:
+
+```sql
+begin;
+select set_config('app.seduh_owner_assignment', 'on', true);  -- this transaction only
+insert into app.seduh_accounts (identity_id, user_id, handle, founding_number, claim_method, adult_attested_at)
+values ('<owner identity uuid>', '<owner competitor auth.users uuid>', '<handle>', 1, 'organiser_link', now());
+select * from app.seduh_profile_settings
+  where account_id = (select id from app.seduh_accounts where founding_number = 1);  -- made by the insert
+commit;
+```
+
+Check: `select handle, founding_number from app.seduh_accounts where founding_number = 1;` returns the one row. If the
+statement fails the number is not burnt (nothing was inserted). Do it locally first (`npm run db:reset`); for the cloud,
+only after the migration is pushed and with the owner's approval. Do not run it through any API role. Cohort rules
+(sizes, completeness bar, window) are not decided (L2-6, 2b), so there are no cohort columns.
+
+Claim links hold only a SHA-256 hash (64 hex characters) of the token and expire within 72 hours; at most one link per
+identity is open at a time (issuing a new one means revoking the old, and that includes an expired one: the index cannot see the clock); a used or revoked link cannot be reopened. They
+carry the issuing `org_id`, frozen like any tenant parent. Phase B's issuing function must call `app.refuse_non_member`
+for that organisation, and any policy ever added must use `app.is_org_member`.

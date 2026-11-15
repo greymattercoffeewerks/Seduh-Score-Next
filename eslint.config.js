@@ -7,6 +7,8 @@ export default [
   {
     ignores: [
       'dist/**',
+      // wrangler dev's bundled scratch output (gitignored).
+      '.wrangler/**',
       'node_modules/**',
       // Local scratch output (never committed); not part of the app.
       'brag-output/**',

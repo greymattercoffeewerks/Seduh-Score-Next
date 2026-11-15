@@ -141,8 +141,8 @@ select is(
                      ', ' order by attnum)
      from pg_attribute where attrelid = 'app.seduh_identities'::regclass and attnum > 0 and not attisdropped),
   'id:uuid:nn, phone_e164:text:nn, display_name:text, country:text, source:text:nn, status:text:nn, '
-  'merged_into:uuid, created_at:timestamp with time zone:nn, updated_at:timestamp with time zone:nn',
-  'app.seduh_identities has exactly the spec''s columns (no email, no auth.users reference, no number, no do_not_link)');
+  'merged_into:uuid, created_at:timestamp with time zone:nn, updated_at:timestamp with time zone:nn, country_code:text',
+  'app.seduh_identities has exactly the spec''s columns (no email, no auth.users reference, no number, no do_not_link; plus the nullable ISO country_code of T-ID2.A2)');
 select is(
   (select string_agg(attname || ':' || format_type(atttypid, atttypmod) || (case when attnotnull then ':nn' else '' end),
                      ', ' order by attnum)

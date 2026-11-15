@@ -42,6 +42,14 @@ body {
   box-sizing: border-box;
 }
 
+/* The kit's field error edge (components.css .field-input[aria-invalid]), which this tool does not load: a 2px
+   --field-edge-error edge, with the padding giving back the extra 1px so the field does not grow. The
+   .form-field-error message (feedback.css, loaded) carries the words, so colour is not the only cue. */
+.gtb-input[aria-invalid='true'] {
+  border: var(--border-strong) solid var(--field-edge-error);
+  padding: 0 calc(var(--space-3) - 1px);
+}
+
 .gtb-btn {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-5);

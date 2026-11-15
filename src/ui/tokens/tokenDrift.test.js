@@ -420,6 +420,7 @@ const SQUARE_ALLOWLIST = [
   ...SQUARE('src/marketing/pricing.css', 'no-corner', ['.pricing-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/results.css', 'no-corner', ['.results-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/country.css', 'no-corner', ['.country-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/profile.css', 'no-corner', ['.profile-page'], PAGE_ROOT),
   ...SQUARE(
     'src/marketing/country.css',
     'no-corner',

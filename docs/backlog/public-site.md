@@ -52,4 +52,4 @@ The shared `.page-hero` on Tour, Community hub, Pricing and Results (CHANGELOG e
 
 The shared public header and the landing nav now read one list (CHANGELOG entry of the same date). One item came out of it.
 
-- **The shared header's mobile menu has no Escape handler.** The landing page's mobile toggle closes on Escape; the shared header's toggle (Tour, Pricing, Community, Results, trust pages, country pages) does not. Pre-existing: the shared header's toggle predates this change. Found by `ui-accessibility-reviewer`; logged, not fixed in that change.
+- **The shared header's mobile menu has no Escape handler.** The landing page's mobile toggle closes on Escape; the shared header's toggle (Tour, Pricing, Community, Results, trust pages, country pages) does not. Pre-existing: the shared header's toggle predates this change. Found by `ui-accessibility-reviewer`; logged, not fixed in that change. **CLOSED (2026-11-15):** the panel already closed on Escape; the toggle now does too (`src/marketing/publicHeader.js`, tests in `publicHeader.test.js`).

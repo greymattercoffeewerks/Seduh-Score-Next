@@ -350,6 +350,39 @@ one constant `COUNTRY_PAGES_PUBLIC` in `core/countryPages.js`, false until the o
 sitemap, on purpose. "Share to story" uses `core/storyCard.js` (reusable; Layer 2 will pass a person spec). Public pages
 stay dark (`stage`).
 
+## Seduh ID person pages: how `/id/<handle>/` is served (2026-11-15, Layer 2 task A1)
+
+Handles are claimed after the build, so unlike the country pages there can be no shell per handle. **Decision: a small
+edge Worker in front of the assets, for `/id/*` only.** `wrangler.jsonc` has `main: worker/index.js`, an `ASSETS`
+binding and `run_worker_first: ["/id/*", "!/id/country", "!/id/country/*"]` (negative patterns win). The Worker
+(`worker/index.js`) answers any one-segment path under `/id/` with the built `id/index.html` shell at **200**; anything
+else that reaches it goes to the assets untouched. The one path rule is `worker/idRoute.js` (pure, tested), shared with the
+Vite dev middleware. Everything outside `/id/` and all of `/id/country/...` never runs Worker code, so those paths
+behave exactly as before.
+
+- **Why not the others.** `not_found_handling: "single-page-application"` is one fallback for the WHOLE site: every real
+  404 (`/nope/`, a mistyped `/tour`) would become a 200 serving one shell (the landing page, not the person page), which
+  hurts search and monitoring and cannot choose a different shell for `/id/`. A query or hash fallback (`/id/?h=` or
+  `/id/#handle`) works on plain assets but is not the printed, QR-stable `/id/<handle>` link the spec promises, a hash
+  never reaches the server (no per-person link preview later), and it would be a second address to support for ever. It
+  stays the fallback if the Worker is ever dropped.
+- **No existence leak.** The shell is 200 for a real handle and an unknown one alike, and any length or case. The status
+  tells a stranger nothing; what an unknown handle shows is the page's job (it must look like an empty profile). The
+  placeholder page makes no data call and shows nothing from the path.
+- **Reserved handles.** `country` is the one the edge must not shadow: `/id/country` with no slash is NOT covered by
+  `!/id/country/*`, so the Worker sees it and hands it back (the assets redirect it to `/id/country/`). The claimable
+  reserved list is the database's (migration), not this file's.
+- **Header.** The Worker adds `X-Robots-Tag: noindex, nofollow` to the shell; the shell has the meta tag too.
+- **Cost.** A Worker run only for `/id/*` person-page requests (the free plan allows 100,000 a day); static asset
+  requests stay free and unmetered.
+- **Testing.** `worker/*.test.js` (path rule, the Worker with a fake `ASSETS`, and a pin on `wrangler.jsonc`);
+  `tests/e2e/id-routing.spec.js` runs the BUILT site under `wrangler dev` (project `built-worker`, port 8787, override with
+  `WORKER_PORT`; run `npm run build` first). `vite preview` cannot run a Worker, so it is not used for this route.
+- **Deploy.** Workers Builds runs the build and then `wrangler deploy`, which bundles `worker/index.js` itself: no new
+  build step. Unproven until production: the Workers Builds dashboard's deploy command is not in the repo (confirm it is
+  `wrangler deploy`), that the deployed edge honours the negative `run_worker_first` patterns exactly as `wrangler dev`
+  does, and that `/id/country/...` still serves from assets on the live host.
+
 ## Results sheet (2026-10-06)
 
 `/results/?sheet=<event id>` (same HTML entry, `resultsMain.js` picks it by query string — so no new

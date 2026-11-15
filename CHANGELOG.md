@@ -8,6 +8,57 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, A1: how `/id/<handle>/` is served (a Worker for `/id/*`) · 2026-11-15
+
+**Task:** Layer 2 fast-track task A1 (routing spike) plus the March plan amendment. Branch `claude/l2-a1-profile-routing-25c4d7`, PR into `dev`. **Patch bump to 4.10.4** (groundwork nobody can use yet: a `noindex` placeholder, linked from nowhere). No database change, no cloud change.
+
+- **Decision:** a small edge Worker in front of the assets, for `/id/*` only (`wrangler.jsonc`: `main`, an `ASSETS` binding, `run_worker_first: ["/id/*", "!/id/country", "!/id/country/*"]`). Any one-segment `/id/<x>` gets the shell at 200, the same for a real handle and an unknown one (no existence leak); the rest of the site and all of `/id/country/...` never run Worker code. Rejected: `not_found_handling: single-page-application` (turns every real 404 on the site into a 200 and serves one shell for all), and `/id/?h=` or a hash (not the QR-stable link). Reasons and limits are in `src/marketing/CLAUDE.md`.
+- **Built:** `worker/index.js` and `worker/idRoute.js` (the one path rule, shared with the Vite dev middleware), the `id/index.html` shell with a placeholder page (`profileMain.js`, `profileScreen.js`, `profile.css`; no data call), a Vite entry, `tests/e2e/id-routing.spec.js` under a new `built-worker` Playwright project that runs `wrangler dev` (port 8787, `WORKER_PORT` overrides, never reuses a running server).
+- **Plan amendment:** `MARCH-2027-BOARD-PLAN.md` section 1.5 (Layer 2 risk) amended and one row added to section 4.
+- **Proved locally** (`wrangler dev` over the built site): handle paths 200 with `X-Robots-Tag`, `/id/country/` and `/id/country/bn/` unchanged, `/id/country` still redirects, `/id/favicon.ico`, `/id/a/b` and `/nope/` still 404, no overflow at 360px. **Not proven until production:** the Workers Builds deploy command is `wrangler deploy`; the deployed edge honours the negative `run_worker_first` patterns; `/id/country/...` still comes from assets live; the Worker is not run for other paths (only behaviour was checked, not invocation counts).
+- **Tests:** `worker/idRoute.test.js`, `worker/index.test.js` (fake `ASSETS`, no outbound call, a pin on `wrangler.jsonc`), `src/marketing/profileScreen.test.js`, a `tokenDrift` allowlist entry for `profile.css`.
+- **Reviews:**
+  - `code-reviewer`: no 🔴. One nit, fixed: a dead `index.html` entry in the not-a-handle set.
+  - `module-boundary-checker`: no 🔴. One nit, fixed: a test now pins the edge's `country` word to `COUNTRY_HUB_PATH`.
+  - `ui-accessibility-reviewer` (shell only): no 🔴. Fixed: header and footer moved beside `<main>` so they are landmarks; a dead `outline: none` rule removed. 🟣 Tour has the same nesting (`tourScreen.js`), not fixed here.
+  - `test-auditor`: no 🔴. Five nits, all fixed: the existence test now stubs `fetch` and asserts no outbound call, the e2e no-data check covers same-origin API paths and `/id/`, a jsdom test mounts the placeholder, the Worker webServer never reuses a running server, and the config pin parses the JSONC instead of matching text.
+  - Full vitest run: three failures on the first pass (two guards this change tripped, now fixed; one `countryScreen` timing test that fails only under load and passes alone).
+
+## Seduh ID Layer 2, Phase A2: the schema for claimed Seduh IDs · 2026-11-15
+
+**Task:** T-ID2.A2 (Layer 2 fast track, `SEDUH-ID-LAYER2-SPEC-DRAFT.md` section 14). Branch `claude/l2-a2-schema-36703f`, PR into `dev`. Migration `20261115120000_seduh_accounts.sql`, pgTAP `079`. Tables, constraints and triggers only: **no function a person can call, no front-end change, no version bump** (the gate runs on the release PR). **Not pushed to the cloud.**
+
+- **`app.seduh_accounts`** (owner-only, in `app`, like the identities): one row per claimed identity, `identity_id` and `user_id` unique, `claim_method` (`organiser_link`; `sms` reserved), `adult_attested_at` NOT NULL (L2-7), `closed_at`. Rows are never deleted or truncated; a closed account stays closed and keeps its handle and number; deleting a closed account's login leaves the row (`user_id` ON DELETE SET NULL).
+- **Handle on the account, not the identity** (most identities never claim): lower case, 3 to 30, letters and digits with single hyphens, unique, frozen by trigger. Reserved words (the 18 asked for, plus about thirty more) live in one function, `app.seduh_handle_reserved`.
+- **Founding number:** a sequence starting at 2, so a default claim never gets 1; an explicit 1 is refused unless the transaction sets `app.seduh_owner_assignment = 'on'` (runbook in `CONVENTIONS.md`, "Seduh ID #0001"); unique, frozen, never reissued. No cohort columns (L2-6).
+- **`app.seduh_profile_settings`:** one row per account, made by an insert trigger, one column per part of spec section 4, L2-1 defaults (everything public, country-page listing off), each inside its own vocabulary (identity, café, knockout take no `organisers`).
+- **`app.seduh_claim_links`:** SHA-256 hash only (a raw token is refused by shape), 72-hour window, one open link per identity, used and revoked exclusive and one-way, an account made by at most one link. **Treated as tenant data where it matters:** `org_id` frozen like any tenant parent, plus identity, hash and expiry; still outside matrices `040`/`041` (not in `public`, no policy, no grant, no function).
+- **`app.seduh_identities.country_code`:** nullable ISO alpha-2, upper case. Free-text `country` stays.
+- **Guards:** `050` pins the three new tables. `033`, `040`, `042` look at `public` only and need nothing.
+- **Left for Phase B:** the claim function must check the identity is active and unmerged; the merge function must refuse an identity that holds an account; the issuing function must prove the person is on the issuing organisation's roster.
+- **Reviews:**
+  - `schema-guardian`: no 🔴. Nits: an expired but unrevoked link still counts as open (a partial index cannot see the clock; noted in the migration for the Phase B issue function); the rollback copy in 079 could drift from the migration (fixed: `tools/seduh-accounts-rollback-sync.test.js` compares them).
+  - `security-reviewer`: no 🔴 (so no independent check was needed). Nits taken: a link's account must be the account of the link's own identity (composite foreign key, new); settings `account_id` frozen; impersonation words reserved (owner, staff, security, official, moderator, seduh-score). Left on purpose: `org_id` ON DELETE CASCADE (provenance must live in the Phase B audit row, noted in the migration).
+  - `code-reviewer`: no 🔴. Nits taken: the runbook's last select is now scoped to the #0001 row; the audit being a Phase B job is now stated; a closed account cannot be handed another login (new trigger rule).
+  - `test-auditor`: 4 🔴 (all test gaps, each confirmed by reading and fixed; the auditor could not launch an independent checker and the mutations it named are each now caught): only 18 of the reserved words were tested (now the whole list, size pinned); the rollback block was a hand copy (now pinned by a unit test); the `service_role` check could pass on missing schema usage (usage granted in the test); the organisation-delete test had no committed link (now has one). Nits fixed: upper-case hash, frozen account facts, used-before-created, a real expired link, a vacuous-set guard on the function checks.
+  - One full pass after the fixes: pgTAP (80 files), unit tests and lint pass.
+- **Design choices the spec left open:** handle on the account (not the identity); #0001 held by a sequence starting at 2 plus an explicit owner-only assignment behind a transaction setting; claim links treated as tenant data where it matters (frozen `org_id`) but kept in `app`, outside the `public` matrices.
+
+## Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15
+
+**Task:** three open items, picked as small and unblocked. Branch `claude/small-fixes-2` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
+
+- **`tools/check-doc-budgets.test.js` passes on Windows.** Its `exists` fixture matched `/real.md`, but `brokenLinks` builds paths with `path.resolve`, which gives backslashes on Windows, so a real file was reported broken. The fixture now normalises separators. Test-only; the checker is unchanged. (Follow-up from the "Public header links" entry, 2026-11-14.)
+- **Guess the Bean fields show the error edge.** GTB does not load `components.css`, so `.gtb-input[aria-invalid='true']` in `src/community/guess-the-bean/shared.css` now copies the kit's 2px `--field-edge-error` edge, giving 1px back in the side padding so the field does not grow. 8.0:1 against the input fill. The `.form-field-error` message (with its glyph) stays the non-colour cue.
+- **The shared header's phone menu closes on Escape from the toggle.** It already closed on Escape inside the panel; now Escape on the toggle closes it too, with focus left on the toggle, as the landing nav does (`src/marketing/publicHeader.js`).
+- **Tests.** `publicHeader.test.js`: Escape on the toggle closes the menu and keeps focus there; other keys do not. `sharedStyles.test.js` (new): the GTB error edge equals the kit's (`components.css`), so the copy cannot drift, and the padding gives back 1px. Reverting either fix fails its test.
+- **Not done:** no browser run.
+- **Reviews:**
+  - `code-reviewer`: clean.
+  - `module-boundary-checker`: no 🔴. Two nits: the GTB test did not compare against the kit (fixed: now a parity test); `guess-the-bean/CLAUDE.md` "Own CSS" does not list the error-edge copy (left for the owner: CLAUDE.md files are not edited on a reviewer's request). 🟣 The toggle and menu logic is duplicated between `landingScreen.js` and `publicHeader.js` (pre-existing, not logged as a task).
+  - `test-auditor`: no 🔴. Nits: no focus assertion (fixed); the "2px" test name (gone with the parity rewrite).
+  - `ui-accessibility-reviewer`: no 🔴. One nit, fixed: the padding compensation is now asserted. 🟣 The normal `.gtb-input` edge is 2.09:1 (under 3:1); logged in `docs/backlog/guess-the-bean.md`.
+
 ## Public site: three small backlog fixes · 2026-11-14
 
 **Task:** three open items from `docs/backlog/public-site.md`, picked as small and unblocked. Branch `claude/marketing-backlog-smalls` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Released in 4.10.3** (patch). No database, RPC or payload change.

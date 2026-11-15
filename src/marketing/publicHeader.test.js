@@ -123,3 +123,29 @@ describe('buildPublicHeader — nav targets', () => {
     expect(current.textContent).toBe('Records');
   });
 });
+
+describe('buildPublicHeader — mobile menu keyboard', () => {
+  it('closes the open menu on Escape pressed on the toggle, as the landing nav does', () => {
+    const header = buildPublicHeader({ active: 'tour' });
+    document.body.replaceChildren(header);
+    const toggle = header.querySelector('.public-header-toggle');
+    const panel = header.querySelector('.public-header-mobile-panel');
+    toggle.click();
+    toggle.focus();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(panel.classList.contains('public-header-mobile-panel-open')).toBe(true);
+    toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(panel.classList.contains('public-header-mobile-panel-open')).toBe(false);
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it('leaves the menu open for other keys on the toggle', () => {
+    const header = buildPublicHeader({ active: 'tour' });
+    document.body.replaceChildren(header);
+    const toggle = header.querySelector('.public-header-toggle');
+    toggle.click();
+    toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  });
+});

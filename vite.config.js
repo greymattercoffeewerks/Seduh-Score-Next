@@ -1,6 +1,7 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { countryPagesPlugin } from './tools/countryPagesPlugin.js';
+import { profileShellFor } from './worker/idRoute.js';
 
 // Single config file for both Vite (dev/build) and Vitest (test) — vitest/config
 // re-exports Vite's defineConfig with the `test` key merged in. Importing
@@ -8,7 +9,21 @@ import { countryPagesPlugin } from './tools/countryPagesPlugin.js';
 // (handoff §10).
 export default defineConfig({
   // Writes id/country/<iso2>/index.html for every ISO code after the build, and serves them in dev (T-CTY.3).
-  plugins: [countryPagesPlugin()],
+  plugins: [
+    countryPagesPlugin(),
+    {
+      // Dev only: serve the person-page shell for /id/<handle>/ the way worker/index.js does in production. (vite preview
+      // does not run the Worker; the built-app check for this route runs against `wrangler dev`.)
+      name: 'seduh-profile-pages-dev',
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          const shell = profileShellFor((req.url ?? '').split('?')[0]);
+          if (shell) req.url = shell;
+          next();
+        });
+      },
+    },
+  ],
   build: {
     rollupOptions: {
       // Seventeen HTML entries: the marketing landing page at root (index.html),
@@ -77,6 +92,8 @@ export default defineConfig({
         // /id/country/ (T-CTY.3): the Seduh ID country pages. One shell; the build copies it to id/country/<iso2>/ for
         // every ISO code (tools/countryPagesPlugin.js). noindex and unlinked until the owner decides (spec CP4).
         idCountry: fileURLToPath(new URL('./id/country/index.html', import.meta.url)),
+        // /id/<handle>/ (Layer 2 routing): the person-page shell, served for any handle by the edge Worker (worker/index.js).
+        idProfile: fileURLToPath(new URL('./id/index.html', import.meta.url)),
       },
     },
   },
@@ -110,6 +127,8 @@ export default defineConfig({
       'eslint-rules/**/*.test.js',
       // Build-output checks (tools/check-admin-bundle-leak.mjs): the scripts' own tests.
       'tools/*.test.js',
+      // The edge Worker and its path rule.
+      'worker/*.test.js',
       // The country-history import (scripts/country-history): fictional fixtures only.
       'scripts/country-history/*.test.js',
     ],
