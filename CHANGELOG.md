@@ -20,7 +20,13 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **`app.seduh_identities.country_code`:** nullable ISO alpha-2, upper case. Free-text `country` stays.
 - **Guards:** `050` pins the three new tables. `033`, `040`, `042` look at `public` only and need nothing.
 - **Left for Phase B:** the claim function must check the identity is active and unmerged; the merge function must refuse an identity that holds an account; the issuing function must prove the person is on the issuing organisation's roster.
-- **Reviews:** (filled in below)
+- **Reviews:**
+  - `schema-guardian`: no 🔴. Nits: an expired but unrevoked link still counts as open (a partial index cannot see the clock; noted in the migration for the Phase B issue function); the rollback copy in 079 could drift from the migration (fixed: `tools/seduh-accounts-rollback-sync.test.js` compares them).
+  - `security-reviewer`: no 🔴 (so no independent check was needed). Nits taken: a link's account must be the account of the link's own identity (composite foreign key, new); settings `account_id` frozen; impersonation words reserved (owner, staff, security, official, moderator, seduh-score). Left on purpose: `org_id` ON DELETE CASCADE (provenance must live in the Phase B audit row, noted in the migration).
+  - `code-reviewer`: no 🔴. Nits taken: the runbook's last select is now scoped to the #0001 row; the audit being a Phase B job is now stated; a closed account cannot be handed another login (new trigger rule).
+  - `test-auditor`: 4 🔴 (all test gaps, each confirmed by reading and fixed; the auditor could not launch an independent checker and the mutations it named are each now caught): only 18 of the reserved words were tested (now the whole list, size pinned); the rollback block was a hand copy (now pinned by a unit test); the `service_role` check could pass on missing schema usage (usage granted in the test); the organisation-delete test had no committed link (now has one). Nits fixed: upper-case hash, frozen account facts, used-before-created, a real expired link, a vacuous-set guard on the function checks.
+  - One full pass after the fixes: pgTAP (80 files), unit tests and lint pass.
+- **Design choices the spec left open:** handle on the account (not the identity); #0001 held by a sequence starting at 2 plus an explicit owner-only assignment behind a transaction setting; claim links treated as tenant data where it matters (frozen `org_id`) but kept in `app`, outside the `public` matrices.
 
 ## Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15
 

@@ -18,10 +18,12 @@
 --   * the migration's own rollback block, run here, removes everything.
 -- Not claimed: the owner role can still disable the triggers (stated in the migration); the Phase B functions are not here.
 begin;
-select plan(133);
+select plan(142);
 
 create schema t079;
 grant usage on schema t079 to anon, authenticated, service_role;
+-- service_role has no USAGE on app by default: grant it (rolled back with the test) so a 42501 below can only come from the TABLE privilege
+grant usage on schema app to anon, authenticated, service_role;
 
 -- 'ok' (the statement is undone) or SQLSTATE; always rolled back.
 create function t079.attempt(stmt text) returns text language plpgsql as $$
@@ -100,6 +102,8 @@ select is((select coalesce(string_agg(p.proname || '/' || r, ', '), 'none')
             where p.pronamespace = 'app'::regnamespace and p.proname ~ '^seduh_(accounts_|claim_links_|handle_)'
               and has_function_privilege(r, p.oid, 'execute')),
   'none', 'no API role can execute the new app functions');
+select is((select count(*)::int from pg_proc p where p.pronamespace = 'app'::regnamespace and p.proname ~ '^seduh_(accounts_|claim_links_|handle_)'), 6,
+  'the six new app functions exist (so the checks around them cannot pass on an empty set)');
 select is((select count(*)::int from pg_proc p where p.pronamespace = 'app'::regnamespace
             and p.proname ~ '^seduh_(accounts_|claim_links_|handle_)' and p.prosecdef), 0,
   'none of the new functions is SECURITY DEFINER (so guard 045 has nothing to demand)');
@@ -149,6 +153,16 @@ select is((select coalesce(string_agg(w, ', '), 'none')
                                'pricing', 'id', 'api', 'bts', 'tools', 'guess-the-bean', 'me', 'settings']) w
             where not app.seduh_handle_reserved(w)),
   'none', 'app.seduh_handle_reserved is true for every one of the eighteen words, including id and me');
+-- the WHOLE list, read from the function itself: its size is pinned (a shrinking list fails) and every word of three or more
+-- characters is refused as a handle (23514)
+select is((select count(*)::int from regexp_matches((select prosrc from pg_proc where oid = 'app.seduh_handle_reserved(text)'::regprocedure), '''([a-z0-9-]+)''', 'g')), 55,
+  'the reserved list holds 55 words (change this number on purpose when the list is extended)');
+select is((select coalesce(string_agg(m[1], ', '), 'none')
+             from regexp_matches((select prosrc from pg_proc where oid = 'app.seduh_handle_reserved(text)'::regprocedure), '''([a-z0-9-]+)''', 'g') m
+            where not app.seduh_handle_reserved(m[1]) or (length(m[1]) >= 3 and t079.attempt(t079.acct(2, 2, m[1])) <> '23514')),
+  'none', 'every word in the list is refused as a handle');
+select is((select coalesce(string_agg(w, ', '), 'none') from unnest(array['owner', 'staff', 'security', 'official', 'moderator', 'seduh-score']) w
+            where not app.seduh_handle_reserved(w)), 'none', 'the impersonation words (owner, staff, security, official, moderator, seduh-score) are reserved');
 select is(app.seduh_handle_reserved('ahmad-79'), false, 'and false for an ordinary handle');
 select is(t079.attempt(t079.acct(2, 2, 'country')), '23514', 'the handle that would collide with /id/country/ is refused');
 
@@ -157,6 +171,13 @@ select is(t079.attempt($$ update app.seduh_accounts set handle = 'changed-79' wh
   '23001', 'the handle is frozen (23001)');
 select is(t079.attempt($$ update app.seduh_accounts set handle = handle where identity_id = '00000000-0000-0000-0000-000000007901' $$),
   'ok', '...but an update that leaves it alone is fine');
+
+select is((select coalesce(string_agg(c, ', '), 'none') from unnest(array['claimed_at', 'claim_method', 'adult_attested_at', 'identity_id', 'id']) c
+            where t079.attempt(format('update app.seduh_accounts set %I = %s where identity_id = %L', c,
+              case c when 'claimed_at' then 'now() + interval ''1 day''' when 'claim_method' then '''sms'''
+                     when 'adult_attested_at' then 'now() + interval ''1 day''' when 'identity_id' then format('%L', t079.u(7920))
+                     else 'gen_random_uuid()' end, t079.u(7901))) <> '23001'),
+  'none', 'claimed_at, claim_method, adult_attested_at, identity_id and id are frozen (23001)');
 
 -- ============ accounts: founding number ============
 
@@ -287,7 +308,8 @@ select is(t079.run(t079.link(1, 11, 7981, t079.hash(1))), 'ok', 'a claim link in
 select is((select (expires_at - created_at) = interval '72 hours' and used_at is null and revoked_at is null from app.seduh_claim_links where id = t079.u(1)), true,
   'it expires after 72 hours and starts open');
 select is(t079.attempt(t079.link(2, 12, 7981, 'not-a-hash')), '23514', 'a raw token (not a 64-hex hash) is refused');
-select is(t079.attempt(t079.link(2, 12, 7981, upper(t079.hash(15) || 'abcdef')::text)), '23514', 'upper-case or over-long hex is refused');
+select is(t079.attempt(t079.link(2, 12, 7981, repeat('A', 64))), '23514', 'a 64-character UPPER-case hex hash is refused');
+select is(t079.attempt(t079.link(2, 12, 7981, t079.hash(15) || 'a')), '23514', 'an over-long hash is refused');
 select is(t079.attempt(t079.link(2, 12, 7981, repeat('g', 64))), '23514', 'a 64-character non-hex token is refused');
 select is(t079.attempt(t079.link(2, 12, 7981, t079.hash(1))), '23505', 'a hash can be stored once');
 select is(t079.attempt(t079.link(2, 12, 7981, t079.hash(2), ', expires_at', ', now() + interval ''73 hours''')), '23514', 'a 73-hour expiry is refused');
@@ -322,8 +344,12 @@ select is(t079.attempt(t079.link(4, 12, 7981, t079.hash(4), ', used_at, account_
   '23503', 'a link cannot name another identity''s account (composite foreign key)');
 select is(t079.attempt(t079.link(4, 12, 7981, t079.hash(4), ', used_at, account_id', format(', now(), %L', (select id from app.seduh_accounts where identity_id = t079.u(7911))))),
   '23505', 'one account is made by at most one link');
-select is(t079.attempt(t079.link(4, 12, 7981, t079.hash(4), ', used_at, account_id', format(', now() + interval ''73 hours'', %L', (select id from app.seduh_accounts where identity_id = t079.u(7904))))),
-  '23514', 'a link cannot be used after it expired');
+select is(t079.attempt(t079.link(4, 4, 7981, t079.hash(4), ', created_at, expires_at, used_at, account_id',
+            format(', now() - interval ''4 days'', now() - interval ''1 day'', now(), %L', (select id from app.seduh_accounts where identity_id = t079.u(7904))))),
+  '23514', 'a link that has expired cannot be used (used_at after expires_at)');
+select is(t079.attempt(t079.link(4, 4, 7981, t079.hash(4), ', used_at, account_id',
+            format(', now() - interval ''1 minute'', %L', (select id from app.seduh_accounts where identity_id = t079.u(7904))))),
+  '23514', 'a link cannot be used before it was created');
 select is(t079.attempt(t079.link(4, 12, 7981, t079.hash(4), ', used_at, revoked_at, account_id', format(', now(), now(), %L', (select id from app.seduh_accounts where identity_id = t079.u(7904))))),
   '23514', 'a link cannot be both used and revoked');
 -- revoke, then no un-revoke
@@ -344,6 +370,8 @@ select is((select coalesce(string_agg(column_name, ', '), 'none') from informati
   'none', 'the only token column is the hash (no raw token, no email, no phone)');
 select is((select count(*)::int from pg_trigger where tgrelid = 'app.seduh_claim_links'::regclass and tgname = 'trg_seduh_claim_links_parent_immutable'), 1,
   'the claim link carries the tenancy freeze trigger');
+select is(t079.run(t079.link(7, 14, 7982, t079.hash(7))), 'ok', 'a committed claim link of organisation B (fixture)');
+select is((select count(*)::int from app.seduh_claim_links where org_id = t079.u(7982)), 1, '(it is there)');
 select is(t079.run($$ delete from orgs where id = '00000000-0000-0000-0000-000000007982' $$), 'ok',
   'deleting an organisation removes its (unused) claim links and is not blocked by them');
 select is((select count(*)::int from app.seduh_claim_links where org_id = t079.u(7982)), 0, '(none left)');
