@@ -422,6 +422,7 @@ const SQUARE_ALLOWLIST = [
   ...SQUARE('src/marketing/country.css', 'no-corner', ['.country-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/profile.css', 'no-corner', ['.profile-page'], PAGE_ROOT),
   ...SQUARE('src/marketing/claim.css', 'no-corner', ['.claim-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/me.css', 'no-corner', ['.me-page'], PAGE_ROOT),
   ...SQUARE(
     'src/marketing/country.css',
     'no-corner',

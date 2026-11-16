@@ -1,0 +1,210 @@
+/* "My Seduh ID" (T-ID2.D-b). Own class prefix, shared tokens only. Form controls, hints and the card come from claim.css, the
+   year groups from profile.css; this adds layout. Phone first (360px), the same 1160px width as the country and person pages
+   on a wide screen. Every control is at least --tap-target-min tall. */
+.me-page {
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+.me-hero,
+.me-body {
+  width: min(100% - 2rem, 1160px);
+  margin-inline: auto;
+}
+.me-hero.page-hero {
+  padding-block: clamp(2rem, 6vw, 3.5rem) clamp(1.25rem, 3vw, 2rem);
+}
+.me-hero h1 {
+  font-size: clamp(var(--text-3xl), 7vw, var(--text-5xl));
+  overflow-wrap: anywhere;
+}
+.me-hero h1:focus {
+  outline: none;
+}
+.me-hero .page-hero-intro {
+  margin-top: var(--space-4);
+}
+.me-hero-links {
+  overflow-wrap: anywhere;
+}
+.me-hero-actions {
+  margin-top: var(--space-3);
+}
+.me-body {
+  padding-block: 0 clamp(2rem, 6vw, 4rem);
+}
+.me-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.me-tab {
+  min-block-size: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+.me-tab[aria-current='true'] {
+  border-radius: var(--radius-field);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+.me-tab:focus-visible,
+.me-radio:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.me-live {
+  min-block-size: 1.5em;
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.me-live[data-tone='error'] {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+.me-live[data-tone='error']::before {
+  content: 'Problem: ';
+}
+.me-section {
+  display: grid;
+  gap: var(--space-4);
+}
+.me-section h2:focus,
+.me-section h3:focus {
+  outline: none;
+}
+.me-h3 {
+  margin: var(--space-4) 0 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+.me-count {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.me-form-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+.me-form-host:empty {
+  display: none;
+}
+.me-entry-form {
+  padding: var(--space-4);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-box);
+}
+.me-years {
+  display: grid;
+  gap: var(--space-2);
+}
+.me-entry-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.me-entry {
+  display: grid;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.me-entry-main {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+  min-inline-size: 0;
+}
+.me-entry-title {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.me-entry-meta,
+.me-entry-detail,
+.me-entry-note {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.me-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.me-role-select {
+  inline-size: auto;
+  min-inline-size: 8rem;
+}
+.me-picker {
+  display: grid;
+  gap: var(--space-2);
+}
+.me-settings {
+  display: grid;
+  gap: var(--space-4);
+}
+.me-setting {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.me-setting legend {
+  padding: 0;
+}
+.me-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.me-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap-target-min);
+}
+.me-radio {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  accent-color: var(--color-accent);
+}
+.me-danger {
+  border-color: var(--color-text);
+}
+@media (max-width: 30rem) {
+  .me-entry-actions .claim-button {
+    flex: 1 1 auto;
+  }
+}
+@media (min-width: 900px) {
+  .me-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-5);
+  }
+  .me-form-grid > :nth-child(n + 8) {
+    grid-column: 1 / -1;
+  }
+  .me-entry {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+  .me-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-8);
+  }
+}

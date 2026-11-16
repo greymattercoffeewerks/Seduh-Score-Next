@@ -16,6 +16,7 @@ function fakeAssets() {
         const { pathname } = new URL(request.url);
         if (pathname === '/id/') return new Response('<title>shell</title>', { status: 200 });
         if (pathname === '/id/claim/') return new Response('<title>claim</title>', { status: 200 });
+        if (pathname === '/id/me/') return new Response('<title>me</title>', { status: 200 });
         return new Response('from assets', { status: 404 });
       },
     },
@@ -49,6 +50,28 @@ describe('worker', () => {
       expect(res.headers.get('cache-control')).toBe('no-store');
       expect(env.seen.map((s) => s.url)).toEqual(['/id/claim/']);
     }
+  });
+
+  it('serves My Seduh ID from its own built page, never as a person page, with no index, no cache and no referrer', async () => {
+    for (const path of ['/id/me/', '/id/me', '/id/Me/']) {
+      const env = fakeAssets();
+      const res = await call(env, path);
+      expect(res.status, path).toBe(200);
+      expect(await res.text(), path).toBe('<title>me</title>');
+      expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+      expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(env.seen.map((s) => s.url)).toEqual(['/id/me/']);
+    }
+    // a handle that only starts with "me", a deeper path, and a write are not the page
+    for (const path of ['/id/mello/', '/id/me/x/']) {
+      const env = fakeAssets();
+      await call(env, path);
+      expect(env.seen.map((s) => s.url)).not.toContain('/id/me/');
+    }
+    const env = fakeAssets();
+    await call(env, '/id/me/', { method: 'POST', body: 'x' });
+    expect(env.seen).toEqual([{ url: '/id/me/', method: 'POST' }]);
   });
 
   it('hands a write method on the claim page back untouched, and still serves a person page and the country pages as before', async () => {

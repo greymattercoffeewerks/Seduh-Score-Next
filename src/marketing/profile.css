@@ -1,7 +1,7 @@
 /* Seduh ID person page (Layer 2, T-ID2.C1). Own class prefix, shared tokens only: no :root block, no colour or corner of
    its own. Tags, cards and actions are the shared primitives (tokens/base.css: .tag, .panel, .action); this adds layout.
    The look follows the country pages (gold best card, compact stats row, native <details>). Phone first: written for
-   360px, widened with min-width queries. One reading column: a person page is a document, not a dashboard. */
+   360px, widened with min-width queries. The page uses the same 1160px width as the country pages; years stay in ONE column at every width (owner, 2026-11-17). */
 body {
   min-width: 320px;
 }
@@ -13,7 +13,7 @@ body {
 }
 .profile-hero,
 .profile-body {
-  width: min(100% - 2rem, 46rem);
+  width: min(100% - 2rem, 1160px);
   margin-inline: auto;
 }
 .profile-body {
@@ -104,6 +104,20 @@ body {
 .profile-stat span {
   color: var(--color-text-secondary);
   font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.profile-stats-note,
+.profile-best-source,
+.profile-provenances {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+.profile-best-source,
+.profile-provenances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
 }
 .profile-best {
   display: grid;
@@ -241,6 +255,15 @@ body {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+/* the kind of a non-competed entry ("Judged"): a small label at the start of the meta line */
+.profile-entry-kind {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text);
+}
 .profile-entry-place {
   font-family: var(--font-display);
   font-size: var(--text-lg);
@@ -253,6 +276,10 @@ body {
 /* The label is the trust signal on every row: one step above the tag's fine-print size. */
 .profile-provenance {
   font-size: var(--text-xs);
+  /* a long label wraps inside its row instead of running under the place on the right (360px) */
+  max-inline-size: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 /* Provenance: how much to trust a row. Seduh Score and the organiser's records are the accent; self-reported is plain,
    so the weaker claim never looks as strong as the stronger one. */
@@ -308,4 +335,20 @@ body {
   align-items: center;
   min-block-size: var(--tap-target-min);
   color: var(--color-accent);
+}
+
+/* Wide screens: the same width as the country pages, the summary beside the best-result card (years stay in one column) */
+@media (min-width: 900px) {
+  .profile-summary-block {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+    column-gap: var(--space-6);
+  }
+  .profile-summary-block > .profile-stats-note {
+    grid-column: 1;
+  }
+  .profile-summary-block > .profile-best {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
 }

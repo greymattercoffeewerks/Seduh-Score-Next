@@ -94,6 +94,34 @@ test('/id/claim/ is the claim page, not a person page: noindex, no referrer, no 
   expect(overflow).toBe(0);
 });
 
+test('/id/me/ is My Seduh ID, not a person page: noindex, no referrer, no cache, signed out it shows sign-in, and the neighbours are untouched', async ({
+  page,
+}) => {
+  for (const path of ['/id/me/', '/id/me', '/id/Me/']) {
+    const res = await page.goto(path);
+    expect(res.status(), path).toBe(200);
+    expect(res.headers()['x-robots-tag'], path).toBe('noindex, nofollow');
+    expect(res.headers()['referrer-policy'], path).toBe('no-referrer');
+    expect(res.headers()['cache-control'], path).toBe('no-store');
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('My Seduh ID');
+    await expect(page.getByLabel('Your email address')).toBeVisible();
+  }
+  // the claim page, a person page, a handle that only starts with "me", and a country page answer as before
+  await page.goto('/id/claim/');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('This link is incomplete');
+  await page.goto('/id/mello/');
+  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('My Seduh ID');
+  await page.goto('/id/country/bn/');
+  await expect(page.locator('main.country-page')).toBeVisible();
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('/id/me/');
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+});
+
 test('/id/firdaus is a permanent redirect to /id/mfosa/ (the owner alias), query string kept, other handles untouched', async ({
   request,
 }) => {
