@@ -146,6 +146,18 @@ const NOT_FOR_THE_CONSOLE = {
   adult_required: 'Seduh ID claim',
   account_exists: 'Seduh ID claim',
   admin_cannot_claim: 'Seduh ID claim',
+  // A claimed person's own record (T-ID2.D-a): the competitor's RPCs; D-b's "My Seduh ID" screens map them to words. Never an admin call.
+  no_account: 'Seduh ID own record',
+  bad_year: 'Seduh ID own record',
+  bad_kind: 'Seduh ID own record',
+  bad_role: 'Seduh ID own record',
+  bad_placement: 'Seduh ID own record',
+  too_many_entries: 'Seduh ID own record',
+  not_found: 'Seduh ID own record',
+  team_not_found: 'Seduh ID own record',
+  already_linked: 'Seduh ID own record',
+  too_many_links: 'Seduh ID own record',
+  bad_setting: 'Seduh ID own record',
 };
 
 describe('the hint copy covers every hint the console can meet', () => {
