@@ -8,6 +8,20 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID: the handle watch list (system words, impersonation, swear words) · 2026-11-16
+
+**Task:** owner request (T-ID2 follow-up). Branch `claude/l2-handle-watchlist-f1a13e`, PR into `dev`. Migration `20261121100000_seduh_handle_blocklist.sql`. **Patch bump to 4.11.2.** **Migration not pushed to the cloud (by hand, after merge, with the owner's approval); the profanity list is loaded afterwards by owner SQL from a local file (it is not in the repository).**
+
+- **Table, not array:** `app.seduh_handle_blocklist (term, kind, match_mode, note, created_at)`, unique `(term, kind)`, owner-only (RLS on, no policy, no grant), platform data (no tenant matrix). Kinds: `system` (EXACT; today's 56 words seeded, `firdaus` included), `impersonation` (term anywhere in the normalised handle; 15 seeded: admin, superuser, root, official, seduh, support, staff, moderator, owner, security, help ...), `profanity` (per row `exact` or `contains`; none in the migration), `allow` (same table, beats every block; a guard refuses an allow row equal to a system word).
+- **Normalising:** lower case, no hyphens, `0 o 1 i 3 e 4 a 5 s 7 t 8 b @ a $ s`; a term becomes a pattern in which each character may repeat, so `adm1n`, `the-admin`, `s3duh`, `seduh-0fficial` are caught and `carrot` is not `root`. `app.seduh_handle_reserved` now reads the table (IMMUTABLE to STABLE, still SECURITY INVOKER, still revoked; no index or constraint used it).
+- **One neutral message:** the claim page says "That handle isn't available, try another." for `reserved` and `handle_reserved`; the database answers are unchanged.
+- **Report:** `app.seduh_handle_blocklist_clashes()` lists existing accounts the current list would block (never automatic; close one through the undo runbook). `app.seduh_handle_blocked_by(handle)` shows what blocks a handle.
+- **Local profanity file:** draft starter list at `Handoffs and Specs/seduh-handle-profanity-DRAFT.csv` (gitignored, never committed) and `tools/seduh-handle-blocklist-sql.mjs` turns it into one upsert transaction. Runbook: `CONVENTIONS.md`, "Seduh ID handle watch list".
+- **Tests:** pgTAP `084` (every kind and mode, normalising, the allow list, exact-only `zork` vs `zorkland`, neutral answers at `seduh_handle_available`, `claim_seduh_id` and the account trigger, owner-only access, the report), `050` (table list), `079` (list size from the table, rollback emulation), `082`/`083` (fixture handles no longer contain `owner`); unit (`claimFlow`, the loader tool, `seduh-handle-aliases`: every alias is a `system` row); the migration's rollback block was run in a rolled-back transaction.
+- **Reviews:** (filled in once the reviewers have run)
+
+---
+
 ## Seduh ID: reserve `firdaus` and redirect `/id/firdaus` to `/id/mfosa` · 2026-11-16
 
 **Task:** owner request (T-ID2 follow-up). Branch `claude/l2-firdaus-alias-2a7035`, PR into `dev`. Migration `20261120100000_reserve_handle_firdaus.sql`. **Patch bump to 4.11.1.** **Migration not pushed to the cloud (by hand, after merge, with the owner's approval); the Worker redirect ships with the next frontend deploy.**

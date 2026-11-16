@@ -94,7 +94,7 @@ async function claimThroughUi(page, url, { email, handle, shotPrefix }) {
   await expect(page.getByText(/You are claiming the Seduh ID of /)).toBeVisible();
   const handleField = page.locator('#claim-handle');
   await handleField.fill('admin');
-  await expect(page.locator('#claim-handle-check')).toContainText('reserved');
+  await expect(page.locator('#claim-handle-check')).toContainText("isn't available");
   await handleField.fill('x');
   await expect(page.locator('#claim-handle-check')).toContainText('3 to 30');
   await handleField.fill(handle.toUpperCase());

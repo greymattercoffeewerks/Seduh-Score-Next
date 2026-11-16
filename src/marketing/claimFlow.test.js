@@ -129,7 +129,7 @@ describe('describeClaimHint: every refusal has its own plain words', () => {
     expect(describeClaimHint('link_revoked')).toMatch(/cancelled.*new one/);
     expect(describeClaimHint('link_used')).toMatch(/already been used/);
     expect(describeClaimHint('handle_taken')).toMatch(/taken/);
-    expect(describeClaimHint('handle_reserved')).toMatch(/reserved/);
+    expect(describeClaimHint('handle_reserved')).toBe("That handle isn't available, try another.");
     expect(describeClaimHint('adult_required')).toMatch(/18 or over/);
     expect(describeClaimHint('account_exists')).toMatch(/different email/);
     expect(describeClaimHint('admin_cannot_claim')).toMatch(/different email/);
@@ -169,6 +169,13 @@ describe('the words around the handle check and the steps', () => {
   it('has words for every answer of seduh_handle_available, and for a failed check', () => {
     for (const answer of ['available', 'taken', 'reserved', 'invalid', 'failed']) {
       expect(HANDLE_CHECK_TEXT[answer], answer).toMatch(/\w/);
+    }
+  });
+  it('says the same neutral words for every kind of block, and never the word reserved', () => {
+    expect(HANDLE_CHECK_TEXT.reserved).toBe("That handle isn't available, try another.");
+    expect(HANDLE_CHECK_TEXT.reserved).toBe(describeClaimHint('handle_reserved'));
+    for (const text of [HANDLE_CHECK_TEXT.reserved, describeClaimHint('handle_reserved')]) {
+      expect(text).not.toMatch(/reserved|blocked|offensive|admin|impersonat|swear|profan/i);
     }
   });
   it('labels the four steps and nothing else', () => {

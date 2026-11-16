@@ -774,8 +774,7 @@ migration (two places) is where `and e.is_shadow is not true` goes the day it do
 What it is: claimed Seduh IDs live in `app.seduh_accounts` (owner-only, like the identities; also `app.seduh_profile_settings`
 and `app.seduh_claim_links`). The **handle** is on the account (not the identity: most identities never claim), frozen
 once set, and a closed account keeps its row, so its handle and **founding number** are retired, never reissued. Rows are
-never deleted. The reserved handles are in one function, `app.seduh_handle_reserved`; to add a word, a new migration does
-`create or replace function` with the longer list (it stops new claims only, handles being frozen). Owner aliases (`/id/<alias>` 301s to `/id/<handle>/`) live in `HANDLE_ALIASES` in `worker/idRoute.js`, and each alias must also be reserved there (`tools/seduh-handle-aliases.test.js` fails otherwise); today `firdaus` to `mfosa` (owner decision 2026-11-16, migration `20261120100000`).
+never deleted. The reserved handles are the **handle watch list**, a table read by one function, `app.seduh_handle_reserved` (see "Seduh ID handle watch list" at the end of this file: add a word by SQL, no release; it stops new claims only, handles being frozen). Owner aliases (`/id/<alias>` 301s to `/id/<handle>/`) live in `HANDLE_ALIASES` in `worker/idRoute.js`, and each alias must also be a `system` row of the watch list (`tools/seduh-handle-aliases.test.js` reads the migrations and fails otherwise); today `firdaus` to `mfosa` (owner decision 2026-11-16, migration `20261120100000`).
 
 **Why #0001 is a runbook step.** The number comes from a sequence that starts at **2**, so no ordinary claim can get 1.
 Only an explicit `founding_number = 1` can, and a trigger refuses it unless the transaction sets
@@ -853,3 +852,40 @@ Closing hides the page at once (the profile door answers the empty shape), retir
 **Audit:** `app.seduh_claim_audit` (its own table, not the admin audit log: that one is admin-gated, the console reads it, and `047` pins its writers). Written by issue, revoke and claim in the same transaction; append-only by `ENABLE ALWAYS` triggers (the table owner could still drop them: the admin log's honest limit); ids and short codes only, never a token, an email or a phone (`app.admin_audit_detail_ok` refuses those key names); refusals write nothing. Read it as the owner: `select * from app.seduh_claim_audit order by id desc limit 50;`.
 
 **Security notes.** The link is a bearer secret: whoever holds it and reads a mailbox can claim, once, within 72 hours (an organiser sends it privately; a person who sees a name that is not theirs stops). The cloud OTP has Auth's own per-address frequency limit and verification rate limit, and each link allows six emailed codes. Links are identity-wide: if one identity is linked to people in two organisations, either organisation's issue or revoke replaces or cancels the other's open link (nothing is disclosed). Two parallel claims of one link make exactly one account (issue, revoke and claim all lock the identity row first: one lock order). `claim_seduh_id` never trusts a user id from the client: it uses `auth.uid()`.
+
+### Seduh ID handle watch list: who may not claim which handle (owner decision 2026-11-16, 20261121100000)
+
+`app.seduh_handle_blocklist (term, kind, match_mode, note, created_at)`, unique `(term, kind)`, owner-only (row-level security on, no policy, no API grant; `050` pins it), platform data with no `org_id` so it is in no tenant matrix. `app.seduh_handle_reserved(handle)` (STABLE, invoker, execute revoked from every API role) answers whether ANY row blocks the handle; its callers are `seduh_handle_available`, `claim_seduh_id`, the reclaim path, `public_seduh_profile` and the account `before insert` trigger. **One neutral answer for every kind**: `seduh_handle_available` says `reserved`, a claim raises `handle_reserved`, the page says "That handle isn't available, try another." Never make the answer depend on the kind.
+
+| kind            | rule                                                                                                     | who writes it                                                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `system`        | EXACT match on the handle (routes, infrastructure, owner aliases: `claim`, `country`, `firdaus` ...)     | the migration seeds today's 56 words; add one by SQL (a `HANDLE_ALIASES` entry needs one) |
+| `impersonation` | the term appears ANYWHERE in the normalised handle (`admin`, `seduh`, `root`, `official`, `support` ...) | seeded; add by SQL                                                                        |
+| `profanity`     | per row: `exact` (whole handle) or `contains` (anywhere)                                                 | the OWNER, from a local file (below); never the repository (it is public)                 |
+| `allow`         | exact handle the owner permits; **beats every block**                                                    | the owner, by SQL                                                                         |
+
+**Normalising** (impersonation and profanity): lower case, hyphens removed, look-alikes mapped `0 o, 1 i, 3 e, 4 a, 5 s, 7 t, 8 b, @ a, $ s`. A term is turned into a pattern in which each character may repeat (`admin` is `a+d+m+i+n+`), so `adm1n`, `the-admin`, `s3duh`, `seduh-0fficial` and `aaadmiin` are caught, while `root` does not catch `carrot` (collapsing repeats on both sides would). Terms are plain lowercase letters and digits; a term of fewer than 4 characters must be `exact`. **Scunthorpe rule:** a short or ambiguous word is `exact` (Cassandra contains "ass", Assam is a tea, Ishita contains "shit"); only a word that is unmistakable inside any longer word is `contains`. Every `impersonation` term is `contains`, so `help` blocks `helpful`: allow-list the real name that clashes.
+
+**Allow list.** Same table, `kind = 'allow'`, `match_mode = 'exact'` (one place, one loader, one key; a second table would have meant two lookups to explain). It beats system, impersonation and profanity for that exact handle only. A guard trigger refuses an allow row equal to a `system` word and the reverse, so a route word or the owner's alias is never allowed by accident; to free a system word, delete its system row on purpose.
+
+**Add or remove a term (owner SQL, local first with `npm run db:reset`; the cloud only with the owner's approval).**
+
+```sql
+insert into app.seduh_handle_blocklist (term, kind, match_mode, note)
+values ('<term>', 'impersonation', 'contains', '<why>');           -- or 'profanity' + 'exact'|'contains', 'system' + 'exact'
+insert into app.seduh_handle_blocklist (term, kind, match_mode, note)
+values ('<real-handle>', 'allow', 'exact', '<whose name it is>');   -- the allow list
+delete from app.seduh_handle_blocklist where term = '<term>' and kind = '<kind>';
+```
+
+A new term stops NEW claims only. **Existing handles are never re-checked automatically** (handles are permanent). To review them: `select * from app.seduh_handle_blocklist_clashes();` lists each account (handle, founding number, closed or not) the CURRENT list would block, with the row that matched. To close one, use the undo runbook under "Seduh ID claim" (a human decision; allow-list the handle instead if it is fine). To see what blocks a word: `select * from app.seduh_handle_blocked_by('<handle>');` (empty means free).
+
+**Load the profanity list from the local file.** The words are NOT in this repository. The owner's file is `Handoffs and Specs/seduh-handle-profanity-DRAFT.csv` (gitignored; columns `term,match_mode,language,note`; `#` lines are comments; review it first, ideally with a native speaker for Malay, Indonesian and Tagalog). Turn it into SQL, read the output, then run it as the owner against local first, then the cloud (the Supabase MCP's `execute_sql`, or the dashboard's SQL editor: paste the file's text):
+
+```bash
+node tools/seduh-handle-blocklist-sql.mjs "Handoffs and Specs/seduh-handle-profanity-DRAFT.csv" > "Handoffs and Specs/load-profanity.sql"
+```
+
+The tool refuses the whole file on the first bad row (nothing is half-loaded) and prints one transaction: an upsert, so loading again changes nothing and a changed mode or note is updated; it ends with a count by mode. Keep the `.sql` out of git too (`Handoffs and Specs/` is ignored; never `git add -f`). Run `select * from app.seduh_handle_blocklist_clashes();` afterwards. Tests use fictional placeholders only (`zork`, `quuxfrob`); `084` proves every kind, the allow list, the neutral answers at every door and the report.
+
+**Rollback** (in the migration header): restores the previous fixed-array function and drops the table, losing any loaded profanity (keep the CSV). A handle claimed while the table stood stays valid.

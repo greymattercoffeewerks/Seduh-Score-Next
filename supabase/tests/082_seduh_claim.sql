@@ -101,7 +101,7 @@ values (t082.u(8310), t082.u(8210), encode(sha256(convert_to(t082.fake(10), 'UTF
 insert into app.seduh_claim_links (identity_id, org_id, token_hash)
 values (t082.u(8308), t082.u(8210), encode(sha256(convert_to(t082.fake(8), 'UTF8')), 'hex'));
 insert into app.seduh_accounts (identity_id, user_id, handle, claim_method, adult_attested_at)
-values (t082.u(8308), t082.u(8212), 'owner-sql-82', 'organiser_link', now());
+values (t082.u(8308), t082.u(8212), 'founder-sql-82', 'organiser_link', now());
 -- identity 9: a live link, then the person opts out
 insert into app.seduh_claim_links (identity_id, org_id, token_hash)
 values (t082.u(8309), t082.u(8210), encode(sha256(convert_to(t082.fake(9), 'UTF8')), 'hex'));
@@ -184,7 +184,7 @@ select is(t082.st(8420), 'no_identity', 'status: no_identity');
 select is(t082.st(8404), 'no_identity', 'status: an opted-out identity reads as no_identity');
 select is(t082.st(8405), 'unavailable', 'status: a merged identity is unavailable');
 select is(t082.st(8402), 'can_issue', 'status: can_issue');
-select is(t082.st(8408), 'claimed:owner-sql-82', 'status: claimed, with the (public) handle');
+select is(t082.st(8408), 'claimed:founder-sql-82', 'status: claimed, with the (public) handle');
 select is(t082.attempt('select * from public.seduh_claim_statuses(' || quote_literal(t082.u(8210)) || ', array[' || quote_literal(t082.u(8412)) || '::uuid])'), '42501/',
   'status naming another organisation''s person: 42501');
 select is(t082.attempt('select * from public.seduh_claim_statuses(' || quote_literal(t082.u(8210)) || ', array[gen_random_uuid()])'), '42501/',
@@ -294,7 +294,7 @@ select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', curr
 -- handle taken, in any case; a closed account keeps its handle too
 select t082.as_user(8205);
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok3'), 'HAPPY-82')), 'P0001/handle_taken', 'a taken handle, in other case: handle_taken');
-select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok3'), 'owner-sql-82')), 'P0001/handle_taken', 'another taken handle');
+select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok3'), 'founder-sql-82')), 'P0001/handle_taken', 'another taken handle');
 reset role;
 select is((select count(*)::int from app.seduh_claim_links where identity_id = t082.u(8303) and used_at is null and revoked_at is null), 1, '(a refused claim leaves the other link open)');
 
@@ -307,8 +307,8 @@ select is(public.seduh_handle_available('Firdaus'), 'reserved', 'handle check: f
 select is(public.seduh_handle_available('a'), 'invalid', 'handle check: invalid (short)');
 select is(public.seduh_handle_available(null), 'invalid', 'handle check: NULL is invalid');
 reset role;
-update app.seduh_accounts set closed_at = now() where handle = 'owner-sql-82';
-select is(public.seduh_handle_available('owner-sql-82'), 'taken', 'a CLOSED account''s handle stays taken (retired, never reissued)');
+update app.seduh_accounts set closed_at = now() where handle = 'founder-sql-82';
+select is(public.seduh_handle_available('founder-sql-82'), 'taken', 'a CLOSED account''s handle stays taken (retired, never reissued)');
 
 -- ============ #0001 ============
 select is(t082.attempt($$ insert into app.seduh_reserved_numbers (founding_number, identity_id) values (2, '00000000-0000-0000-0000-000000008313') $$), '23514/',
@@ -336,12 +336,12 @@ select is(left(t082.attempt($$ insert into app.seduh_reserved_numbers (founding_
 select t082.as_user(8201);
 select set_config('t082.tok6', public.issue_seduh_claim_link(t082.u(8406)), false);
 select t082.as_user(8203);
-select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok6'), 'owner-82')), 'P0001/admin_cannot_claim',
+select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok6'), 'founder-82')), 'P0001/admin_cannot_claim',
   'the owner''s ADMIN login cannot take #0001');
 select t082.as_user(8207);
-select is(public.claim_seduh_id(current_setting('t082.tok6'), 'owner-82', true) ->> 'founding_number', '1', 'the reserved identity''s claim receives founding number 1');
+select is(public.claim_seduh_id(current_setting('t082.tok6'), 'founder-82', true) ->> 'founding_number', '1', 'the reserved identity''s claim receives founding number 1');
 reset role;
-select is((select count(*)::int from app.seduh_accounts where founding_number = 1 and identity_id = t082.u(8306) and handle = 'owner-82'), 1, 'and the account holds it');
+select is((select count(*)::int from app.seduh_accounts where founding_number = 1 and identity_id = t082.u(8306) and handle = 'founder-82'), 1, 'and the account holds it');
 select is((select count(*)::int from app.seduh_reserved_numbers where identity_id = t082.u(8306) and consumed_at is not null and account_id is not null), 1,
   'the reservation is consumed and names the account');
 select is(coalesce(current_setting('app.seduh_owner_assignment', true), ''), '', 'the owner-assignment flag is cleared after the claim');
