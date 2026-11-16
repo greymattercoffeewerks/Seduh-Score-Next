@@ -227,8 +227,14 @@ below are enforced by tests that fail CI, not by memory; the "how to add a tenan
 - **Anonymous people reach data only through narrow `SECURITY DEFINER` doors** (`public_org_by_slug`,
   `public_event_summary`, `get_scoring_record`, `submit_guess`, the Guess the Bean feed, and the two country-page doors
   `public_country_record` / `public_country_index`, which read only LISTED rows of `app.historical_results`, T-CTY.1, and the person-page door
-  `public_seduh_profile(handle)`, which applies a claimed person's privacy settings in SQL and reads only already-published results, T-ID2.B1), never a table read:
+  `public_seduh_profile(handle)`, which applies a claimed person's privacy settings in SQL and reads only already-published results, T-ID2.B1; it now also shows the person's own self-reported entries and team links, and the country door lists a team's opted-in members, T-ID2.D-a), never a table read:
   `events` is closed to anon, and `live_sessions` shows anon only ACTIVE rows (D6, `038`).
+- **A claimed person writes only their own record, through narrow `authenticated` doors** (T-ID2.D-a: `seduh_my_record`, `seduh_add_entry`,
+  `seduh_update_entry`, `seduh_delete_entry`, `seduh_team_options`, `seduh_add_team_link`, `seduh_remove_team_link`,
+  `seduh_set_my_settings`). Each opens with `app.seduh_my_account()` (the caller's `auth.uid()` owns an OPEN account, else one
+  42501 `no_account`), takes no uuid, and writes `where account_id = <the caller's account>`; an organiser can never write a person's
+  entries. A team membership is `self_reported` until the OWNER confirms it (owner SQL, audited); nobody is listed on a country page
+  unless they opted in themselves. Contract and runbook: `CONVENTIONS.md`, "Seduh ID: a person's own record".
 - **Audience links name the organiser** (`#/live/<slug>/projector|phone|splash`). A slug can never be changed (it is in
   printed and QR links). The old slug-less links are a legacy shim that shows the one organisation named by
   `VITE_LEGACY_AUDIENCE_ORG_SLUG` (see Repo).

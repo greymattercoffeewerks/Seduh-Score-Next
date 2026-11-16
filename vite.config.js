@@ -142,6 +142,8 @@ export default defineConfig({
       'worker/*.test.js',
       // The country-history import (scripts/country-history): fictional fixtures only.
       'scripts/country-history/*.test.js',
+      // The person's own record loader (scripts/seduh-id-record): fictional fixtures only.
+      'scripts/seduh-id-record/*.test.js',
     ],
     setupFiles: ['./src/testSetup.js'],
   },

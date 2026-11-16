@@ -83,14 +83,25 @@ function recordedEntry(raw) {
 // self-reported, whatever the row claims.
 function seamEntry(raw, { defaultKind, provenance, allowSeduhScore = false }) {
   if (!raw || typeof raw !== 'object') return null;
-  const title = text(raw.title ?? raw.event_name ?? raw.competition ?? raw.name, 120);
+  // Two real shapes now reach this function (T-ID2.D-a, migration 20261122100000): a self-reported entry
+  // {year, competition_name, kind, role, result_text, placement, note, location} and a team link {edition_year, competition_name,
+  // team_name, stage_reached, placement, role, membership}. The older provisional keys stay accepted. D-b pins the final shape.
+  const title = text(
+    raw.title ?? raw.event_name ?? raw.competition_name ?? raw.competition ?? raw.name,
+    120,
+  );
   if (!title) return null;
   const date = isoDate(raw.event_date ?? raw.date);
   const kind = ENTRY_KINDS.includes(raw.kind) ? raw.kind : defaultKind;
   let prov = provenance;
   if (allowSeduhScore && [PROVENANCE_SEDUH_SCORE, PROVENANCE_ORGANISER].includes(raw.provenance))
     prov = raw.provenance;
-  const placing = int(raw.placing);
+  const placing = int(raw.placing ?? raw.placement);
+  // a team link's stage is a code ('quarter_final'); a self-reported entry carries its own words in result_text
+  const stage =
+    typeof raw.stage_reached === 'string' ? raw.stage_reached.replaceAll('_', ' ') : null;
+  const result =
+    text(raw.result_text, 80) ?? (stage ? stage.charAt(0).toUpperCase() + stage.slice(1) : null);
   return {
     kind,
     provenance: prov,
@@ -99,9 +110,11 @@ function seamEntry(raw, { defaultKind, provenance, allowSeduhScore = false }) {
     format: null,
     team: text(raw.team_name ?? raw.team, 80),
     location: text(raw.location, 80),
-    detail: [text(raw.role, 60), text(raw.detail ?? raw.note, 160)].filter(Boolean).join(' · '),
+    detail: [text(raw.role, 60), result, text(raw.detail ?? raw.note, 160)]
+      .filter(Boolean)
+      .join(' · '),
     date,
-    year: yearOf(raw.year, date),
+    year: yearOf(raw.year ?? raw.edition_year, date),
     placing: placing !== null && placing >= 1 ? placing : null,
     correct: null,
     total: null,
