@@ -94,7 +94,9 @@ test('a claimed person with published results renders at 360px with no horizonta
     'Recorded by Seduh Score',
   ]);
   await expect(page.locator('.profile-best-finish')).toHaveText('1st · Proof Open 2026');
-  await expect(page.locator('.profile-stats')).toContainText('3results');
+  // the stats count every entry by kind, and podiums (placings 1, 3 and 5: two podiums)
+  await expect(page.locator('.profile-stats')).toContainText('3competed');
+  await expect(page.locator('.profile-stats')).toContainText('2podiums');
   // only the newest year is open
   await expect(page.locator('.profile-year[open]')).toHaveCount(1);
   expect(await overflow(page)).toBe(0);

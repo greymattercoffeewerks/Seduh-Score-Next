@@ -9,7 +9,8 @@ import { sqlAsOwner } from './support/admins.js';
 // person signs in with the emailed 6-digit code (Mailpit), adds, edits and deletes an entry, links and unlinks a team, changes
 // privacy settings, and the PUBLIC page /id/<handle>/ reflects each change. Also: a signed-out visit shows sign-in; an unknown
 // email gets the same words as a known one; the claim page, a person page and a country page still answer. Everything is
-// fictional (an invented handle, login and team in the invented country XA).
+// fictional (an invented handle, login and team). The team is in the invented country XA, which is not in the app's country list, so the
+// picker is read with "Any country"; the team is the newest year so it is inside the picker's 300 newest rows.
 // ME_SHOTS=<dir> also saves screenshots at 360px and desktop (local only; not committed).
 
 const expect = baseExpect.configure({ timeout: 20000 });
@@ -83,7 +84,16 @@ test.describe('My Seduh ID (real app, real local Supabase)', () => {
     person = await claimedPerson('mine');
     sqlAsOwner(
       `insert into app.historical_results (competition, competition_name, edition_year, team_name, country_code, stage_reached, source_ref, supplied_by, supplied_on, permission_ref) values ` +
-        `('btc', 'Me Proof Championship', 2024, ${sqlText(teamName)}, 'XA', 'quarter_final', 'x', 'x', '2026-11-01', 'test');`,
+        `('btc', 'Me Proof Championship', 2026, ${sqlText(teamName)}, 'XA', 'quarter_final', 'x', 'x', '2026-11-01', 'test');`,
+    );
+  });
+
+  // The seeded team row is removed afterwards (memberships first: they restrict the delete), so a long-lived local database does
+  // not push a later run's row out of the picker's 300 newest.
+  test.afterAll(() => {
+    sqlAsOwner(
+      `delete from app.seduh_team_memberships where result_id in (select id from app.historical_results where team_name = ${sqlText(teamName)});` +
+        `delete from app.historical_results where team_name = ${sqlText(teamName)};`,
     );
   });
 
@@ -180,7 +190,12 @@ test.describe('My Seduh ID (real app, real local Supabase)', () => {
   }) => {
     await signIn(page, person.email);
     await page.getByRole('button', { name: 'My teams', exact: true }).click();
-    await page.locator('#me-country').selectOption('XA');
+    // XA is not an option of the country select (it lists real countries), so ask for any country and find the team by name
+    await expect(page.locator('#me-country')).toBeEnabled();
+    // the select narrows through the door: a real country with no listed team says so
+    await page.locator('#me-country').selectOption('AD');
+    await expect(page.getByText(/No team results for .* are available to link yet/)).toBeVisible();
+    await page.locator('#me-country').selectOption({ label: 'Any country' });
     const row = page.locator('.me-picker .me-entry', { hasText: teamName });
     await expect(row).toBeVisible();
     await row.getByRole('combobox').selectOption('captain');
