@@ -92,3 +92,18 @@ test('/id/claim/ is the claim page, not a person page: noindex, no referrer, no 
   );
   expect(overflow).toBe(0);
 });
+
+test('/id/firdaus is a permanent redirect to /id/mfosa/ (the owner alias), query string kept, other handles untouched', async ({
+  request,
+}) => {
+  for (const path of ['/id/firdaus', '/id/firdaus/', '/id/Firdaus/']) {
+    const res = await request.get(path, { maxRedirects: 0 });
+    expect(res.status(), path).toBe(301);
+    expect(res.headers().location, path).toBe('/id/mfosa/');
+  }
+  const withQuery = await request.get('/id/firdaus/?ref=card', { maxRedirects: 0 });
+  expect(withQuery.status()).toBe(301);
+  expect(withQuery.headers().location).toBe('/id/mfosa/?ref=card');
+  const other = await request.get('/id/someone/', { maxRedirects: 0 });
+  expect(other.status()).toBe(200);
+});

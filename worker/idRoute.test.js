@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRY_HUB_PATH } from '../src/core/countryPages.js';
 import {
+  aliasRedirectFor,
   CLAIM_SHELL_PATH,
+  HANDLE_ALIASES,
   claimShellFor,
   isClaimPath,
   isProfilePath,
@@ -106,6 +108,42 @@ describe('the claim page', () => {
     ]) {
       expect(isClaimPath(no), no).toBe(false);
       expect(claimShellFor(no), no).toBeNull();
+    }
+  });
+});
+
+describe('aliasRedirectFor (owner aliases)', () => {
+  it('sends /id/firdaus and /id/firdaus/ in any case to /id/mfosa/', () => {
+    for (const path of ['/id/firdaus', '/id/firdaus/', '/id/Firdaus', '/id/FIRDAUS/']) {
+      expect(aliasRedirectFor(path), path).toBe('/id/mfosa/');
+    }
+  });
+
+  it('leaves every other path alone: other handles, the target, country, claim, deeper paths, lookalikes', () => {
+    for (const path of [
+      '/id/mfosa/',
+      '/id/someone',
+      '/id/country',
+      '/id/country/',
+      '/id/claim/',
+      '/id/firdaus2/',
+      '/id/xfirdaus',
+      '/id/firdaus/extra',
+      '/id/constructor',
+      '/id/__proto__',
+      '/id/toString/',
+      '/firdaus',
+      '/id/',
+    ]) {
+      expect(aliasRedirectFor(path), path).toBeNull();
+    }
+  });
+
+  it('only ever points an alias at a well-formed lower-case handle that is not itself an alias', () => {
+    for (const [from, to] of Object.entries(HANDLE_ALIASES)) {
+      expect(from).toMatch(/^[a-z0-9-]{3,30}$/);
+      expect(to).toMatch(/^[a-z0-9-]{3,30}$/);
+      expect(Object.hasOwn(HANDLE_ALIASES, to), `${from} points at an alias`).toBe(false);
     }
   });
 });
