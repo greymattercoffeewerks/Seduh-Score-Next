@@ -18,7 +18,7 @@
 --   * the migration's own rollback block, run here, removes everything.
 -- Not claimed: the owner role can still disable the triggers (stated in the migration); the Phase B functions are not here.
 begin;
-select plan(142);
+select plan(143);
 
 create schema t079;
 grant usage on schema t079 to anon, authenticated, service_role;
@@ -102,8 +102,8 @@ select is((select coalesce(string_agg(p.proname || '/' || r, ', '), 'none')
             where p.pronamespace = 'app'::regnamespace and p.proname ~ '^seduh_(accounts_|claim_links_|handle_)'
               and has_function_privilege(r, p.oid, 'execute')),
   'none', 'no API role can execute the new app functions');
-select is((select count(*)::int from pg_proc p where p.pronamespace = 'app'::regnamespace and p.proname ~ '^seduh_(accounts_|claim_links_|handle_)'), 6,
-  'the six new app functions exist (so the checks around them cannot pass on an empty set)');
+select is((select count(*)::int from pg_proc p where p.pronamespace = 'app'::regnamespace and p.proname ~ '^seduh_(accounts_|claim_links_|handle_)'), 11,
+  'the new app functions exist (six from this migration, five from the handle watch list, 20261121100000) (so the checks around them cannot pass on an empty set)');
 select is((select count(*)::int from pg_proc p where p.pronamespace = 'app'::regnamespace
             and p.proname ~ '^seduh_(accounts_|claim_links_|handle_)' and p.prosecdef), 0,
   'none of the new functions is SECURITY DEFINER (so guard 045 has nothing to demand)');
@@ -155,14 +155,15 @@ select is((select coalesce(string_agg(w, ', '), 'none')
   'none', 'app.seduh_handle_reserved is true for every one of the eighteen words, including id and me');
 -- the WHOLE list, read from the function itself: its size is pinned (a shrinking list fails) and every word of three or more
 -- characters is refused as a handle (23514)
-select is((select count(*)::int from regexp_matches((select prosrc from pg_proc where oid = 'app.seduh_handle_reserved(text)'::regprocedure), '''([a-z0-9-]+)''', 'g')), 55,
-  'the reserved list holds 55 words (change this number on purpose when the list is extended)');
-select is((select coalesce(string_agg(m[1], ', '), 'none')
-             from regexp_matches((select prosrc from pg_proc where oid = 'app.seduh_handle_reserved(text)'::regprocedure), '''([a-z0-9-]+)''', 'g') m
-            where not app.seduh_handle_reserved(m[1]) or (length(m[1]) >= 3 and t079.attempt(t079.acct(2, 2, m[1])) <> '23514')),
+select is((select count(*)::int from app.seduh_handle_blocklist where kind = 'system'), 56,
+  'the reserved list (the system rows of the handle watch list) holds 56 words (change this number on purpose when the list is extended)');
+select is((select coalesce(string_agg(b.term, ', '), 'none')
+             from app.seduh_handle_blocklist b
+            where b.kind = 'system' and (not app.seduh_handle_reserved(b.term) or (length(b.term) >= 3 and t079.attempt(t079.acct(2, 2, b.term)) <> '23514'))),
   'none', 'every word in the list is refused as a handle');
 select is((select coalesce(string_agg(w, ', '), 'none') from unnest(array['owner', 'staff', 'security', 'official', 'moderator', 'seduh-score']) w
             where not app.seduh_handle_reserved(w)), 'none', 'the impersonation words (owner, staff, security, official, moderator, seduh-score) are reserved');
+select is(app.seduh_handle_reserved('firdaus'), true, 'firdaus is reserved (owner decision 2026-11-16: /id/firdaus redirects to the owner)');
 select is(app.seduh_handle_reserved('ahmad-79'), false, 'and false for an ordinary handle');
 select is(t079.attempt(t079.acct(2, 2, 'country')), '23514', 'the handle that would collide with /id/country/ is refused');
 
@@ -198,7 +199,7 @@ select is(t079.attempt(format('select set_config(''app.seduh_owner_assignment'',
 select is(t079.attempt(t079.acct(3, 3, 'gamma-79', ', founding_number', format(', %s', (select founding_number from app.seduh_accounts where identity_id = t079.u(7901))))),
   '23505', 'a number already taken is refused');
 -- 1 can be used once, ever: with the switch on, a second 1 hits the unique constraint
-select is(t079.run(format('select set_config(''app.seduh_owner_assignment'', ''on'', false); %s', t079.acct(3, 3, 'owner-79', ', founding_number', ', 1'))),
+select is(t079.run(format('select set_config(''app.seduh_owner_assignment'', ''on'', false); %s', t079.acct(3, 3, 'founder-79', ', founding_number', ', 1'))),
   'ok', 'the owner takes 1 (fixture 3)');
 select set_config('app.seduh_owner_assignment', 'off', false);
 select is(t079.run(t079.acct(4, 4, 'delta-79')), 'ok', 'an ordinary claim after the owner still gets a number above 1 (fixture 4)');
@@ -381,6 +382,13 @@ select is((select count(*)::int from app.seduh_claim_links where org_id = t079.u
 -- a later migration (20261118100000, T-ID2.B3a) depends on these tables, so ITS rollback block runs first, inside its own
 -- savepoint (tools/seduh-accounts-rollback-sync.test.js pins THIS migration's block, which follows unchanged)
 savepoint later_migrations;
+-- the handle watch list (20261121100000) comes off first, its rollback block: the previous array function, then its own objects
+drop function if exists app.seduh_handle_blocklist_clashes();
+drop function if exists app.seduh_handle_blocked_by(text);
+drop table if exists app.seduh_handle_blocklist;
+drop function if exists app.seduh_handle_blocklist_guard();
+drop function if exists app.seduh_handle_pattern(text);
+drop function if exists app.seduh_handle_normalise(text);
 drop function if exists public.seduh_claim_begin(text);
 drop function if exists public.claim_seduh_id(text, text, boolean);
 drop table if exists app.seduh_reserved_numbers;

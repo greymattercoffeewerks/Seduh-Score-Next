@@ -6,7 +6,13 @@
 // A person page request gets the shell (the built id/index.html) with status 200. Anything else that reaches the Worker
 // (for example /id/favicon.ico, or /id/country with no slash) is handed to the assets unchanged, so it behaves exactly as
 // it did before this Worker existed (a redirect or Cloudflare's own 404).
-import { CLAIM_SHELL_PATH, isClaimPath, isProfilePath, PROFILE_SHELL_PATH } from './idRoute.js';
+import {
+  aliasRedirectFor,
+  CLAIM_SHELL_PATH,
+  isClaimPath,
+  isProfilePath,
+  PROFILE_SHELL_PATH,
+} from './idRoute.js';
 
 export default {
   async fetch(request, env) {
@@ -21,6 +27,11 @@ export default {
       headers.set('Referrer-Policy', 'no-referrer');
       headers.set('Cache-Control', 'no-store');
       return new Response(claim.body, { status: 200, headers });
+    }
+    const alias = readOnly ? aliasRedirectFor(url.pathname) : null;
+    if (alias) {
+      // An owner alias (worker/idRoute.js HANDLE_ALIASES): permanent, query string kept, before the shell.
+      return new Response(null, { status: 301, headers: { Location: `${alias}${url.search}` } });
     }
     if (!readOnly || !isProfilePath(url.pathname)) return env.ASSETS.fetch(request);
 

@@ -265,7 +265,7 @@ describe('step 4, handle, 18+ and claim', () => {
   it('words each check answer, and does not ask the database about a shape it already knows is wrong', async () => {
     const expected = {
       taken: 'Already taken',
-      reserved: 'reserved',
+      reserved: "isn't available",
       invalid: '3 to 30',
       failed: 'Could not check',
     };

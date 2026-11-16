@@ -185,14 +185,14 @@ set local role authenticated;
 select t083.as_user(8301);
 select set_config('t083.tok4', public.issue_seduh_claim_link(t083.u(8332)), false);
 select t083.as_user(8302);
-select is(public.claim_seduh_id(current_setting('t083.tok4'), 'owner-83', true) ->> 'founding_number', '1', 'the reserved identity takes number 1');
+select is(public.claim_seduh_id(current_setting('t083.tok4'), 'founder-83', true) ->> 'founding_number', '1', 'the reserved identity takes number 1');
 reset role;
-select is(t083.undo('owner-83'), 'ok', 'the owner''s claim is undone');
+select is(t083.undo('founder-83'), 'ok', 'the owner''s claim is undone');
 set local role authenticated;
 select t083.as_user(8301);
 select set_config('t083.tok5', public.issue_seduh_claim_link(t083.u(8332)), false);
 select t083.as_user(8302);
-select ok((public.claim_seduh_id(current_setting('t083.tok5'), 'owner-again-83', true) ->> 'founding_number')::int >= 2, 'a re-claim of the reserved identity gets a sequence number, never 1 again');
+select ok((public.claim_seduh_id(current_setting('t083.tok5'), 'founder-again-83', true) ->> 'founding_number')::int >= 2, 'a re-claim of the reserved identity gets a sequence number, never 1 again');
 reset role;
 
 -- the rollback block refuses, on purpose, once an identity has two rows

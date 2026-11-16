@@ -1,5 +1,5 @@
-// Entry for the Seduh ID person pages (/id/<handle>/). One shell serves every handle (worker/index.js); this placeholder
-// reads nothing from the path yet.
-import { mountProfilePlaceholder } from './profileScreen.js';
+// Entry for the Seduh ID person pages (/id/<handle>/). One shell serves every handle (worker/index.js); the page reads
+// its handle from the path and asks the anonymous profile door.
+import { mountProfileFromLocation } from './profileScreen.js';
 
-mountProfilePlaceholder(document.querySelector('#app'));
+mountProfileFromLocation(document.querySelector('#app'));

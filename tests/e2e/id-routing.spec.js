@@ -14,20 +14,21 @@ test('any /id/<handle>/ path serves the person-page shell with 200 and noindex',
     expect(res.status(), path).toBe(200);
     // /id/ itself comes straight from the assets (no Worker), so it carries the meta tag only.
     if (path !== '/id/') expect(res.headers()['x-robots-tag']).toBe('noindex, nofollow');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Seduh ID profile');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   }
-  // The placeholder makes no data call: every request is this origin's page, its bundle, or its icons (nothing
-  // cross-origin, and no same-origin API path either).
+  // The page makes ONE data call, to the profile door (cross-origin, to the project's own API); everything else is this
+  // origin's page, its bundle, or its icons (no same-origin API path).
   const origin = new URL(baseURL).origin;
-  const stray = calls.filter(
-    (u) =>
-      u.origin !== origin ||
-      !(
-        u.pathname.startsWith('/id/') ||
-        u.pathname.startsWith('/assets/') ||
-        u.pathname.startsWith('/favicon')
-      ),
+  const stray = calls.filter((u) =>
+    u.pathname === '/rest/v1/rpc/public_seduh_profile'
+      ? false
+      : u.origin !== origin ||
+        !(
+          u.pathname.startsWith('/id/') ||
+          u.pathname.startsWith('/assets/') ||
+          u.pathname.startsWith('/favicon')
+        ),
   );
   expect(stray.map((u) => u.href)).toEqual([]);
 });
@@ -81,7 +82,7 @@ test('/id/claim/ is the claim page, not a person page: noindex, no referrer, no 
   }
   // a person page and a country page still answer as before
   await page.goto('/id/someone/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Seduh ID profile');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await page.goto('/id/country/bn/');
   await expect(page.locator('main.country-page')).toBeVisible();
   // the claim page does not overflow a 360px screen
@@ -91,4 +92,19 @@ test('/id/claim/ is the claim page, not a person page: noindex, no referrer, no 
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBe(0);
+});
+
+test('/id/firdaus is a permanent redirect to /id/mfosa/ (the owner alias), query string kept, other handles untouched', async ({
+  request,
+}) => {
+  for (const path of ['/id/firdaus', '/id/firdaus/', '/id/Firdaus/']) {
+    const res = await request.get(path, { maxRedirects: 0 });
+    expect(res.status(), path).toBe(301);
+    expect(res.headers().location, path).toBe('/id/mfosa/');
+  }
+  const withQuery = await request.get('/id/firdaus/?ref=card', { maxRedirects: 0 });
+  expect(withQuery.status()).toBe(301);
+  expect(withQuery.headers().location).toBe('/id/mfosa/?ref=card');
+  const other = await request.get('/id/someone/', { maxRedirects: 0 });
+  expect(other.status()).toBe(200);
 });

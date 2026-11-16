@@ -1,5 +1,7 @@
-/* Seduh ID person page shell (Layer 2). Own class prefix, shared tokens only: no :root block, no colour or corner of its
-   own. Phone first: written for 360px. */
+/* Seduh ID person page (Layer 2, T-ID2.C1). Own class prefix, shared tokens only: no :root block, no colour or corner of
+   its own. Tags, cards and actions are the shared primitives (tokens/base.css: .tag, .panel, .action); this adds layout.
+   The look follows the country pages (gold best card, compact stats row, native <details>). Phone first: written for
+   360px, widened with min-width queries. One reading column: a person page is a document, not a dashboard. */
 body {
   min-width: 320px;
 }
@@ -9,7 +11,301 @@ body {
   background: var(--color-canvas);
   color: var(--color-text);
 }
-.profile-hero {
-  width: min(100% - 2rem, 1160px);
+.profile-hero,
+.profile-body {
+  width: min(100% - 2rem, 46rem);
   margin-inline: auto;
+}
+.profile-body {
+  padding-block: clamp(0.75rem, 2.5vw, 1.25rem);
+}
+.profile-section-title {
+  margin: 0 0 var(--space-3);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* ---- Hero: avatar, name, chips ---- */
+.profile-hero-one {
+  padding-block: clamp(2rem, 5vw, 3rem) var(--space-3);
+}
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+.profile-identity-text {
+  min-inline-size: 0;
+}
+.profile-identity h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 8vw, 3rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.profile-handle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+/* The initials stand in until photos exist (a later task). A true circle is what --radius-full is for. */
+.profile-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 5rem;
+  block-size: 5rem;
+  background: var(--color-accent);
+  border-radius: var(--radius-full);
+  color: var(--color-accent-contrast);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+}
+.profile-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+/* The founding number is gold, as the best-result card is. */
+.profile-founding {
+  --tag-edge: var(--color-gold);
+  --tag-ink: var(--color-gold);
+}
+
+/* ---- Summary: one compact row of totals, then the best result on the gold tint ---- */
+.profile-summary-block {
+  display: grid;
+  gap: var(--space-3);
+}
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(4.25rem, 1fr));
+  gap: var(--space-3);
+}
+.profile-stat b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 5vw, 1.75rem);
+  line-height: 1.1;
+  color: var(--color-accent);
+}
+.profile-stat span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+.profile-best {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-gold-tint);
+  border-radius: var(--radius-box);
+}
+.profile-best-label {
+  margin: 0;
+  color: var(--color-gold);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.profile-best-finish {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 4.5vw, 1.625rem);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.profile-best-detail {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* ---- The record: summary, filters, then years ---- */
+.profile-summary,
+.profile-quiet {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+}
+.profile-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.profile-filter {
+  min-block-size: var(--tap-target-min);
+  padding-inline: var(--space-3);
+  background: transparent;
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-radius: var(--radius-field);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.profile-filter[aria-pressed='true'] {
+  background: var(--color-accent);
+  border-radius: var(--radius-field);
+  border-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: var(--font-weight-bold);
+}
+.profile-year {
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.profile-year-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--tap-target-min);
+  cursor: pointer;
+  list-style: none;
+}
+.profile-year-head::-webkit-details-marker {
+  display: none;
+}
+.profile-year-label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+}
+.profile-year-count {
+  flex: 1 1 auto;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.profile-year-cue {
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-inline-end: 2px solid var(--color-text-secondary);
+  border-block-end: 2px solid var(--color-text-secondary);
+  transform: rotate(45deg);
+  margin-inline-end: var(--space-1);
+}
+.profile-year[open] > summary .profile-year-cue {
+  transform: rotate(-135deg);
+}
+.profile-entry-list,
+.profile-h2h {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.profile-entry {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.profile-entry-date {
+  padding-top: 2px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.profile-entry-main {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+  min-inline-size: 0;
+}
+.profile-entry-title {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.profile-entry-meta,
+.profile-entry-detail {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.profile-entry-detail {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.profile-entry-place {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  text-align: end;
+}
+.profile-entry-place.is-first {
+  color: var(--color-gold);
+}
+/* The label is the trust signal on every row: one step above the tag's fine-print size. */
+.profile-provenance {
+  font-size: var(--text-xs);
+}
+/* Provenance: how much to trust a row. Seduh Score and the organiser's records are the accent; self-reported is plain,
+   so the weaker claim never looks as strong as the stronger one. */
+.profile-provenance {
+  --tag-edge: var(--color-accent);
+  --tag-ink: var(--color-accent);
+}
+.profile-prov-self_reported {
+  --tag-edge: var(--color-border-card);
+  --tag-ink: var(--color-text-secondary);
+}
+
+/* ---- Head to head, works with ---- */
+.profile-h2h-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.profile-h2h-rec {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+/* ---- States and the closing note ---- */
+.profile-state-card {
+  padding: var(--space-5);
+}
+.profile-state-card h2 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+}
+.profile-state-card p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+.profile-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.profile-state-actions .action {
+  min-block-size: var(--tap-target-min);
+}
+.profile-note p {
+  color: var(--color-text-secondary);
+}
+.profile-note a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap-target-min);
+  color: var(--color-accent);
 }

@@ -54,7 +54,8 @@ export function formatFoundingNumber(n) {
 export const HANDLE_CHECK_TEXT = {
   available: 'Available.',
   taken: 'Already taken. Choose another.',
-  reserved: 'That word is reserved. Choose another.',
+  // one neutral line for every kind of block (system word, impersonation, swear word): nobody can probe which one matched
+  reserved: "That handle isn't available, try another.",
   invalid: 'Use 3 to 30 lowercase letters, numbers or single hyphens (not at the start or end).',
   failed: 'Could not check just now. You can still try to claim it.',
 };
@@ -96,7 +97,7 @@ const TEXT = {
   // the claim
   handle_invalid:
     'That handle is not allowed. Use 3 to 30 lowercase letters, numbers or single hyphens (not at the start or end).',
-  handle_reserved: 'That handle is reserved. Choose another.',
+  handle_reserved: "That handle isn't available, try another.",
   handle_taken: 'That handle is already taken. Choose another.',
   adult_required: 'You need to confirm you are 18 or over to claim a Seduh ID.',
   account_exists:
