@@ -318,7 +318,7 @@ test.describe('claiming a Seduh ID through the screens (real app, real local Sup
     await expect(page.locator('main.country-page')).toBeVisible();
     expect(await page.title()).not.toMatch(/Claim/);
     await page.goto('/id/someone-else/');
-    await expect(page.getByRole('heading', { name: 'Seduh ID profile' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No Seduh ID here.' })).toBeVisible();
     await page.goto('/id/claim/#nonsense');
     await expect(page.getByRole('heading', { name: 'This link is incomplete' })).toBeVisible();
   });

@@ -383,6 +383,30 @@ behave exactly as before.
   `wrangler deploy`), that the deployed edge honours the negative `run_worker_first` patterns exactly as `wrangler dev`
   does, and that `/id/country/...` still serves from assets on the live host.
 
+## The person page itself (2026-11-16, Layer 2 task C1)
+
+`/id/<handle>/` now draws the real page: `profileMain.js` reads the handle from the path (`core/seduhProfile.js`
+`handleFromPath`, lower-cased) and `profileScreen.js` asks the ONE door `public_seduh_profile` (`core/seduhProfile.js`
+rebuilds every field from known keys; `profileFormat.js` is the pure words, order and totals; `profile.css`). Design basis is
+the owner's concept (`design/seduh-id-layer2-concept.html`, local) on the country pages' patterns.
+
+- **States.** Loading; a failed read (alert, "Try again" moves focus to the h1); `has_profile: false` is the SAME "No Seduh ID here"
+  page for every non-page and never echoes the handle (a test fails if two non-page handles differ); a claimed page whose parts are
+  all hidden shows the handle and "keeps their Seduh ID private"; a claimed person with no results shows "No results on Seduh Score yet.";
+  otherwise the full page. Sections with no data (stats, best result, knockout, works with) are hidden, never empty.
+- **The record is one list.** `normaliseProfile` folds `recorded_results`, `organiser_records`, `self_reported` and `judging_roles`
+  into entries `{ kind, provenance, year, date, title, placing, ... }`; the screen never branches on which list a row came from, so
+  a seam that starts returning rows needs only its row shape pinned in `seduhProfile.js` (those three shapes are PROVISIONAL, the
+  header says so). Provenance is forced by seam (a `self_reported` row can never claim to be recorded). Filter buttons (kinds
+  present only, hidden when one), year groups (`<details>`, newest open), a polite status line. **Totals and the best-result card
+  count only non-self-reported entries** (spec 14.4).
+- **Seams, marked in the code.** C2 photo (`photo_url` is ignored; the avatar is initials), C3 "Share to story" (none yet), C5 links
+  into profiles (none: opponents are plain text). The country chip is plain text unless `buildCountryChip` is enabled, which
+  reads `COUNTRY_PAGES_PUBLIC`; this page does not import the switch itself.
+- **Tests.** Unit (`seduhProfile`, `profileFormat`, `profileScreen` incl. a 60-entry mixed fixture) and Playwright
+  `seduh-profile-page-live.spec.js` (project `dev-identity`: a seeded claimed person at 360px, the empty record, an unknown handle).
+  `id-routing.spec.js` now allows the one door call.
+
 ## The claim page: `/id/claim/#<token>` (2026-11-16, Layer 2 task B3b)
 
 Where a person claims a Seduh ID with the link an organiser sent (`id/claim/index.html`, `claimMain.js`, `claimScreen.js`,
