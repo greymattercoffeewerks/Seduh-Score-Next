@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { test, expect as baseExpect } from '@playwright/test';
 import { sqlAsOwner } from './support/admins.js';
 
@@ -15,16 +15,19 @@ import { sqlAsOwner } from './support/admins.js';
 // PROFILE_SHOTS=<dir> also saves 360px and desktop screenshots (local only; they are not committed).
 
 const expect = baseExpect.configure({ timeout: 20000 });
-const tag = Date.now().toString(36);
+// Every seed makes its own unique handle, login, organisation and phone (a random id, not the clock: parallel workers
+// and retries each evaluate this file again, and a shared tag made two seeds collide).
+const unique = () => randomUUID().replaceAll('-', '').slice(0, 12);
 const shotDir = process.env.PROFILE_SHOTS;
 if (shotDir) mkdirSync(shotDir, { recursive: true });
 
-const phone = () => `+673962${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`;
+const phone = () => `+673${String(randomInt(0, 1e9)).padStart(9, '0')}`;
 const sqlText = (s) => `'${String(s).replaceAll("'", "''")}'`;
 
 // Makes one claimed account (login, identity, account) and returns its handle. `events` are published Cup Taster events
 // the person finished in, as [name, date, place] with the person in the full standings.
-function seedClaimed({ handle, name, events }) {
+function seedClaimed({ prefix, name, events }) {
+  const handle = `${prefix}${unique()}`; // 3 to 30 characters, lower case letters and digits: never a reserved word
   const [userId, identityId, accountId, orgId, personId] = Array.from({ length: 5 }, randomUUID);
   const number = phone();
   const statements = [
@@ -51,6 +54,7 @@ function seedClaimed({ handle, name, events }) {
     });
     sqlAsOwner(`${batch.join(';' + String.fromCharCode(10))};`);
   }
+  return handle;
 }
 
 async function shot(page, name) {
@@ -59,13 +63,11 @@ async function shot(page, name) {
 const overflow = (page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-const full = `proof${tag}`;
-const empty = `quiet${tag}`;
-const long = `long${tag}`;
-
-test.beforeAll(() => {
-  seedClaimed({
-    handle: full,
+test('a claimed person with published results renders at 360px with no horizontal scroll', async ({
+  page,
+}) => {
+  const full = seedClaimed({
+    prefix: 'proof',
     name: 'Profile Proof Person',
     events: [
       ['Proof Open 2026', '2026-11-02', 1],
@@ -73,22 +75,6 @@ test.beforeAll(() => {
       ['Proof Classic 2025', '2025-08-01', 5],
     ],
   });
-  seedClaimed({ handle: empty, name: 'Quiet Claimed Person', events: [] });
-  // 60 published results across 2019 to 2026: the long record (spec 14.5)
-  seedClaimed({
-    handle: long,
-    name: 'Long Record Person',
-    events: Array.from({ length: 60 }, (_, i) => [
-      `Long Cup ${i}`,
-      `${2019 + (i % 8)}-0${1 + (i % 9)}-15`,
-      (i % 6) + 1,
-    ]),
-  });
-});
-
-test('a claimed person with published results renders at 360px with no horizontal scroll', async ({
-  page,
-}) => {
   await page.setViewportSize({ width: 360, height: 780 });
   const calls = [];
   page.on('request', (r) => calls.push(r.url()));
@@ -121,6 +107,16 @@ test('a claimed person with published results renders at 360px with no horizonta
 test('a 60-entry record renders at 360px with no horizontal scroll, newest year open', async ({
   page,
 }) => {
+  // 60 published results across 2019 to 2026: the long record (spec 14.5)
+  const long = seedClaimed({
+    prefix: 'long',
+    name: 'Long Record Person',
+    events: Array.from({ length: 60 }, (_, i) => [
+      `Long Cup ${i}`,
+      `${2019 + (i % 8)}-0${1 + (i % 9)}-15`,
+      (i % 6) + 1,
+    ]),
+  });
   await page.setViewportSize({ width: 360, height: 780 });
   await page.goto(`/id/${long}/`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Long Record Person');
@@ -132,6 +128,7 @@ test('a 60-entry record renders at 360px with no horizontal scroll, newest year 
 });
 
 test('a claimed person with no results shows the friendly empty-record line', async ({ page }) => {
+  const empty = seedClaimed({ prefix: 'quiet', name: 'Quiet Claimed Person', events: [] });
   await page.setViewportSize({ width: 360, height: 780 });
   await page.goto(`/id/${empty}/`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Quiet Claimed Person');
@@ -144,10 +141,11 @@ test('a claimed person with no results shows the friendly empty-record line', as
 });
 
 test('an unknown handle shows the empty page and says nothing about why', async ({ page }) => {
+  const ghost = `nobody-${unique()}`;
   await page.setViewportSize({ width: 360, height: 780 });
-  await page.goto(`/id/nobody-${tag}/`);
+  await page.goto(`/id/${ghost}/`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('No Seduh ID here.');
-  await expect(page.locator('body')).not.toContainText(`nobody-${tag}`);
+  await expect(page.locator('body')).not.toContainText(ghost);
   expect(await overflow(page)).toBe(0);
   await shot(page, 'noprofile-360');
   await page.setViewportSize({ width: 1280, height: 900 });
