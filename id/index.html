@@ -17,7 +17,7 @@
     <!-- Seduh Score Next, Seduh ID person pages (Layer 2, T-ID2.4 routing spike). One shell for EVERY /id/<handle>/ path:
          handles are not a fixed list, so the edge Worker (worker/index.js) answers any one-segment path under /id/ with
          this file and the page reads its handle from the path. noindex and linked from nowhere until the owner decides.
-         Placeholder only for now: no data calls. The country pages have their own shell and are not served by this one. -->
+         The page reads its handle from the path and asks public.public_seduh_profile (src/core/seduhProfile.js). The country pages have their own shell and are not served by this one. -->
     <meta name="robots" content="noindex, nofollow" />
   </head>
   <body>

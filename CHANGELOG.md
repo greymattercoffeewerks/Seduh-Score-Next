@@ -8,6 +8,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, C1: the person page · 2026-11-16
+
+**Task:** T-ID2.C1. Branch `claude/l2-c1-profile-page-c7ef26`, PR into `dev`. Front end only: no migration, no cloud change. **Minor bump to 4.12.0** (a person's page now shows their record). The page stays `noindex`, linked from nowhere, so nothing public changes until the owner opens it.
+
+- **Page** `/id/<handle>/` (`src/marketing/profileScreen.js`, `profileFormat.js`, `profile.css`; `src/core/seduhProfile.js` reads and rebuilds the door `public_seduh_profile`). Header with an initials avatar, "Seduh ID #0001" gold chip, country chip (plain text: it links only when `COUNTRY_PAGES_PUBLIC` is on, through `buildCountryChip`); stats row, gold best-result card, the record, head to head, works with, and the footer note with a mailto correction link. States: loading, failed read (Try again focuses the h1), "No Seduh ID here" (identical for every non-page, never echoes the handle), all-hidden ("keeps their Seduh ID private"), empty record ("No results on Seduh Score yet."), full.
+- **The record is built for long lists.** The door's four lists fold into one entry list with provenance forced by seam; summary line, filter buttons (only kinds present, hidden for one), year groups in `<details>` (newest open, year headings are h3), every entry labelled "Recorded by Seduh Score" / "From the organiser's records" / "Self-reported, not verified by Seduh". Stats and the best result count only non-self-reported entries. The three empty seams' row shapes are provisional and marked.
+- **Seams:** photo (C2, `photo_url` ignored), "Share to story" (C3, none), links into profiles (C5, none).
+- **Differs from the concept:** one reading column (46rem) rather than a phone frame; no role/café line, "Open to opportunities" or About (no data or Layer 3); no share bar or Copy link yet; stats are results, podiums, organisers, best place (the concept's "times judged" has no source); the handle shows as an address line under the name.
+- **Tests:** unit for every state, a 60-entry mixed fixture, filters, year grouping, provenance, hidden sections, founding padding, the chip gate and text-only rendering; Playwright `seduh-profile-page-live.spec.js` (project `dev-identity`) on the local stack: a seeded person, a 60-entry person, an empty record and an unknown handle at 360px with no horizontal scroll; `id-routing.spec.js` and `seduh-claim-ui-live.spec.js` updated for the real page. Checked read-only against the cloud profile `mfosa` (has_profile, #1, BN, no results): that is the empty-record state.
+- **Reviews:** `module-boundary-checker`: two 🔴 fixed (a copy of `formatDuration`, and format names and a forked label map in core: core now passes the raw format key and the page uses the results pages' `formatLabel`), one 🟡 fixed (`ordinal` from core). `code-reviewer`: no 🔴; one note fixed (year now follows the date so sorting and grouping agree). `test-auditor`: a 60-entry browser case added, free-text and no-call tests added; the routing spec's heading check stays loose on purpose (the built site has no database in CI; the live spec proves the content). `ui-accessibility-reviewer`: no 🔴; three nits fixed (kept the focus ring, provenance label a size up, year headings).
+
+---
+
 ## Seduh ID Layer 2, B3b: the claim screens and re-claim after undo · 2026-11-16
 
 **Task:** T-ID2.B3b. Branch `claude/l2-b3b-claim-screens-97485f`, PR into `dev`. Migration `20261119100000_seduh_reclaim_after_close.sql`, pgTAP `083` (new). **Minor bump to 4.11.0** (a person can now claim a Seduh ID). **Not pushed to the cloud; B3a's migration, this one and the `seduh-claim` function are all still to push and deploy by hand.**
