@@ -19,7 +19,7 @@
 --   * ACL AND CATALOG: who may execute what; every new public function is SECURITY DEFINER with search_path pinned; the rollback
 --     block removes everything it added.
 begin;
-select plan(138);
+select plan(140);
 
 create schema t082;
 grant usage on schema t082 to anon, authenticated, service_role;
@@ -229,6 +229,7 @@ select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', curr
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok1b'), null)), 'P0001/handle_invalid', 'a NULL handle');
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok1b'), 'admin')), 'P0001/handle_reserved', 'a reserved handle');
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok1b'), '  COUNTRY ')), 'P0001/handle_reserved', 'a reserved handle in other case and with spaces');
+select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', current_setting('t082.tok1b'), 'firdaus')), 'P0001/handle_reserved', 'firdaus is reserved (owner alias, 2026-11-16)');
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', t082.fake(99), 'happy-82')), 'P0001/link_invalid', 'a well-formed token that was never issued: link_invalid');
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', 'short', 'happy-82')), 'P0001/link_invalid', 'a malformed token: link_invalid');
 select is(t082.attempt(format('select public.claim_seduh_id(%L, %L, true)', null, 'happy-82')), 'P0001/link_invalid', 'a NULL token: link_invalid');
@@ -302,6 +303,7 @@ set local role anon;
 select is(public.seduh_handle_available('fresh-handle-82'), 'available', 'handle check: available');
 select is(public.seduh_handle_available('Happy-82'), 'taken', 'handle check: taken (any case)');
 select is(public.seduh_handle_available('admin'), 'reserved', 'handle check: reserved');
+select is(public.seduh_handle_available('Firdaus'), 'reserved', 'handle check: firdaus is reserved (any case)');
 select is(public.seduh_handle_available('a'), 'invalid', 'handle check: invalid (short)');
 select is(public.seduh_handle_available(null), 'invalid', 'handle check: NULL is invalid');
 reset role;

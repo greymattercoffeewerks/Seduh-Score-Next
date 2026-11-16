@@ -8,6 +8,17 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID: reserve `firdaus` and redirect `/id/firdaus` to `/id/mfosa` · 2026-11-16
+
+**Task:** owner request (T-ID2 follow-up). Branch `claude/l2-firdaus-alias-2a7035`, PR into `dev`. Migration `20261120100000_reserve_handle_firdaus.sql`. **Patch bump to 4.11.1.** **Migration not pushed to the cloud (by hand, after merge, with the owner's approval); the Worker redirect ships with the next frontend deploy.**
+
+- **Reserved:** `app.seduh_handle_reserved` is the same function with `'firdaus'` added (same signature, `immutable`, empty `search_path`, revoke; rollback restores the previous list). No account holds it (the cloud has 0 accounts), so nothing is orphaned.
+- **Redirect:** `HANDLE_ALIASES = { firdaus: 'mfosa' }` in `worker/idRoute.js`; `/id/firdaus` and `/id/firdaus/` in any case answer a 301 to `/id/mfosa/` with the query string kept, before the profile shell; `/id/country/*`, `/id/claim/` and other handles are untouched. The Vite dev middleware uses the same function. Until `mfosa` is claimed the target shows the normal empty profile.
+- **Tests:** unit (`idRoute`, `index`), `tools/seduh-handle-aliases.test.js` (every alias is reserved in the latest migration's list; the target is not), pgTAP `079` (list size 56, `firdaus` reserved) and `082` (`seduh_handle_available` says `reserved`, a claim is refused `handle_reserved`), Playwright `id-routing` (301s against the real Worker).
+- **Reviews:** `code-reviewer`: clean. `schema-guardian`: clean (rollback run in a rolled-back transaction). `test-auditor`: no 🔴; two nits fixed (dev middleware now redirects GET/HEAD only, like the Worker; the POST case asserts the request reached the assets). pgTAP full suite passes after `db:reset`; 079 standalone reports 3 fewer assertions than planned on the base commit too (pre-existing).
+
+---
+
 ## Seduh ID Layer 2, B3b: the claim screens and re-claim after undo · 2026-11-16
 
 **Task:** T-ID2.B3b. Branch `claude/l2-b3b-claim-screens-97485f`, PR into `dev`. Migration `20261119100000_seduh_reclaim_after_close.sql`, pgTAP `083` (new). **Minor bump to 4.11.0** (a person can now claim a Seduh ID). **Not pushed to the cloud; B3a's migration, this one and the `seduh-claim` function are all still to push and deploy by hand.**

@@ -775,7 +775,7 @@ What it is: claimed Seduh IDs live in `app.seduh_accounts` (owner-only, like the
 and `app.seduh_claim_links`). The **handle** is on the account (not the identity: most identities never claim), frozen
 once set, and a closed account keeps its row, so its handle and **founding number** are retired, never reissued. Rows are
 never deleted. The reserved handles are in one function, `app.seduh_handle_reserved`; to add a word, a new migration does
-`create or replace function` with the longer list (it stops new claims only, handles being frozen).
+`create or replace function` with the longer list (it stops new claims only, handles being frozen). Owner aliases (`/id/<alias>` 301s to `/id/<handle>/`) live in `HANDLE_ALIASES` in `worker/idRoute.js`, and each alias must also be reserved there (`tools/seduh-handle-aliases.test.js` fails otherwise); today `firdaus` to `mfosa` (owner decision 2026-11-16, migration `20261120100000`).
 
 **Why #0001 is a runbook step.** The number comes from a sequence that starts at **2**, so no ordinary claim can get 1.
 Only an explicit `founding_number = 1` can, and a trigger refuses it unless the transaction sets

@@ -18,7 +18,7 @@
 --   * the migration's own rollback block, run here, removes everything.
 -- Not claimed: the owner role can still disable the triggers (stated in the migration); the Phase B functions are not here.
 begin;
-select plan(142);
+select plan(143);
 
 create schema t079;
 grant usage on schema t079 to anon, authenticated, service_role;
@@ -155,14 +155,15 @@ select is((select coalesce(string_agg(w, ', '), 'none')
   'none', 'app.seduh_handle_reserved is true for every one of the eighteen words, including id and me');
 -- the WHOLE list, read from the function itself: its size is pinned (a shrinking list fails) and every word of three or more
 -- characters is refused as a handle (23514)
-select is((select count(*)::int from regexp_matches((select prosrc from pg_proc where oid = 'app.seduh_handle_reserved(text)'::regprocedure), '''([a-z0-9-]+)''', 'g')), 55,
-  'the reserved list holds 55 words (change this number on purpose when the list is extended)');
+select is((select count(*)::int from regexp_matches((select prosrc from pg_proc where oid = 'app.seduh_handle_reserved(text)'::regprocedure), '''([a-z0-9-]+)''', 'g')), 56,
+  'the reserved list holds 56 words (change this number on purpose when the list is extended)');
 select is((select coalesce(string_agg(m[1], ', '), 'none')
              from regexp_matches((select prosrc from pg_proc where oid = 'app.seduh_handle_reserved(text)'::regprocedure), '''([a-z0-9-]+)''', 'g') m
             where not app.seduh_handle_reserved(m[1]) or (length(m[1]) >= 3 and t079.attempt(t079.acct(2, 2, m[1])) <> '23514')),
   'none', 'every word in the list is refused as a handle');
 select is((select coalesce(string_agg(w, ', '), 'none') from unnest(array['owner', 'staff', 'security', 'official', 'moderator', 'seduh-score']) w
             where not app.seduh_handle_reserved(w)), 'none', 'the impersonation words (owner, staff, security, official, moderator, seduh-score) are reserved');
+select is(app.seduh_handle_reserved('firdaus'), true, 'firdaus is reserved (owner decision 2026-11-16: /id/firdaus redirects to the owner)');
 select is(app.seduh_handle_reserved('ahmad-79'), false, 'and false for an ordinary handle');
 select is(t079.attempt(t079.acct(2, 2, 'country')), '23514', 'the handle that would collide with /id/country/ is refused');
 

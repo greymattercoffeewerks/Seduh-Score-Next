@@ -64,6 +64,32 @@ describe('worker', () => {
     expect(country.seen.map((s) => s.url)).toEqual(['/id/country/bn/']);
   });
 
+  it('answers a 301 to /id/mfosa/ for the firdaus alias, in any case, with the query string kept, before any asset is read', async () => {
+    const { ASSETS, seen } = fakeAssets();
+    for (const path of ['/id/firdaus', '/id/firdaus/', '/id/FirDaus/']) {
+      const res = await call({ ASSETS }, path);
+      expect(res.status, path).toBe(301);
+      expect(res.headers.get('location'), path).toBe('/id/mfosa/');
+    }
+    const withQuery = await call({ ASSETS }, '/id/firdaus/?ref=card&x=1');
+    expect(withQuery.status).toBe(301);
+    expect(withQuery.headers.get('location')).toBe('/id/mfosa/?ref=card&x=1');
+    const head = await call({ ASSETS }, '/id/firdaus', { method: 'HEAD' });
+    expect(head.status).toBe(301);
+    expect(seen).toEqual([]);
+  });
+
+  it('does not redirect the target, other handles, country or claim, and does not answer a write method on the alias', async () => {
+    const { ASSETS, seen } = fakeAssets();
+    for (const path of ['/id/mfosa/', '/id/someone/', '/id/country', '/id/claim/']) {
+      const res = await call({ ASSETS }, path);
+      expect(res.status, path).not.toBe(301);
+    }
+    const post = await call({ ASSETS }, '/id/firdaus/', { method: 'POST' });
+    expect(post.status).not.toBe(301);
+    expect(seen.at(-1)).toEqual({ url: '/id/firdaus/', method: 'POST' });
+  });
+
   it('makes no outbound call and gives every handle the same status and body', async () => {
     // The Worker must not look a handle up anywhere: a status that depended on existence would leak it.
     const outbound = vi.fn(() => {
