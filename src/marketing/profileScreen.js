@@ -260,7 +260,7 @@ function bestCard({ entry, verified }) {
       el('h2', {
         id: 'profile-best-title',
         className: 'profile-best-label',
-        text: verified ? 'Best verified result' : 'Best result, self-reported',
+        text: verified ? 'Best verified result' : 'Best result',
       }),
       el('p', {
         className: 'profile-best-finish',
@@ -281,13 +281,21 @@ function bestCard({ entry, verified }) {
   );
 }
 
-// The meta line as text, with the team's country linked to its page only while the country pages are public.
+// The meta line: the kind of a non-competed entry as a small label, then the rest as text, with the team's country linked
+// to its page only while the country pages are public.
 function metaNodes(entry, options) {
-  const text = metaText(entry);
+  const rest = metaText({ ...entry, kind: 'competed' });
   const link = entry.country
     ? buildCountryChip(entry.country, { enabled: options.linkCountry })
     : null;
-  return link ? [document.createTextNode(`${text} `), link] : [document.createTextNode(text)];
+  const nodes = [];
+  if (entry.kind !== 'competed') {
+    nodes.push(el('span', { className: 'profile-entry-kind', text: KIND_LABELS[entry.kind] }));
+    if (rest) nodes.push(document.createTextNode(' · '));
+  }
+  nodes.push(document.createTextNode(link ? rest + ' ' : rest));
+  if (link) nodes.push(link);
+  return nodes;
 }
 
 function entryItem(entry, options = {}) {

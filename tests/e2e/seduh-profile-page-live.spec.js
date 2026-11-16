@@ -82,9 +82,15 @@ test('a claimed person with published results renders at 360px with no horizonta
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Profile Proof Person');
   await expect(page.getByText(/^Seduh ID #\d{4}$/)).toBeVisible();
   await expect(page.locator('.profile-entry')).toHaveCount(3);
-  await expect(page.locator('.profile-provenance')).toHaveText([
+  // the record list: one label per entry
+  await expect(page.locator('.profile-entry .profile-provenance')).toHaveText([
     'Recorded by Seduh Score',
     'Recorded by Seduh Score',
+    'Recorded by Seduh Score',
+  ]);
+  // the best-result card names its own source: a result recorded by Seduh Score is verified
+  await expect(page.locator('.profile-best-label')).toHaveText('Best verified result');
+  await expect(page.locator('.profile-best .profile-provenance')).toHaveText([
     'Recorded by Seduh Score',
   ]);
   await expect(page.locator('.profile-best-finish')).toHaveText('1st · Proof Open 2026');

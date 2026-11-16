@@ -116,12 +116,51 @@ describe('stats count everything; the best result prefers a verified one', () =>
     const entries = [
       e({ placing: 4 }),
       e({ placing: 1, provenance: 'self_reported' }),
-      e({ placing: 2, provenance: 'organiser_archive' }),
+      e({ placing: 2, provenance: 'organiser_archive', membership: 'confirmed' }),
     ];
     expect(bestResult(entries)).toMatchObject({ verified: true, entry: { placing: 2 } });
   });
+  it('a team result with NO membership information is not verified either (never claim more than we know)', () => {
+    const none = e({ placing: 1, provenance: 'organiser_archive', title: 'x' });
+    expect(bestResult([none])).toMatchObject({ verified: false });
+  });
+  it('a team result is verified ONLY with a confirmed membership: a self-reported one is not', () => {
+    const unconfirmed = e({
+      placing: 4,
+      provenance: 'organiser_archive',
+      membership: 'self_reported',
+      title: 'team',
+    });
+    expect(bestResult([unconfirmed])).toMatchObject({ verified: false, entry: { title: 'team' } });
+    const confirmed = { ...unconfirmed, membership: 'confirmed' };
+    expect(bestResult([confirmed])).toMatchObject({ verified: true });
+    // a recorded result beats an unconfirmed team result that places better
+    const recorded = e({ placing: 5, title: 'rec' });
+    const better = e({ placing: 1, provenance: 'organiser_archive', membership: 'self_reported' });
+    expect(bestResult([better, recorded])).toMatchObject({
+      verified: true,
+      entry: { title: 'rec' },
+    });
+  });
+  it('an unconfirmed team result is preferred to own better-placed entries (tiers), and neither is verified', () => {
+    const team = e({
+      placing: 4,
+      provenance: 'organiser_archive',
+      membership: 'self_reported',
+      title: 'team',
+    });
+    const own = e({ placing: 1, provenance: 'self_reported', title: 'own' });
+    expect(bestResult([own, team])).toMatchObject({ verified: false, entry: { title: 'team' } });
+    expect(bestResult([own])).toMatchObject({ verified: false, entry: { title: 'own' } });
+  });
   it("Seduh Score's own record wins a tie of placing with the organiser's", () => {
-    const org = e({ placing: 2, provenance: 'organiser_archive', date: '2026-01-01', year: 2026 });
+    const org = e({
+      placing: 2,
+      provenance: 'organiser_archive',
+      membership: 'confirmed',
+      date: '2026-01-01',
+      year: 2026,
+    });
     const rec = e({ placing: 2, title: 'rec', date: '2024-01-01', year: 2024 });
     expect(bestResult([org, rec]).entry.title).toBe('rec');
   });
@@ -163,10 +202,18 @@ describe('team links: labels and meta', () => {
 });
 
 describe('placeText and knockoutText', () => {
-  it('shows the ordinal, the role for a non-competed kind, nothing for an unplaced competed one', () => {
+  it('the place cell holds only a real placing; an entry without one has nothing there, whatever its kind', () => {
     expect(placeText(e({ placing: 3 }))).toBe('3rd');
-    expect(placeText(e({ kind: 'judged' }))).toBe('Judged');
+    expect(placeText(e({ kind: 'judged' }))).toBe('');
+    expect(placeText(e({ kind: 'organised' }))).toBe('');
     expect(placeText(e())).toBe('');
+  });
+  it('the kind of a non-competed entry is a small label at the start of its meta line', () => {
+    expect(metaText(e({ kind: 'judged', organiser: null, location: 'Bandar' }))).toBe(
+      'Judged · Bandar',
+    );
+    expect(metaText(e({ kind: 'volunteered', organiser: null }))).toBe('Volunteered');
+    expect(metaText(e({ kind: 'competed', organiser: null, location: 'Bandar' }))).toBe('Bandar');
   });
   it('knockout text is null when nothing was played', () => {
     expect(knockoutText({ won: 0, lost: 0, opponents: [] })).toBeNull();

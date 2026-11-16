@@ -1,7 +1,7 @@
 /* Seduh ID person page (Layer 2, T-ID2.C1). Own class prefix, shared tokens only: no :root block, no colour or corner of
    its own. Tags, cards and actions are the shared primitives (tokens/base.css: .tag, .panel, .action); this adds layout.
    The look follows the country pages (gold best card, compact stats row, native <details>). Phone first: written for
-   360px, widened with min-width queries. The page uses the same 1160px width as the country pages and spreads the record into two columns on a wide screen. */
+   360px, widened with min-width queries. The page uses the same 1160px width as the country pages; years stay in ONE column at every width (owner, 2026-11-17). */
 body {
   min-width: 320px;
 }
@@ -255,6 +255,15 @@ body {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+/* the kind of a non-competed entry ("Judged"): a small label at the start of the meta line */
+.profile-entry-kind {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text);
+}
 .profile-entry-place {
   font-family: var(--font-display);
   font-size: var(--text-lg);
@@ -328,7 +337,7 @@ body {
   color: var(--color-accent);
 }
 
-/* Wide screens: the same width as the country pages, the record in two columns, the summary side by side */
+/* Wide screens: the same width as the country pages, the summary beside the best-result card (years stay in one column) */
 @media (min-width: 900px) {
   .profile-summary-block {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
@@ -341,11 +350,5 @@ body {
   .profile-summary-block > .profile-best {
     grid-column: 2;
     grid-row: 1 / span 2;
-  }
-  .profile-record-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--space-8);
-    align-items: start;
   }
 }

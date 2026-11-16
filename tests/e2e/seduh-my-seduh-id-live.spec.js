@@ -160,17 +160,18 @@ test.describe('My Seduh ID (real app, real local Supabase)', () => {
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.locator('#me-status')).toHaveText('Entry saved.');
     await pub.reload();
-    await expect(pub.getByText('Me Proof Open Renamed')).toBeVisible();
+    // the same entry is also the best-result card (a placing of 2), by design: the list is the scoped place to look
+    await expect(pub.locator('.profile-entry', { hasText: 'Me Proof Open Renamed' })).toBeVisible();
     // delete asks first
     await page.getByRole('button', { name: 'Delete Me Proof Open Renamed' }).click();
     await expect(page.getByText('This cannot be undone.')).toBeVisible();
     await page.getByRole('button', { name: 'Keep it' }).click();
-    await expect(page.getByText('Me Proof Open Renamed')).toBeVisible();
+    await expect(page.locator('.me-entry', { hasText: 'Me Proof Open Renamed' })).toBeVisible();
     await page.getByRole('button', { name: 'Delete Me Proof Open Renamed' }).click();
     await page.getByRole('button', { name: 'Yes, delete it' }).click();
     await expect(page.locator('#me-status')).toHaveText('Entry deleted.');
     await pub.reload();
-    await expect(pub.getByText('Me Proof Open Renamed')).toHaveCount(0);
+    await expect(pub.getByText('Me Proof Open Renamed')).toHaveCount(0); // nowhere on the page, the best-result card included
     await pub.close();
   });
 
@@ -219,7 +220,7 @@ test.describe('My Seduh ID (real app, real local Supabase)', () => {
     await shot(page, 'privacy');
     const pub = await page.context().newPage();
     await pub.goto(`/id/${person.handle}/`);
-    await expect(pub.getByText('Me Proof Hidden Test')).toBeVisible();
+    await expect(pub.locator('.profile-entry', { hasText: 'Me Proof Hidden Test' })).toBeVisible();
 
     await page
       .getByRole('group', { name: 'Results you added yourself' })

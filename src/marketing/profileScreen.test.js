@@ -346,9 +346,7 @@ describe('provenance labels', () => {
     const { root } = await mount(
       door({ self_reported: [{ competition_name: 'Regional', year: 2023, placement: 2 }] }),
     );
-    expect(root.querySelector('.profile-best-label').textContent).toBe(
-      'Best result, self-reported',
-    );
+    expect(root.querySelector('.profile-best-label').textContent).toBe('Best result');
     expect(root.querySelector('.profile-best').textContent).toContain(
       'Self-reported, not verified',
     );
@@ -359,16 +357,26 @@ describe('provenance labels', () => {
 describe('the owner-shaped record: 14 self-reported entries and 4 team links', () => {
   const owner = () =>
     door({
-      self_reported: Array.from({ length: 14 }, (_, i) => ({
-        year: 2023 + (i % 4),
-        competition_name: `Self ${i}`,
-        location: 'Bandar',
-        kind: ['competed', 'judged', 'organised'][i % 3],
-        role: 'Competitor',
-        result_text: '2nd',
-        placement: 2,
-        note: null,
-      })),
+      self_reported: [
+        ...Array.from({ length: 14 }, (_, i) => ({
+          year: 2023 + (i % 4),
+          competition_name: `Self ${i}`,
+          location: 'Bandar',
+          kind: ['competed', 'judged', 'organised'][i % 3],
+          role: 'Competitor',
+          result_text: '2nd',
+          placement: 2,
+          note: null,
+        })),
+        {
+          year: 2023,
+          competition_name: 'Judged no place',
+          location: 'Bandar',
+          kind: 'judged',
+          placement: null,
+          note: null,
+        },
+      ],
       organiser_records: [
         ['quarter_final', null, 2023],
         ['semi_final', 4, 2024],
@@ -391,7 +399,7 @@ describe('the owner-shaped record: 14 self-reported entries and 4 team links', (
 
   it('shows every entry, titled by competition name, grouped by edition year, never "Undated" or a raw code', async () => {
     const { root } = await mount(owner(), { linkCountry: false });
-    expect(root.querySelectorAll('.profile-entry')).toHaveLength(18);
+    expect(root.querySelectorAll('.profile-entry')).toHaveLength(19);
     const t = text(root);
     expect(t).not.toContain('Undated');
     expect(t).not.toContain('btc');
@@ -409,15 +417,41 @@ describe('the owner-shaped record: 14 self-reported entries and 4 team links', (
     expect(rowFor(root, 'Championship 2023').textContent).toContain('Quarter-final');
   });
 
-  it('derives the stats from all items and picks the verified best (the organiser 4th place)', async () => {
+  it('derives the stats from all items; the best is the organiser 4th place, headed "Best result" because its membership is self-reported', async () => {
     const { root } = await mount(owner(), { linkCountry: false });
     const stats = root.querySelector('.profile-stats').textContent;
     expect(stats).toMatch(/9competed/); // 5 self + 4 team
-    expect(stats).toMatch(/5judged/);
+    expect(stats).toMatch(/6judged/);
     expect(stats).toMatch(/4organised/);
-    expect(root.querySelector('.profile-best-label').textContent).toBe('Best verified result');
+    expect(root.querySelector('.profile-best-label').textContent).toBe('Best result');
     expect(root.querySelector('.profile-best-finish').textContent).toMatch(/4th.*2024/);
+    expect(root.querySelector('.profile-best').textContent).toContain(
+      'Team result from the organiser’s records',
+    );
     expect(root.querySelector('.profile-best').textContent).toContain('Membership self-reported');
+  });
+
+  it('with a CONFIRMED membership the same result is headed "Best verified result"', async () => {
+    const raw = owner();
+    raw.organiser_records = raw.organiser_records.map((r) => ({ ...r, membership: 'confirmed' }));
+    const { root } = await mount(raw, { linkCountry: false });
+    expect(root.querySelector('.profile-best-label').textContent).toBe('Best verified result');
+    expect(root.querySelector('.profile-best').textContent).toContain('Membership confirmed');
+  });
+
+  it('an entry without a placing shows its kind in the meta line, never in the place cell', async () => {
+    const { root } = await mount(owner(), { linkCountry: false });
+    const judged = [...root.querySelectorAll('.profile-entry')].find(
+      (li) => li.querySelector('.profile-entry-title').textContent === 'Judged no place',
+    );
+    expect(judged.querySelector('.profile-entry-place')).toBeNull();
+    expect(judged.querySelector('.profile-entry-meta .profile-entry-kind').textContent).toBe(
+      'Judged',
+    );
+    expect(judged.querySelector('.profile-entry-meta').textContent).toBe('Judged · Bandar');
+    for (const cell of root.querySelectorAll('.profile-entry-place')) {
+      expect(cell.textContent).toMatch(/^[0-9]+(st|nd|rd|th)$/);
+    }
   });
 
   it('links the team country only when the country pages are public', async () => {
