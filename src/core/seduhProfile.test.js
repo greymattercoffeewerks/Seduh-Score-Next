@@ -141,6 +141,57 @@ describe('normaliseProfile', () => {
     expect(p.entries.find((e) => e.title === 'B').provenance).toBe('organiser_archive');
   });
 
+  it('reads the real shapes of the two seams (T-ID2.D-a): a self-reported entry and a team link', () => {
+    const p = normaliseProfile(
+      door({
+        self_reported: [
+          {
+            year: 2025,
+            competition_name: 'Regional Open',
+            kind: 'judged',
+            role: 'head judge',
+            result_text: 'Final',
+            placement: 3,
+            location: 'Testville',
+            note: 'A note',
+            provenance: 'self_reported',
+          },
+        ],
+        organiser_records: [
+          {
+            competition: 'btc',
+            competition_name: 'ASEAN Championship',
+            edition_year: 2024,
+            team_name: 'Test Team',
+            country_code: 'XA',
+            stage_reached: 'quarter_final',
+            placement: null,
+            role: 'member',
+            membership: 'self_reported',
+            provenance: 'organiser_archive',
+          },
+        ],
+      }),
+    );
+    expect(p.entries.find((e) => e.title === 'Regional Open')).toMatchObject({
+      kind: 'judged',
+      provenance: 'self_reported',
+      year: 2025,
+      placing: 3,
+      location: 'Testville',
+      detail: 'head judge · Final · A note',
+    });
+    // the title is the competition's name, never the competition code ('btc')
+    expect(p.entries.find((e) => e.title === 'ASEAN Championship')).toMatchObject({
+      provenance: 'organiser_archive',
+      year: 2024,
+      team: 'Test Team',
+      placing: null,
+      detail: 'member · Quarter final',
+    });
+    expect(p.entries.some((e) => e.title === 'btc')).toBe(false);
+  });
+
   it('judging roles default to judged and to the cautious provenance', () => {
     const [e] = normaliseProfile(
       door({ judging_roles: [{ title: 'BTC 2026', provenance: 'bogus' }] }),

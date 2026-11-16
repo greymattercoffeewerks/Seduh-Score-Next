@@ -171,3 +171,6 @@ brag-output/
 
 # Country-history load SQL holds real results (public repository, permission covers the Board only): never committed.
 scripts/country-history/out/
+
+# A person's own Seduh ID record load SQL holds real personal data: never committed.
+scripts/seduh-id-record/out/

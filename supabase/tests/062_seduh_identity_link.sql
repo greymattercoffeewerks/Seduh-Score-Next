@@ -297,8 +297,8 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname not in ('pg_catalog', 'information_schema', 'app') and p.prokind in ('f', 'p')
       and p.prosrc ~* '(seduh_identities|seduh_identity_merges|person_link_blocks)'),
-  'admin_seduh_id_counts(), claim_seduh_id(text,text,boolean), issue_seduh_claim_link(uuid), link_person_identity(uuid,uuid), public_seduh_profile(text), revoke_seduh_claim_link(uuid), seduh_claim_begin(text), seduh_claim_statuses(uuid,uuid[])',
-  'the functions outside app that touch the Seduh ID tables are exactly the link function, the console''s read-only counts function (T-ID.C3, pgTAP 065), the profile door and the claim functions (T-ID2.B3a, pgTAP 082); a second writer or reader must be added here on purpose');
+  'admin_seduh_id_counts(), claim_seduh_id(text,text,boolean), issue_seduh_claim_link(uuid), link_person_identity(uuid,uuid), public_country_record(text), public_seduh_profile(text), revoke_seduh_claim_link(uuid), seduh_claim_begin(text), seduh_claim_statuses(uuid,uuid[])',
+  'the functions outside app that touch the Seduh ID tables are exactly the link function, the console''s read-only counts function (T-ID.C3, pgTAP 065), the profile door, the country door (its member list, T-ID2.D-a), and the claim functions (T-ID2.B3a, pgTAP 082); a second writer or reader must be added here on purpose');
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text collate "C"), 'none')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
