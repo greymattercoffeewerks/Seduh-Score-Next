@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { countryPagesPlugin } from './tools/countryPagesPlugin.js';
-import { aliasRedirectFor, claimShellFor, profileShellFor } from './worker/idRoute.js';
+import { aliasRedirectFor, claimShellFor, meShellFor, profileShellFor } from './worker/idRoute.js';
 
 // Single config file for both Vite (dev/build) and Vitest (test) — vitest/config
 // re-exports Vite's defineConfig with the `test` key merged in. Importing
@@ -26,7 +26,7 @@ export default defineConfig({
             res.end();
             return;
           }
-          const shell = claimShellFor(path) ?? profileShellFor(path);
+          const shell = claimShellFor(path) ?? meShellFor(path) ?? profileShellFor(path);
           if (shell) req.url = shell;
           next();
         });
@@ -105,6 +105,8 @@ export default defineConfig({
         idProfile: fileURLToPath(new URL('./id/index.html', import.meta.url)),
         // /id/claim/ (T-ID2.B3b): where a person claims their Seduh ID; the token is in the URL fragment. noindex.
         idClaim: fileURLToPath(new URL('./id/claim/index.html', import.meta.url)),
+        // /id/me/ (T-ID2.D-b): My Seduh ID, a signed-in person's own record and privacy. noindex, linked from nowhere yet.
+        idMe: fileURLToPath(new URL('./id/me/index.html', import.meta.url)),
       },
     },
   },
@@ -142,6 +144,8 @@ export default defineConfig({
       'worker/*.test.js',
       // The country-history import (scripts/country-history): fictional fixtures only.
       'scripts/country-history/*.test.js',
+      // The person's own record loader (scripts/seduh-id-record): fictional fixtures only.
+      'scripts/seduh-id-record/*.test.js',
     ],
     setupFiles: ['./src/testSetup.js'],
   },

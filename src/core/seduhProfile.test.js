@@ -129,8 +129,10 @@ describe('normaliseProfile', () => {
   it('forces provenance by seam: self_reported rows are always self-reported, whatever they claim', () => {
     const p = normaliseProfile(
       door({
-        self_reported: [{ title: 'A', provenance: 'seduh_score', kind: 'judged', year: 2024 }],
-        organiser_records: [{ title: 'B', provenance: 'seduh_score' }],
+        self_reported: [
+          { competition_name: 'A', provenance: 'seduh_score', kind: 'judged', year: 2024 },
+        ],
+        organiser_records: [{ competition_name: 'B', provenance: 'seduh_score' }],
       }),
     );
     expect(p.entries.find((e) => e.title === 'A')).toMatchObject({
@@ -141,6 +143,88 @@ describe('normaliseProfile', () => {
     expect(p.entries.find((e) => e.title === 'B').provenance).toBe('organiser_archive');
   });
 
+  it('reads the real shapes of the two seams (T-ID2.D-a): a self-reported entry and a team link', () => {
+    const p = normaliseProfile(
+      door({
+        self_reported: [
+          {
+            year: 2025,
+            competition_name: 'Regional Open',
+            kind: 'judged',
+            role: 'head judge',
+            result_text: 'Final',
+            placement: 3,
+            location: 'Testville',
+            note: 'A note',
+            provenance: 'self_reported',
+          },
+        ],
+        organiser_records: [
+          {
+            competition: 'btc',
+            competition_name: 'ASEAN Championship',
+            edition_year: 2024,
+            team_name: 'Test Team',
+            country_code: 'XA',
+            stage_reached: 'quarter_final',
+            placement: null,
+            role: 'member',
+            membership: 'self_reported',
+            provenance: 'organiser_archive',
+          },
+        ],
+      }),
+    );
+    expect(p.entries.find((e) => e.title === 'Regional Open')).toMatchObject({
+      kind: 'judged',
+      provenance: 'self_reported',
+      year: 2025,
+      placing: 3,
+      location: 'Testville',
+      detail: 'head judge · Final · A note',
+    });
+    // the title is the competition's name, never the competition code ('btc')
+    expect(p.entries.find((e) => e.title === 'ASEAN Championship')).toMatchObject({
+      provenance: 'organiser_archive',
+      year: 2024,
+      team: 'Test Team',
+      placing: null,
+      detail: 'Member · Quarter-final',
+      membership: 'self_reported',
+      country: 'XA',
+    });
+    expect(p.entries.some((e) => e.title === 'btc')).toBe(false);
+  });
+
+  it('a team link: confirmed stays confirmed, anything else is self-reported; a champion or finalist has a place', () => {
+    const link = (over) => ({
+      competition_name: 'ASEAN Championship',
+      edition_year: 2024,
+      team_name: 'T',
+      country_code: 'xa',
+      ...over,
+    });
+    const [a, b, c, d] = normaliseProfile(
+      door({
+        organiser_records: [
+          link({ membership: 'confirmed', stage_reached: 'champion', role: 'captain' }),
+          link({ membership: 'bogus', stage_reached: 'final' }),
+          link({ stage_reached: 'entered', country_code: 'nope' }),
+          link({ placement: 4, stage_reached: 'semi_final' }),
+        ],
+      }),
+    ).entries;
+    expect(a).toMatchObject({
+      membership: 'confirmed',
+      placing: 1,
+      detail: 'Captain · Champion',
+      country: 'XA',
+    });
+    expect(b).toMatchObject({ membership: 'self_reported', placing: 2, detail: 'Runner-up' });
+    expect(c).toMatchObject({ placing: null, country: null, detail: 'Entered' });
+    expect(d).toMatchObject({ placing: 4, detail: '4th place' });
+  });
+
   it('judging roles default to judged and to the cautious provenance', () => {
     const [e] = normaliseProfile(
       door({ judging_roles: [{ title: 'BTC 2026', provenance: 'bogus' }] }),
@@ -149,7 +233,9 @@ describe('normaliseProfile', () => {
   });
 
   it('an unknown kind falls back to the seam default', () => {
-    const [e] = normaliseProfile(door({ self_reported: [{ title: 'A', kind: 'wizard' }] })).entries;
+    const [e] = normaliseProfile(
+      door({ self_reported: [{ competition_name: 'A', kind: 'wizard' }] }),
+    ).entries;
     expect(e.kind).toBe('competed');
   });
 

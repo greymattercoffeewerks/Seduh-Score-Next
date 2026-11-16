@@ -240,7 +240,7 @@ describe('public trust pages are wired into the build', () => {
 
 // T-ID2.B3b: claiming a Seduh ID. The Privacy page and Terms change in the same release as the capability they describe.
 describe('claiming a Seduh ID (T-ID2.B3b wording)', () => {
-  it('Privacy says what claiming collects, what becomes public, and is honest that settings are not built yet', () => {
+  it('Privacy says what claiming collects, what becomes public, and describes the settings that now exist', () => {
     const privacy = mount('privacy').textContent;
     expect(privacy).toContain('Claiming your Seduh ID');
     expect(privacy).toContain('you are 18 or over');
@@ -251,11 +251,14 @@ describe('claiming a Seduh ID (T-ID2.B3b wording)', () => {
     );
     expect(privacy).toContain('Claiming makes part of your Seduh ID public');
     expect(privacy).toContain('Your phone number and email address are never shown');
-    // the settings screen does not exist yet: the page must not promise it as if it did
-    expect(privacy).toContain('settings, which are coming soon');
+    // the settings screen exists now (T-ID2.D-b): the page describes it, and says nothing is still coming
+    expect(privacy).toContain('You choose what stays public in My Seduh ID');
+    expect(privacy).toContain('Each change takes effect at once');
     expect(privacy).toContain('email us and we will hide any part of it');
-    expect(privacy).not.toMatch(/you can hide .* in (your )?settings\./i);
-    // closing, and the sign-in, are manual: "on request", never automatic
+    expect(privacy).not.toContain('coming soon');
+    expect(privacy).toContain('What you add to your Seduh ID yourself');
+    expect(privacy).toContain('Self-reported, not verified by Seduh');
+    expect(privacy).toContain('Show me on my country');
     expect(privacy).toContain('Closing your Seduh ID after you have claimed it');
     expect(privacy).toContain('on request, delete your sign-in');
     expect(privacy).toContain('Your handle and founding number are never given to anyone else');

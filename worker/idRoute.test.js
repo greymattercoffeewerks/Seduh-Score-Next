@@ -6,6 +6,8 @@ import {
   HANDLE_ALIASES,
   claimShellFor,
   isClaimPath,
+  isMePath,
+  meShellFor,
   isProfilePath,
   PROFILE_SHELL_PATH,
   profileShellFor,
@@ -145,5 +147,23 @@ describe('aliasRedirectFor (owner aliases)', () => {
       expect(to).toMatch(/^[a-z0-9-]{3,30}$/);
       expect(Object.hasOwn(HANDLE_ALIASES, to), `${from} points at an alias`).toBe(false);
     }
+  });
+});
+
+describe('My Seduh ID path (T-ID2.D-b)', () => {
+  it('is /id/me and /id/me/ in any case, and nothing else', () => {
+    for (const ok of ['/id/me', '/id/me/', '/id/Me/', '/id/ME'])
+      expect(isMePath(ok), ok).toBe(true);
+    for (const no of ['/id/mel', '/id/me/x', '/id/me.html', '/id/', '/id/claim/', '/me/']) {
+      expect(isMePath(no), no).toBe(false);
+    }
+    expect(meShellFor('/id/me')).toBe('/id/me/index.html');
+    expect(meShellFor('/id/mfosa/')).toBeNull();
+  });
+  it('is never a person page (me is reserved), while a handle starting with me still is', () => {
+    expect(isProfilePath('/id/me/')).toBe(false);
+    expect(isProfilePath('/id/me')).toBe(false);
+    expect(isProfilePath('/id/mello/')).toBe(true);
+    expect(isProfilePath('/id/mfosa/')).toBe(true);
   });
 });

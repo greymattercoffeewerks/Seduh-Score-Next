@@ -1,6 +1,12 @@
 // Words and order for a Seduh ID person page: pure, no DOM. Everything here works on the normalised entries from
 // core/seduhProfile.js, so a new record source (self-reported, the organiser's records) needs no change in this file.
-import { ENTRY_KINDS, PROVENANCE_SELF } from '../core/seduhProfile.js';
+import {
+  ENTRY_KINDS,
+  PROVENANCE_SELF,
+  TEAM_RESULT_LABEL,
+  membershipLabel,
+  profileProvenanceLabel,
+} from '../core/seduhProfile.js';
 import { ordinalLabel as ordinal } from '../core/ordinal.js';
 import { formatLabel } from './resultsScreen.js';
 
@@ -33,8 +39,9 @@ export function foundingText(n) {
 /** The line under an entry's title: organiser, team, place, and the format in words. */
 export function metaText(entry) {
   return [
+    entry.kind !== 'competed' ? KIND_LABELS[entry.kind] : null,
     entry.organiser,
-    entry.team,
+    entry.team ? (entry.country ? `${entry.team} (${entry.country})` : entry.team) : null,
     entry.location,
     entry.format ? formatLabel(entry.format) : null,
   ]
@@ -110,49 +117,83 @@ export function groupByYear(entries) {
   return groups;
 }
 
-// Totals and the best result count only what Seduh Score or an organiser vouches for: a self-reported entry is never
-// counted in a "recorded" total (spec 14.4), so a person cannot raise their own numbers.
-const vouched = (entries) => entries.filter((e) => e.provenance !== PROVENANCE_SELF);
+const isVouched = (e) => e.provenance !== PROVENANCE_SELF;
+// VERIFIED (owner decision 2026-11-17): recorded by Seduh Score, or an organiser's team result whose membership is confirmed
+// (a team link the person made themselves is their own claim until the owner confirms it; a missing membership is not confirmed).
+const isVerified = (e) =>
+  e.provenance === 'seduh_score' || (isVouched(e) && e.membership === 'confirmed');
 
-/** The stats row: results, podiums, organisers, best placing. Empty when nothing vouched-for was competed. */
+/**
+ * The stats row. It counts EVERYTHING on the page (self-reported too) by kind, and podiums among competed entries, so it
+ * always agrees with the record below it; the screen says that self-reported entries are included. Only kinds that
+ * occur are shown. Empty when the page has no entries.
+ */
 export function computeStats(entries) {
-  const competed = vouched(entries).filter((e) => e.kind === 'competed');
-  if (competed.length === 0) return [];
-  const placings = competed.map((e) => e.placing).filter((p) => p !== null);
-  const organisers = new Set(competed.map((e) => e.organiser).filter(Boolean));
-  const stats = [
-    { value: String(competed.length), label: competed.length === 1 ? 'result' : 'results' },
-    { value: String(placings.filter((p) => p <= 3).length), label: 'podiums' },
-  ];
-  if (organisers.size > 0)
-    stats.push({
-      value: String(organisers.size),
-      label: organisers.size === 1 ? 'organiser' : 'organisers',
-    });
-  if (placings.length > 0)
-    stats.push({ value: ordinal(Math.min(...placings)), label: 'best place' });
+  if (entries.length === 0) return [];
+  const stats = [];
+  for (const kind of ENTRY_KINDS) {
+    const n = entries.filter((e) => e.kind === kind).length;
+    if (n > 0) stats.push({ value: String(n), label: KIND_VERBS[kind] });
+  }
+  const podiums = entries.filter(
+    (e) => e.kind === 'competed' && e.placing !== null && e.placing <= 3,
+  ).length;
+  if (entries.some((e) => e.kind === 'competed')) {
+    stats.push({ value: String(podiums), label: podiums === 1 ? 'podium' : 'podiums' });
+  }
   return stats;
 }
 
-/** The best vouched-for competed result: lowest placing, newest on a tie. Null when none has a placing. */
-export function bestResult(entries) {
-  const ranked = sortEntries(
-    vouched(entries).filter((e) => e.kind === 'competed' && e.placing !== null),
-  );
+/** True when any entry in the list is self-reported (the stats note says so). */
+// (a team link's membership is the person's own claim until it is confirmed, so it counts as reported by them too)
+export const hasSelfReported = (entries) =>
+  entries.some((e) => !isVouched(e) || e.membership === 'self_reported');
+
+const bestOf = (candidates) => {
   let best = null;
-  for (const entry of ranked) if (best === null || entry.placing < best.placing) best = entry;
+  for (const entry of sortEntries(candidates)) {
+    if (best === null || entry.placing < best.placing) best = entry;
+  }
   return best;
+};
+
+/**
+ * The best-result card's entry, from the first of three tiers that has a placed competed entry: (1) VERIFIED (recorded by
+ * Seduh Score, or a team result with a confirmed membership; Seduh Score's own record first on a tie of placing), (2) an
+ * organiser's team result whose membership is still self-reported, (3) the person's own entries. Within a tier the lowest
+ * placing wins, the newest on a tie. Returns `{ entry, verified }` or null; only tier 1 is `verified`, and the card shows
+ * the entry's own labels either way, so nothing is mixed silently.
+ */
+export function bestResult(entries) {
+  const placed = entries.filter((e) => e.kind === 'competed' && e.placing !== null);
+  const verified = placed.filter(isVerified);
+  if (verified.length > 0) {
+    const recorded = bestOf(verified.filter((e) => e.provenance === 'seduh_score'));
+    const organiser = bestOf(verified.filter((e) => e.provenance !== 'seduh_score'));
+    const entry =
+      recorded && (!organiser || recorded.placing <= organiser.placing) ? recorded : organiser;
+    return { entry, verified: true };
+  }
+  const team = bestOf(placed.filter((e) => isVouched(e) && !isVerified(e)));
+  if (team) return { entry: team, verified: false };
+  const own = bestOf(placed);
+  return own ? { entry: own, verified: false } : null;
 }
 
 /** One entry's detail line for the card: "8 / 8 correct · 2:13" style text is already in `detail`; this adds the date. */
 export function bestDetail(entry) {
-  return [entry.organiser, dateText(entry)].filter(Boolean).join(' · ');
+  return [entry.organiser, entry.team, dateText(entry)].filter(Boolean).join(' · ');
 }
 
-/** The right-hand cell of an entry: "1st", or the role word when there is no placing. */
+/** The labels under an entry. A team link has TWO (the team result is the organiser's, the membership the person's). */
+export function provenanceLabels(entry) {
+  if (entry.membership) return [TEAM_RESULT_LABEL, membershipLabel(entry.membership)];
+  return [profileProvenanceLabel(entry.provenance)];
+}
+
+/** The right-hand cell of an entry: a real placing ("1st"), or nothing. The kind of an entry is a small label in its meta line. */
 export function placeText(entry) {
-  if (entry.placing !== null) return ordinal(entry.placing);
-  return entry.kind === 'competed' ? '' : KIND_LABELS[entry.kind];
+  return entry.placing !== null ? ordinal(entry.placing) : '';
 }
 
 /** Knockout record in words, or null when there is none (the section is then hidden). */

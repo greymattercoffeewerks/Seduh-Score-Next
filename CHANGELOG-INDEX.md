@@ -235,3 +235,5 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - Privacy and Terms: archive and Seduh ID Layer 1a wording published to `dev` (owner-approved, live only on release to `main`) · 2026-11-01 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.5: live proof of the archive pipeline, API level and browser level (tests only, nothing in the cloud) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.4c: `archive_event_status`, a member-readable archive status; the panel stops guessing (built dark, not in the cloud) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- T-ARC.6 section 3: pricing-page archive wording (public copy; live only when `dev` is released to `main`) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- T-ARC.Z: archive pipeline close-out (built, deployed, dark; never published anything) and the version bump to 3.5.0 · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)

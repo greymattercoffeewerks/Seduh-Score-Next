@@ -10,9 +10,10 @@
 // The four record lists of the door (recorded_results, organiser_records, self_reported, judging_roles) are folded into
 // ONE list of entries, each carrying its provenance, so the screen never branches on which list a row came from: a
 // seam that starts returning rows (Phase C) appears with no change to the page. recorded_results has a fixed shape
-// (CONVENTIONS.md); the other three are still empty seams, so their row shape here is PROVISIONAL and tolerant. When a
-// seam is built, pin its shape in this file and in seduhProfile.test.js.
+// (CONVENTIONS.md); `self_reported` and `organiser_records` (team links) are pinned since T-ID2.D-b; `judging_roles` is still an
+// empty seam whose row shape is PROVISIONAL and tolerant. When it is built, pin its shape here and in seduhProfile.test.js.
 import { formatDuration } from './duration.js';
+import { ordinalLabel } from './ordinal.js';
 import { getSupabase } from './supabaseClient.js';
 
 export const PROVENANCE_SEDUH_SCORE = 'seduh_score';
@@ -26,6 +27,11 @@ export const PROVENANCE_LABELS = {
   [PROVENANCE_ORGANISER]: 'From the organiser’s records',
   [PROVENANCE_SELF]: 'Self-reported, not verified by Seduh',
 };
+/** The words for a team link's membership: the person's own claim until the platform confirms it. */
+export function membershipLabel(membership) {
+  return membership === 'confirmed' ? 'Membership confirmed' : 'Membership self-reported';
+}
+export const TEAM_RESULT_LABEL = 'Team result from the organiser’s records';
 export function profileProvenanceLabel(provenance) {
   return PROVENANCE_LABELS[provenance] ?? PROVENANCE_LABELS[PROVENANCE_SELF];
 }
@@ -68,6 +74,8 @@ function recordedEntry(raw) {
     // The format key is passed on raw: core never names a format. The page words it (marketing/profileFormat.js).
     format: text(raw.format, 40),
     team: null,
+    country: null,
+    membership: null,
     location: null,
     detail,
     date,
@@ -79,33 +87,108 @@ function recordedEntry(raw) {
   };
 }
 
-// PROVISIONAL shape for the three seams (see the header). `provenance` is forced by seam: self_reported rows are always
-// self-reported, whatever the row claims.
-function seamEntry(raw, { defaultKind, provenance, allowSeduhScore = false }) {
+// The two record shapes the door returns for a person's own record (T-ID2.D-a, pinned by D-b). Both rebuild every field from
+// known keys; provenance is forced by the list a row came from, never by what the row claims.
+//
+// A self-reported ENTRY (`self_reported`): {year, competition_name, location, kind, role, result_text, placement, note}.
+const STAGE_WORDS = {
+  champion: 'Champion',
+  final: 'Runner-up',
+  semi_final: 'Semi-final',
+  quarter_final: 'Quarter-final',
+  preliminary: 'Preliminaries',
+  entered: 'Entered',
+};
+/** Pure. A team result in words, ONE wording for the person page and My Seduh ID: "Champion", "Runner-up", "4th place", or the stage. */
+export function teamResultWords({ placement, stage_reached: stage }) {
+  if (stage === 'champion') return 'Champion';
+  if (stage === 'final') return 'Runner-up';
+  if (Number.isInteger(placement) && placement >= 1) return `${ordinalLabel(placement)} place`;
+  return STAGE_WORDS[stage] ?? '';
+}
+const ROLE_WORDS = { member: 'Member', captain: 'Captain', coach: 'Coach', reserve: 'Reserve' };
+
+const emptyEntry = {
+  organiser: null,
+  format: null,
+  team: null,
+  country: null,
+  location: null,
+  membership: null,
+  detail: '',
+  date: null,
+  correct: null,
+  total: null,
+  timeSecs: null,
+};
+
+function selfEntry(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const title = text(raw.title ?? raw.event_name ?? raw.competition ?? raw.name, 120);
+  const title = text(raw.competition_name ?? raw.title ?? raw.event_name, 120);
+  if (!title) return null;
+  const kind = ENTRY_KINDS.includes(raw.kind) ? raw.kind : 'competed';
+  const placing = int(raw.placement ?? raw.placing);
+  return {
+    ...emptyEntry,
+    kind,
+    provenance: PROVENANCE_SELF,
+    title,
+    location: text(raw.location, 80),
+    detail: [text(raw.role, 60), text(raw.result_text, 80), text(raw.note ?? raw.detail, 160)]
+      .filter(Boolean)
+      .join(' · '),
+    year: yearOf(raw.year, null),
+    placing: placing !== null && placing >= 1 ? placing : null,
+  };
+}
+
+// A team link (`organiser_records`): {competition, competition_name, edition_year, team_name, country_code, stage_reached,
+// placement, role, membership}. The TEAM RESULT is the organiser's; the MEMBERSHIP is the person's until it is confirmed:
+// `membership` is 'self_reported' (also for any value we do not know: never claim more than we know) or 'confirmed'.
+function teamEntry(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = text(raw.competition_name, 120);
+  if (!title) return null;
+  const stage = typeof raw.stage_reached === 'string' ? raw.stage_reached : null;
+  let placing = int(raw.placement);
+  if (placing === null || placing < 1) {
+    placing = stage === 'champion' ? 1 : stage === 'final' ? 2 : null;
+  }
+  const result = teamResultWords({ placement: placing, stage_reached: stage }) || null;
+  const country = typeof raw.country_code === 'string' ? raw.country_code.trim().toUpperCase() : '';
+  return {
+    ...emptyEntry,
+    kind: 'competed',
+    provenance: PROVENANCE_ORGANISER,
+    title,
+    team: text(raw.team_name, 80),
+    country: /^[A-Z]{2}$/.test(country) ? country : null,
+    membership: raw.membership === 'confirmed' ? 'confirmed' : 'self_reported',
+    detail: [ROLE_WORDS[raw.role] ?? null, result].filter(Boolean).join(' · '),
+    year: yearOf(raw.edition_year, null),
+    placing: placing !== null && placing >= 1 ? placing : null,
+  };
+}
+
+// A judging role (`judging_roles`) is still an empty seam: a tolerant, PROVISIONAL shape, forced to self-reported unless the
+// row says the organiser or Seduh Score vouches for it.
+function judgingEntry(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = text(raw.title ?? raw.event_name ?? raw.competition_name ?? raw.name, 120);
   if (!title) return null;
   const date = isoDate(raw.event_date ?? raw.date);
-  const kind = ENTRY_KINDS.includes(raw.kind) ? raw.kind : defaultKind;
-  let prov = provenance;
-  if (allowSeduhScore && [PROVENANCE_SEDUH_SCORE, PROVENANCE_ORGANISER].includes(raw.provenance))
-    prov = raw.provenance;
-  const placing = int(raw.placing);
+  const vouched = [PROVENANCE_SEDUH_SCORE, PROVENANCE_ORGANISER].includes(raw.provenance);
   return {
-    kind,
-    provenance: prov,
+    ...emptyEntry,
+    kind: 'judged',
+    provenance: vouched ? raw.provenance : PROVENANCE_SELF,
     title,
     organiser: text(raw.organiser_name, 80),
-    format: null,
-    team: text(raw.team_name ?? raw.team, 80),
     location: text(raw.location, 80),
     detail: [text(raw.role, 60), text(raw.detail ?? raw.note, 160)].filter(Boolean).join(' · '),
     date,
     year: yearOf(raw.year, date),
-    placing: placing !== null && placing >= 1 ? placing : null,
-    correct: null,
-    total: null,
-    timeSecs: null,
+    placing: null,
   };
 }
 
@@ -145,15 +228,9 @@ export function normaliseProfile(raw) {
   const founding = int(id.founding_number);
   const entries = [
     ...list(raw.recorded_results).map(recordedEntry),
-    ...list(raw.organiser_records).map((r) =>
-      seamEntry(r, { defaultKind: 'competed', provenance: PROVENANCE_ORGANISER }),
-    ),
-    ...list(raw.self_reported).map((r) =>
-      seamEntry(r, { defaultKind: 'competed', provenance: PROVENANCE_SELF }),
-    ),
-    ...list(raw.judging_roles).map((r) =>
-      seamEntry(r, { defaultKind: 'judged', provenance: PROVENANCE_SELF, allowSeduhScore: true }),
-    ),
+    ...list(raw.organiser_records).map(teamEntry),
+    ...list(raw.self_reported).map(selfEntry),
+    ...list(raw.judging_roles).map(judgingEntry),
   ].filter(Boolean);
   const ko =
     raw.knockout_record && typeof raw.knockout_record === 'object' ? raw.knockout_record : {};
