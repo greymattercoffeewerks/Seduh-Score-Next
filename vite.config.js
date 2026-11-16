@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { countryPagesPlugin } from './tools/countryPagesPlugin.js';
-import { claimShellFor, profileShellFor } from './worker/idRoute.js';
+import { aliasRedirectFor, claimShellFor, profileShellFor } from './worker/idRoute.js';
 
 // Single config file for both Vite (dev/build) and Vitest (test) — vitest/config
 // re-exports Vite's defineConfig with the `test` key merged in. Importing
@@ -16,8 +16,16 @@ export default defineConfig({
       // does not run the Worker; the built-app check for this route runs against `wrangler dev`.)
       name: 'seduh-profile-pages-dev',
       configureServer(server) {
-        server.middlewares.use((req, _res, next) => {
-          const path = (req.url ?? '').split('?')[0];
+        server.middlewares.use((req, res, next) => {
+          const [path, ...rest] = (req.url ?? '').split('?');
+          const alias =
+            req.method === 'GET' || req.method === 'HEAD' ? aliasRedirectFor(path) : null;
+          if (alias) {
+            res.statusCode = 301;
+            res.setHeader('Location', rest.length ? `${alias}?${rest.join('?')}` : alias);
+            res.end();
+            return;
+          }
           const shell = claimShellFor(path) ?? profileShellFor(path);
           if (shell) req.url = shell;
           next();

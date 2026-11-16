@@ -51,3 +51,18 @@ export function isClaimPath(pathname) {
 export function claimShellFor(pathname) {
   return isClaimPath(pathname) ? `${CLAIM_SHELL_PATH}index.html` : null;
 }
+
+// Owner aliases (owner decision, 2026-11-16): /id/<alias> answers a 301 to /id/<handle>/. Today there is one: the owner's first
+// name goes to their page. EACH ALIAS MUST ALSO BE A RESERVED HANDLE in the database (app.seduh_handle_reserved), or a stranger
+// could claim it and the redirect would hide their page; tools/seduh-handle-aliases.test.js fails when one is missing.
+export const HANDLE_ALIASES = { firdaus: 'mfosa' };
+
+/** Pure. The path to redirect a person-page request to (always /id/<handle>/), or null when the path is not an alias. */
+export function aliasRedirectFor(pathname) {
+  const match = PROFILE_PATH.exec(pathname);
+  if (match === null) return null;
+  const target = Object.hasOwn(HANDLE_ALIASES, match[1].toLowerCase())
+    ? HANDLE_ALIASES[match[1].toLowerCase()]
+    : null;
+  return target === null ? null : `/id/${target}/`;
+}
