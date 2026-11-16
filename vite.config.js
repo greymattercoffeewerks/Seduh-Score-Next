@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { countryPagesPlugin } from './tools/countryPagesPlugin.js';
-import { profileShellFor } from './worker/idRoute.js';
+import { claimShellFor, profileShellFor } from './worker/idRoute.js';
 
 // Single config file for both Vite (dev/build) and Vitest (test) — vitest/config
 // re-exports Vite's defineConfig with the `test` key merged in. Importing
@@ -17,7 +17,8 @@ export default defineConfig({
       name: 'seduh-profile-pages-dev',
       configureServer(server) {
         server.middlewares.use((req, _res, next) => {
-          const shell = profileShellFor((req.url ?? '').split('?')[0]);
+          const path = (req.url ?? '').split('?')[0];
+          const shell = claimShellFor(path) ?? profileShellFor(path);
           if (shell) req.url = shell;
           next();
         });
@@ -26,7 +27,7 @@ export default defineConfig({
   ],
   build: {
     rollupOptions: {
-      // Seventeen HTML entries: the marketing landing page at root (index.html),
+      // Eighteen HTML entries: the marketing landing page at root (index.html),
       // the console SPA at /app/ (app/index.html — moved out of root
       // 2026-09-07 so the bare domain serves the landing page instead of
       // booting straight into the console), the standalone Timer tool at
@@ -94,6 +95,8 @@ export default defineConfig({
         idCountry: fileURLToPath(new URL('./id/country/index.html', import.meta.url)),
         // /id/<handle>/ (Layer 2 routing): the person-page shell, served for any handle by the edge Worker (worker/index.js).
         idProfile: fileURLToPath(new URL('./id/index.html', import.meta.url)),
+        // /id/claim/ (T-ID2.B3b): where a person claims their Seduh ID; the token is in the URL fragment. noindex.
+        idClaim: fileURLToPath(new URL('./id/claim/index.html', import.meta.url)),
       },
     },
   },

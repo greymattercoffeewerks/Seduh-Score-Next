@@ -22,6 +22,37 @@ import {
   describeAffiliationError,
 } from './affiliations.js';
 import { describeError } from './errors.js';
+import { copyText } from './clipboard.js';
+import { buildQrBlock } from './qrBlock.js';
+import {
+  CLAIM_LINK_WARNING,
+  CLAIM_STATE_TEXT,
+  WHATSAPP_NOTE,
+  claimLinkUrl,
+  describeClaimError,
+  fetchClaimStatuses,
+  issueClaimLink,
+  revokeClaimLink,
+  whatsappShareUrl,
+} from './seduhClaim.js';
+
+// Pure. "Thursday 19 Nov, 4:30 pm", in the organiser's own clock.
+export function formatUntil(date) {
+  return date.toLocaleString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function firstNameOf(displayName) {
+  return String(displayName ?? '')
+    .trim()
+    .split(/\s+/)[0];
+}
 
 export function peopleHeading(orgName) {
   return orgName ? `People in ${orgName}` : 'People';
@@ -73,6 +104,27 @@ export async function mountPeopleScreen(
   let pendingError = null;
   let pendingSuccess = null;
   let focusAfterRender = null;
+  // Seduh ID claiming (T-ID2.B3b). `claimStatuses` is null when the check failed (or the database has no such door yet):
+  // the roster still works and simply shows no claim controls. `issued` holds the ONE link on show: the token lives only
+  // here, in memory, until the organiser presses Done or leaves the screen; it cannot be read back from the database.
+  let claimStatuses = null;
+  let claimCheckFailed = false;
+  let issued = null;
+
+  async function loadClaimStatuses() {
+    try {
+      claimStatuses = await fetchClaimStatuses(
+        orgId,
+        people.map((p) => p.id),
+        client,
+      );
+      claimCheckFailed = false;
+    } catch {
+      // keep what was last known: a link that was just made must stay on screen (it cannot be shown again), and a row's
+      // state is better slightly old than gone. With nothing known yet there are simply no claim controls.
+      claimCheckFailed = true;
+    }
+  }
 
   async function loadPersisted() {
     const [list, open] = await Promise.all([
@@ -82,6 +134,7 @@ export async function mountPeopleScreen(
     people = list.people;
     truncated = list.truncated;
     affiliations = open;
+    await loadClaimStatuses();
   }
 
   function frame() {
@@ -190,23 +243,201 @@ export async function mountPeopleScreen(
         ? el('span', { className: 'people-tag people-tag-linked', text: LINKED_LABEL })
         : null,
     ].filter(Boolean);
-    return el('li', { attrs: { id: `people-row-${person.id}` } }, [
-      el(
-        'div',
-        { className: 'people-info' },
-        [
-          el('span', { className: 'people-name', text: person.displayName }),
-          person.cafe ? el('span', { className: 'stage-meta', text: person.cafe }) : null,
-          tags.length ? el('span', { className: 'people-tags' }, tags) : null,
-        ].filter(Boolean),
-      ),
-      el('div', { className: 'people-actions' }, [
-        ...person.roles.map((r) => endButton(person, r)),
-        ...AFFILIATION_RELATIONSHIPS.filter((rel) => !held.has(rel)).map((rel) =>
-          roleButton(person, rel),
+    return el(
+      'li',
+      { attrs: { id: `people-row-${person.id}` } },
+      [
+        el(
+          'div',
+          { className: 'people-info' },
+          [
+            el('span', { className: 'people-name', text: person.displayName }),
+            person.cafe ? el('span', { className: 'stage-meta', text: person.cafe }) : null,
+            tags.length ? el('span', { className: 'people-tags' }, tags) : null,
+          ].filter(Boolean),
         ),
-      ]),
-    ]);
+        el('div', { className: 'people-actions' }, [
+          ...person.roles.map((r) => endButton(person, r)),
+          ...AFFILIATION_RELATIONSHIPS.filter((rel) => !held.has(rel)).map((rel) =>
+            roleButton(person, rel),
+          ),
+        ]),
+        renderClaim(person),
+      ].filter(Boolean),
+    );
+  }
+
+  function claimButton(person, { id, text, label, onClick }) {
+    const button = el('button', {
+      className: 'btn btn-outline tap-target',
+      text,
+      attrs: {
+        type: 'button',
+        id: `${id}-${person.id}`,
+        'aria-label': `${label}, ${person.displayName}`,
+      },
+    });
+    button.disabled = busy;
+    button.addEventListener('click', onClick);
+    return button;
+  }
+
+  // The line under a person: where their Seduh ID stands, and the one thing an organiser can do about it.
+  function renderClaim(person) {
+    if (!claimStatuses) return null;
+    const status = claimStatuses.get(person.id);
+    if (!status) return null;
+    const children = [];
+    if (status.state === 'claimed') {
+      children.push(
+        el(
+          'p',
+          { className: 'people-claim-text' },
+          [
+            el('span', { text: `${CLAIM_STATE_TEXT.claimed} ` }),
+            status.handle
+              ? el('a', {
+                  className: 'people-claim-handle',
+                  text: `@${status.handle}`,
+                  attrs: {
+                    href: `/id/${status.handle}/`,
+                    'aria-label': `Seduh ID page of ${person.displayName}, @${status.handle}`,
+                  },
+                })
+              : null,
+          ].filter(Boolean),
+        ),
+      );
+    } else if (status.state === 'link_open') {
+      children.push(
+        el('p', {
+          className: 'people-claim-text',
+          text: status.expiresAt
+            ? `${CLAIM_STATE_TEXT.link_open} It works until ${formatUntil(status.expiresAt)}.`
+            : CLAIM_STATE_TEXT.link_open,
+        }),
+      );
+    } else {
+      children.push(
+        el('p', { className: 'people-claim-text', text: CLAIM_STATE_TEXT[status.state] }),
+      );
+    }
+    const actions = [];
+    if (status.state === 'can_issue') {
+      actions.push(
+        claimButton(person, {
+          id: 'people-claim-issue',
+          text: 'Send claim link',
+          label: 'Send claim link',
+          onClick: () => handleIssue(person),
+        }),
+      );
+    } else if (status.state === 'link_open') {
+      actions.push(
+        claimButton(person, {
+          id: 'people-claim-issue',
+          text: 'Make a new link',
+          label: 'Make a new link',
+          onClick: () => handleIssue(person),
+        }),
+        claimButton(person, {
+          id: 'people-claim-revoke',
+          text: 'Cancel link',
+          label: 'Cancel link',
+          onClick: () => handleRevoke(person),
+        }),
+      );
+    }
+    if (actions.length) children.push(el('div', { className: 'people-actions' }, actions));
+    if (issued?.personId === person.id) children.push(renderIssued(person));
+    return el(
+      'div',
+      { className: 'people-claim', attrs: { id: `people-claim-${person.id}` } },
+      children,
+    );
+  }
+
+  // The link, shown once. The warning comes first, so it is read before the link is copied.
+  function renderIssued(person) {
+    const copyStatus = el('p', {
+      className: 'stage-meta people-claim-copied',
+      attrs: { role: 'status', 'aria-live': 'polite', id: `people-claim-copied-${person.id}` },
+    });
+    const input = el('input', {
+      className: 'field-input people-claim-url',
+      id: `people-claim-url-${person.id}`,
+      attrs: {
+        type: 'text',
+        readonly: '',
+        value: issued.url,
+        'aria-label': `Claim link for ${person.displayName}`,
+        'aria-describedby': `people-claim-warning-${person.id}`,
+        autocomplete: 'off',
+        spellcheck: 'false',
+      },
+    });
+    const copy = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: 'Copy link',
+      attrs: { type: 'button', id: `people-claim-copy-${person.id}` },
+    });
+    copy.addEventListener('click', async () => {
+      const ok = await copyText(issued?.url ?? '');
+      copyStatus.textContent = ok
+        ? 'Link copied.'
+        : 'Could not copy. Select the link above and copy it by hand.';
+      if (!ok) {
+        input.focus();
+        input.select();
+      }
+    });
+    const whatsapp = el('a', {
+      className: 'btn btn-outline tap-target',
+      text: 'Share on WhatsApp',
+      attrs: {
+        href: whatsappShareUrl(issued.url, firstNameOf(person.displayName)),
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        'aria-label': `Share on WhatsApp, ${person.displayName} (opens in a new tab)`,
+      },
+    });
+    const done = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Done',
+      attrs: {
+        type: 'button',
+        id: `people-claim-done-${person.id}`,
+        'aria-label': `Done, hide the claim link for ${person.displayName}`,
+      },
+    });
+    done.addEventListener('click', () => {
+      issued = null;
+      focusAfterRender = `#people-claim-issue-${person.id}, #people-claim-revoke-${person.id}`;
+      render();
+    });
+    return el(
+      'div',
+      {
+        className: 'people-claim-issued',
+        attrs: { role: 'group', 'aria-label': `Claim link for ${person.displayName}` },
+      },
+      [
+        el('p', {
+          className: 'people-claim-warning',
+          id: `people-claim-warning-${person.id}`,
+          text: CLAIM_LINK_WARNING,
+        }),
+        input,
+        el('div', { className: 'people-actions' }, [copy, whatsapp, done]),
+        copyStatus,
+        el('p', { className: 'stage-meta', text: WHATSAPP_NOTE }),
+        buildQrBlock({
+          url: issued.url,
+          caption: 'Or let them scan this code',
+          label: 'seduhscore.com/id/claim',
+        }),
+      ],
+    );
   }
 
   function render() {
@@ -220,6 +451,15 @@ export async function mountPeopleScreen(
       el('p', { className: 'stage-meta', text: summarisePeople(people, affiliations) }),
     );
     container.appendChild(el('p', { text: PEOPLE_INTRO }));
+    if (claimCheckFailed) {
+      container.appendChild(
+        el('p', {
+          className: 'stage-meta',
+          id: 'people-claim-unchecked',
+          text: 'Claim links could not be checked just now. Reload the page to try again.',
+        }),
+      );
+    }
 
     const feedback = el('div', {
       id: 'people-feedback',
@@ -337,6 +577,43 @@ export async function mountPeopleScreen(
       () => endAffiliation(role.id, client),
       `${person.displayName} is no longer ${word}.`,
     );
+  }
+
+  // Send a claim link: ask for it, keep it in memory, show it once. A failed refresh of the statuses must not hide a link
+  // that was made (it cannot be made again without replacing it).
+  async function handleIssue(person) {
+    if (busy) return;
+    busy = true;
+    issued = null;
+    render();
+    try {
+      const token = await issueClaimLink(person.id, client);
+      issued = { personId: person.id, url: claimLinkUrl(token, window.location.origin) };
+      focusAfterRender = `#people-claim-url-${person.id}`;
+      await loadClaimStatuses();
+    } catch (err) {
+      pendingError = describeClaimError(err);
+    }
+    busy = false;
+    render();
+  }
+
+  async function handleRevoke(person) {
+    if (busy) return;
+    busy = true;
+    render();
+    try {
+      await revokeClaimLink(person.id, client);
+      if (issued?.personId === person.id) issued = null;
+      pendingSuccess = `The claim link for ${person.displayName} was cancelled.`;
+      focusAfterRender = `#people-claim-issue-${person.id}`;
+    } catch (err) {
+      pendingError = describeClaimError(err);
+    }
+    // either way, show what is true now (the link may be gone already: used, or replaced)
+    await loadClaimStatuses();
+    busy = false;
+    render();
   }
 
   await attemptLoad();

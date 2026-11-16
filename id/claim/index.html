@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claim your Seduh ID — Seduh Score</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/marketing/publicHeader.css" />
+    <link rel="stylesheet" href="/src/marketing/claim.css" />
+    <meta name="description" content="Claim your Seduh ID with the link an organiser sent you." />
+    <!-- Seduh Score Next, claiming a Seduh ID (Layer 2, T-ID2.B3b). The claim token is in the URL FRAGMENT (#...), which no
+         request carries, so it is in no server log; claimMain.js takes it out of the address bar at once. Never indexed, linked
+         from nowhere, and no referrer leaves this page (the edge Worker sets the same in headers: worker/index.js). -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/marketing/claimMain.js"></script>
+  </body>
+</html>

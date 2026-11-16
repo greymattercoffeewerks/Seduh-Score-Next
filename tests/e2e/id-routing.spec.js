@@ -65,3 +65,30 @@ test('paths that are not a person page still behave as before: a real 404', asyn
   }
   expect((await request.get('/')).status()).toBe(200);
 });
+
+test('/id/claim/ is the claim page, not a person page: noindex, no referrer, no cache, and the neighbours are untouched', async ({
+  page,
+}) => {
+  for (const path of ['/id/claim/', '/id/claim', '/id/Claim/']) {
+    const res = await page.goto(path);
+    expect(res.status(), path).toBe(200);
+    expect(res.headers()['x-robots-tag'], path).toBe('noindex, nofollow');
+    expect(res.headers()['referrer-policy'], path).toBe('no-referrer');
+    expect(res.headers()['cache-control'], path).toBe('no-store');
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    // no claim link in the address: the page says so, in words, and does not look like a person page
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('This link is incomplete');
+  }
+  // a person page and a country page still answer as before
+  await page.goto('/id/someone/');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Seduh ID profile');
+  await page.goto('/id/country/bn/');
+  await expect(page.locator('main.country-page')).toBeVisible();
+  // the claim page does not overflow a 360px screen
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('/id/claim/');
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+});
