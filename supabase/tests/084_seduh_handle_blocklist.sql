@@ -12,7 +12,7 @@
 --   * seduh_handle_reserved is STABLE (and SECURITY INVOKER like every app helper), and its execute grant is still revoked.
 -- Profanity here is two FICTIONAL placeholders (zork, quuxfrob); the real list is loaded by the owner from a local file.
 begin;
-select plan(67);
+select plan(70);
 
 create schema t084;
 grant usage on schema t084 to anon, authenticated, service_role;
@@ -157,6 +157,13 @@ select is((select handle from app.seduh_accounts where identity_id = t084.u(8421
 select is(t084.attempt($$ insert into app.seduh_accounts (identity_id, user_id, handle, claim_method, adult_attested_at)
   values ('00000000-0000-0000-0000-000000008422', '00000000-0000-0000-0000-000000008403', 'adm1n', 'organiser_link', now()) $$), '23514/',
   'the account insert trigger refuses a disguised admin whatever the door');
+
+-- ============ a handle claimed BEFORE a term existed keeps its public page ============
+insert into app.seduh_handle_blocklist (term, kind, match_mode, note) values ('finehan', 'impersonation', 'contains', 'test');
+select is(app.seduh_handle_reserved('fine-handle-84'), true, 'a later term now matches the existing handle');
+select is((select public.public_seduh_profile('fine-handle-84') ->> 'has_profile'), 'true', '...and the profile door still serves the page (a term never unpublishes a person)');
+select is((select public.public_seduh_profile('adm1n-nobody') ->> 'has_profile'), 'false', 'while a blocked handle with no account is still the empty shape');
+delete from app.seduh_handle_blocklist where term = 'finehan';
 
 -- ============ the report ============
 select is((select count(*)::int from app.seduh_handle_blocklist_clashes()), 0, 'report: no existing handle clashes yet');

@@ -21,7 +21,9 @@ function cells(line) {
 export function parseProfanityCsv(text) {
   const rows = [];
   const seen = new Set();
-  const lines = String(text).replace(/^\uFEFF/, '').split(/\r?\n/);
+  const lines = String(text)
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/);
   let header = null;
   lines.forEach((line, i) => {
     if (!line.trim() || line.trimStart().startsWith('#')) return;
@@ -33,6 +35,8 @@ export function parseProfanityCsv(text) {
       }
       return;
     }
+    if (c.length > 4)
+      throw new Error(`line ${i + 1}: more than 4 cells (a note may not contain a comma)`);
     const [term, mode, language = '', note = ''] = c;
     const where = `line ${i + 1}`;
     if (!/^[a-z0-9]{3,30}$/.test(term ?? ''))
