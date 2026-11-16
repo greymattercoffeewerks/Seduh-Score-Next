@@ -396,10 +396,9 @@ the owner's concept (`design/seduh-id-layer2-concept.html`, local) on the countr
   otherwise the full page. Sections with no data (stats, best result, knockout, works with) are hidden, never empty.
 - **The record is one list.** `normaliseProfile` folds `recorded_results`, `organiser_records`, `self_reported` and `judging_roles`
   into entries `{ kind, provenance, year, date, title, placing, ... }`; the screen never branches on which list a row came from, so
-  a seam that starts returning rows needs only its row shape pinned in `seduhProfile.js` (those three shapes are PROVISIONAL, the
-  header says so). Provenance is forced by seam (a `self_reported` row can never claim to be recorded). Filter buttons (kinds
-  present only, hidden when one), year groups (`<details>`, newest open), a polite status line. **Totals and the best-result card
-  count only non-self-reported entries** (spec 14.4).
+  a seam that starts returning rows needs only its row shape pinned in `seduhProfile.js` (two are pinned since D-b; `judging_roles` is still PROVISIONAL). Provenance is forced by seam (a `self_reported` row can never claim to be recorded). Filter buttons (kinds
+  present only, hidden when one), year groups (`<details>`, newest open), a polite status line. **Totals count everything and the best-result card
+  prefers a verified result and says which** (changed in D-b; see below), so a person cannot silently raise a verified number.
 - **Seams, marked in the code.** C2 photo (`photo_url` is ignored; the avatar is initials), C3 "Share to story" (none yet), C5 links
   into profiles (none: opponents are plain text). The country chip is plain text unless `buildCountryChip` is enabled, which
   reads `COUNTRY_PAGES_PUBLIC`; this page does not import the switch itself.
@@ -420,8 +419,21 @@ hint in words, 360px first) are in `CONVENTIONS.md`, "Seduh ID claim". Three thi
 - **Form controls are styled here.** `components.css` is not linked on public pages, so `claim.css` styles its inputs from
   tokens (44px, `--field-edge`), and the hero, `panel` and `action` classes are the shared primitives.
 - **Privacy and Terms were changed in the same release** (`trustContent.js`, "Claiming your Seduh ID", "Closing your Seduh ID
-  after you have claimed it", Terms "Seduh ID"). The Privacy page says the settings screen is "coming soon" and closing and
-  deleting the sign-in are "on request": change those sentences when the Phase C settings and close arrive, not before.
+  after you have claimed it", Terms "Seduh ID"). Closing and deleting the sign-in are still "on request" on the Privacy page: change those sentences when close arrives, not before. (The settings screen arrived with D-b, below, and the "coming soon" sentence was replaced then.)
+
+## My Seduh ID, and the person page's final record rendering (2026-11-17, Layer 2 task D-b)
+
+**`/id/me/`** (`id/me/index.html`, `meMain.js`, `meScreen.js`, `meFlow.js` pure words, limits, settings and the record's shape, `meApi.js` the calls, `me.css`; it also links `claim.css` for form controls and `profile.css` for year groups). A person who has claimed signs in again with an emailed code and manages their own record: **My record** (entries by year, add, edit, delete), **My teams** (the `seduh_team_options` picker, BN by default, add with a role, remove) and **Privacy** (every `seduh_set_my_settings` key in plain words, each saved the moment it changes, a failed save puts the control back). The contract it calls is in `CONVENTIONS.md`, "Seduh ID: a person's own record". Rules that hold:
+
+- **Session.** It uses the competitor client (`claimClient.js`: own storage key, `sessionStorage`), never the organiser's or the admin's (`meApi.test.js` fails if `meApi`, `meMain` or `meScreen` import anything else). The doors take no uuid: the database finds the person from the JWT.
+- **Sign-in never says whether an email has a Seduh ID.** `signInWithOtp({ shouldCreateUser: false })`; a refusal for an address with no login is shown as the same "If that email has a Seduh ID, we sent a code" as a success. Only "could not reach us" differs. A rate limit is NOT shown (GoTrue limits one address, so a 429 would appear for a known address only; the earlier code is still valid), and a 1.5 s minimum answer time keeps the call from being the quicker oracle. A login with no account is told so only AFTER a correct code (`no_account`), which only the mailbox owner can reach.
+- **Every refusal is a hint turned into words** (`meFlow.js` `TEXT`, the D-a hints included; they stay listed as "not for the console" in `src/admin/adminErrors.test.js`, which is the admin console's own list). The form checks the same limits first (`validateEntryForm`), and the database still decides.
+- **Delete and Remove ask inside the page** ("Yes, delete it" / "Keep it"), never a browser dialog. Writes reload the record from the door afterwards, so the page never shows a state the database does not hold. One persistent live region (`#me-status`) announces every save and failure.
+- **Routing.** `me` is a reserved handle; `worker/idRoute.js` (`isMePath`, `meShellFor`) and `worker/index.js` serve `/id/me` and `/id/me/` from the built page with `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`, like the claim page. `/id/<handle>/`, `/id/claim/`, `/id/country/*` and the `/id/firdaus` 301 are untouched (`id-routing.spec.js` pins them).
+- **Nothing public links to it yet** (discovery is C5). Not built, on purpose: an "Edit your Seduh ID" link on the person page for the signed-in owner (it would put a session check on every profile view), C2 photo, C3 story card, "This isn't mine".
+- **Tests.** Unit (`meFlow`, `meApi`, `meScreen`) and Playwright `seduh-my-seduh-id-live.spec.js` (project `dev-identity`: sign in by Mailpit code, add, edit and delete an entry, link and unlink a team, toggle settings, and the public page follows each change). `ME_SHOTS=<dir>` saves 360px and desktop screenshots.
+
+**The person page's record (same task).** `core/seduhProfile.js` pins the two shapes (a `self_reported` entry; a team link in `organiser_records`) and keeps `judging_roles` provisional. A team link is titled by `competition_name`, grouped by `edition_year`, shows the team with its country, the role, and the result in words (a placing as "4th place", else the stage: "Quarter-final", "Preliminaries"; a champion or finalist with no number counts as 1st or 2nd), and carries **two labels**: "Team result from the organiser's records" and "Membership self-reported" or "Membership confirmed". The stats row **counts everything** by kind plus podiums and says that self-reported entries are included; the best-result card **prefers a verified result** (lowest placing; Seduh Score's own record before the organiser's on a tie, then newest) and is headed "Best verified result", falling back to the best self-reported one headed "Best result, self-reported". The country on a team row links to its page only while `COUNTRY_PAGES_PUBLIC` is true. The page now uses the country pages' 1160px width, with the record in two columns and the summary beside the best-result card from 900px.
 
 ## Results sheet (2026-10-06)
 

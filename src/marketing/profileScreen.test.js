@@ -48,17 +48,20 @@ function longDoor() {
   return door({
     recorded_results: Array.from({ length: 20 }, (_, i) => recorded(i)),
     organiser_records: Array.from({ length: 10 }, (_, i) => ({
-      title: `Championship ${i}`,
-      kind: 'competed',
-      year: 2023 + (i % 4),
-      placing: 4 + (i % 3),
+      competition: 'btc',
+      competition_name: `Championship ${i}`,
+      edition_year: 2023 + (i % 4),
+      placement: 4 + (i % 3),
       team_name: 'Bean Bandits',
+      country_code: 'BN',
+      role: 'member',
+      membership: i % 2 ? 'confirmed' : 'self_reported',
     })),
     self_reported: Array.from({ length: 24 }, (_, i) => ({
-      title: `Self entry ${i}`,
+      competition_name: `Self entry ${i}`,
       kind: kinds[i % 4],
       year: 2019 + (i % 8),
-      placing: i % 4 === 0 ? 1 : null,
+      placement: i % 4 === 0 ? 1 : null,
     })),
     judging_roles: Array.from({ length: 6 }, (_, i) => ({
       title: `Judged ${i}`,
@@ -206,7 +209,7 @@ describe('the full page', () => {
     const t = text(root);
     expect(root.querySelector('h1').textContent).toBe('Syafiqah Omar');
     expect(t).toContain('Seduh ID #0042');
-    expect(root.querySelector('.profile-stats').textContent).toMatch(/2results/);
+    expect(root.querySelector('.profile-stats').textContent).toMatch(/2competed/);
     expect(root.querySelector('.profile-best-finish').textContent).toBe('1st · Kiulap Open');
     expect(root.querySelector('.profile-best-detail').textContent).toContain('8 / 8 correct');
     expect(t).toContain('Head to head');
@@ -307,37 +310,121 @@ describe('provenance labels', () => {
     const { root } = await mount(
       door({
         recorded_results: [recorded(1)],
-        organiser_records: [{ title: 'ASEAN BTC 2024', year: 2024 }],
-        self_reported: [{ title: 'Regional qualifier', year: 2023 }],
+        organiser_records: [
+          { competition_name: 'ASEAN BTC 2024', edition_year: 2024, membership: 'confirmed' },
+        ],
+        self_reported: [{ competition_name: 'Regional qualifier', year: 2023 }],
       }),
     );
-    const labels = [...root.querySelectorAll('.profile-entry')].map(
-      (li) => li.querySelector('.profile-provenance').textContent,
+    const labels = [...root.querySelectorAll('.profile-entry')].map((li) =>
+      [...li.querySelectorAll('.profile-provenance')].map((n) => n.textContent),
     );
     expect(labels).toHaveLength(3);
-    expect(labels).toContain('Recorded by Seduh Score');
-    expect(labels).toContain('From the organiser’s records');
-    expect(labels).toContain('Self-reported, not verified by Seduh');
+    expect(labels).toContainEqual(['Recorded by Seduh Score']);
+    // a team link carries TWO labels: the team result is the organiser's, the membership the person's
+    expect(labels).toContainEqual([
+      'Team result from the organiser’s records',
+      'Membership confirmed',
+    ]);
+    expect(labels).toContainEqual(['Self-reported, not verified by Seduh']);
   });
 
-  it('self-reported entries never raise the stats or the best result', async () => {
+  it('the stats count everything and say so; the best card prefers a verified result and says which', async () => {
     const { root } = await mount(
       door({
         recorded_results: [recorded(1, { placing: 5 })],
-        self_reported: [{ title: 'Won everything', year: 2020, placing: 1 }],
+        self_reported: [{ competition_name: 'Won everything', year: 2020, placement: 1 }],
       }),
     );
+    expect(root.querySelector('.profile-best-label').textContent).toBe('Best verified result');
     expect(root.querySelector('.profile-best-finish').textContent).toMatch(/^5th/);
-    expect(root.querySelector('.profile-stats').textContent).toMatch(/1result/);
-    expect(root.querySelector('.profile-stats').textContent).not.toContain('1st');
+    expect(root.querySelector('.profile-stats').textContent).toMatch(/2competed/);
+    expect(root.querySelector('.profile-stats-note').textContent).toMatch(/themselves/);
   });
 
-  it('a person with only self-reported entries has no stats and no best card, but has the record', async () => {
+  it('a person with only self-reported entries gets a best card that says it is self-reported', async () => {
     const { root } = await mount(
-      door({ self_reported: [{ title: 'Regional', year: 2023, placing: 2 }] }),
+      door({ self_reported: [{ competition_name: 'Regional', year: 2023, placement: 2 }] }),
     );
-    expect(root.querySelector('.profile-stats, .profile-best')).toBeNull();
+    expect(root.querySelector('.profile-best-label').textContent).toBe(
+      'Best result, self-reported',
+    );
+    expect(root.querySelector('.profile-best').textContent).toContain(
+      'Self-reported, not verified',
+    );
     expect(root.querySelectorAll('.profile-entry')).toHaveLength(1);
+  });
+});
+
+describe('the owner-shaped record: 14 self-reported entries and 4 team links', () => {
+  const owner = () =>
+    door({
+      self_reported: Array.from({ length: 14 }, (_, i) => ({
+        year: 2023 + (i % 4),
+        competition_name: `Self ${i}`,
+        location: 'Bandar',
+        kind: ['competed', 'judged', 'organised'][i % 3],
+        role: 'Competitor',
+        result_text: '2nd',
+        placement: 2,
+        note: null,
+      })),
+      organiser_records: [
+        ['quarter_final', null, 2023],
+        ['semi_final', 4, 2024],
+        ['preliminary', null, 2025],
+        ['quarter_final', null, 2026],
+      ].map(([stage, placement, year]) => ({
+        competition: 'btc',
+        competition_name: `ASEAN Barista Team Championship ${year}`,
+        edition_year: year,
+        team_name: 'Bean Bandits',
+        country_code: 'BN',
+        stage_reached: stage,
+        placement,
+        role: 'member',
+        membership: 'self_reported',
+      })),
+    });
+  const rowFor = (root, needle) =>
+    [...root.querySelectorAll('.profile-entry')].find((li) => li.textContent.includes(needle));
+
+  it('shows every entry, titled by competition name, grouped by edition year, never "Undated" or a raw code', async () => {
+    const { root } = await mount(owner(), { linkCountry: false });
+    expect(root.querySelectorAll('.profile-entry')).toHaveLength(18);
+    const t = text(root);
+    expect(t).not.toContain('Undated');
+    expect(t).not.toContain('btc');
+    expect(t).toContain('ASEAN Barista Team Championship 2024');
+    expect(t).toMatch(/Bean Bandits \(BN\)/);
+  });
+
+  it('shows the team result words, the role and both labels on a team link', async () => {
+    const { root } = await mount(owner(), { linkCountry: false });
+    const row = rowFor(root, 'Championship 2024');
+    expect(row.textContent).toContain('Member · 4th place');
+    expect(row.textContent).toContain('Team result from the organiser’s records');
+    expect(row.textContent).toContain('Membership self-reported');
+    expect(rowFor(root, 'Championship 2025').textContent).toContain('Preliminaries');
+    expect(rowFor(root, 'Championship 2023').textContent).toContain('Quarter-final');
+  });
+
+  it('derives the stats from all items and picks the verified best (the organiser 4th place)', async () => {
+    const { root } = await mount(owner(), { linkCountry: false });
+    const stats = root.querySelector('.profile-stats').textContent;
+    expect(stats).toMatch(/9competed/); // 5 self + 4 team
+    expect(stats).toMatch(/5judged/);
+    expect(stats).toMatch(/4organised/);
+    expect(root.querySelector('.profile-best-label').textContent).toBe('Best verified result');
+    expect(root.querySelector('.profile-best-finish').textContent).toMatch(/4th.*2024/);
+    expect(root.querySelector('.profile-best').textContent).toContain('Membership self-reported');
+  });
+
+  it('links the team country only when the country pages are public', async () => {
+    const off = await mount(owner(), { linkCountry: false });
+    expect(off.root.querySelector('a[href^="/id/country/"]')).toBeNull();
+    const on = await mount(owner(), { linkCountry: true });
+    expect(on.root.querySelector('.profile-entry a[href="/id/country/bn/"]')).not.toBeNull();
   });
 });
 

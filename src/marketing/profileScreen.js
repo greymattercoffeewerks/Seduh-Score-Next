@@ -17,7 +17,7 @@
 import { el } from '../core/dom.js';
 import { countryName } from '../core/country.js';
 import { buildCountryChip } from '../core/countryChip.js';
-import { fetchSeduhProfile, handleFromPath, profileProvenanceLabel } from '../core/seduhProfile.js';
+import { fetchSeduhProfile, handleFromPath } from '../core/seduhProfile.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
@@ -31,12 +31,14 @@ import {
   filterEntries,
   foundingText,
   groupByYear,
+  hasSelfReported,
   initialsOf,
   kindsPresent,
   knockoutText,
   metaText,
   ordinal,
   placeText,
+  provenanceLabels,
   summaryLine,
 } from './profileFormat.js';
 
@@ -247,7 +249,7 @@ function statsRow(stats) {
   );
 }
 
-function bestCard(entry) {
+function bestCard({ entry, verified }) {
   return el(
     'div',
     {
@@ -255,7 +257,11 @@ function bestCard(entry) {
       attrs: { role: 'group', 'aria-labelledby': 'profile-best-title' },
     },
     [
-      el('h2', { id: 'profile-best-title', className: 'profile-best-label', text: 'Best result' }),
+      el('h2', {
+        id: 'profile-best-title',
+        className: 'profile-best-label',
+        text: verified ? 'Best verified result' : 'Best result, self-reported',
+      }),
       el('p', {
         className: 'profile-best-finish',
         text: `${ordinal(entry.placing)} · ${entry.title}`,
@@ -264,11 +270,27 @@ function bestCard(entry) {
         className: 'profile-best-detail tabular-nums',
         text: [entry.detail, bestDetail(entry)].filter(Boolean).join(' · '),
       }),
+      el(
+        'p',
+        { className: 'profile-best-source' },
+        provenanceLabels(entry).map((label) =>
+          el('span', { className: 'profile-provenance tag', text: label }),
+        ),
+      ),
     ],
   );
 }
 
-function entryItem(entry) {
+// The meta line as text, with the team's country linked to its page only while the country pages are public.
+function metaNodes(entry, options) {
+  const text = metaText(entry);
+  const link = entry.country
+    ? buildCountryChip(entry.country, { enabled: options.linkCountry })
+    : null;
+  return link ? [document.createTextNode(`${text} `), link] : [document.createTextNode(text)];
+}
+
+function entryItem(entry, options = {}) {
   const place = placeText(entry);
   return el(
     'li',
@@ -281,15 +303,21 @@ function entryItem(entry) {
         [
           el('span', { className: 'profile-entry-title', text: entry.title }),
           metaText(entry)
-            ? el('span', { className: 'profile-entry-meta', text: metaText(entry) })
+            ? el('span', { className: 'profile-entry-meta' }, metaNodes(entry, options))
             : null,
           entry.detail
             ? el('span', { className: 'profile-entry-detail tabular-nums', text: entry.detail })
             : null,
-          el('span', {
-            className: `profile-provenance tag profile-prov-${entry.provenance}`,
-            text: profileProvenanceLabel(entry.provenance),
-          }),
+          el(
+            'span',
+            { className: 'profile-provenances' },
+            provenanceLabels(entry).map((label, i) =>
+              el('span', {
+                className: `profile-provenance tag profile-prov-${entry.provenance}${i > 0 ? ' profile-prov-membership' : ''}`,
+                text: label,
+              }),
+            ),
+          ),
         ].filter(Boolean),
       ),
       place
@@ -302,7 +330,7 @@ function entryItem(entry) {
   );
 }
 
-function yearGroup(group, open) {
+function yearGroup(group, open, options) {
   const n = group.entries.length;
   return el('details', { className: 'profile-year', attrs: open ? { open: '' } : {} }, [
     el('summary', { className: 'profile-year-head' }, [
@@ -316,7 +344,7 @@ function yearGroup(group, open) {
     el(
       'ul',
       { className: 'profile-entry-list', attrs: { role: 'list' } },
-      group.entries.map(entryItem),
+      group.entries.map((entry) => entryItem(entry, options)),
     ),
   ]);
 }
@@ -324,7 +352,7 @@ function yearGroup(group, open) {
 // The record: a summary, filter buttons (only when there is more than one kind), then the entries by year, the newest
 // year open and the rest closed. Built for dozens of entries. The filter redraws the list only; the buttons stay put so
 // focus does not move, and a polite status line says what is now shown.
-function recordSection(entries) {
+function recordSection(entries, options) {
   const section = el(
     'section',
     { className: 'profile-body', attrs: { 'aria-labelledby': 'profile-record-title' } },
@@ -344,7 +372,9 @@ function recordSection(entries) {
   let active = 'all';
   const draw = () => {
     const shown = filterEntries(entries, active);
-    list.replaceChildren(...groupByYear(shown).map((group, i) => yearGroup(group, i === 0)));
+    list.replaceChildren(
+      ...groupByYear(shown).map((group, i) => yearGroup(group, i === 0, options)),
+    );
     status.textContent =
       active === 'all'
         ? ''
@@ -455,10 +485,19 @@ function fullPage(root, profile, options) {
       ? el(
           'section',
           { className: 'profile-body profile-summary-block', attrs: { 'aria-label': 'Summary' } },
-          [stats.length > 0 ? statsRow(stats) : null, best ? bestCard(best) : null].filter(Boolean),
+          [
+            stats.length > 0 ? statsRow(stats) : null,
+            stats.length > 0 && hasSelfReported(profile.entries)
+              ? el('p', {
+                  className: 'profile-stats-note',
+                  text: 'Totals include entries and team memberships the person reported themselves.',
+                })
+              : null,
+            best ? bestCard(best) : null,
+          ].filter(Boolean),
         )
       : null,
-    recordSection(profile.entries),
+    recordSection(profile.entries, options),
     knockoutSection(profile.knockout),
     worksWithSection(profile.affiliations),
     correctionNote(profile),

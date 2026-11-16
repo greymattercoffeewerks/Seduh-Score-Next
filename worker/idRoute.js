@@ -16,7 +16,7 @@ export const PROFILE_SHELL_PATH = '/id/';
 // (the handle migration) is the authority for what may be CLAIMED; this is only what the EDGE must not shadow. `country`
 // is the one that matters: /id/country (no trailing slash) is not covered by the Worker's run_worker_first exclusion
 // "/id/country/*", so the Worker meets it and has to hand it back to the static assets.
-const NOT_A_HANDLE = new Set(['country', 'claim']);
+const NOT_A_HANDLE = new Set(['country', 'claim', 'me']);
 
 // One path segment of letters, digits, hyphen and underscore, up to 64 long. Deliberately wider than a real handle (3 to
 // 30, lower case): a too-short, too-long or upper-case name must reach the same shell and be answered as "no such Seduh
@@ -50,6 +50,23 @@ export function isClaimPath(pathname) {
 /** Pure. The claim shell's path for a request path that is the claim page, else null (the Vite dev middleware uses this). */
 export function claimShellFor(pathname) {
   return isClaimPath(pathname) ? `${CLAIM_SHELL_PATH}index.html` : null;
+}
+
+/** Where the built My Seduh ID page lives (id/me/index.html in the build output). */
+export const ME_SHELL_PATH = '/id/me/';
+
+// My Seduh ID (T-ID2.D-b): /id/me and /id/me/ in any case. `me` is a reserved handle in the database, so no person page can ever
+// have this path. Nothing secret is in the URL: the page reads the competitor's own session from this tab's storage.
+const ME_PATH = /^\/id\/me\/?$/i;
+
+/** Pure. True for My Seduh ID's own path and nothing else. */
+export function isMePath(pathname) {
+  return ME_PATH.test(pathname);
+}
+
+/** Pure. The My Seduh ID shell's path for a request path that is that page, else null (the Vite dev middleware uses this). */
+export function meShellFor(pathname) {
+  return isMePath(pathname) ? `${ME_SHELL_PATH}index.html` : null;
 }
 
 // Owner aliases (owner decision, 2026-11-16): /id/<alias> answers a 301 to /id/<handle>/. Today there is one: the owner's first

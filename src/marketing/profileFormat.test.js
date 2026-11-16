@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   bestResult,
   computeStats,
+  hasSelfReported,
+  provenanceLabels,
   dateText,
   filterEntries,
   foundingText,
@@ -95,8 +97,8 @@ describe('summary and filters', () => {
   });
 });
 
-describe('stats and best result count only what is vouched for', () => {
-  it('ignores self-reported entries for totals and the best result', () => {
+describe('stats count everything; the best result prefers a verified one', () => {
+  it('counts every kind and the podiums across all provenances', () => {
     const entries = [
       e({ placing: 4 }),
       e({ placing: 2, organiser: 'Other' }),
@@ -104,29 +106,59 @@ describe('stats and best result count only what is vouched for', () => {
       e({ kind: 'judged' }),
     ];
     expect(computeStats(entries)).toEqual([
-      { value: '2', label: 'results' },
-      { value: '1', label: 'podiums' },
-      { value: '2', label: 'organisers' },
-      { value: '2nd', label: 'best place' },
+      { value: '3', label: 'competed' },
+      { value: '1', label: 'judged' },
+      { value: '2', label: 'podiums' },
     ]);
-    expect(bestResult(entries).placing).toBe(2);
-  });
-  it('has no stats and no best result when nothing is vouched for', () => {
-    const only = [e({ provenance: 'self_reported', placing: 1 })];
-    expect(computeStats(only)).toEqual([]);
-    expect(bestResult(only)).toBeNull();
     expect(computeStats([])).toEqual([]);
+  });
+  it('prefers a verified result over a better self-reported one, and says which', () => {
+    const entries = [
+      e({ placing: 4 }),
+      e({ placing: 1, provenance: 'self_reported' }),
+      e({ placing: 2, provenance: 'organiser_archive' }),
+    ];
+    expect(bestResult(entries)).toMatchObject({ verified: true, entry: { placing: 2 } });
+  });
+  it("Seduh Score's own record wins a tie of placing with the organiser's", () => {
+    const org = e({ placing: 2, provenance: 'organiser_archive', date: '2026-01-01', year: 2026 });
+    const rec = e({ placing: 2, title: 'rec', date: '2024-01-01', year: 2024 });
+    expect(bestResult([org, rec]).entry.title).toBe('rec');
+  });
+  it('falls back to the best self-reported result, marked not verified', () => {
+    const only = [e({ provenance: 'self_reported', placing: 3 })];
+    expect(bestResult(only)).toMatchObject({ verified: false, entry: { placing: 3 } });
+    expect(bestResult([e({ provenance: 'self_reported', placing: null })])).toBeNull();
+    expect(hasSelfReported(only)).toBe(true);
   });
   it('the newest entry wins a tie on placing', () => {
     const old = e({ placing: 1, date: '2025-01-01', year: 2025, title: 'old' });
     const recent = e({ placing: 1, date: '2026-01-01', year: 2026, title: 'recent' });
-    expect(bestResult([old, recent]).title).toBe('recent');
+    expect(bestResult([old, recent]).entry.title).toBe('recent');
   });
-  it('omits organisers and best placing when absent, and says "result" for one', () => {
-    expect(computeStats([e({ organiser: null })])).toEqual([
-      { value: '1', label: 'result' },
-      { value: '0', label: 'podiums' },
+  it('says podium for one, and shows no podium cell without a competed entry', () => {
+    expect(computeStats([e({ placing: 1 })])).toEqual([
+      { value: '1', label: 'competed' },
+      { value: '1', label: 'podium' },
     ]);
+    expect(computeStats([e({ kind: 'organised' })])).toEqual([{ value: '1', label: 'organised' }]);
+  });
+});
+
+describe('team links: labels and meta', () => {
+  it('a team link has two labels; every other entry has one', () => {
+    expect(
+      provenanceLabels(e({ membership: 'self_reported', provenance: 'organiser_archive' })),
+    ).toEqual(['Team result from the organiser’s records', 'Membership self-reported']);
+    expect(provenanceLabels(e({ membership: 'confirmed' }))[1]).toBe('Membership confirmed');
+    expect(provenanceLabels(e({ provenance: 'self_reported' }))).toEqual([
+      'Self-reported, not verified by Seduh',
+    ]);
+  });
+  it('the team reads with its country', () => {
+    expect(metaText(e({ organiser: null, team: 'Bean Bandits', country: 'BN' }))).toBe(
+      'Bean Bandits (BN)',
+    );
   });
 });
 

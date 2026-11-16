@@ -10,6 +10,8 @@ import {
   aliasRedirectFor,
   CLAIM_SHELL_PATH,
   isClaimPath,
+  isMePath,
+  ME_SHELL_PATH,
   isProfilePath,
   PROFILE_SHELL_PATH,
 } from './idRoute.js';
@@ -27,6 +29,16 @@ export default {
       headers.set('Referrer-Policy', 'no-referrer');
       headers.set('Cache-Control', 'no-store');
       return new Response(claim.body, { status: 200, headers });
+    }
+    if (readOnly && isMePath(url.pathname)) {
+      // My Seduh ID (T-ID2.D-b): the person's own page. Same headers as the claim page: never indexed, never cached, no referrer.
+      const me = await env.ASSETS.fetch(new Request(new URL(ME_SHELL_PATH, url), request));
+      if (!me.ok) return me;
+      const headers = new Headers(me.headers);
+      headers.set('X-Robots-Tag', 'noindex, nofollow');
+      headers.set('Referrer-Policy', 'no-referrer');
+      headers.set('Cache-Control', 'no-store');
+      return new Response(me.body, { status: 200, headers });
     }
     const alias = readOnly ? aliasRedirectFor(url.pathname) : null;
     if (alias) {
