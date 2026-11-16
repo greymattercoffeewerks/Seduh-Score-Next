@@ -12,7 +12,7 @@
 --   * seduh_handle_reserved is STABLE (and SECURITY INVOKER like every app helper), and its execute grant is still revoked.
 -- Profanity here is two FICTIONAL placeholders (zork, quuxfrob); the real list is loaded by the owner from a local file.
 begin;
-select plan(70);
+select plan(73);
 
 create schema t084;
 grant usage on schema t084 to anon, authenticated, service_role;
@@ -102,6 +102,7 @@ select is(app.seduh_handle_reserved('firdaus'), true, 'system: firdaus');
 select is(app.seduh_handle_reserved('guess-the-bean'), true, 'system: a hyphenated route word');
 select is(app.seduh_handle_reserved('countryside-84'), false, 'system is exact: a longer word is not blocked');
 select is(app.seduh_handle_reserved('ahmad-79'), false, 'an ordinary handle is free');
+select is(app.seduh_handle_reserved('cla1m') or app.seduh_handle_reserved('c0untry'), false, 'system is exact: look-alikes of a route word are not normalised (only impersonation and profanity are)');
 
 -- ============ impersonation: CONTAINS after normalising ============
 select is((select coalesce(string_agg(w, ', '), 'none') from unnest(array['adm1n', 'the-admin', 's3duh', 'seduh-0fficial', 'aaadmiin', '5upp0rt-team', 'ad-min', 'my-r00t', 'super-user-1', 'a-d-m-i-n', 'x-superuser']) w
@@ -124,6 +125,8 @@ select is(app.seduh_handle_reserved('xx-quuxfr0b-yy'), true, '...inside a longer
 select is(app.seduh_handle_reserved('quuxfrobnicate'), true, '...as a prefix of a longer word');
 select is(app.seduh_handle_reserved('quux'), false, '...but not a shorter piece of it');
 
+select is(t084.attempt($$ insert into app.seduh_handle_blocklist (term, kind, match_mode) values (repeat('q', 31), 'profanity', 'exact') $$), '23514/', 'a term over 30 characters is refused');
+
 -- ============ allow beats every block ============
 insert into app.seduh_handle_blocklist (term, kind, match_mode, note)
 values ('staffan', 'allow', 'exact', 'a real name that contains staff'), ('z0rk', 'allow', 'exact', 'test');
@@ -133,6 +136,8 @@ select is(app.seduh_handle_reserved('z0rk'), false, 'allow beats profanity');
 select is(app.seduh_handle_reserved('zork'), true, '...for that exact handle only');
 select is(t084.attempt($$ insert into app.seduh_handle_blocklist (term, kind, match_mode) values ('claim', 'allow', 'exact') $$), '23514/', 'an allow row cannot equal a system word');
 select is(t084.attempt($$ insert into app.seduh_handle_blocklist (term, kind, match_mode) values ('staffan', 'system', 'exact') $$), '23514/', 'a system row cannot equal an allow row');
+insert into app.seduh_handle_blocklist (term, kind, match_mode) values ('kestrel-84', 'allow', 'exact');
+select is(t084.attempt($$ update app.seduh_handle_blocklist set term = 'claim' where term = 'kestrel-84' and kind = 'allow' $$), '23514/', 'the guard also holds on UPDATE (an allow row cannot be edited into a system word)');
 
 -- ============ one neutral answer, at every door ============
 set local role anon;
@@ -172,7 +177,9 @@ select is((select handle || '/' || matched_kind || '/' || matched_term || '/' ||
   'report: an existing handle the list now blocks is listed with the row that matched');
 insert into app.seduh_handle_blocklist (term, kind, match_mode, note) values ('fine-handle-84', 'allow', 'exact', 'test');
 select is((select count(*)::int from app.seduh_handle_blocklist_clashes()), 0, 'report: an allow-listed handle is not a clash');
-select is((select count(*)::int from app.seduh_accounts where handle = 'fine-handle-84'), 1, 'and the report never changed an account');
+update app.seduh_accounts set closed_at = now(), user_id = null where handle = 'fine-handle-84';
+delete from app.seduh_handle_blocklist where term = 'fine-handle-84' and kind = 'allow';
+select is((select closed from app.seduh_handle_blocklist_clashes() where handle = 'fine-handle-84'), true, 'report: a CLOSED account is listed too, marked closed (its handle is retired, not free)');
 
 select * from finish();
 rollback;

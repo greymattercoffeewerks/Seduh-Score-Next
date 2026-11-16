@@ -26,6 +26,8 @@ describe('the profanity loader', () => {
       ['abc,contains', /line 2.*4 or more/],
       ['zork,exact\nzork,contains', /line 3.*twice/],
       ['zork,exact,Toolong', /line 2.*language/],
+      [`${'q'.repeat(31)},exact`, /line 2.*3 to 30/],
+      ['zork,exact,xx,a,b', /line 2.*more than 4/],
     ];
     for (const [row, message] of bad) {
       expect(() => parseProfanityCsv(`term,match_mode,language\n${row}`), row).toThrow(message);
