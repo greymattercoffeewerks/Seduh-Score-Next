@@ -88,6 +88,12 @@ one function every call site shares over patching each call site individually â€
 also the "local patches are an anti-pattern" rule applied to focus management
 specifically.
 
+**A status line that must outlive redraws is built once per mount.** A message such as "Event finished." created
+inside `render()` is lost on the next redraw. Build the `role="status"` node once in the mount function, re-append it on
+each render, and clear it only at the action that replaces it. Move focus to it only for a new error, not an old one a
+late redraw re-inserts. When a redraw re-inserts the kept line, set `aria-live="off"` for that insertion and restore
+`polite` on the next tick, so a screen reader does not read it again. Reference: `src/core/eventsScreen.js` (4.17.1).
+
 ---
 
 ## Migration workflow

@@ -70,6 +70,8 @@ Every section moved out of `ROADMAP.md`'s open-items run, by heading, with the f
 - Known open items from the landing proof photo (full bleed, 2026-10-30) → [`public-site.md`](public-site.md)
 - Known open items from the Behind the Seduh reader rebuild (v4.0.0, 2026-11-09) → [`public-site.md`](public-site.md)
 - Known open items from the public header links fix (2026-11-14) → [`public-site.md`](public-site.md)
+- Known open items from the Menu bars forced-colors fix (4.17.2, 2026-11-17) → [`public-site.md`](public-site.md)
+- Known open items from the Events finished message (UI bug #5, 2026-11-17) → [`tenancy.md`](tenancy.md)
 
 ## Triage, 2026-11-07
 
@@ -80,6 +82,6 @@ Open items the triage flagged as worth a decision (not a full list):
 - **BTC:** `btc_matches_write` is still `FOR ALL`, so a member can mark a match confirmed directly, and `btc_match_judges` stays editable after confirmation (`btc.md`, `tenancy.md`). Due before any beta run.
 - **Tenancy:** `service_role` still holds TRUNCATE on most tenant tables; anonymous reads still reveal which organisation owns each event; `team-accounts` email probing is accepted but unmitigated (needs rate limiting).
 - **Offline and UX:** a failed event check still reads "No event scheduled" (`src/core/viewer-shell.js`); an unpushed migration makes the audience view retry forever; `core/db.js` `withStore` attaches its handlers after `await`; the lost-write notice is not persisted across tabs.
-- **Accessibility:** Cup Taster organiser screens still use native `.disabled` with no focus preservation; disabled-button contrast (3:1) is open; the Menu button loses its bars in forced-colors mode.
+- **Accessibility:** Cup Taster organiser screens still use native `.disabled` with no focus preservation; disabled-button contrast (3:1) is open; the Menu button loses its bars in forced-colors mode. **CLOSED (2026-11-17, 4.17.2):** the forced-colors bars item is fixed (see `cup-taster.md`, `tenancy.md`).
 - **Not built:** BTC dispute-pack button, a CSV email at the end of the event window, a bounded `admin_plan_orgs`, the `public_event_branding` door, paging on the archive page.
-- **Owner or real-world actions:** republishing the live event, the `/results/` indexing decision, the `team-accounts` Edge Function deploy, and a cloud-push check for the stage 3 homepage migration.
+- **Owner or real-world actions:** republishing the live event, the `/results/` indexing decision, the `team-accounts` Edge Function deploy. (The stage 3 homepage migration cloud-push check is done: `homepage_live_listing` is in the cloud, checked 2026-11-17.)

@@ -132,7 +132,7 @@ _Client only: the organisation slot in `src/core/appShell.js` / `appShell.css`, 
 - **Two organisations with the same name** are told apart by slug in the list, the label and the announcement; the slug is the unique one.
 - **The refusal panel has no timer** (it clears on Escape, on leaving the control, on a tap anywhere, or on the next choice) and, at 360px, can sit over the page heading until dismissed. The tap-anywhere dismissal is there for iOS Safari, which does not reliably blur a select; not verified on a device.
 - **A timing-sensitive existing test is flaky under heavy parallel load** (`appShell.test.js`, "still announces at the cap when the wall clock steps backwards during the hold": real timers and a 100ms window). It passes alone and in a quiet full run; it failed twice while mutation runs shared the machine. Not touched by C3.
-- **Forced-colors mode hides the Menu button's three bars** (pre-existing, not C3's): worth its own item.
+- **Forced-colors mode hides the Menu button's three bars** (pre-existing, not C3's): worth its own item. **CLOSED (2026-11-17, 4.17.2):** the bars now paint `ButtonText` under `forced-colors: active` (`src/core/appShell.css`, guard in `appShell.test.js`); the real high-contrast render is an owner check, not yet seen.
 
 ---
 
@@ -348,3 +348,9 @@ Found by `ui-accessibility-reviewer` on the `#/events` rebuild (`src/core/events
 - **Breadcrumb tap target is too small** for touch (the reviewer's measure, not re-checked at 360px). (`eventsScreen.js` breadcrumb.)
 - **Focus is dropped when the organisation links redraw late** (a `subscribeOrgLinks` redraw after the user has moved focus). (`eventsScreen.js` / `organiserHome.js`.)
 - **Enter submits the new-event form** (a native form submit; the reviewer asked for it to be reconsidered). (`newEventScreen.js`.)
+
+## Known open items from the Events finished message (UI bug #5, 2026-11-17)
+
+Found by `ui-accessibility-reviewer` on the `#/events` outcome line (`src/core/eventsScreen.js`). Logged, not fixed in that change.
+
+- **The `.screen-feedback:not(:empty)` entry animation has no reduced-motion guard.** `src/ui/tokens/components.css` runs a 4px rise and fade on every feedback line; the `prefers-reduced-motion: no-preference` block covers the button busy line only. Shared by every screen that uses `.screen-feedback`, not just the events screen, so the fix belongs in the token file. Pre-existing, not introduced by 4.17.1.

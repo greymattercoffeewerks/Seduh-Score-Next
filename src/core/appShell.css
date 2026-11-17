@@ -243,6 +243,15 @@
   border-radius: var(--radius-sm);
 }
 
+/* Forced colours (Windows high contrast) drops author backgrounds, and the bars are nothing but a background, so the
+   button looked empty at phone width (no "Menu" label there). Paint them in the button's own system text colour. */
+@media (forced-colors: active) {
+  .app-shell-nav-toggle-bar {
+    background: ButtonText;
+    forced-color-adjust: none;
+  }
+}
+
 /* Wraps the nav links AND the auth control (2026-09-06, user-reported —
    the auth cluster used to sit outside this panel, forcing its own
    full-width row below the header on mobile even with the nav already

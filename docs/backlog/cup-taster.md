@@ -781,7 +781,7 @@ _Deferred findings from T-HARDEN.header-sync-chip, flagged and documented, not b
 - **200% text-size scaling at tablet width (768px):** the header grows ~112px when a long chip ("123 writes lost") appears and wraps. Consider shortening the chip or letting the event name give way earlier.
 - **Chip and panel placement:** at 360px the Tab order is brand, chip, Menu while the chip sits visually on the second row; the open panel is anchored to the header's bottom edge, so with the nav menu open it can sit far from its chip (consider closing the menu when the chip opens).
 - **Event name truncation at 1366px** happens even with room to spare (the breadcrumb shares the leftover with the chip).
-- **Forced-colors mode:** the Menu button's three bars (background fills) vanish.
+- **Forced-colors mode:** the Menu button's three bars (background fills) vanish. **CLOSED (2026-11-17, 4.17.2):** `.app-shell-nav-toggle-bar` paints `ButtonText` with `forced-color-adjust: none` under `@media (forced-colors: active)` in `src/core/appShell.css`, held by a guard in `appShell.test.js`. A real Windows high-contrast render is not yet seen (owner check owed; see the CHANGELOG entry).
 - **Flaky e2e:** "keyboard focus survives crossing the 1366px breakpoint" fails on the first run after other activity and passes on re-run (also on the unchanged code); find the timing.
 - The brand-lockup item "check the header lockup on the real iPad / Safari" is **done** (user confirmed, 2026-10-08).
 

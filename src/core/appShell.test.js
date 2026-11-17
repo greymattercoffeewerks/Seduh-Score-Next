@@ -2964,6 +2964,23 @@ describe('mountAppShell — sync panel', () => {
           .map((b) => b.body)
           .join(';');
 
+      it('keeps the Menu button bars visible in forced-colors mode (they are only a background)', () => {
+        // The block walker sees a media query's inner rule as its own block, so read the media block from the text.
+        const media =
+          css.match(/@media\s*\(forced-colors:\s*active\)\s*\{([\s\S]*?\})\s*\}/g) ?? [];
+        const bars = media.find((block) => /\.app-shell-nav-toggle-bar\s*\{/.test(block));
+        expect(bars).toBeDefined();
+        // The bars rule's own body, matched on the WHOLE selector: a sibling rule's system colour, or a scoped rule
+        // (`:hover .app-shell-nav-toggle-bar`) that leaves the bars bare at rest, cannot pass for it.
+        const rules = [...bars.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
+          ([, selector]) => selector.trim() === '.app-shell-nav-toggle-bar',
+        );
+        expect(rules).toHaveLength(1);
+        const body = rules[0][2];
+        expect(body).toMatch(/background(-color)?:\s*ButtonText/);
+        expect(body).toMatch(/forced-color-adjust:\s*none/);
+      });
+
       it('makes every chip one line of one fixed height, whatever the status', () => {
         const base = blocks.filter((b) => b.selector === '.app-shell-sync-chip');
         expect(base).toHaveLength(1);
