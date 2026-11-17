@@ -70,6 +70,14 @@
   .events-home-rail {
     display: contents;
   }
+
+  /* the dissolved columns no longer carry their min-inline-size, so each card does: a long unbroken name wraps */
+  .events-home > *,
+  .events-home-main > *,
+  .events-home-rail > * {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
 }
 
 .events-slot-featured {
