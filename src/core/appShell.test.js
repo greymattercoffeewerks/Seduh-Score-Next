@@ -681,6 +681,60 @@ describe('mountAppShell', () => {
     expect(root.querySelector('.app-shell-breadcrumb').textContent).toBe('October Cup');
   });
 
+  it('the header event name links to the event home', async () => {
+    const client = fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } });
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, { client });
+    await setNav({ eventId: 'ev1', links: [] });
+    expect(root.querySelector('.app-shell-breadcrumb a').getAttribute('href')).toBe('#/events/ev1');
+  });
+
+  describe('the event bar', () => {
+    const describe_ = (screen) => () => ({
+      sections: [
+        { key: 'home', label: 'Event home', href: '#/events/ev1' },
+        { key: 'roster', label: 'Roster', href: '#/events/ev1/roster' },
+      ],
+      currentKey: screen,
+      currentLabel: screen === 'home' ? null : 'Roster',
+    });
+
+    it('shows the trail and sections between the header and the screen, and follows the current screen without a refetch', async () => {
+      const client = fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } });
+      const root = document.createElement('div');
+      const { setNav } = mountAppShell(root, { client });
+      await setNav({ eventId: 'ev1', links: [], eventBar: describe_('home') });
+      const bar = root.querySelector('.app-shell-event-bar .event-bar');
+      expect(bar).not.toBeNull();
+      expect(root.querySelector('.app-shell-event-bar').nextElementSibling).toBe(
+        root.querySelector('.app-shell-outlet'),
+      );
+      expect(bar.querySelector('.event-bar-sections [aria-current="page"]').textContent).toBe(
+        'Event home',
+      );
+      await setNav({ eventId: 'ev1', links: [], eventBar: describe_('roster') });
+      expect(root.querySelector('.event-bar-sections [aria-current="page"]').textContent).toBe(
+        'Roster',
+      );
+      expect(root.querySelector('.event-bar-trail a[href="#/events/ev1"]').textContent).toBe(
+        'October Cup',
+      );
+      expect(client.calls.filter(([table]) => table === 'events')).toHaveLength(1);
+    });
+
+    it('is empty off an event screen, when the format has no sections, and when the event cannot be read', async () => {
+      const client = fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } });
+      const root = document.createElement('div');
+      const { setNav } = mountAppShell(root, { client });
+      await setNav({ eventId: 'ev1', links: [], eventBar: () => null });
+      expect(root.querySelector('.app-shell-event-bar').children).toHaveLength(0);
+      await setNav({ eventId: 'ev1', links: [], eventBar: describe_('home') });
+      expect(root.querySelector('.event-bar')).not.toBeNull();
+      await setNav({ links: [] });
+      expect(root.querySelector('.event-bar')).toBeNull();
+    });
+  });
+
   it('omitting eventId clears the breadcrumb and resets the cache', async () => {
     const client = fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } });
     const root = document.createElement('div');
