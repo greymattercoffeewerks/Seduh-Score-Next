@@ -520,8 +520,15 @@ export async function mountEventsScreen(
   });
   // Built once: the card keeps its QR code and its "copied" line across the screen's own re-renders.
   const audienceCard = audienceLinks ? buildAudienceLinksCard(audienceLinks, { orgName }) : null;
+  // Built once, like the audience card: an outcome line ("Event finished.") must survive the screen's own redraws
+  // (opening the Finished group, a Manage toggle, the filter, the archive panel arriving) and is not re-announced by
+  // them. It is cleared only when the organiser starts another Finish or Delete.
+  const feedback = el('div', {
+    className: 'screen-feedback',
+    attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+  });
 
-  function setFeedback(feedback, message, tone) {
+  function setFeedback(message, tone) {
     feedback.textContent = message ?? '';
     if (tone) feedback.dataset.tone = tone;
     else delete feedback.dataset.tone;
@@ -642,6 +649,7 @@ export async function mountEventsScreen(
     // does nothing: without this, a late read could reopen the confirm step
     // over a delete already in flight (code-reviewer, 2026-09-27).
     if (deleteStates[eventId]) return;
+    setFeedback(null);
     openRows = new Set(openRows).add(eventId);
     deleteStates = { ...deleteStates, [eventId]: 'checking' };
     // Read before showing the confirm step so its warning is in place when
@@ -710,6 +718,7 @@ export async function mountEventsScreen(
 
   function handleFinishClick(eventId) {
     if (finishStates[eventId]) return;
+    setFeedback(null);
     openRows = new Set(openRows).add(eventId);
     finishErrors = { ...finishErrors, [eventId]: undefined };
     finishStates = { ...finishStates, [eventId]: 'confirming' };
@@ -935,16 +944,20 @@ export async function mountEventsScreen(
       el('div', { className: 'events-header' }, [heading, newEventLink('header')]),
     );
 
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
+    // Only a NEW error takes focus below: the line keeps an old one across redraws, and a late redraw (the org links,
+    // the archive panel) must not pull the person back to it or read it out again.
+    const freshError = Boolean(pendingError);
     if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
+      setFeedback(pendingError, 'error');
       pendingError = null;
     } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
+      setFeedback(pendingSuccess, 'success');
       pendingSuccess = null;
+    } else if (feedback.textContent) {
+      // The kept line is re-inserted by this redraw with its old text; a screen reader that reads a live region's
+      // content on insertion would say it again. Silent for the insertion, live again a moment later.
+      feedback.setAttribute('aria-live', 'off');
+      setTimeout(() => feedback.setAttribute('aria-live', 'polite'), 0);
     }
     // Appended right after the heading, not at the bottom (found in production UI/UX feedback: a message at the
     // very bottom of the page was easy to miss). `.screen-feedback:empty` takes no room when there is nothing to show.
@@ -1039,7 +1052,7 @@ export async function mountEventsScreen(
       const target = root.querySelector(focusAfterRender);
       target?.focus();
       focusAfterRender = null;
-    } else if (feedback.dataset.tone === 'error') {
+    } else if (freshError) {
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
     }

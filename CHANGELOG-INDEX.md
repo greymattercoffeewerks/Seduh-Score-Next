@@ -1,6 +1,6 @@
 # Changelog index (archived entries)
 
-One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries since 2026-10-30 are in [`CHANGELOG.md`](CHANGELOG.md).
+One line per entry moved out of `CHANGELOG.md`: date, heading, file. The most recent entries are in [`CHANGELOG.md`](CHANGELOG.md).
 
 - D-PW1: organiser password recovery and Change password · 2026-10-23 → [`2026-10-H2`](docs/archive/changelog/2026-10-H2.md)
 - T-GATE.C: the admin Plan panel (gating step 3), still dark · 2026-10-23 → [`2026-10-H2`](docs/archive/changelog/2026-10-H2.md)
@@ -239,3 +239,16 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - T-ARC.Z: archive pipeline close-out (built, deployed, dark; never published anything) and the version bump to 3.5.0 · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - Reconciliation and housekeeping: version-bump guard, leak item closed, Seduh ID owner checks, branch pruning · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.7 close: the gating keys flipped and the archive tick given its floor (switched on, nothing published yet) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
+- BTC Build A: a preliminary round number on btc_matches · 2026-11-08 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- BTC Build E part 2: team country in the live payload and on the audience surfaces · 2026-11-08 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- Petrol V2 public pages · 2026-11-09 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- Petrol V2 drift guard · 2026-11-08 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- Petrol V2 P2: shared components · 2026-11-08 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- Petrol V2 P3: surfaces · 2026-11-08 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- Petrol V2 P1: design tokens · 2026-11-08 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- BTC Build E: country on teams and judges (PR 1) · 2026-11-08 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- Landing page: new hero tagline · 2026-11-06 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- Landing page: Throwdown shown as live (3 formats) · 2026-11-06 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- T-TD.1.9 Throwdown: the 3rd place match after a walkover: built and in review, PR into `dev`; migration NOT yet in the cloud · 2026-11-03 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- T-TD.1 Throwdown core knockout: built and in review, PR into `dev`; migrations now in the cloud · 2026-11-03 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)
+- v3.6.1: contact and Data Protection Officer address is hello@seduhscore.com; Seduh ID opt-out time limits published · 2026-11-04 → [`2026-11-H2`](docs/archive/changelog/2026-11-H2.md)

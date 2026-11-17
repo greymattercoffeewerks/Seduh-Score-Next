@@ -923,6 +923,63 @@ describe('mountEventsScreen', () => {
         expect(root.querySelector('.screen-feedback').textContent).toBe('Event finished.');
       });
 
+      async function finishCup(root) {
+        root.querySelector('#finish-event-cup').click();
+        root.querySelector('#confirm-finish-cup').click();
+        await vi.waitFor(() =>
+          expect(root.querySelector('.screen-feedback').textContent).toBe('Event finished.'),
+        );
+        return root.querySelector('.screen-feedback');
+      }
+
+      it('keeps "Event finished." across redraws: the Finished group, a Manage toggle and the filter', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        const line = await finishCup(root);
+        const stillThere = () => {
+          // The same node keeps its text and tone (not a fresh, empty copy).
+          expect(root.querySelector('.screen-feedback')).toBe(line);
+          expect(line.textContent).toBe('Event finished.');
+          expect(line.dataset.tone).toBe('success');
+        };
+        root.querySelector('#events-finished-toggle').click();
+        expect(root.querySelector('#events-finished-list').hidden).toBe(false);
+        stillThere();
+        // Re-inserted silently, then live again, so a redraw does not read the outcome out a second time.
+        expect(line.getAttribute('aria-live')).toBe('off');
+        await vi.waitFor(() => expect(line.getAttribute('aria-live')).toBe('polite'));
+        root.querySelector('#manage-live').click();
+        expect(root.querySelector('#manage-panel-live').hidden).toBe(false);
+        stillThere();
+        root.querySelector('#events-filter-chip-btc').click();
+        expect(root.querySelector('#events-filter-chip-btc').getAttribute('aria-pressed')).toBe(
+          'true',
+        );
+        stillThere();
+      });
+
+      it('clears the outcome line when another Finish starts', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        await finishCup(root);
+        root.querySelector('#manage-live').click();
+        expect(root.querySelector('#manage-panel-live').hidden).toBe(false);
+        root.querySelector('#finish-event-live').click();
+        expect(root.querySelector('.screen-feedback').textContent).toBe('');
+        expect(root.querySelector('.screen-feedback').dataset.tone).toBeUndefined();
+      });
+
+      it('clears the outcome line when a Delete starts', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        await finishCup(root);
+        root.querySelector('#manage-rehearsal').click();
+        expect(root.querySelector('#manage-panel-rehearsal').hidden).toBe(false);
+        root.querySelector('#delete-event-rehearsal').click();
+        expect(root.querySelector('.screen-feedback').textContent).toBe('');
+        expect(root.querySelector('.screen-feedback').dataset.tone).toBeUndefined();
+      });
+
       it('deleting test data inside the collapsed Finished group opens the group for the flow', async () => {
         const { root, screen } = mountHome();
         await screen;
