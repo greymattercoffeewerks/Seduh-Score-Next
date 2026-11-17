@@ -7,6 +7,8 @@
 // every key is always present, 0 when a format does not use it. A describer answers the shape core/eventHome.js
 // documents (summary, ready, phase, next, progress, attention) and never throws on missing data.
 
+import { MIN_JUDGES } from './formats/btc/runSheet.js';
+
 export const FORMAT_OPTIONS = [
   {
     value: 'cup_taster',
@@ -87,17 +89,17 @@ function describeBtc(event, facts) {
   const done = n(facts, 'matches_confirmed');
   const active = n(facts, 'matches_active');
   const attention = [];
-  if (!event.ended_at && facts && teams > 0 && judges === 0) {
+  if (!event.ended_at && facts && teams > 0 && judges < MIN_JUDGES) {
     attention.push({
       id: 'no-judges',
       severity: 'warning',
-      text: 'has no judges yet.',
+      text: judges === 0 ? 'has no judges yet.' : `needs at least ${MIN_JUDGES} judges.`,
       actionLabel: 'Open',
     });
   }
   let next = null;
   if (active > 0) next = 'next: finish the match being scored';
-  else if (teams < 2) next = 'next: add the teams';
+  else if (teams < 2 || teams % 2 === 1) next = 'next: add the teams';
   else if (matches === 0) next = 'next: draw the matches';
   else if (done < matches) next = 'next: score the next match';
   return {
@@ -107,7 +109,9 @@ function describeBtc(event, facts) {
           matches > 0 ? `${done} of ${matches} matches done` : 'no matches yet',
         ])
       : null,
-    ready: facts ? teams >= 2 && judges > 0 : null,
+    // the same rule as the event's own run sheet (formats/btc/runSheet.js setupState, minus the country check, which
+    // the counts cannot see): an even field of at least two, and at least MIN_JUDGES judges
+    ready: facts ? teams >= 2 && teams % 2 === 0 && judges >= MIN_JUDGES : null,
     phase: null,
     next,
     progress:

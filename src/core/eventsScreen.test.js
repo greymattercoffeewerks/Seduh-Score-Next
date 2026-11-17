@@ -717,6 +717,15 @@ describe('mountEventsScreen', () => {
       expect(old.querySelector('.status[data-state="done"]').textContent).toBe('Finished');
     });
 
+    it('a LIVE test event wears the test tag on the Live now card too (D9)', async () => {
+      const events = EVENTS.map((e) => (e.id === 'live' ? { ...e, is_test: true } : e));
+      const { root, screen } = mountHome({ client: fakeClient({ events, summaries: SUMMARIES }) });
+      await screen;
+      expect(
+        root.querySelector('.events-featured--live .status[data-state="test"]').textContent,
+      ).toBe('Test data');
+    });
+
     describe('the format filter', () => {
       it('is drawn only when more than one format is configured', async () => {
         for (const formatOptions of [undefined, [FORMATS[0]]]) {

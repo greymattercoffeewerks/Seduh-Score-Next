@@ -42,7 +42,11 @@ async function signInAs(page, { email, password }) {
 
 async function openEvents(page, tenant) {
   await signInAs(page, tenant);
-  await expect(page.getByRole('heading', { name: `Events in ${tenant.orgName}` })).toBeVisible();
+  await expect(page.locator('.events-org-eyebrow')).toHaveText(tenant.orgName);
+  // Finished events (which carry the archive panel) sit in a collapsed group on the home.
+  const finished = page.locator('#events-finished-toggle');
+  if ((await finished.count()) > 0 && (await finished.getAttribute('aria-expanded')) === 'false')
+    await finished.click();
 }
 
 const panel = (page, id) => page.locator(`#archive-panel-${id}`);
@@ -475,8 +479,8 @@ test('a test event is marked, never offered the archive, and never told it will 
   });
   expect(flip.status).toBe(204);
   await openEvents(page, w.ann);
-  const row = page.locator('.events-list li', { hasText: `t1 ${tag}` });
-  await expect(row.locator('.is-test-indicator')).toHaveText('Test data');
+  const row = page.locator('.events-row', { hasText: `t1 ${tag}` });
+  await expect(row.locator('.status[data-state="test"]')).toHaveText('Test data');
   await expect(panel(page, id)).toHaveAttribute('data-archive-state', 'test');
   await expect(panel(page, id)).toContainText('Test data is never published to the archive.');
   await expect(page.locator(`#archive-listing-${id}`)).toHaveCount(0);

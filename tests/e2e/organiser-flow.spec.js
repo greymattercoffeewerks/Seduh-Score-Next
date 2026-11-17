@@ -1,3 +1,4 @@
+import { createEventViaUi } from './support/newEvent.js';
 import { test, expect } from '@playwright/test';
 
 // Proves the routing skeleton wired up in the 2026-08-29 app-wiring pass
@@ -66,19 +67,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     // --- Events screen: create ---
     await expect(page.locator('.app-shell-name')).toHaveText('Seduh Score');
-    // The form says which organisation the event will be created in, and the list whose events these are.
-    await expect(
-      page.getByRole('heading', { name: 'Create an event in Local Dev Org' }),
-    ).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Events in Local Dev Org' })).toBeVisible();
-    await page.getByLabel('Event name').fill(eventName);
-    await page.getByRole('button', { name: 'Create event' }).click();
-    const eventLink = page.getByRole('link', { name: eventName });
-    await expect(eventLink).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText('Local Dev Org');
+    await createEventViaUi(page, eventName);
 
     // --- Event dashboard ---
-    await eventLink.click();
-    await expect(page.getByRole('heading', { name: eventName })).toBeVisible();
     await expect(
       page
         .getByRole('navigation', { name: 'Sections', exact: true })
@@ -162,9 +154,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await signIn(page);
 
     const eventName = `E2E Offline Soak ${Date.now()}`;
-    await page.getByLabel('Event name').fill(eventName);
-    await page.getByRole('button', { name: 'Create event' }).click();
-    await page.getByRole('link', { name: eventName }).click();
+    await createEventViaUi(page, eventName);
     await page
       .getByRole('navigation', { name: 'Event sections' })
       .getByRole('link', { name: 'Setup' })
@@ -358,9 +348,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // A second event, taken as far as a pending heat.
     const eventName = `E2E Take Over ${uniq}`;
     await page.reload();
-    await page.getByLabel('Event name').fill(eventName);
-    await page.getByRole('button', { name: 'Create event' }).click();
-    await page.getByRole('link', { name: eventName }).click();
+    await createEventViaUi(page, eventName);
     const eventId = page.url().match(/events\/([0-9a-f-]{36})/)?.[1];
     expect(eventId).toBeTruthy();
     await page
@@ -511,7 +499,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     page,
   }) => {
     await signIn(page);
-    await expect(page.locator('form.create-event-form')).toBeVisible();
+    await expect(page.locator('#events-heading')).toBeVisible();
 
     const card = page.locator('.audience-links-card');
     await expect(card.getByRole('heading', { name: 'Share with your audience' })).toBeVisible();
@@ -693,7 +681,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // (a slow-resolving screen's OWN internal render() isn't gated by the
     // router's staleness guard, only the router's `current` bookkeeping
     // is), not something this route-dispatch test is meant to exercise.
-    await expect(page.locator('form.create-event-form')).toBeVisible();
+    await expect(page.locator('#events-heading')).toBeVisible();
     await navigateHash(page, '#/this/route/does/not/exist');
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Back to events' })).toBeVisible();
@@ -706,7 +694,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // else guards this cut-over. Signed in, the brand + four links + email +
     // Sign out used to wrap into three left-aligned rows at 640-1100px.
     await signIn(page);
-    await expect(page.locator('form.create-event-form')).toBeVisible();
+    await expect(page.locator('#events-heading')).toBeVisible();
     const toggle = page.getByRole('button', { name: 'Menu', exact: true });
 
     for (const width of [360, 731, 1365]) {
@@ -756,7 +744,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     page,
   }) => {
     await signIn(page);
-    await expect(page.locator('form.create-event-form')).toBeVisible();
+    await expect(page.locator('#events-heading')).toBeVisible();
     const toggle = page.getByRole('button', { name: 'Menu', exact: true });
     const label = page.locator('.app-shell-nav-toggle-label');
 
@@ -1268,12 +1256,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto('/app/#/events');
     // First by name, so it starts active.
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(longName);
     await expect(
-      page.getByRole('heading', { name: `Create an event in ${longName}` }),
-    ).toBeVisible();
-    await expect(page.getByRole('heading', { name: `Events in ${longName}` })).toBeVisible();
-    // The form is named by its heading for someone who jumps straight to it.
-    await expect(page.getByRole('form', { name: `Create an event in ${longName}` })).toBeVisible();
+      page.getByRole('link', { name: `New event in ${longName}` }).first(),
+    ).toBeAttached();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );

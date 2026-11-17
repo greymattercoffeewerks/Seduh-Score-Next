@@ -687,12 +687,14 @@ export async function mountEventsScreen(
     focusAfterRender = '#events-heading';
     render();
     try {
-      await deleteTestEvent(orgId, eventId, client);
+      await raceTimeout(deleteTestEvent(orgId, eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
       events = events.filter((event) => event.id !== eventId);
       pendingSuccess = 'Event deleted.';
       focusAfterRender = '#events-heading';
     } catch (err) {
-      pendingError = describeError(err);
+      pendingError = err.timedOut
+        ? 'This is taking longer than expected. Check your connection, then look at the list before trying again.'
+        : describeError(err);
       focusAfterRender = null;
     }
     // Matches handleCancelDelete's own one-line idiom — found in review
@@ -724,7 +726,7 @@ export async function mountEventsScreen(
     focusAfterRender = '#events-heading';
     render();
     try {
-      await finishEvent(orgId, eventId, client);
+      await raceTimeout(finishEvent(orgId, eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
       events = events.map((event) =>
         event.id === eventId ? { ...event, ended_at: new Date().toISOString() } : event,
       );

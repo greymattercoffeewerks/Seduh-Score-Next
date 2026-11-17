@@ -100,7 +100,7 @@ export function findNextEvent(events, today) {
     .filter(
       (event) => typeof event.event_date === 'string' && event.event_date.slice(0, 10) >= today,
     )
-    .sort((a, b) => a.event_date.localeCompare(b.event_date));
+    .sort((a, b) => a.event_date.slice(0, 10).localeCompare(b.event_date.slice(0, 10)));
   return dated[0] ?? open[0] ?? null;
 }
 

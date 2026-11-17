@@ -11,6 +11,7 @@ import { getSupabase } from './supabaseClient.js';
 import { el, labeledField } from './dom.js';
 import { describeError } from './errors.js';
 import { createEvent } from './events.js';
+import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { goToHash } from './navigation.js';
 
 export function blankDraft(defaultFormat) {
@@ -199,7 +200,7 @@ export function renderNewEventForm(draft, { disabled, formatOptions, eventsHref 
         }),
         el('p', {
           className: 'stage-meta',
-          text: 'Next you set the event up: teams, judges or cuppers, depending on the format.',
+          text: 'Next you set the event up from its own page.',
         }),
       ]),
     ].filter(Boolean),
@@ -244,20 +245,26 @@ export async function mountNewEventScreen(
 
     let created = null;
     try {
-      created = await createEvent(
-        orgId,
-        {
-          format: draft.format,
-          name: draft.name.trim(),
-          eventDate: draft.eventDate || null,
-          venue: draft.venue.trim() || null,
-          city: draft.city.trim() || null,
-          isTest: draft.isTest,
-        },
-        client,
+      created = await raceTimeout(
+        createEvent(
+          orgId,
+          {
+            format: draft.format,
+            name: draft.name.trim(),
+            eventDate: draft.eventDate || null,
+            venue: draft.venue.trim() || null,
+            city: draft.city.trim() || null,
+            isTest: draft.isTest,
+          },
+          client,
+        ),
+        DEFAULT_LOAD_TIMEOUT_MS,
       );
     } catch (err) {
-      pendingError = describeError(err);
+      // A create that timed out may still have landed: say so, so nobody makes a second one blindly.
+      pendingError = err.timedOut
+        ? 'This is taking longer than expected. Check your connection and the events list before trying again.'
+        : describeError(err);
     }
     creating = false;
     if (created) {

@@ -5,7 +5,7 @@
 -- an organisation with no events answers an empty list, not an error; the output carries counts only (no names or ids of
 -- anything but the event); the migration's rollback block removes the function.
 begin;
-select plan(17);
+select plan(20);
 
 create schema t086;
 grant usage on schema t086 to anon, authenticated;
@@ -33,6 +33,17 @@ insert into ct_heats (stage_id, heat_number, duration_secs, status) values
   (t086.u(30), 1, 600, 'confirmed'), (t086.u(30), 2, 600, 'scoring'), (t086.u(30), 3, 600, 'pending');
 insert into btc_teams (event_id, name) values (t086.u(21), 'Team A'), (t086.u(21), 'Team B');
 insert into btc_judges (event_id, name) values (t086.u(21), 'Judge A');
+insert into btc_matches (event_id, round, team1_id, team2_id, status)
+  select t086.u(21), 'preliminary', a.id, b.id, st
+    from (select id from btc_teams where event_id = t086.u(21) and name = 'Team A') a,
+         (select id from btc_teams where event_id = t086.u(21) and name = 'Team B') b,
+         unnest(array['confirmed', 'confirmed', 'scoring', 'pending']) st;
+insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs, status) values
+  (t086.u(31), t086.u(20), 'finals', 2, 3, 600, 'complete');
+insert into td_rounds (id, event_id, position) values (t086.u(40), t086.u(21), 1);
+insert into td_matches (event_id, round_id, position, result_kind, confirmed_at) values
+  (t086.u(21), t086.u(40), 1, 'votes', now()), (t086.u(21), t086.u(40), 2, null, null);
+insert into live_sessions (org_id, event_id, format, active, is_test) values (t086.u(10), t086.u(20), 'cup_taster', false, false);
 insert into live_sessions (org_id, event_id, format, active, is_test) values (t086.u(10), t086.u(21), 'btc', true, true);
 
 -- ============ ACL ============
@@ -50,14 +61,20 @@ select is((select count(*)::int from public.org_event_summaries(t086.u(10)) wher
 select is((select (facts ->> 'entries')::int || '/' || (facts ->> 'entries_active')::int
              from public.org_event_summaries(t086.u(10)) where event_id = t086.u(20)), '3/2', 'entries: all and not withdrawn');
 select is((select (facts ->> 'stages')::int || '/' || (facts ->> 'stages_complete')::int
-             from public.org_event_summaries(t086.u(10)) where event_id = t086.u(20)), '1/0', 'stages');
+             from public.org_event_summaries(t086.u(10)) where event_id = t086.u(20)), '2/1', 'stages');
 select is((select (facts ->> 'heats')::int || '/' || (facts ->> 'heats_confirmed')::int || '/' || (facts ->> 'heats_active')::int
              from public.org_event_summaries(t086.u(10)) where event_id = t086.u(20)), '3/1/1', 'heats: all, confirmed, timing or scoring');
 select is((select (facts ->> 'teams')::int || '/' || (facts ->> 'judges')::int
              from public.org_event_summaries(t086.u(10)) where event_id = t086.u(21)), '2/1', 'btc teams and judges');
-select is((select (facts ->> 'matches')::int + (facts ->> 'td_matches')::int
-             from public.org_event_summaries(t086.u(10)) where event_id = t086.u(21)), 0, 'a count with nothing to count is 0, present');
-select is((select count(*)::int from public.org_event_summaries(t086.u(10)) s, jsonb_object_keys(s.facts) k where s.event_id = t086.u(20)), 14,
+select is((select (facts ->> 'matches')::int || '/' || (facts ->> 'matches_confirmed')::int || '/' || (facts ->> 'matches_active')::int
+             from public.org_event_summaries(t086.u(10)) where event_id = t086.u(21)), '4/2/1', 'btc matches: all, confirmed, scoring');
+select is((select (facts ->> 'td_matches')::int || '/' || (facts ->> 'td_confirmed')::int
+             from public.org_event_summaries(t086.u(10)) where event_id = t086.u(21)), '2/1', 'throwdown matches: all, with a confirmed result');
+select is((select (facts ->> 'stages')::int || '/' || (facts ->> 'stages_complete')::int
+             from public.org_event_summaries(t086.u(10)) where event_id = t086.u(20)), '2/1', 'a complete stage is counted as complete');
+select is((select (facts ->> 'matches')::int || '/' || (facts ->> 'td_matches')::int
+             from public.org_event_summaries(t086.u(10)) where event_id = t086.u(20)), '0/0', 'a count with nothing to count is 0, present');
+select is((select count(*)::int from public.org_event_summaries(t086.u(10)) s, jsonb_object_keys(s.facts) k), 28,
   'every row carries the same fourteen keys');
 select is((select string_agg(event_id::text || ':' || is_live::text, ',' order by event_id) from public.org_event_summaries(t086.u(10))),
   t086.u(20)::text || ':false,' || t086.u(21)::text || ':true', 'is_live follows the one active live session');

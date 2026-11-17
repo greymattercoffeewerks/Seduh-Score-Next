@@ -85,7 +85,7 @@ describe('describeEventForHome', () => {
   });
 
   describe('BTC', () => {
-    it('counts teams and matches done, and is ready with two teams and a judge', () => {
+    it('counts teams and matches done, and is ready with an even field and at least three judges', () => {
       const info = describeEventForHome(
         event('btc'),
         facts({ teams: 8, judges: 3, matches: 10, matches_confirmed: 6, matches_active: 2 }),
@@ -104,10 +104,10 @@ describe('describeEventForHome', () => {
       expect(describeEventForHome(event('btc'), facts({ teams: 1 })).next).toBe(
         'next: add the teams',
       );
-      expect(describeEventForHome(event('btc'), facts({ teams: 4, judges: 1 })).next).toBe(
+      expect(describeEventForHome(event('btc'), facts({ teams: 4, judges: 3 })).next).toBe(
         'next: draw the matches',
       );
-      expect(describeEventForHome(event('btc'), facts({ teams: 4, judges: 1 })).summary).toBe(
+      expect(describeEventForHome(event('btc'), facts({ teams: 4, judges: 3 })).summary).toBe(
         '4 teams · no matches yet',
       );
     });
@@ -115,14 +115,32 @@ describe('describeEventForHome', () => {
     it('has no progress and no next step once every match is confirmed or when there are no matches', () => {
       const done = describeEventForHome(
         event('btc'),
-        facts({ teams: 2, judges: 1, matches: 1, matches_confirmed: 1 }),
+        facts({ teams: 2, judges: 3, matches: 1, matches_confirmed: 1 }),
       );
       expect(done.next).toBeNull();
       expect(done.progress.done).toBe(1);
       expect(
-        describeEventForHome(event('btc'), facts({ teams: 2, judges: 1 })).progress,
+        describeEventForHome(event('btc'), facts({ teams: 2, judges: 3 })).progress,
       ).toBeNull();
     });
+  });
+
+  it('Cup Taster is not ready with cuppers but no heats, or heats but no cuppers', () => {
+    expect(
+      describeEventForHome(event('cup_taster'), facts({ entries_active: 16, heats: 0 })).ready,
+    ).toBe(false);
+    expect(
+      describeEventForHome(event('cup_taster'), facts({ entries_active: 0, heats: 4 })).ready,
+    ).toBe(false);
+  });
+
+  it('BTC is not ready with fewer than three judges or an odd field, the same rule as its run sheet, and says so', () => {
+    expect(describeEventForHome(event('btc'), facts({ teams: 2, judges: 1 })).ready).toBe(false);
+    expect(
+      describeEventForHome(event('btc'), facts({ teams: 2, judges: 1 })).attention[0].text,
+    ).toBe('needs at least 3 judges.');
+    expect(describeEventForHome(event('btc'), facts({ teams: 3, judges: 3 })).ready).toBe(false);
+    expect(describeEventForHome(event('btc'), facts({ teams: 4, judges: 3 })).ready).toBe(true);
   });
 
   describe('Throwdown', () => {
