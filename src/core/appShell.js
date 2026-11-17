@@ -21,6 +21,7 @@
 // (a persistent header, a nav slot, an outlet); the composition root owns
 // what the nav actually SAYS.
 import { el, brandLockup, setBusyDisabled } from './dom.js';
+import { renderEventBar } from './eventBar.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { orgLabel } from './orgLabel.js';
 import { findEvent } from './events.js';
@@ -384,6 +385,9 @@ export function mountAppShell(
     orgNoticeEl,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
+  // The in-event trail and section links (core/eventBar.js), between the header and the screen. Empty (and so
+  // taking no room) off an event screen.
+  const eventBarSlot = el('div', { className: 'app-shell-event-bar' });
   // Quick, glance-based verification for bug reports (2026-09-05) — mirrors
   // the legacy Seduh Score site's own footer nameplate (seduhscore.com/bts/:
   // "seduhscore.com · v5.16.0"). A plain static `<footer>`, not `role="status"`
@@ -416,7 +420,7 @@ export function mountAppShell(
     ),
   ]);
 
-  root.append(header, outlet, footerEl);
+  root.append(header, eventBarSlot, outlet, footerEl);
 
   // Temporary (2026-08-30) — a plain "who's signed in, sign out" control,
   // ahead of any real access-control UI (D14). Reactive via
@@ -928,6 +932,32 @@ export function mountAppShell(
   // UI gate, is what actually protects this read, same as everywhere else
   // in this app.
   let cachedEventId = null;
+  let cachedEvent = null;
+  // The newest setNav call's describer: a fetch that resolves after a later call (same event, another screen)
+  // must paint for the screen now showing, not the one it started on.
+  let latestEventBar = null;
+
+  // `eventBar` is the caller's function from (event) to { sections, currentKey, currentLabel }, or null: which
+  // sections an event has is the composition root's decision, never this file's.
+  function paintEventBar(describe) {
+    if (!cachedEvent || typeof describe !== 'function') {
+      eventBarSlot.replaceChildren();
+      return;
+    }
+    const spec = describe(cachedEvent);
+    if (!spec) {
+      eventBarSlot.replaceChildren();
+      return;
+    }
+    eventBarSlot.replaceChildren(
+      renderEventBar({
+        eventsHref: '#/events',
+        eventName: cachedEvent.name,
+        eventHref: `#/events/${cachedEvent.id}`,
+        ...spec,
+      }),
+    );
+  }
 
   // Keeps a CSS custom property on `root` in sync with the header's own
   // real rendered height — set on `root` (the common ancestor of both
@@ -1134,7 +1164,8 @@ export function mountAppShell(
     renderOrganisation();
   }
 
-  async function setNav({ eventId = null, links = [] } = {}) {
+  async function setNav({ eventId = null, links = [], eventBar = null } = {}) {
+    latestEventBar = eventBar;
     navEl.innerHTML = '';
     for (const link of links) {
       const linkAttrs = { href: link.href };
@@ -1215,16 +1246,22 @@ export function mountAppShell(
 
     if (!eventId) {
       cachedEventId = null;
+      cachedEvent = null;
+      eventBarSlot.replaceChildren();
       breadcrumbEl.textContent = '';
       updateContextRow();
       refreshSync(); // don't wait up to SYNC_POLL_MS for "enabled" to catch up
       return;
     }
     if (eventId === cachedEventId) {
+      // Same event, another of its screens: the trail and the current section change, the name does not.
+      paintEventBar(eventBar);
       refreshSync();
       return;
     }
     cachedEventId = eventId;
+    cachedEvent = null;
+    eventBarSlot.replaceChildren();
     refreshSync();
     try {
       const event = await findEvent(eventId, client);
@@ -1234,10 +1271,13 @@ export function mountAppShell(
       // cachedEventId has moved on to a DIFFERENT event since this fetch
       // started, this result is stale, drop it.
       if (cachedEventId !== eventId) return;
+      cachedEvent = event;
       breadcrumbEl.textContent = event.name;
+      paintEventBar(latestEventBar);
     } catch {
       if (cachedEventId !== eventId) return;
       breadcrumbEl.textContent = '';
+      eventBarSlot.replaceChildren();
     }
     updateContextRow();
   }
@@ -1259,6 +1299,8 @@ export function mountAppShell(
     // as setNav without an event, without touching the links.
     clearEventContext() {
       cachedEventId = null;
+      cachedEvent = null;
+      eventBarSlot.replaceChildren();
       breadcrumbEl.textContent = '';
       updateContextRow();
       refreshSync();

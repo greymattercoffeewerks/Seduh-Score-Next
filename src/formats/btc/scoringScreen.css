@@ -124,6 +124,12 @@
   margin-top: var(--space-2);
 }
 
+/* The confirm result sits under the bevelled Confirm / Re-confirm button (and its hint): real air, not a
+   near-touch. Empty, it stays clipped and takes no room (the shared .screen-feedback:empty rule). */
+.btc-scoring-screen .screen-feedback[data-region='feedback']:not(:empty) {
+  margin-top: var(--space-4);
+}
+
 /* The live regions (save warning, notice, confirm feedback) are always in the page so a
    screen reader announces text put into them. While empty they take no space and show no
    box but stay in the accessibility tree: that is the shared .screen-feedback:empty rule in

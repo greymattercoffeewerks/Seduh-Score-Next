@@ -237,5 +237,5 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - T-ARC.4c: `archive_event_status`, a member-readable archive status; the panel stops guessing (built dark, not in the cloud) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.6 section 3: pricing-page archive wording (public copy; live only when `dev` is released to `main`) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.Z: archive pipeline close-out (built, deployed, dark; never published anything) and the version bump to 3.5.0 · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
-
+- Reconciliation and housekeeping: version-bump guard, leak item closed, Seduh ID owner checks, branch pruning · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.7 close: the gating keys flipped and the archive tick given its floor (switched on, nothing published yet) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)

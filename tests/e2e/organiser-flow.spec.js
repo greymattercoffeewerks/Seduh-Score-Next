@@ -79,24 +79,37 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // --- Event dashboard ---
     await eventLink.click();
     await expect(page.getByRole('heading', { name: eventName })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Event home' })).toBeVisible();
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Sections', exact: true })
+        .getByRole('link', { name: 'Event home' }),
+    ).toBeVisible();
     await expect(page.getByText('No stage plan yet.')).toBeVisible();
 
     // --- Setup: build a one-stage plan ---
-    await page.getByRole('link', { name: 'Setup' }).click();
+    await page
+      .getByRole('navigation', { name: 'Event sections' })
+      .getByRole('link', { name: 'Setup' })
+      .click();
     await expect(page.getByRole('heading', { name: 'Stage plan' })).toBeVisible();
     await page.getByRole('button', { name: 'Add stage' }).click();
     await page.getByRole('button', { name: 'Save stage plan' }).click();
     await expect(page.getByText('Stage plan saved.')).toBeVisible();
 
     // --- Event home reflects the new stage ---
-    await page.getByRole('link', { name: 'Event home' }).click();
+    await page
+      .getByRole('navigation', { name: 'Sections', exact: true })
+      .getByRole('link', { name: 'Event home' })
+      .click();
     await expect(page.getByText(/1st .* Preliminary/)).toBeVisible();
     const generateHeatsLink = page.getByRole('link', { name: 'Generate heats' });
     await expect(generateHeatsLink).toBeVisible();
 
     // --- Roster: register two cuppers ---
-    await page.getByRole('link', { name: 'Roster' }).click();
+    await page
+      .getByRole('navigation', { name: 'Event sections' })
+      .getByRole('link', { name: 'Roster' })
+      .click();
     await expect(page.getByRole('heading', { name: 'Roster' })).toBeVisible();
     for (const [name, phone] of [
       ['E2E Cupper One', '555-1001'],
@@ -109,7 +122,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     }
 
     // --- Heats: seed roster into the stage, generate, and reach Timing ---
-    await page.getByRole('link', { name: 'Event home' }).click();
+    await page
+      .getByRole('navigation', { name: 'Sections', exact: true })
+      .getByRole('link', { name: 'Event home' })
+      .click();
     await page.getByRole('link', { name: 'Generate heats' }).click();
     await expect(page.getByRole('heading', { name: /Heat generation/ })).toBeVisible();
     await page.getByRole('button', { name: 'Seed roster into this stage' }).click();
@@ -149,12 +165,21 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await page.getByLabel('Event name').fill(eventName);
     await page.getByRole('button', { name: 'Create event' }).click();
     await page.getByRole('link', { name: eventName }).click();
-    await page.getByRole('link', { name: 'Setup' }).click();
+    await page
+      .getByRole('navigation', { name: 'Event sections' })
+      .getByRole('link', { name: 'Setup' })
+      .click();
     await page.getByRole('button', { name: 'Add stage' }).click();
     await page.getByRole('button', { name: 'Save stage plan' }).click();
     await expect(page.getByText('Stage plan saved.')).toBeVisible();
-    await page.getByRole('link', { name: 'Event home' }).click();
-    await page.getByRole('link', { name: 'Roster' }).click();
+    await page
+      .getByRole('navigation', { name: 'Sections', exact: true })
+      .getByRole('link', { name: 'Event home' })
+      .click();
+    await page
+      .getByRole('navigation', { name: 'Event sections' })
+      .getByRole('link', { name: 'Roster' })
+      .click();
     // Two cuppers, not one — random heat generation refuses a heat below
     // its own minimum size (2); a single-cupper roster was found the hard
     // way to leave this test stuck on a "partition: n (1) is below the
@@ -177,7 +202,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
       await page.getByRole('button', { name: 'Register' }).click();
       await expect(page.getByText(`${name} registered.`)).toBeVisible();
     }
-    await page.getByRole('link', { name: 'Event home' }).click();
+    await page
+      .getByRole('navigation', { name: 'Sections', exact: true })
+      .getByRole('link', { name: 'Event home' })
+      .click();
     await page.getByRole('link', { name: 'Generate heats' }).click();
     await page.getByRole('button', { name: 'Seed roster into this stage' }).click();
     await expect(page.getByText(`Offline Soak Cupper One ${uniq}`).first()).toBeVisible();
@@ -335,12 +363,21 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await page.getByRole('link', { name: eventName }).click();
     const eventId = page.url().match(/events\/([0-9a-f-]{36})/)?.[1];
     expect(eventId).toBeTruthy();
-    await page.getByRole('link', { name: 'Setup' }).click();
+    await page
+      .getByRole('navigation', { name: 'Event sections' })
+      .getByRole('link', { name: 'Setup' })
+      .click();
     await page.getByRole('button', { name: 'Add stage' }).click();
     await page.getByRole('button', { name: 'Save stage plan' }).click();
     await expect(page.getByText('Stage plan saved.')).toBeVisible();
-    await page.getByRole('link', { name: 'Event home' }).click();
-    await page.getByRole('link', { name: 'Roster' }).click();
+    await page
+      .getByRole('navigation', { name: 'Sections', exact: true })
+      .getByRole('link', { name: 'Event home' })
+      .click();
+    await page
+      .getByRole('navigation', { name: 'Event sections' })
+      .getByRole('link', { name: 'Roster' })
+      .click();
     for (const [name, phone] of [
       [`Take Over Cupper One ${uniq}`, `556-${String(uniq % 10000).padStart(4, '0')}`],
       [`Take Over Cupper Two ${uniq}`, `556-${String((uniq + 1) % 10000).padStart(4, '0')}`],
@@ -350,7 +387,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
       await page.getByRole('button', { name: 'Register' }).click();
       await expect(page.getByText(`${name} registered.`)).toBeVisible();
     }
-    await page.getByRole('link', { name: 'Event home' }).click();
+    await page
+      .getByRole('navigation', { name: 'Sections', exact: true })
+      .getByRole('link', { name: 'Event home' })
+      .click();
     await page.getByRole('link', { name: 'Generate heats' }).click();
     await page.getByRole('button', { name: 'Seed roster into this stage' }).click();
     await page.getByRole('button', { name: 'Generate heats (random)' }).click();

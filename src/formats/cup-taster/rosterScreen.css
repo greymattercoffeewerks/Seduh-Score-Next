@@ -81,6 +81,14 @@
 
   .roster-form-fields .form-field {
     flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  /* The phone field holds a 12rem country select beside the number box. At the generic 140px basis it was
+     squeezed until the number box had no width and the Email field painted over it (1024 to 1440px). Its own
+     basis (select + gap + a usable number box) makes it wrap to a line of its own before it can be squeezed. */
+  .roster-form-fields .form-field:has(.roster-phone-row) {
+    flex: 2 1 22rem;
   }
 
   .roster-list li {
