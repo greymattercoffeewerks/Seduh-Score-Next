@@ -168,6 +168,15 @@ describe('buildResultsSheet', () => {
     expect(sheet.querySelector('.results-sheet-kicker').textContent).toContain('Cup Taster');
   });
 
+  it('marks each competitor name with the exact name and cafe printed, so a claimed person can be linked (Seduh ID discovery)', () => {
+    const sheet = buildResultsSheet(payload({ standings: STANDINGS }));
+    const first = sheet.querySelector('td.results-sheet-name');
+    expect(first.getAttribute('data-profile-name')).toBe('Alex');
+    expect(first.getAttribute('data-profile-cafe')).toBe('Kedai Runduk');
+    // with nothing applied (discovery closed) the name is plain text, no link
+    expect(sheet.querySelector('td.results-sheet-name a')).toBeNull();
+  });
+
   it('shows the full standings with score and time first and the round reached last, ties as published', () => {
     const sheet = buildResultsSheet(payload({ standings: STANDINGS }));
     expect(headers(sheet)).toEqual(['Place', 'Competitor', 'Café', 'Score', 'Time', 'Reached']);

@@ -10,6 +10,7 @@ import { el, withSrExpansion } from '../core/dom.js';
 import { formatDuration, formatDurationLong } from '../core/duration.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
+import { linkClaimedNames } from '../core/seduhDiscovery.js';
 import { listPublishedResults, publishedOrgName } from '../core/publicResults.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
@@ -131,7 +132,12 @@ function podiumRow(entry, chipFor) {
       'div',
       { className: 'results-podium-who' },
       [
-        el('span', { className: 'results-podium-name', text: entry.name }),
+        // data-profile-*: lets core/seduhDiscovery.js link a CLAIMED, public competitor (only while discovery is open).
+        el('span', {
+          className: 'results-podium-name',
+          text: entry.name,
+          attrs: { 'data-profile-name': entry.name, 'data-profile-cafe': entry.cafe ?? '' },
+        }),
         // `cafe` is optional — resultsPublishing.js's own payload falls back
         // to null when the podium finisher's own entry has none on record.
         // Filtered out here, not passed through as null — core/dom.js's
@@ -437,6 +443,8 @@ export async function mountResultsScreen(root, { client, countryChip = buildCoun
     ...(archiveSection ? [archiveSection] : []),
   );
 
+  // Claimed competitors' names become links once the database says discovery is open; never awaited, never an error.
+  if (latest) void linkClaimedNames(latestSection, latest.eventId, client);
   if (latestSection) revealOnScroll(latestSection);
   if (archiveSection) revealOnScroll(archiveSection);
 }

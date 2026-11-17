@@ -869,3 +869,41 @@ a {
 .petrol-live-bar-rest {
   padding: 8px 4px;
 }
+
+/* ---- Find a competitor (Seduh ID discovery; drawn only while the database switch is open) ---- */
+.petrol-find-label {
+  display: block;
+  margin: 24px 0 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.petrol-find-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 32rem;
+}
+.petrol-find-input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
+  font: inherit;
+}
+.petrol-find-row .action {
+  min-height: var(--tap-target-min);
+}
+.petrol-find-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  margin-top: 12px;
+  color: var(--color-accent);
+}
