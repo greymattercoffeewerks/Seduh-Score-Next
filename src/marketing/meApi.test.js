@@ -192,3 +192,164 @@ describe('session isolation', () => {
     expect(source).not.toMatch(/supabaseClient|adminClient|getSupabase\(|src\/admin|\.\.\/admin/);
   });
 });
+
+// T-ID2.C2: the photo, with the Storage client faked.
+describe('photo', () => {
+  const NEW_HEX = 'c'.repeat(32);
+  const OLD = `/storage/v1/object/public/seduh-avatars/mine/${'a'.repeat(32)}.webp`;
+  const prepared = { blob: { size: 10 }, type: 'image/webp', ext: 'webp' };
+  function withStorage({ upload = { error: null }, remove = {} } = {}) {
+    const calls = [];
+    const client = fakeClient({
+      rpc: {
+        seduh_set_my_photo: { data: { ok: 1 } },
+        seduh_remove_my_photo: { data: { removed: true } },
+      },
+    });
+    client.storage = {
+      from: vi.fn((bucket) => ({
+        upload: vi.fn(async (...a) => {
+          calls.push(['upload', bucket, ...a]);
+          return upload;
+        }),
+        remove: vi.fn(async (...a) => {
+          calls.push(['remove', bucket, ...a]);
+          if (remove instanceof Error) throw remove;
+          return remove;
+        }),
+      })),
+    };
+    return { client, calls };
+  }
+
+  it("uploads into the caller's own folder under a random name (never upsert), removes the old file, then records the new path", async () => {
+    const { client, calls } = withStorage();
+    const result = await api(client).setPhoto({
+      prepared,
+      handle: 'mine',
+      previousUrl: OLD,
+      random: () => NEW_HEX,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(calls[0].slice(0, 3)).toEqual(['upload', 'seduh-avatars', `mine/${NEW_HEX}.webp`]);
+    expect(calls[0][4]).toMatchObject({ contentType: 'image/webp', upsert: false });
+    expect(calls[1]).toEqual(['remove', 'seduh-avatars', [`mine/${'a'.repeat(32)}.webp`]]);
+    expect(client.rpc).toHaveBeenCalledWith('seduh_set_my_photo', {
+      p_path: `mine/${NEW_HEX}.webp`,
+    });
+  });
+
+  it.each([
+    [413, 'photo_too_big'],
+    [415, 'photo_bad_type'],
+    [401, 'signed_out'],
+    [403, 'photo_upload_failed'],
+    [500, 'photo_upload_failed'],
+  ])('maps an upload refused with %i to %s and records nothing', async (statusCode, hint) => {
+    const { client } = withStorage({
+      upload: { error: { statusCode: String(statusCode), message: 'x' } },
+    });
+    expect(await api(client).setPhoto({ prepared, handle: 'mine', random: () => NEW_HEX })).toEqual(
+      { ok: false, hint },
+    );
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+
+  it('takes the new file back out when the door refuses it, and passes the hint on', async () => {
+    const { client, calls } = withStorage();
+    client.rpc = vi.fn(async () => ({
+      data: null,
+      error: { code: 'P0001', hint: 'no_object', message: 'x' },
+    }));
+    const result = await api(client).setPhoto({ prepared, handle: 'mine', random: () => NEW_HEX });
+    expect(result).toEqual({ ok: false, hint: 'no_object' });
+    expect(calls.at(-1)).toEqual(['remove', 'seduh-avatars', [`mine/${NEW_HEX}.webp`]]);
+  });
+
+  it('a failing remove of the old file never fails the save, and a thrown upload is a hint, not an exception', async () => {
+    const { client } = withStorage({ remove: new Error('network') });
+    expect(
+      await api(client).setPhoto({
+        prepared,
+        handle: 'mine',
+        previousUrl: OLD,
+        random: () => NEW_HEX,
+      }),
+    ).toEqual({ ok: true });
+    const broken = fakeClient();
+    broken.storage = {
+      from: () => ({
+        upload: async () => {
+          throw new Error('offline');
+        },
+        remove: async () => ({}),
+      }),
+    };
+    expect(await api(broken).setPhoto({ prepared, handle: 'mine', random: () => NEW_HEX })).toEqual(
+      { ok: false, hint: 'photo_upload_failed' },
+    );
+  });
+
+  it('removing removes the file through the API first, then calls the door', async () => {
+    const { client, calls } = withStorage();
+    expect(await api(client).removePhoto(OLD)).toEqual({ ok: true, data: { removed: true } });
+    expect(calls[0]).toEqual(['remove', 'seduh-avatars', [`mine/${'a'.repeat(32)}.webp`]]);
+    expect(client.rpc).toHaveBeenCalledWith('seduh_remove_my_photo', {});
+  });
+});
+
+// Review fixes (T-ID2.C2): the ORDER of upload, old-file removal and door is what keeps the bytes freed, so it is asserted.
+describe('photo: order and timeouts', () => {
+  const OLD = `/storage/v1/object/public/seduh-avatars/mine/${'a'.repeat(32)}.webp`;
+  const prepared = { blob: { size: 10 }, type: 'image/webp', ext: 'webp' };
+  function ordered(rpcAnswer) {
+    const log = [];
+    const client = fakeClient();
+    client.rpc = vi.fn(async (name) => {
+      log.push(`rpc:${name}`);
+      return rpcAnswer ?? { data: {}, error: null };
+    });
+    client.storage = {
+      from: () => ({
+        upload: async () => {
+          log.push('upload');
+          return { error: null };
+        },
+        remove: async ([p]) => {
+          log.push(`remove:${p.slice(-8)}`);
+          return {};
+        },
+      }),
+    };
+    return { client, log };
+  }
+  it('uploads, removes the old file through the API, and only then calls the door', async () => {
+    const { client, log } = ordered();
+    await api(client).setPhoto({
+      prepared,
+      handle: 'mine',
+      previousUrl: OLD,
+      random: () => 'c'.repeat(32),
+    });
+    expect(log).toEqual(['upload', 'remove:aaa.webp', 'rpc:seduh_set_my_photo']);
+  });
+  it('removing frees the file through the API before the door', async () => {
+    const { client, log } = ordered();
+    await api(client).removePhoto(OLD);
+    expect(log[0]).toMatch(/^remove:/);
+    expect(log[1]).toBe('rpc:seduh_remove_my_photo');
+  });
+  it('after a TIMEOUT it does not delete the new file (the database may have saved it)', async () => {
+    const { client, log } = ordered();
+    client.rpc = vi.fn(async () => {
+      throw Object.assign(new Error('timeout'), { timedOut: true });
+    });
+    const result = await api(client).setPhoto({
+      prepared,
+      handle: 'mine',
+      random: () => 'c'.repeat(32),
+    });
+    expect(result.ok).toBe(false);
+    expect(log).toEqual(['upload']);
+  });
+});

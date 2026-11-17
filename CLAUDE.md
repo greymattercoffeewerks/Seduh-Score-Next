@@ -227,7 +227,7 @@ below are enforced by tests that fail CI, not by memory; the "how to add a tenan
 - **Anonymous people reach data only through narrow `SECURITY DEFINER` doors** (`public_org_by_slug`,
   `public_event_summary`, `get_scoring_record`, `submit_guess`, the Guess the Bean feed, and the two country-page doors
   `public_country_record` / `public_country_index`, which read only LISTED rows of `app.historical_results`, T-CTY.1, and the person-page door
-  `public_seduh_profile(handle)`, which applies a claimed person's privacy settings in SQL and reads only already-published results, T-ID2.B1; it now also shows the person's own self-reported entries and team links, and the country door lists a team's opted-in members, T-ID2.D-a), never a table read:
+  `public_seduh_profile(handle)`, which applies a claimed person's privacy settings in SQL and reads only already-published results, T-ID2.B1; it now also shows the person's own self-reported entries and team links, and the country door lists a team's opted-in members, T-ID2.D-a; and, from T-ID2.C2, the person's photo address while their name is public, a public Storage object read by exact path, never a listing), never a table read:
   `events` is closed to anon, and `live_sessions` shows anon only ACTIVE rows (D6, `038`).
 - **A claimed person writes only their own record, through narrow `authenticated` doors** (T-ID2.D-a: `seduh_my_record`, `seduh_add_entry`,
   `seduh_update_entry`, `seduh_delete_entry`, `seduh_team_options`, `seduh_add_team_link`, `seduh_remove_team_link`,

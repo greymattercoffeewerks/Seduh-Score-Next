@@ -47,6 +47,7 @@ describe('normaliseProfile', () => {
       displayName: 'Syafiqah Omar',
       countryCode: 'BN',
       foundingNumber: 7,
+      photoUrl: null,
     });
     expect(
       normaliseProfile(door({ identity: { display_name: 'A', country_code: 'Brunei' } })).identity
@@ -280,5 +281,41 @@ describe('fetchSeduhProfile', () => {
   it('throws on a failed request (a failure is not "no page")', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: null, error: new Error('boom') });
     await expect(fetchSeduhProfile('x', { rpc })).rejects.toThrow('boom');
+  });
+});
+
+// T-ID2.C2: the photo's accepted shape is exact.
+import { cleanPhotoUrl, photoObjectName, photoSrc } from './seduhProfile.js';
+describe('the profile photo address', () => {
+  const name = `alpha/${'0f'.repeat(16)}.webp`;
+  const path = `/storage/v1/object/public/seduh-avatars/${name}`;
+  it('accepts only the one relative shape, in the right folder', () => {
+    expect(cleanPhotoUrl(path)).toBe(path);
+    expect(cleanPhotoUrl(path, 'alpha')).toBe(path);
+    expect(cleanPhotoUrl(path, 'beta')).toBeNull();
+    for (const bad of [
+      null,
+      undefined,
+      5,
+      '',
+      `https://x.test${path}`,
+      `${path}?a=1`,
+      `${path}#x`,
+      path.replace('.webp', '.png'),
+      path.replace('seduh-avatars', 'x'),
+      `${path}/../x`,
+      path.toUpperCase(),
+    ])
+      expect(cleanPhotoUrl(bad), String(bad)).toBeNull();
+  });
+  it('gives the object name, and the absolute address on a safe origin only', () => {
+    expect(photoObjectName(path)).toBe(name);
+    expect(photoObjectName('nope')).toBeNull();
+    expect(photoSrc(path, 'https://p.supabase.co')).toBe(`https://p.supabase.co${path}`);
+    expect(photoSrc(path, 'https://p.supabase.co/rest/v1')).toBe(`https://p.supabase.co${path}`);
+    expect(photoSrc(path, 'http://127.0.0.1:54421')).toBe(`http://127.0.0.1:54421${path}`);
+    for (const base of ['http://p.supabase.co', 'javascript:alert(1)', '', undefined, 'not a url'])
+      expect(photoSrc(path, base), String(base)).toBeNull();
+    expect(photoSrc('bad', 'https://p.supabase.co')).toBeNull();
   });
 });

@@ -8,6 +8,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, C2: profile photos · 2026-11-17
+
+**Task:** T-ID2.C2. Branch `claude/l2-c2-photo-cf7493`, PR into `dev`. Migration `20261123100000_seduh_photo.sql` (not in the cloud until pushed by hand). **Minor bump to 4.14.0** (a person can add a photo).
+
+- **Storage and database:** public bucket `seduh-avatars` (200 KB, webp and jpeg, enforced by the bucket); path `<handle>/<random hex>.<ext>`; Storage policies insert, delete and select for the caller's own folder only (no anon policy, no UPDATE); owner-only table `app.seduh_account_photos`; doors `seduh_set_my_photo`, `seduh_remove_my_photo`; owner function `app.seduh_photo_remove` (audit action `photo.remove`); `public_seduh_profile` fills `identity.photo_url` only while the name is public; `seduh_my_record` shows the person their own.
+- **Front end:** `photoPipeline.js` (crop, 512, re-encode, 200 KB loop, EXIF gone), a Photo tab in My Seduh ID, the photo and a "Report this photo" link on the person page, initials as the fallback.
+- **Privacy page** (same release): one paragraph, "A profile photo, if you add one".
+- **Tests:** pgTAP `086` (Storage policies as each role, doors, door visibility, owner removal, rollback; `050` and `079` and `085` kept in step); unit (`photoPipeline`, `meApi`, `meScreen`, `profileScreen`, `seduhProfile`, Privacy); Playwright `seduh-photo-live.spec.js` (project `dev-identity`: the real Storage API refuses a PNG and 200 KB + 1 byte, nobody else can write, delete or list, anon lists nothing; a 6 MB JPEG with GPS data goes in and a 512 x 512 file of 40 KB with no EXIF comes out, shows on the public page, and is removed).
+- **Found by the e2e:** `hidden` buttons stayed visible (`.action` sets `display`); fixed in `me.css`.
+- **Reviews:** `security-reviewer`: no 🔴; 🟡 a hidden or closed account's file stays at its unguessable address (intentional; Privacy and the Photo tab now say so, and the runbook says to run the owner removal on close), the room-cap helper takes any folder (harmless oracle on public handles; left), the cap is not serialised (bounded by the next save's sweep). `schema-guardian`: no 🔴; rollback run for real in a transaction and re-applied; the two redefined functions differ from the old ones only by the photo. `ui-accessibility-reviewer`: 🔴 a failed reload after a save or remove left the Photo controls disabled (fixed, both paths, tested); 🟡 a failure announced twice, a wrong label for a broken photo, a cancelled dialog leaving a dead preview, a stale-choice race (all fixed, tested). `module-boundary-checker`: clean; 🟡 the bucket name is now one export. `test-auditor`: 🔴 the audit "no path" check could not fail (now checks the removed file name and the exact key set); 🟡 order assertions, a trivial assertion and the e2e "nothing uploaded" check (fixed); the rollback replay is a hand copy (kept, schema-guardian runs the real one). `code-reviewer`: no 🔴; 🟡 a failed door after the old file is removed leaves no photo (accepted trade-off, in CONVENTIONS), a timeout deleted a possibly-saved file (fixed), blob-URL leak and race (fixed), dead `inputTypes` (now used), section comment (fixed).
+
+---
+
 ## Seduh ID Layer 2, D-b: My Seduh ID, and the person page's record · 2026-11-17
 
 **Task:** T-ID2.D-b. Branch `claude/l2-db-my-seduh-id-2e5f8f`, PR into `dev`. No migration, no cloud change. **Minor bump to 4.13.0** (a new usable capability: a person manages their own record and privacy).

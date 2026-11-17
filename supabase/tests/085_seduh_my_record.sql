@@ -454,7 +454,7 @@ drop table if exists app.seduh_team_memberships;
 drop table if exists app.seduh_self_reported_entries;
 drop function if exists app.seduh_text_ok(text);
 select is((select count(*)::int from pg_proc p where p.pronamespace in ('public'::regnamespace, 'app'::regnamespace)
-            and (p.proname ~ '^seduh_(my_|add_entry|update_entry|delete_entry|team_|add_team|remove_team|set_my|entry_|link_json|clean_text|text_ok|membership)')), 0, 'the rollback block removes every function it added');
+            and p.proname !~ 'photo' and (p.proname ~ '^seduh_(my_|add_entry|update_entry|delete_entry|team_|add_team|remove_team|set_my|entry_|link_json|clean_text|text_ok|membership)')), 0, 'the rollback block removes every function it added (the photo functions are 086''s)');
 select is((select count(*)::int from pg_class where relnamespace = 'app'::regnamespace and relname in ('seduh_self_reported_entries', 'seduh_team_memberships')), 0, '...and both tables');
 rollback to savepoint rollback_block;
 

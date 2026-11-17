@@ -158,6 +158,10 @@ const NOT_FOR_THE_CONSOLE = {
   already_linked: 'Seduh ID own record',
   too_many_links: 'Seduh ID own record',
   bad_setting: 'Seduh ID own record',
+  bad_path: 'Seduh ID photo',
+  no_object: 'Seduh ID photo',
+  photo_too_big: 'Seduh ID photo',
+  photo_bad_type: 'Seduh ID photo',
 };
 
 describe('the hint copy covers every hint the console can meet', () => {
