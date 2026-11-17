@@ -931,6 +931,7 @@ export function mountMeScreen(
     function photoPanel() {
       let prepared = null;
       let previewUrl = null;
+      let left = false; // set when the tab is left
       let choice = 0; // the latest choice wins: an earlier, slower prepare() must not overwrite it
       const currentSrc = photoSrc(record.account.photoUrl, supabaseUrl);
       const name = record.account.displayName ?? record.account.handle;
@@ -997,7 +998,7 @@ export function mountMeScreen(
         }
         setStatus(status, 'Preparing your photo…');
         const result = await prepare(file);
-        if (destroyed || mine !== choice) return;
+        if (destroyed || left || mine !== choice) return;
         if (!result.ok) {
           input.value = '';
           setStatus(status, describeMeHint(result.hint), 'error');
@@ -1016,6 +1017,7 @@ export function mountMeScreen(
 
       // leaving the tab (the panel is rebuilt) must not leak the preview's object URL
       const release = () => {
+        left = true;
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = null;
       };
@@ -1037,10 +1039,20 @@ export function mountMeScreen(
           else setStatus(status, describeMeHint(result.hint), 'error');
           return;
         }
-        release();
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
         say('Photo saved.');
         if (await refresh()) document.getElementById('me-photo-file')?.focus();
-        else busy([save, removeBtn, input], false); // the reload failed: the controls must not stay dead
+        else {
+          // the reload failed: the controls must not stay dead, and the status must not stay at "Uploading…"
+          busy([save, removeBtn, input], false);
+          setStatus(
+            status,
+            'Your photo was saved, but we could not refresh this page. Reload it to see it.',
+          );
+          save.hidden = true;
+          prepared = null;
+        } // the reload failed: the controls must not stay dead
       });
 
       removeBtn.addEventListener('click', () => {
@@ -1072,8 +1084,10 @@ export function mountMeScreen(
             return;
           }
           say('Photo removed.');
+          ask.replaceChildren();
+          removeBtn.hidden = true;
+          showInitials();
           if (await refresh()) document.getElementById('me-photo-file')?.focus();
-          else busy([yes, keep], false);
         });
         ask.replaceChildren(note, el('div', { className: 'claim-actions' }, [yes, keep]));
         keep.focus();
