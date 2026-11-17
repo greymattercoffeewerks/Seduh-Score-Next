@@ -132,7 +132,7 @@ _Client only: the organisation slot in `src/core/appShell.js` / `appShell.css`, 
 - **Two organisations with the same name** are told apart by slug in the list, the label and the announcement; the slug is the unique one.
 - **The refusal panel has no timer** (it clears on Escape, on leaving the control, on a tap anywhere, or on the next choice) and, at 360px, can sit over the page heading until dismissed. The tap-anywhere dismissal is there for iOS Safari, which does not reliably blur a select; not verified on a device.
 - **A timing-sensitive existing test is flaky under heavy parallel load** (`appShell.test.js`, "still announces at the cap when the wall clock steps backwards during the hold": real timers and a 100ms window). It passes alone and in a quiet full run; it failed twice while mutation runs shared the machine. Not touched by C3.
-- **Forced-colors mode hides the Menu button's three bars** (pre-existing, not C3's): worth its own item.
+- **Forced-colors mode hides the Menu button's three bars** (pre-existing, not C3's): worth its own item. **CLOSED (2026-11-17, 4.17.2):** the bars now paint `ButtonText` under `forced-colors: active` (`src/core/appShell.css`, guard in `appShell.test.js`); the real high-contrast render is an owner check, not yet seen.
 
 ---
 
