@@ -253,10 +253,10 @@ describe('signed in: the header', () => {
     expect(ended.root.querySelector('input[type="email"]')).not.toBeNull();
   });
 
-  it('has three sections and marks the current one', async () => {
+  it('has four sections and marks the current one', async () => {
     const { root } = await mount();
     const tabs = [...root.querySelectorAll('.me-tab')];
-    expect(tabs.map((t) => t.textContent)).toEqual(['My record', 'My teams', 'Privacy']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['My record', 'My teams', 'Photo', 'Privacy']);
     expect(tabs[0].getAttribute('aria-current')).toBe('true');
     await tab(root, 'Privacy');
     expect(root.querySelectorAll('.me-tab[aria-current="true"]')).toHaveLength(1);
@@ -869,5 +869,254 @@ describe('what the page never does', () => {
     expect(root.querySelector('main a[href^="/app"], main a[href^="/admin"]')).toBeNull();
     expect(text(root)).not.toContain('secret.person@example.test');
     expect(text(root)).not.toContain('7777777');
+  });
+});
+
+// T-ID2.C2: the Photo tab.
+describe('photo', () => {
+  const PHOTO_URL = `/storage/v1/object/public/seduh-avatars/mine/${'a'.repeat(32)}.webp`;
+  const withPhoto = () => rawRecord({ account: { ...rawRecord().account, photo_url: PHOTO_URL } });
+  async function mountPhoto(over = {}, record = rawRecord()) {
+    const { api, state } = fakeApi({
+      setPhoto: vi.fn(async () => ({ ok: true })),
+      removePhoto: vi.fn(async () => ({ ok: true })),
+      ...over,
+    });
+    state.raw = record;
+    const root = document.createElement('div');
+    document.body.append(root);
+    const prepare = vi.fn(async () => ({
+      ok: true,
+      blob: new Blob(['x'], { type: 'image/webp' }),
+      type: 'image/webp',
+      ext: 'webp',
+      size: 120000,
+    }));
+    mountMeScreen(root, { api, thisYear: 2026, prepare, supabaseUrl: 'https://p.supabase.co' });
+    await settle();
+    click(byText(root, '.me-tab', 'Photo'));
+    await settle();
+    return { root, api, state, prepare };
+  }
+  const choose = async (root, file) => {
+    const input = root.querySelector('#me-photo-file');
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+  };
+
+  it('with no photo: initials, a file chooser, no Remove, no Save until a picture is chosen', async () => {
+    const { root } = await mountPhoto();
+    expect(root.querySelector('.me-photo-initials').textContent).toBe('TP');
+    expect(root.querySelector('#me-photo-file').getAttribute('accept')).toContain('image/jpeg');
+    expect(root.querySelector('#me-photo-remove').hidden).toBe(true);
+    expect(root.querySelector('#me-photo-save').hidden).toBe(true);
+  });
+
+  it('with a photo: shows it with the alt text and offers Remove', async () => {
+    const { root } = await mountPhoto({}, withPhoto());
+    const img = root.querySelector('img.me-photo-img');
+    expect(img.getAttribute('src')).toBe(`https://p.supabase.co${PHOTO_URL}`);
+    expect(img.getAttribute('alt')).toBe('Photo of Test Person');
+    expect(root.querySelector('#me-photo-remove').hidden).toBe(false);
+  });
+
+  it('choosing a file prepares it, previews it and only then offers to save; saving uploads and reloads the record', async () => {
+    const { root, api, prepare } = await mountPhoto();
+    URL.createObjectURL = vi.fn(() => 'blob:preview');
+    URL.revokeObjectURL = vi.fn();
+    await choose(root, new File(['abc'], 'me.jpg', { type: 'image/jpeg' }));
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('img.me-photo-img').getAttribute('src')).toBe('blob:preview');
+    expect(text(root)).toContain('Ready: 117 KB');
+    expect(api.setPhoto).not.toHaveBeenCalled();
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(api.setPhoto).toHaveBeenCalledWith(
+      expect.objectContaining({ handle: 'mine', previousUrl: null }),
+    );
+    expect(api.loadRecord.mock.calls.length).toBeGreaterThan(1);
+    expect(root.querySelector('#me-status').textContent).toBe('Photo saved.');
+  });
+
+  it('a file that cannot be used says why, in words, and nothing is saved', async () => {
+    const { root, api } = await mountPhoto();
+    const prepare = async () => ({ ok: false, hint: 'photo_input_too_big' });
+    // swap in a refusing prepare by remounting
+    document.body.replaceChildren();
+    const r2 = document.createElement('div');
+    document.body.append(r2);
+    mountMeScreen(r2, { api, thisYear: 2026, prepare, supabaseUrl: 'https://p.supabase.co' });
+    await settle();
+    click(byText(r2, '.me-tab', 'Photo'));
+    await settle();
+    await choose(r2, new File(['abc'], 'big.jpg', { type: 'image/jpeg' }));
+    expect(r2.querySelector('#me-photo-status').textContent).toBe(
+      describeMeHint('photo_input_too_big'),
+    );
+    expect(r2.querySelector('#me-photo-save').hidden).toBe(true);
+    expect(api.setPhoto).not.toHaveBeenCalled();
+    expect(root).toBeTruthy();
+  });
+
+  it('a failed upload says so, keeps the chosen picture and lets the person try again', async () => {
+    const setPhoto = vi.fn(async () => ({ ok: false, hint: 'photo_upload_failed' }));
+    const { root } = await mountPhoto({ setPhoto });
+    URL.createObjectURL = vi.fn(() => 'blob:preview');
+    await choose(root, new File(['abc'], 'me.jpg', { type: 'image/jpeg' }));
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(root.querySelector('#me-photo-status').textContent).toBe(
+      describeMeHint('photo_upload_failed'),
+    );
+    expect(root.querySelector('#me-photo-save').disabled).toBe(false);
+  });
+
+  it('removing asks inside the page first, then removes through the api', async () => {
+    const { root, api } = await mountPhoto({}, withPhoto());
+    click(root.querySelector('#me-photo-remove'));
+    expect(text(root)).toContain('Remove your photo?');
+    expect(api.removePhoto).not.toHaveBeenCalled();
+    click(root.querySelector('#me-photo-remove-yes'));
+    await settle();
+    expect(api.removePhoto).toHaveBeenCalledWith(PHOTO_URL);
+    expect(root.querySelector('#me-status').textContent).toBe('Photo removed.');
+  });
+
+  it('says the photo is hidden while the name is hidden', async () => {
+    const hidden = rawRecord();
+    hidden.settings.vis_identity = 'hidden';
+    const { root } = await mountPhoto({}, hidden);
+    expect(text(root)).toContain('your photo is hidden there too');
+  });
+
+  it('a photo that fails to load falls back to the initials', async () => {
+    const { root } = await mountPhoto({}, withPhoto());
+    root.querySelector('img.me-photo-img').dispatchEvent(new Event('error'));
+    expect(root.querySelector('img.me-photo-img')).toBeNull();
+    expect(root.querySelector('.me-photo-initials')).not.toBeNull();
+  });
+});
+
+// Review fixes (T-ID2.C2).
+describe('photo: review fixes', () => {
+  const PHOTO_URL = `/storage/v1/object/public/seduh-avatars/mine/${'a'.repeat(32)}.webp`;
+  async function mountP(over = {}, prepare, record) {
+    const { api, state } = fakeApi({ setPhoto: vi.fn(async () => ({ ok: true })), ...over });
+    if (record) state.raw = record;
+    const root = document.createElement('div');
+    document.body.append(root);
+    mountMeScreen(root, { api, thisYear: 2026, prepare, supabaseUrl: 'https://p.supabase.co' });
+    await settle();
+    click(byText(root, '.me-tab', 'Photo'));
+    await settle();
+    return { root, api, state };
+  }
+  const pick = async (root, name = 'a.jpg') => {
+    const input = root.querySelector('#me-photo-file');
+    Object.defineProperty(input, 'files', {
+      value: [new File(['x'], name, { type: 'image/jpeg' })],
+      configurable: true,
+    });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const good = (size) => ({
+    ok: true,
+    blob: new Blob(['x']),
+    type: 'image/webp',
+    ext: 'webp',
+    size,
+  });
+
+  it('the LAST file chosen wins even when an earlier one finishes preparing later', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    let release;
+    const slow = new Promise((r) => (release = r));
+    const prepare = vi
+      .fn()
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce(good(50 * 1024));
+    const { root, api } = await mountP({}, prepare);
+    await pick(root, 'big.jpg');
+    await pick(root, 'small.jpg');
+    await settle();
+    release(good(190 * 1024));
+    await settle();
+    expect(text(root)).toContain('Ready: 50 KB');
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(api.setPhoto.mock.calls[0][0].prepared.size).toBe(50 * 1024);
+  });
+
+  it('cancelling the file dialog goes back to the saved photo, not a preview nobody can save', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const record = rawRecord({ account: { ...rawRecord().account, photo_url: PHOTO_URL } });
+    const { root } = await mountP(
+      {},
+      vi.fn(async () => good(1000)),
+      record,
+    );
+    await pick(root);
+    await settle();
+    expect(root.querySelector('img.me-photo-img').getAttribute('src')).toBe('blob:x');
+    const input = root.querySelector('#me-photo-file');
+    Object.defineProperty(input, 'files', { value: [], configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(root.querySelector('img.me-photo-img').getAttribute('src')).toBe(
+      `https://p.supabase.co${PHOTO_URL}`,
+    );
+    expect(root.querySelector('#me-photo-save').hidden).toBe(true);
+  });
+
+  it('a failed reload after a save does not leave the photo controls dead', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const { root, api } = await mountP(
+      {},
+      vi.fn(async () => good(1000)),
+    );
+    await pick(root);
+    await settle();
+    api.loadRecord.mockResolvedValue({ ok: false, hint: 'offline' });
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(root.querySelector('#me-photo-save').disabled).toBe(false);
+    expect(root.querySelector('#me-photo-file').disabled).toBe(false);
+  });
+
+  it('a failed upload is announced once, beside the field, and the preview stays', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const setPhoto = vi.fn(async () => ({ ok: false, hint: 'photo_upload_failed' }));
+    const { root } = await mountP(
+      { setPhoto },
+      vi.fn(async () => good(1000)),
+    );
+    await pick(root);
+    await settle();
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(root.querySelector('#me-photo-status').textContent).toBe(
+      describeMeHint('photo_upload_failed'),
+    );
+    expect(root.querySelector('#me-status').textContent).toBe('');
+    expect(root.querySelector('img.me-photo-img')).not.toBeNull();
+  });
+
+  it('leaving the tab releases the preview address', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:leak');
+    URL.revokeObjectURL = vi.fn();
+    const { root } = await mountP(
+      {},
+      vi.fn(async () => good(1000)),
+    );
+    await pick(root);
+    await settle();
+    click(byText(root, '.me-tab', 'Privacy'));
+    await settle();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:leak');
   });
 });

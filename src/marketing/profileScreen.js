@@ -11,13 +11,12 @@
 // no results yet, and the full page. Text goes in through textContent only (el()).
 //
 // Not built yet, on purpose, each a marked seam:
-//   - SEAM C2: a profile photo (the door's photo_url is null; the avatar is initials).
 //   - SEAM C3: "Share to story" (the person story card; core/storyCard.js is ready for a person spec).
 //   - SEAM C5: links INTO profiles (discovery). Nothing here links to another profile.
 import { el } from '../core/dom.js';
 import { countryName } from '../core/country.js';
 import { buildCountryChip } from '../core/countryChip.js';
-import { fetchSeduhProfile, handleFromPath } from '../core/seduhProfile.js';
+import { fetchSeduhProfile, handleFromPath, photoSrc } from '../core/seduhProfile.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
@@ -173,13 +172,45 @@ function correctionNote(profile) {
 
 // ---- the full page ----
 
-function avatar(name) {
-  // SEAM C2: an <img> of the person's photo replaces the initials once photos exist.
+// The avatar: the person's photo when the door sent one (T-ID2.C2, drawn only from the one accepted relative shape on this project's
+// own Supabase address), else the initials. A photo that fails to load, or is hidden, is replaced by the initials; the alt text is
+// "Photo of <name>". The initials are decoration (the name is the h1 beside them).
+function initialsAvatar(name) {
   return el('span', {
     className: 'profile-avatar',
     attrs: { 'aria-hidden': 'true' },
     text: initialsOf(name),
   });
+}
+
+function avatar(name, src, onFailed) {
+  if (!src) return initialsAvatar(name);
+  const img = el('img', {
+    className: 'profile-avatar profile-avatar-photo',
+    attrs: { src, alt: `Photo of ${name}`, width: '512', height: '512', decoding: 'async' },
+  });
+  img.addEventListener(
+    'error',
+    () => {
+      img.replaceWith(initialsAvatar(name));
+      onFailed?.();
+    },
+    { once: true },
+  );
+  return img;
+}
+
+// "Report this photo": a mailto with the handle in the subject, the address also shown as text (a person without a mail app can copy it).
+function reportPhoto(handle) {
+  const subject = encodeURIComponent(`Report a Seduh ID photo: ${handle}`);
+  return el('p', { className: 'profile-report' }, [
+    el('a', {
+      className: 'profile-report-link',
+      text: 'Report this photo',
+      attrs: { href: `mailto:${CONTACT_EMAIL}?subject=${subject}` },
+    }),
+    document.createTextNode(` · ${CONTACT_EMAIL}`),
+  ]);
 }
 
 function countryNode(code, { linkCountry }) {
@@ -209,6 +240,11 @@ function heroFull(profile, options) {
       : null,
     identity?.countryCode ? countryNode(identity.countryCode, options) : null,
   ].filter(Boolean);
+  const src = photoSrc(
+    identity?.photoUrl ?? null,
+    options.supabaseUrl ?? import.meta.env?.VITE_SUPABASE_URL,
+  );
+  const report = src ? reportPhoto(handle) : null;
   return el(
     'section',
     {
@@ -219,7 +255,7 @@ function heroFull(profile, options) {
       el('div', { className: 'page-hero-grid', attrs: { 'aria-hidden': 'true' } }),
       el('p', { className: 'page-hero-kicker', text: KICKER }),
       el('div', { className: 'profile-identity' }, [
-        avatar(name),
+        avatar(name, src, () => report?.remove()),
         el('div', { className: 'profile-identity-text' }, [
           el('h1', { id: 'profile-title', text: name, attrs: { tabindex: '-1' } }),
           // The handle is shown beside a name only (a name is not unique); alone it is already the title.
@@ -231,6 +267,7 @@ function heroFull(profile, options) {
       chips.length
         ? el('ul', { className: 'profile-labels', attrs: { role: 'list' } }, chips)
         : null,
+      report,
       // SEAM C3: the "Share to story" button goes here.
     ].filter(Boolean),
   );
@@ -526,10 +563,10 @@ const isAllHidden = (p) =>
 export async function mountProfilePage(
   root,
   rawHandle,
-  { client, fetchProfile = fetchSeduhProfile, linkCountry } = {},
+  { client, fetchProfile = fetchSeduhProfile, linkCountry, supabaseUrl } = {},
 ) {
   const handle = String(rawHandle ?? '').toLowerCase();
-  const options = { linkCountry: linkCountry ?? undefined };
+  const options = { linkCountry: linkCountry ?? undefined, supabaseUrl };
   document.title = 'Seduh ID — Seduh Score';
 
   async function load() {

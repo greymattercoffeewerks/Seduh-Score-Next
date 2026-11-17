@@ -257,6 +257,10 @@ describe('claiming a Seduh ID (T-ID2.B3b wording)', () => {
     expect(privacy).toContain('email us and we will hide any part of it');
     expect(privacy).not.toContain('coming soon');
     expect(privacy).toContain('What you add to your Seduh ID yourself');
+    // T-ID2.C2: the photo line says what is true (public while the name is, location data removed, removable, reportable)
+    expect(privacy).toContain('A profile photo, if you add one');
+    expect(privacy).toContain('removes any location and camera data');
+    expect(privacy).toContain('Anyone can report a photo');
     expect(privacy).toContain('Self-reported, not verified by Seduh');
     expect(privacy).toContain('Show me on my country');
     expect(privacy).toContain('Closing your Seduh ID after you have claimed it');

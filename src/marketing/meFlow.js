@@ -5,7 +5,7 @@
 // Every refusal reaches the page as a stable snake_case HINT (CONVENTIONS.md "Seduh ID: a person's own record"); the page
 // shows the words here and never the server's own text. An unknown hint gets the generic sentence.
 import { normaliseCode, normaliseEmail } from './claimFlow.js';
-import { ENTRY_KINDS, teamResultWords } from '../core/seduhProfile.js';
+import { ENTRY_KINDS, cleanPhotoUrl, teamResultWords } from '../core/seduhProfile.js';
 
 export { normaliseCode, normaliseEmail };
 
@@ -67,6 +67,15 @@ const TEXT = {
   already_linked: 'You have already linked that team.',
   too_many_links: `You have reached the limit of ${TEAM_LINK_LIMIT} team links. Remove one to add another.`,
   bad_input: 'That country is not valid. Choose one from the list.',
+  // the photo
+  photo_not_image: 'That file is not a picture we can use. Choose a JPEG, PNG or WebP photo.',
+  photo_input_too_big: 'That file is larger than 10 MB. Choose a smaller photo.',
+  photo_unreadable: 'We could not open that picture. Try another one.',
+  photo_too_big: 'That photo is still too large after shrinking it. Try a simpler picture.',
+  photo_bad_type: 'That photo is not a type we accept. Choose a JPEG, PNG or WebP photo.',
+  photo_upload_failed: 'The photo could not be uploaded. Check your connection and try again.',
+  bad_path: 'That photo could not be saved. Try again.',
+  no_object: 'The upload did not finish. Try again.',
   // settings
   bad_setting: 'That setting could not be saved. Reload the page and try again.',
   // no answer
@@ -307,6 +316,7 @@ export function normaliseMyRecord(raw) {
       foundingNumber: intOrNull(account.founding_number),
       displayName: text(account.display_name, 120),
       countryCode: typeof account.country_code === 'string' ? account.country_code : null,
+      photoUrl: cleanPhotoUrl(account.photo_url, handle),
     },
     settings,
     entries: list(raw.entries).map(normaliseEntry).filter(Boolean),

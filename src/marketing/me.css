@@ -183,6 +183,46 @@
   block-size: 1.5rem;
   accent-color: var(--color-accent);
 }
+/* Photo (T-ID2.C2): a 7rem circle (initials or the picture), the file input at tap height. */
+.me-photo {
+  display: grid;
+  gap: var(--space-3);
+}
+.me-photo-frame {
+  inline-size: 7rem;
+  block-size: 7rem;
+}
+.me-photo-img,
+.me-photo-initials {
+  display: grid;
+  inline-size: 100%;
+  block-size: 100%;
+  place-items: center;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+}
+.me-photo-initials {
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-weight-bold);
+}
+/* .action sets display, which would beat the hidden attribute (a Remove button with no photo, a Save button before a choice) */
+.me-photo [hidden] {
+  display: none;
+}
+.me-photo-file {
+  inline-size: 100%;
+  min-block-size: var(--tap-target-min);
+  color: var(--color-text);
+  font: inherit;
+}
+.me-photo-ask {
+  display: grid;
+  gap: var(--space-2);
+}
 .me-danger {
   border-color: var(--color-text);
 }
