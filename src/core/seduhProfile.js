@@ -211,6 +211,7 @@ function normaliseAffiliation(raw) {
 // ---- the profile photo (T-ID2.C2) ----
 // The door returns a RELATIVE path under the project's public Storage (the database cannot know the project's address). Only that
 // exact shape is accepted, so a malformed value can never become an <img src>; the page adds its own Supabase origin.
+export const AVATAR_BUCKET = 'seduh-avatars';
 const AVATAR_URL =
   /^\/storage\/v1\/object\/public\/seduh-avatars\/([a-z0-9](?:-?[a-z0-9])*)\/([0-9a-f]{32}\.(?:webp|jpg))$/;
 /** Pure. The photo's relative URL when it has the one accepted shape (and, when a handle is given, is in that handle's folder), else null. */

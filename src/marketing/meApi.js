@@ -12,14 +12,13 @@
 // per-address one would reveal a known address. A minimum answer time keeps this call from being the quicker oracle.
 import { raceTimeout } from '../core/timeout.js';
 import { getClaimClient } from './claimClient.js';
-import { photoObjectName } from '../core/seduhProfile.js';
+import { AVATAR_BUCKET, photoObjectName } from '../core/seduhProfile.js';
 import { randomHex32 } from './photoPipeline.js';
 import { normaliseMyRecord, normaliseTeamOptions } from './meFlow.js';
 
 const CALL_TIMEOUT_MS = 20000;
 const MIN_REQUEST_CODE_MS = 1500;
 const HINT = /^[a-z_]{1,40}$/;
-const AVATAR_BUCKET = 'seduh-avatars';
 
 function hintFromRpcError(error, status) {
   if (typeof error?.hint === 'string' && HINT.test(error.hint)) return error.hint;
@@ -172,6 +171,8 @@ export function createMeApi({ client, minRequestCodeMs = MIN_REQUEST_CODE_MS } =
       }
       const answer = await door('seduh_set_my_photo', { p_path: path });
       if (!answer.ok) {
+        // After a TIMEOUT the database may have committed: deleting the file then would break a saved photo, so leave it (the next save sweeps strays).
+        if (answer.hint === 'timeout') return answer;
         // the new file is not recorded: take it back out so it does not sit in the folder (best effort; the next save sweeps it)
         try {
           await getClient().storage.from(AVATAR_BUCKET).remove([path]);

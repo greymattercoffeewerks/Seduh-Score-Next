@@ -49,7 +49,7 @@ export function metaText(entry) {
     .join(' · ');
 }
 
-/** Up to two capital letters from a name, for the avatar until photos exist. "?" when there is nothing usable. */
+/** Up to two capital letters from a name, for the avatar when there is no photo. "?" when there is nothing usable. */
 export function initialsOf(name) {
   const words = String(name ?? '')
     .split(/\s+/)

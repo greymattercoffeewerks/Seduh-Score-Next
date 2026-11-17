@@ -297,3 +297,59 @@ describe('photo', () => {
     expect(client.rpc).toHaveBeenCalledWith('seduh_remove_my_photo', {});
   });
 });
+
+// Review fixes (T-ID2.C2): the ORDER of upload, old-file removal and door is what keeps the bytes freed, so it is asserted.
+describe('photo: order and timeouts', () => {
+  const OLD = `/storage/v1/object/public/seduh-avatars/mine/${'a'.repeat(32)}.webp`;
+  const prepared = { blob: { size: 10 }, type: 'image/webp', ext: 'webp' };
+  function ordered(rpcAnswer) {
+    const log = [];
+    const client = fakeClient();
+    client.rpc = vi.fn(async (name) => {
+      log.push(`rpc:${name}`);
+      return rpcAnswer ?? { data: {}, error: null };
+    });
+    client.storage = {
+      from: () => ({
+        upload: async () => {
+          log.push('upload');
+          return { error: null };
+        },
+        remove: async ([p]) => {
+          log.push(`remove:${p.slice(-8)}`);
+          return {};
+        },
+      }),
+    };
+    return { client, log };
+  }
+  it('uploads, removes the old file through the API, and only then calls the door', async () => {
+    const { client, log } = ordered();
+    await api(client).setPhoto({
+      prepared,
+      handle: 'mine',
+      previousUrl: OLD,
+      random: () => 'c'.repeat(32),
+    });
+    expect(log).toEqual(['upload', 'remove:aaa.webp', 'rpc:seduh_set_my_photo']);
+  });
+  it('removing frees the file through the API before the door', async () => {
+    const { client, log } = ordered();
+    await api(client).removePhoto(OLD);
+    expect(log[0]).toMatch(/^remove:/);
+    expect(log[1]).toBe('rpc:seduh_remove_my_photo');
+  });
+  it('after a TIMEOUT it does not delete the new file (the database may have saved it)', async () => {
+    const { client, log } = ordered();
+    client.rpc = vi.fn(async () => {
+      throw Object.assign(new Error('timeout'), { timedOut: true });
+    });
+    const result = await api(client).setPhoto({
+      prepared,
+      handle: 'mine',
+      random: () => 'c'.repeat(32),
+    });
+    expect(result.ok).toBe(false);
+    expect(log).toEqual(['upload']);
+  });
+});

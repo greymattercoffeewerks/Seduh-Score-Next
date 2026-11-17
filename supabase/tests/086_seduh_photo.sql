@@ -15,7 +15,7 @@
 --   * THE OWNER FUNCTION: audited (photo.remove, no path in the audit), refuses an unknown handle, a handle with no photo and a bare reason.
 --   * the table's constraints and frozen parent; a copy of the migration's rollback block (kept in step by hand) removes what it added.
 begin;
-select plan(88);
+select plan(89);
 
 create schema t086;
 grant usage on schema t086 to anon, authenticated, service_role;
@@ -280,8 +280,10 @@ select is(t086.n_objects('bravo-t86'), 0, '...the objects are gone');
 select is((select count(*)::int from app.seduh_account_photos where account_id = t086.u(102)), 0, '...and the reference');
 select is(t086.j(0, $$ select public.public_seduh_profile('bravo-t86') $$) -> 'identity' ->> 'photo_url', null, '...so the public page shows initials');
 select is((select count(*)::int from app.seduh_claim_audit where action = 'photo.remove' and account_id = t086.u(102)
-            and detail ->> 'reason' = 'T086 reported by a viewer' and detail ->> 'handle' = 'bravo-t86' and not (detail::text like '%storage%')), 1,
-  '...and it is audited, with the reason and no path');
+            and detail ->> 'reason' = 'T086 reported by a viewer' and detail ->> 'handle' = 'bravo-t86' and strpos(detail::text, repeat('2', 32)) = 0), 1,
+  '...and it is audited, with the reason and without the removed photo''s path (its random name is not in the detail)');
+select is((select array(select k from app.seduh_claim_audit, jsonb_object_keys(detail) k where action = 'photo.remove' order by k)),
+  array['had_reference', 'handle', 'reason'], '...and the audit detail holds exactly handle, reason and had_reference (a new key would have to be reviewed)');
 select is((select count(*)::int from app.seduh_claim_audit where action = 'photo.remove'), 1, '...once, and the refusals above wrote nothing');
 
 -- ============ the table's own rules ============

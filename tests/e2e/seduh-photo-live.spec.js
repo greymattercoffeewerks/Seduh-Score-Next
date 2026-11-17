@@ -85,15 +85,25 @@ test.describe('the Storage bucket and the doors (real Storage API, no browser)',
     const me = await claimedPerson('own');
     const ok = await upload(me.token, `${me.handle}/${hex32()}.webp`, randomBytes(5000));
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
-    const png = await upload(me.token, `${me.handle}/${hex32()}.webp`, randomBytes(5000), 'image/png');
+    const png = await upload(
+      me.token,
+      `${me.handle}/${hex32()}.webp`,
+      randomBytes(5000),
+      'image/png',
+    );
     expect([400, 415]).toContain(png.status);
     const big = await upload(me.token, `${me.handle}/${hex32()}.webp`, randomBytes(204801));
     expect([400, 413]).toContain(big.status);
-    const exactly = await upload(me.token, `${me.handle}/${hex32()}.jpg`, randomBytes(204800), 'image/jpeg');
+    const exactly = await upload(
+      me.token,
+      `${me.handle}/${hex32()}.jpg`,
+      randomBytes(204800),
+      'image/jpeg',
+    );
     expect(exactly.status, JSON.stringify(exactly.body)).toBe(200);
   });
 
-  test('nobody else can write into, delete from or list someone else\'s folder; anon can read an exact path but list nothing', async () => {
+  test("nobody else can write into, delete from or list someone else's folder; anon can read an exact path but list nothing", async () => {
     const owner = await claimedPerson('victim');
     const other = await claimedPerson('other');
     const organiserOnly = await createLoneUser('orgonly');
@@ -103,7 +113,11 @@ test.describe('the Storage bucket and the doors (real Storage API, no browser)',
     expect((await upload(owner.token, path, bytes)).status).toBe(200);
 
     // writes into someone else's folder
-    for (const [who, token] of [['another claimed person', other.token], ['a login with no Seduh ID', orgToken], ['anon', null]]) {
+    for (const [who, token] of [
+      ['another claimed person', other.token],
+      ['a login with no Seduh ID', orgToken],
+      ['anon', null],
+    ]) {
       const attempt = await upload(token, `${owner.handle}/${hex32()}.webp`, randomBytes(1000));
       expect(attempt.status, who).toBeGreaterThanOrEqual(400);
     }
@@ -127,7 +141,9 @@ test.describe('the Storage bucket and the doors (real Storage API, no browser)',
     expect(own.status).toBe(200);
     expect(own.body.map((o) => `${owner.handle}/${o.name}`)).toEqual([path]);
     // an upload outside the fixed name shape is refused even in the owner's own folder
-    expect((await upload(owner.token, `${owner.handle}/me.webp`, randomBytes(1000))).status).toBeGreaterThanOrEqual(400);
+    expect(
+      (await upload(owner.token, `${owner.handle}/me.webp`, randomBytes(1000))).status,
+    ).toBeGreaterThanOrEqual(400);
   });
 
   test('set, replace and remove through the doors; the public door shows the address only while the name is public', async () => {
@@ -137,35 +153,71 @@ test.describe('the Storage bucket and the doors (real Storage API, no browser)',
     expect((await upload(me.token, first, randomBytes(3000))).status).toBe(200);
 
     // refused: someone else's folder, a missing object, no login
-    const elsewhere = await rpc('seduh_set_my_photo', { p_path: `someone-else/${hex32()}.webp` }, { token: me.token });
+    const elsewhere = await rpc(
+      'seduh_set_my_photo',
+      { p_path: `someone-else/${hex32()}.webp` },
+      { token: me.token },
+    );
     expect(elsewhere.body.hint).toBe('bad_path');
-    const missing = await rpc('seduh_set_my_photo', { p_path: `${me.handle}/${hex32()}.webp` }, { token: me.token });
+    const missing = await rpc(
+      'seduh_set_my_photo',
+      { p_path: `${me.handle}/${hex32()}.webp` },
+      { token: me.token },
+    );
     expect(missing.body.hint).toBe('no_object');
-    expect((await rpc('seduh_set_my_photo', { p_path: first }, { token: null })).status).toBeGreaterThanOrEqual(400);
+    expect(
+      (await rpc('seduh_set_my_photo', { p_path: first }, { token: null })).status,
+    ).toBeGreaterThanOrEqual(400);
 
     const set = await rpc('seduh_set_my_photo', { p_path: first }, { token: me.token });
     expect(set.status, JSON.stringify(set.body)).toBe(200);
-    expect((await profile(me.handle)).identity.photo_url).toBe(`/storage/v1/object/public/seduh-avatars/${first}`);
+    expect((await profile(me.handle)).identity.photo_url).toBe(
+      `/storage/v1/object/public/seduh-avatars/${first}`,
+    );
     expect((await fetch(objectUrl(first))).status).toBe(200);
 
     // replace: the old address stops working
     expect((await upload(me.token, second, randomBytes(3000), 'image/jpeg')).status).toBe(200);
-    expect((await rpc('seduh_set_my_photo', { p_path: second }, { token: me.token })).status).toBe(200);
-    expect((await profile(me.handle)).identity.photo_url).toBe(`/storage/v1/object/public/seduh-avatars/${second}`);
+    expect((await rpc('seduh_set_my_photo', { p_path: second }, { token: me.token })).status).toBe(
+      200,
+    );
+    expect((await profile(me.handle)).identity.photo_url).toBe(
+      `/storage/v1/object/public/seduh-avatars/${second}`,
+    );
     expect((await fetch(objectUrl(first))).status).toBeGreaterThanOrEqual(400);
     expect((await fetch(objectUrl(second))).status).toBe(200);
 
     // hidden name: no photo on the public door, but the person's own record still has it
-    expect((await rpc('seduh_set_my_settings', { p_settings: { vis_identity: 'hidden' } }, { token: me.token })).status).toBe(200);
+    expect(
+      (
+        await rpc(
+          'seduh_set_my_settings',
+          { p_settings: { vis_identity: 'hidden' } },
+          { token: me.token },
+        )
+      ).status,
+    ).toBe(200);
     expect((await profile(me.handle)).identity.photo_url).toBeNull();
-    expect((await rpc('seduh_my_record', {}, { token: me.token })).body.account.photo_url).toContain(second);
-    expect((await rpc('seduh_set_my_settings', { p_settings: { vis_identity: 'public' } }, { token: me.token })).status).toBe(200);
+    expect(
+      (await rpc('seduh_my_record', {}, { token: me.token })).body.account.photo_url,
+    ).toContain(second);
+    expect(
+      (
+        await rpc(
+          'seduh_set_my_settings',
+          { p_settings: { vis_identity: 'public' } },
+          { token: me.token },
+        )
+      ).status,
+    ).toBe(200);
 
     // remove: the address dies and the page has no photo
     const removed = await rpc('seduh_remove_my_photo', {}, { token: me.token });
     expect(removed.body.removed).toBe(true);
     expect((await fetch(objectUrl(second))).status).toBeGreaterThanOrEqual(400);
     expect((await profile(me.handle)).identity.photo_url).toBeNull();
+    // nothing reached the bucket either
+    expect((await list(me.token, me.handle)).body).toEqual([]);
   });
 });
 
@@ -176,8 +228,14 @@ test.describe('the photo in a real browser', () => {
 
   async function codeFor(email) {
     const search = async () =>
-      (await (await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)).json()).messages ?? [];
-    await expect.poll(async () => (await search()).length, { intervals: [250, 500, 1000] }).toBeGreaterThan(0);
+      (
+        await (
+          await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)
+        ).json()
+      ).messages ?? [];
+    await expect
+      .poll(async () => (await search()).length, { intervals: [250, 500, 1000] })
+      .toBeGreaterThan(0);
     const [newest] = await search();
     const message = await (await fetch(`${MAILPIT}/api/v1/message/${newest.ID}`)).json();
     const match = `${message.Text ?? ''}\n${message.HTML ?? ''}`.match(/\b(\d{6})\b/);
@@ -230,7 +288,9 @@ test.describe('the photo in a real browser', () => {
       ctx.putImageData(data, 0, 0);
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.95));
       const jpeg = new Uint8Array(await blob.arrayBuffer());
-      const text = new TextEncoder().encode('Exif\0\0MM\0*CameraMake=ProofCam GPSLatitude=4.8903 GPSLongitude=114.9422');
+      const text = new TextEncoder().encode(
+        'Exif\0\0MM\0*CameraMake=ProofCam GPSLatitude=4.8903 GPSLongitude=114.9422',
+      );
       const length = text.length + 2;
       const app1 = new Uint8Array([0xff, 0xe1, length >> 8, length & 255, ...text]);
       const out = new Uint8Array(jpeg.length + app1.length);
@@ -238,7 +298,8 @@ test.describe('the photo in a real browser', () => {
       out.set(app1, 2);
       out.set(jpeg.subarray(2), 2 + app1.length);
       let binary = '';
-      for (let i = 0; i < out.length; i += 0x8000) binary += String.fromCharCode(...out.subarray(i, i + 0x8000));
+      for (let i = 0; i < out.length; i += 0x8000)
+        binary += String.fromCharCode(...out.subarray(i, i + 0x8000));
       return btoa(binary);
     });
     const buffer = Buffer.from(fixture, 'base64');
@@ -249,7 +310,9 @@ test.describe('the photo in a real browser', () => {
     await page.getByRole('button', { name: 'Photo', exact: true }).click();
     await expect(page.locator('.me-photo-initials')).toBeVisible();
     await shot(page, 'photo-empty');
-    await page.locator('#me-photo-file').setInputFiles({ name: 'camera.jpg', mimeType: 'image/jpeg', buffer });
+    await page
+      .locator('#me-photo-file')
+      .setInputFiles({ name: 'camera.jpg', mimeType: 'image/jpeg', buffer });
     await expect(page.locator('#me-photo-status')).toContainText('Ready:');
     await expect(page.locator('#me-photo-save')).toBeVisible();
     await shot(page, 'photo-preview');
@@ -259,12 +322,27 @@ test.describe('the photo in a real browser', () => {
 
     // what was STORED
     const stored = (await profile(me.handle)).identity.photo_url;
-    expect(stored).toMatch(new RegExp(`^/storage/v1/object/public/seduh-avatars/${me.handle}/[0-9a-f]{32}\\.(webp|jpg)$`));
+    expect(stored).toMatch(
+      new RegExp(
+        `^/storage/v1/object/public/seduh-avatars/${me.handle}/[0-9a-f]{32}\\.(webp|jpg)$`,
+      ),
+    );
     const bytes = Buffer.from(await (await fetch(`${api}${stored}`)).arrayBuffer());
     expect(bytes.length).toBeGreaterThan(1000);
     expect(bytes.length).toBeLessThanOrEqual(204800);
-    for (const marker of ['Exif', 'GPSLatitude', 'GPSLongitude', 'CameraMake', 'ProofCam', 'XMP', 'http://ns.adobe.com'])
-      expect(bytes.includes(Buffer.from(marker)), `the stored file must not contain ${marker}`).toBe(false);
+    for (const marker of [
+      'Exif',
+      'GPSLatitude',
+      'GPSLongitude',
+      'CameraMake',
+      'ProofCam',
+      'XMP',
+      'http://ns.adobe.com',
+    ])
+      expect(
+        bytes.includes(Buffer.from(marker)),
+        `the stored file must not contain ${marker}`,
+      ).toBe(false);
     const dims = await page.evaluate(async (url) => {
       const bitmap = await createImageBitmap(await (await fetch(url)).blob());
       return [bitmap.width, bitmap.height];
@@ -279,9 +357,16 @@ test.describe('the photo in a real browser', () => {
     await expect(img).toBeVisible();
     await expect(img).toHaveAttribute('alt', 'Photo of Photo Proof browser');
     await expect.poll(() => img.evaluate((i) => i.naturalWidth)).toBe(512);
-    await expect(pub.getByRole('link', { name: 'Report this photo' })).toHaveAttribute('href', new RegExp(`^mailto:.*subject=.*${me.handle}`));
+    await expect(pub.getByRole('link', { name: 'Report this photo' })).toHaveAttribute(
+      'href',
+      new RegExp(`^mailto:.*subject=.*${me.handle}`),
+    );
     await expect(pub.locator('.profile-report')).toContainText('hello@seduhscore.com');
-    expect(await pub.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    expect(
+      await pub.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
     await shot(pub, 'profile-with-photo');
 
     // remove from My Seduh ID: the public page shows initials again and no report link
@@ -297,7 +382,9 @@ test.describe('the photo in a real browser', () => {
     await visitor.close();
   });
 
-  test('a file that is not a picture is refused in words and nothing is uploaded', async ({ page }) => {
+  test('a file that is not a picture is refused in words and nothing is uploaded', async ({
+    page,
+  }) => {
     const me = await claimedPerson('notimg');
     await page.goto('/id/me/');
     await page.getByLabel('Your email address').fill(me.user.email);
@@ -305,7 +392,13 @@ test.describe('the photo in a real browser', () => {
     await page.getByLabel('6-digit code').fill(await codeFor(me.user.email));
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.getByRole('button', { name: 'Photo', exact: true }).click();
-    await page.locator('#me-photo-file').setInputFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 fictional') });
+    await page
+      .locator('#me-photo-file')
+      .setInputFiles({
+        name: 'notes.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF-1.4 fictional'),
+      });
     await expect(page.locator('#me-photo-status')).toContainText('not a picture');
     await expect(page.locator('#me-photo-save')).toBeHidden();
     expect((await profile(me.handle)).identity.photo_url).toBeNull();

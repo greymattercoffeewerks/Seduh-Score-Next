@@ -322,6 +322,7 @@ export function mountMeScreen(
     const live = el('p', { className: 'me-live', attrs: { id: 'me-status', role: 'status' } });
     const say = (message, tone) => setStatus(live, message, tone);
     const panel = el('div', { className: 'me-panel' });
+    let panelCleanup = null;
     const tabButtons = TABS.map(([key, label]) => {
       const b = el('button', {
         className: 'me-tab',
@@ -354,6 +355,8 @@ export function mountMeScreen(
     }
 
     function draw() {
+      panelCleanup?.();
+      panelCleanup = null;
       panel.replaceChildren(
         tab === 'record'
           ? recordPanel()
@@ -922,45 +925,54 @@ export function mountMeScreen(
       );
     }
 
-    // ---- Privacy ----
-
     // ---- Photo (T-ID2.C2) ----
     // Choose, crop square, resize to 512, re-encode, check 200 KB (photoPipeline.js), upload with this person's own session, record.
     // The picture is shown as a preview before anything is sent; the original file never leaves the browser.
     function photoPanel() {
       let prepared = null;
       let previewUrl = null;
+      let choice = 0; // the latest choice wins: an earlier, slower prepare() must not overwrite it
       const currentSrc = photoSrc(record.account.photoUrl, supabaseUrl);
       const name = record.account.displayName ?? record.account.handle;
       const status = statusLine('me-photo-status');
 
       const frame = el('div', { className: 'me-photo-frame' });
-      function showInitials() {
+      function showInitials(label = 'No photo yet: your initials show instead') {
         frame.replaceChildren(
           el('span', {
             className: 'me-photo-initials',
             text: initialsOf(name),
-            attrs: { role: 'img', 'aria-label': 'No photo yet: your initials show instead' },
+            attrs: { role: 'img', 'aria-label': label },
           }),
         );
+      }
+      // what the frame shows when nothing is being previewed: the saved photo, or the initials
+      function showCurrent() {
+        if (currentSrc) showImage(currentSrc, `Photo of ${name}`);
+        else showInitials();
       }
       function showImage(src, alt) {
         const img = el('img', {
           className: 'me-photo-img',
           attrs: { src, alt, width: String(PHOTO.size), height: String(PHOTO.size) },
         });
-        img.addEventListener('error', () => showInitials(), { once: true });
+        img.addEventListener(
+          'error',
+          () => showInitials('Your photo could not be loaded: your initials show instead'),
+          {
+            once: true,
+          },
+        );
         frame.replaceChildren(img);
       }
-      if (currentSrc) showImage(currentSrc, `Photo of ${name}`);
-      else showInitials();
+      showCurrent();
 
       const input = el('input', {
         className: 'me-photo-file',
         attrs: {
           type: 'file',
           id: 'me-photo-file',
-          accept: 'image/jpeg,image/png,image/webp,image/gif,image/avif,image/heic',
+          accept: PHOTO.inputTypes.join(','),
           'aria-describedby': 'me-photo-help me-photo-status',
         },
       });
@@ -973,15 +985,19 @@ export function mountMeScreen(
 
       input.addEventListener('change', async () => {
         const file = input.files?.[0];
+        const mine = ++choice;
         prepared = null;
         save.hidden = true;
         setStatus(status, '');
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = null;
-        if (!file) return;
+        if (!file) {
+          showCurrent(); // a cancelled dialog: back to the saved photo, not a preview nobody can save
+          return;
+        }
         setStatus(status, 'Preparing your photo…');
         const result = await prepare(file);
-        if (destroyed) return;
+        if (destroyed || mine !== choice) return;
         if (!result.ok) {
           input.value = '';
           setStatus(status, describeMeHint(result.hint), 'error');
@@ -998,6 +1014,13 @@ export function mountMeScreen(
         save.textContent = currentSrc ? 'Replace my photo' : 'Save photo';
       });
 
+      // leaving the tab (the panel is rebuilt) must not leak the preview's object URL
+      const release = () => {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+      };
+      panelCleanup = release;
+
       save.addEventListener('click', async () => {
         if (!prepared) return;
         busy([save, removeBtn, input], true);
@@ -1010,13 +1033,14 @@ export function mountMeScreen(
         if (destroyed) return;
         if (!result.ok) {
           busy([save, removeBtn, input], false);
-          const words = failed(result);
-          if (words) setStatus(status, words, 'error');
+          if (isSignedOutHint(result.hint)) failed(result);
+          else setStatus(status, describeMeHint(result.hint), 'error');
           return;
         }
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        release();
         say('Photo saved.');
         if (await refresh()) document.getElementById('me-photo-file')?.focus();
+        else busy([save, removeBtn, input], false); // the reload failed: the controls must not stay dead
       });
 
       removeBtn.addEventListener('click', () => {
@@ -1043,11 +1067,13 @@ export function mountMeScreen(
           if (destroyed) return;
           if (!result.ok) {
             busy([yes, keep], false);
-            failed(result);
+            if (isSignedOutHint(result.hint)) failed(result);
+            else setStatus(status, describeMeHint(result.hint), 'error');
             return;
           }
           say('Photo removed.');
           if (await refresh()) document.getElementById('me-photo-file')?.focus();
+          else busy([yes, keep], false);
         });
         ask.replaceChildren(note, el('div', { className: 'claim-actions' }, [yes, keep]));
         keep.focus();
@@ -1083,12 +1109,14 @@ export function mountMeScreen(
           record.settings.vis_identity !== 'public'
             ? el('p', {
                 className: 'claim-hint',
-                text: 'Your name is hidden on your public page, so your photo is hidden too. Change that under Privacy.',
+                text: 'Your name is hidden on your public page, so your photo is hidden there too. The picture stays stored until you remove it. Change your name setting under Privacy.',
               })
             : null,
         ].filter(Boolean),
       );
     }
+
+    // ---- Privacy ----
 
     function privacyPanel() {
       const rows = SETTINGS.map((s) => {

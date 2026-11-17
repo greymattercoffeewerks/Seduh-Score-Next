@@ -987,7 +987,7 @@ describe('photo', () => {
     const hidden = rawRecord();
     hidden.settings.vis_identity = 'hidden';
     const { root } = await mountPhoto({}, hidden);
-    expect(text(root)).toContain('your photo is hidden too');
+    expect(text(root)).toContain('your photo is hidden there too');
   });
 
   it('a photo that fails to load falls back to the initials', async () => {
@@ -995,5 +995,128 @@ describe('photo', () => {
     root.querySelector('img.me-photo-img').dispatchEvent(new Event('error'));
     expect(root.querySelector('img.me-photo-img')).toBeNull();
     expect(root.querySelector('.me-photo-initials')).not.toBeNull();
+  });
+});
+
+// Review fixes (T-ID2.C2).
+describe('photo: review fixes', () => {
+  const PHOTO_URL = `/storage/v1/object/public/seduh-avatars/mine/${'a'.repeat(32)}.webp`;
+  async function mountP(over = {}, prepare, record) {
+    const { api, state } = fakeApi({ setPhoto: vi.fn(async () => ({ ok: true })), ...over });
+    if (record) state.raw = record;
+    const root = document.createElement('div');
+    document.body.append(root);
+    mountMeScreen(root, { api, thisYear: 2026, prepare, supabaseUrl: 'https://p.supabase.co' });
+    await settle();
+    click(byText(root, '.me-tab', 'Photo'));
+    await settle();
+    return { root, api, state };
+  }
+  const pick = async (root, name = 'a.jpg') => {
+    const input = root.querySelector('#me-photo-file');
+    Object.defineProperty(input, 'files', {
+      value: [new File(['x'], name, { type: 'image/jpeg' })],
+      configurable: true,
+    });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const good = (size) => ({
+    ok: true,
+    blob: new Blob(['x']),
+    type: 'image/webp',
+    ext: 'webp',
+    size,
+  });
+
+  it('the LAST file chosen wins even when an earlier one finishes preparing later', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    let release;
+    const slow = new Promise((r) => (release = r));
+    const prepare = vi
+      .fn()
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce(good(50 * 1024));
+    const { root, api } = await mountP({}, prepare);
+    await pick(root, 'big.jpg');
+    await pick(root, 'small.jpg');
+    await settle();
+    release(good(190 * 1024));
+    await settle();
+    expect(text(root)).toContain('Ready: 50 KB');
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(api.setPhoto.mock.calls[0][0].prepared.size).toBe(50 * 1024);
+  });
+
+  it('cancelling the file dialog goes back to the saved photo, not a preview nobody can save', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const record = rawRecord({ account: { ...rawRecord().account, photo_url: PHOTO_URL } });
+    const { root } = await mountP(
+      {},
+      vi.fn(async () => good(1000)),
+      record,
+    );
+    await pick(root);
+    await settle();
+    expect(root.querySelector('img.me-photo-img').getAttribute('src')).toBe('blob:x');
+    const input = root.querySelector('#me-photo-file');
+    Object.defineProperty(input, 'files', { value: [], configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(root.querySelector('img.me-photo-img').getAttribute('src')).toBe(
+      `https://p.supabase.co${PHOTO_URL}`,
+    );
+    expect(root.querySelector('#me-photo-save').hidden).toBe(true);
+  });
+
+  it('a failed reload after a save does not leave the photo controls dead', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const { root, api } = await mountP(
+      {},
+      vi.fn(async () => good(1000)),
+    );
+    await pick(root);
+    await settle();
+    api.loadRecord.mockResolvedValue({ ok: false, hint: 'offline' });
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(root.querySelector('#me-photo-save').disabled).toBe(false);
+    expect(root.querySelector('#me-photo-file').disabled).toBe(false);
+  });
+
+  it('a failed upload is announced once, beside the field, and the preview stays', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const setPhoto = vi.fn(async () => ({ ok: false, hint: 'photo_upload_failed' }));
+    const { root } = await mountP(
+      { setPhoto },
+      vi.fn(async () => good(1000)),
+    );
+    await pick(root);
+    await settle();
+    click(root.querySelector('#me-photo-save'));
+    await settle();
+    expect(root.querySelector('#me-photo-status').textContent).toBe(
+      describeMeHint('photo_upload_failed'),
+    );
+    expect(root.querySelector('#me-status').textContent).toBe('');
+    expect(root.querySelector('img.me-photo-img')).not.toBeNull();
+  });
+
+  it('leaving the tab releases the preview address', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:leak');
+    URL.revokeObjectURL = vi.fn();
+    const { root } = await mountP(
+      {},
+      vi.fn(async () => good(1000)),
+    );
+    await pick(root);
+    await settle();
+    click(byText(root, '.me-tab', 'Privacy'));
+    await settle();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:leak');
   });
 });
