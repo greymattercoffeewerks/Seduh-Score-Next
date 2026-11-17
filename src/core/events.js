@@ -91,6 +91,19 @@ export async function listEventsForOrg(orgId, client = getSupabase()) {
   return data;
 }
 
+// What each of the organisation's events has so far, in ONE read (the organiser home must not ask a table per event):
+// `org_event_summaries` answers a row per event with its live flag and a flat object of plain counts (see its
+// migration for the keys). Returns a Map of event id to { isLive, facts }. What the counts mean is the caller's
+// (each format words its own); a failed read throws, and the home treats that as "no summaries", never as "no events".
+export async function listEventSummaries(orgId, client = getSupabase()) {
+  const { data, error } = await client.rpc('org_event_summaries', { p_org_id: orgId });
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error('org_event_summaries: unexpected response');
+  return new Map(
+    data.map((row) => [row.event_id, { isLive: row.is_live === true, facts: row.facts ?? {} }]),
+  );
+}
+
 // Thin RPC wrapper (user-requested "Delete event" feature, 2026-09-05) —
 // the actual is_test-only safety guard, org check, and cascading delete all
 // live server-side (supabase/migrations/20260905130000_delete_test_event_rpc.sql's

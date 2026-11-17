@@ -1,13 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  blankDraft,
-  validateDraft,
-  renderEventsList,
-  renderCreateForm,
-  mountEventsScreen,
-  eventsListHeading,
-  createEventHeading,
-} from './eventsScreen.js';
+import { renderEventsList, renderFormatFilter, mountEventsScreen } from './eventsScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { _clearAllForTests } from './db.js';
 import { enqueueOperation, setOutboxOwner, _resetOutboxOwnerForTests } from './outbox.js';
@@ -18,17 +10,6 @@ async function openDeleteConfirm(root, eventId) {
   root.querySelector(`#delete-event-${eventId}`).click();
   await vi.waitFor(() => expect(root.querySelector(`#confirm-delete-${eventId}`)).not.toBeNull());
 }
-
-describe('validateDraft', () => {
-  it('requires a non-blank name', () => {
-    expect(validateDraft(blankDraft())).toBe('Name is required.');
-    expect(validateDraft({ ...blankDraft(), name: '  ' })).toBe('Name is required.');
-  });
-
-  it('is satisfied by a name alone — date/venue/isTest are all optional', () => {
-    expect(validateDraft({ ...blankDraft(), name: 'October Cup' })).toBeNull();
-  });
-});
 
 describe('renderEventsList', () => {
   it('shows an empty-state message, not a blank list, when there are no events', () => {
@@ -52,8 +33,8 @@ describe('renderEventsList', () => {
     ];
     const list = renderEventsList(events);
     const rows = [...list.querySelectorAll('li')];
-    expect(rows[0].querySelector('.is-test-indicator')).not.toBeNull();
-    expect(rows[1].querySelector('.is-test-indicator')).toBeNull();
+    expect(rows[0].querySelector('.status[data-state="test"]').textContent).toBe('Test data');
+    expect(rows[1].querySelector('.status[data-state="test"]')).toBeNull();
   });
 
   it('shows date, venue, and city as meta text when present', () => {
@@ -68,7 +49,7 @@ describe('renderEventsList', () => {
       },
     ];
     const list = renderEventsList(events);
-    expect(list.querySelector('li').textContent).toContain('2026-10-04');
+    expect(list.querySelector('li').textContent).toContain('4 Oct');
     expect(list.querySelector('li').textContent).toContain('HQ');
     expect(list.querySelector('li').textContent).toContain('Bandar Seri Begawan');
   });
@@ -172,41 +153,28 @@ describe('renderEventsList', () => {
   });
 });
 
-describe('renderCreateForm', () => {
-  it('the visible label text for date/venue/city matches their own aria-label — both say "(optional)", so a sighted user and a screen-reader user get the same information (found in the app-wiring holistic pass)', () => {
-    const form = renderCreateForm(blankDraft(), { disabled: false });
-    const labels = [...form.querySelectorAll('.form-field-label')].map((el) => el.textContent);
-    expect(labels).toContain('Event date (optional)');
-    expect(labels).toContain('Venue (optional)');
-    expect(labels).toContain('City (optional)');
-    expect(form.querySelector('[data-field="eventDate"]').getAttribute('aria-label')).toBe(
-      'Event date (optional)',
-    );
-    expect(form.querySelector('[data-field="venue"]').getAttribute('aria-label')).toBe(
-      'Venue (optional)',
-    );
-    expect(form.querySelector('[data-field="city"]').getAttribute('aria-label')).toBe(
-      'City (optional)',
-    );
-  });
-
-  it('typing into the City field updates the draft, same as Venue', () => {
-    const draft = blankDraft();
-    const form = renderCreateForm(draft, { disabled: false });
-    const cityInput = form.querySelector('[data-field="city"]');
-    cityInput.value = 'Bandar Seri Begawan';
-    cityInput.dispatchEvent(new Event('input'));
-    expect(draft.city).toBe('Bandar Seri Begawan');
-  });
-});
-
-function fakeClient({ events = [], insertResult, rpcResult } = {}) {
+function fakeClient({
+  events = [],
+  insertResult,
+  rpcResult,
+  summaries = [],
+  summariesError = null,
+} = {}) {
   const calls = [];
+  const summaryReads = [];
   const db = { events: [...events] };
   return {
     calls,
+    summaryReads,
     db,
     rpc: (name, payload) => {
+      // The organiser home's one per-organisation summary read (org_event_summaries): a read, not a write.
+      if (name === 'org_event_summaries') {
+        summaryReads.push(payload);
+        return Promise.resolve(
+          summariesError ? { data: null, error: summariesError } : { data: summaries, error: null },
+        );
+      }
       // T-ARC.4: the screen asks for the plan snapshot after the list is on screen (the archive panel, dark here). It is a
       // read, not one of the writes these tests count, and archivePanel.test.js covers it.
       if (name === 'my_entitlements') return Promise.resolve({ data: null, error: null });
@@ -246,14 +214,17 @@ function fakeClient({ events = [], insertResult, rpcResult } = {}) {
 }
 
 describe('mountEventsScreen', () => {
-  it('loads and renders existing events for the org, and the create form', async () => {
+  it('loads and renders existing events for the org, with the way to a new one and no create form on the home', async () => {
     const root = document.createElement('div');
     const client = fakeClient({
       events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
     });
     await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
     expect(root.textContent).toContain('October Cup');
-    expect(root.querySelector('form.create-event-form')).not.toBeNull();
+    expect(root.querySelector('form')).toBeNull();
+    const create = root.querySelector('a.events-new--header');
+    expect(create.getAttribute('href')).toBe('#/events/new');
+    expect(create.classList.contains('btn-primary')).toBe(true);
   });
 
   it('requires a confirmation before finishing, then calls the scoped RPC and preserves an announced focus target', async () => {
@@ -330,7 +301,6 @@ describe('mountEventsScreen', () => {
       await mountEventsScreen(root, {
         orgId: 'org1',
         client,
-        defaultFormat: 'cup_taster',
         archivePublishHrefFor: (event) => `#/events/${event.id}/report`,
       });
       return root;
@@ -471,128 +441,623 @@ describe('mountEventsScreen', () => {
     root.remove();
   });
 
-  it('never hardcodes a format — the create call uses whatever defaultFormat was passed in', async () => {
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    const client = fakeClient({});
-    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'guess_the_bean' });
-
-    root.querySelector('[data-field="name"]').value = 'Booth Night';
-    root.querySelector('[data-field="name"]').dispatchEvent(new Event('input', { bubbles: true }));
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const insertCall = client.calls.find(([action]) => action === 'insert');
-    expect(insertCall[2].format).toBe('guess_the_bean');
-  });
-
-  it('shows the open-event refusal in the focused live feedback panel', async () => {
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    const client = fakeClient({
-      insertResult: {
-        data: null,
-        error: { code: '42501', hint: 'entitlement_cap_reached', details: 'events_open' },
+  describe('the organiser home (2026-11-17)', () => {
+    const NOW = () => new Date('2026-11-17T10:00:00');
+    const FORMATS = [
+      { value: 'cup_taster', label: 'Cup Taster' },
+      { value: 'btc', label: 'BTC' },
+      { value: 'throwdown', label: 'Throwdown' },
+    ];
+    const EVENTS = [
+      {
+        id: 'live',
+        format: 'btc',
+        name: 'Borneo Team Brew-Off',
+        event_date: '2026-11-21',
+        venue: 'The Roastery',
+        city: 'Gadong',
+        is_test: false,
+        ended_at: null,
       },
-    });
-    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
-    const name = root.querySelector('[data-field="name"]');
-    name.value = 'November Cup';
-    name.dispatchEvent(new Event('input', { bubbles: true }));
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await vi.waitFor(() =>
-      expect(root.querySelector('.screen-feedback').textContent).toContain(
-        'You already have an open event, and your plan allows one at a time. If it is a test event, delete it to make room.',
-      ),
-    );
-    const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.getAttribute('role')).toBe('status');
-    expect(document.activeElement).toBe(feedback);
-    document.body.removeChild(root);
-  });
-
-  it('shows the format plan message in the same focused live feedback panel', async () => {
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    const client = fakeClient({
-      insertResult: {
-        data: null,
-        error: { code: '42501', hint: 'entitlement_required', details: 'btc_format' },
+      {
+        id: 'cup',
+        format: 'cup_taster',
+        name: 'Brunei Cup Tasters Open',
+        event_date: '2026-12-05',
+        venue: 'Kopi Kaki HQ',
+        city: null,
+        is_test: false,
+        ended_at: null,
       },
+      {
+        id: 'latte',
+        format: 'throwdown',
+        name: 'Latte Art Throwdown',
+        event_date: null,
+        venue: null,
+        city: null,
+        is_test: false,
+        ended_at: null,
+      },
+      {
+        id: 'rehearsal',
+        format: 'btc',
+        name: 'Rehearsal run',
+        event_date: '2026-11-19',
+        venue: 'The Roastery',
+        city: null,
+        is_test: true,
+        ended_at: null,
+      },
+      {
+        id: 'old1',
+        format: 'cup_taster',
+        name: 'Cup Tasters Open, Oct',
+        event_date: '2026-10-04',
+        venue: 'HQ',
+        city: null,
+        is_test: false,
+        ended_at: '2026-10-05T00:00:00Z',
+      },
+      {
+        id: 'old2',
+        format: 'btc',
+        name: 'Old test bracket',
+        event_date: '2026-09-04',
+        venue: 'HQ',
+        city: null,
+        is_test: true,
+        ended_at: '2026-09-05T00:00:00Z',
+      },
+    ];
+    const SUMMARIES = [
+      { event_id: 'live', is_live: true, facts: { matches: 10, matches_confirmed: 6 } },
+      { event_id: 'cup', is_live: false, facts: { entries_active: 16 } },
+      { event_id: 'latte', is_live: false, facts: { entries_active: 0 } },
+    ];
+    // What a composition root's describeEvent returns, by event id: this file never names a format's words.
+    const describeEvent = (event, facts, { isLive }) => {
+      if (!facts) return null;
+      if (event.id === 'live') {
+        return {
+          summary: '6 of 10 matches done',
+          phase: 'Round 2',
+          next: 'next: score match 17',
+          progress: { done: 6, total: 10, active: 2, text: '6 of 10 confirmed · 2 scoring' },
+          action: { label: 'Score match 17', href: '#/events/live/matches/m17/scoring' },
+          attention: [],
+          ready: true,
+        };
+      }
+      if (event.id === 'cup') return { summary: '16 cuppers · 4 heats drawn', ready: true };
+      if (event.id === 'latte') {
+        return {
+          summary: 'no judges yet',
+          ready: false,
+          attention: [{ id: 'no-judges', severity: 'warning', text: 'has no judges yet.' }],
+        };
+      }
+      return { summary: isLive ? 'live' : 'old', ready: null };
+    };
+    function mountHome(extra = {}) {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      homeRoots.push(root);
+      const client = extra.client ?? fakeClient({ events: EVENTS, summaries: SUMMARIES });
+      const screen = mountEventsScreen(root, {
+        orgId: 'org1',
+        orgName: 'Kopi Kaki Collective',
+        client,
+        formatOptions: FORMATS,
+        describeEvent,
+        now: NOW,
+        ...extra,
+      });
+      return { root, client, screen };
+    }
+    const homeRoots = [];
+    afterEach(() => {
+      for (const root of homeRoots.splice(0)) root.remove();
     });
-    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'btc' });
-    const name = root.querySelector('[data-field="name"]');
-    name.value = 'November Brew Team Challenge';
-    name.dispatchEvent(new Event('input', { bubbles: true }));
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await vi.waitFor(() =>
-      expect(root.querySelector('.screen-feedback').textContent).toContain(
-        'This format needs a plan that includes it.',
-      ),
-    );
-    const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.getAttribute('role')).toBe('status');
-    expect(document.activeElement).toBe(feedback);
-    document.body.removeChild(root);
-  });
+    const rowNames = (container) =>
+      [...container.querySelectorAll('.events-row .events-row-title a')].map((a) => a.textContent);
 
-  it('renders no format selector when formatOptions is omitted — every existing single-format caller keeps its exact prior form shape', async () => {
-    const root = document.createElement('div');
-    const client = fakeClient({});
-    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
-    expect(root.querySelector('select[data-field="format"]')).toBeNull();
-  });
-
-  it('renders no format selector when only one format option is given', async () => {
-    const root = document.createElement('div');
-    const client = fakeClient({});
-    await mountEventsScreen(root, {
-      orgId: 'org1',
-      client,
-      defaultFormat: 'cup_taster',
-      formatOptions: [{ value: 'cup_taster', label: 'Cup Taster' }],
-    });
-    expect(root.querySelector('select[data-field="format"]')).toBeNull();
-  });
-
-  it('renders a format selector defaulted to defaultFormat when more than one option is given, and creates using the SELECTED format, not defaultFormat', async () => {
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    const client = fakeClient({});
-    await mountEventsScreen(root, {
-      orgId: 'org1',
-      client,
-      defaultFormat: 'cup_taster',
-      formatOptions: [
-        { value: 'cup_taster', label: 'Cup Taster' },
-        { value: 'btc', label: 'BTC' },
-      ],
+    it('asks for what each event has in ONE read for the organisation, not one per event', async () => {
+      const { client, screen } = mountHome();
+      await screen;
+      expect(client.summaryReads).toEqual([{ p_org_id: 'org1' }]);
     });
 
-    const select = root.querySelector('select[data-field="format"]');
-    expect(select).not.toBeNull();
-    expect(select.value).toBe('cup_taster');
+    it('shows a Live now card: format, date and venue, phase, next step, a progress meter in words, and Open event', async () => {
+      const { root, screen } = mountHome();
+      await screen;
+      const card = root.querySelector('.events-featured--live');
+      expect(card.querySelector('.status[data-state="live"]').textContent).toBe('Live now');
+      expect(card.querySelector('.events-format-tag').textContent).toBe('BTC');
+      expect(card.textContent).toContain('Sat 21 Nov · The Roastery · Gadong');
+      expect(card.querySelector('h2').textContent).toBe('Borneo Team Brew-Off');
+      expect(card.querySelector('.events-featured-state').textContent).toBe(
+        'Round 2 · next: score match 17',
+      );
+      const meter = card.querySelector('[role="meter"]');
+      expect(meter.getAttribute('aria-valuenow')).toBe('6');
+      expect(meter.getAttribute('aria-valuemax')).toBe('10');
+      expect(meter.getAttribute('aria-valuetext')).toBe('6 of 10 confirmed · 2 scoring');
+      expect(card.querySelector('.events-featured-figures').textContent).toContain('2 scoring');
+      const open = [...card.querySelectorAll('a')].find((a) => a.textContent === 'Open event');
+      expect(open.getAttribute('href')).toBe('#/events/live');
+      const next = [...card.querySelectorAll('a')].find((a) => a.textContent === 'Score match 17');
+      expect(next.getAttribute('href')).toBe('#/events/live/matches/m17/scoring');
+    });
 
-    select.value = 'btc';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    root.querySelector('[data-field="name"]').value = 'Regional Bracket';
-    root.querySelector('[data-field="name"]').dispatchEvent(new Event('input', { bubbles: true }));
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    it('does not repeat the live event in the list below it', async () => {
+      const { root, screen } = mountHome();
+      await screen;
+      expect(rowNames(root)).not.toContain('Borneo Team Brew-Off');
+    });
 
-    const insertCall = client.calls.find(([action]) => action === 'insert');
-    expect(insertCall[2].format).toBe('btc');
+    it('with nothing live, features the soonest dated open event as Coming up next, and leaves it out of the list', async () => {
+      const client = fakeClient({ events: EVENTS, summaries: [] });
+      const { root, screen } = mountHome({ client });
+      await screen;
+      expect(root.querySelector('.events-featured--live')).toBeNull();
+      const card = root.querySelector('.events-featured');
+      // 19 Nov (the rehearsal) is the soonest dated open event from the 17th.
+      expect(card.querySelector('.events-featured-eyebrow').textContent).toBe('Coming up next');
+      expect(card.querySelector('h2').textContent).toBe('Rehearsal run');
+      expect(rowNames(root)).not.toContain('Rehearsal run');
+      expect(rowNames(root)).toContain('Borneo Team Brew-Off');
+    });
+
+    it('groups the rest as "Coming up and in setup" and a collapsed "Finished", each with its count, in the order the list came', async () => {
+      const { root, screen } = mountHome();
+      await screen;
+      const headings = [...root.querySelectorAll('.events-group-heading')].map(
+        (h) => h.textContent,
+      );
+      // live is featured, so three open events remain
+      expect(headings).toEqual(['Coming up and in setup · 3']);
+      expect(rowNames(root.querySelector('.events-list'))).toEqual([
+        'Brunei Cup Tasters Open',
+        'Latte Art Throwdown',
+        'Rehearsal run',
+      ]);
+      const toggle = root.querySelector('#events-finished-toggle');
+      expect(toggle.textContent).toContain('Finished · 2');
+      expect(toggle.textContent).toContain('Latest: Cup Tasters Open, Oct');
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(root.querySelector('#events-finished-list').hidden).toBe(true);
+    });
+
+    it('opens and closes the Finished group from its toggle, keeping focus on the toggle', async () => {
+      const { root, screen } = mountHome();
+      await screen;
+      root.querySelector('#events-finished-toggle').click();
+      const toggle = root.querySelector('#events-finished-toggle');
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(root.querySelector('#events-finished-list').hidden).toBe(false);
+      expect(document.activeElement).toBe(toggle);
+      expect(rowNames(root.querySelector('#events-finished-list'))).toEqual([
+        'Cup Tasters Open, Oct',
+        'Old test bracket',
+      ]);
+      toggle.click();
+      expect(root.querySelector('#events-finished-toggle').getAttribute('aria-expanded')).toBe(
+        'false',
+      );
+    });
+
+    it('says the counts under the heading, and names the organisation above it as text', async () => {
+      const { root, screen } = mountHome({ orgName: '<b>Kopi</b>' });
+      await screen;
+      expect(root.querySelector('.events-counts').textContent).toBe(
+        '1 live · 3 coming up · 2 finished',
+      );
+      expect(root.querySelector('.events-org-eyebrow').textContent).toBe('<b>Kopi</b>');
+      expect(root.querySelector('h1').textContent).toBe('Events');
+    });
+
+    it('each row shows format, name, date · venue · city, the format words and a status tag', async () => {
+      const { root, screen } = mountHome();
+      await screen;
+      const rows = [...root.querySelectorAll('.events-row')];
+      const cup = rows.find((r) => r.dataset.eventId === 'cup');
+      expect(cup.querySelector('.events-format-tag').textContent).toBe('Cup Taster');
+      expect(cup.textContent).toContain('Sat 5 Dec · Kopi Kaki HQ');
+      expect(cup.querySelector('.events-row-summary').textContent).toBe(
+        '16 cuppers · 4 heats drawn',
+      );
+      expect(cup.querySelector('.events-row-tags .status').textContent).toBe('Ready');
+      const latte = rows.find((r) => r.dataset.eventId === 'latte');
+      expect(latte.querySelector('.events-row-tags .status').textContent).toBe('In setup');
+    });
+
+    it('a row for an event that has no summary shows no invented state line, and is still listed', async () => {
+      const { root, screen } = mountHome({ describeEvent: null });
+      await screen;
+      expect(rowNames(root.querySelector('.events-list'))).toContain('Latte Art Throwdown');
+      expect(root.querySelector('.events-row-summary')).toBeNull();
+    });
+
+    it('a failed summary read never fails the screen: every event is still listed, with no state lines', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const client = fakeClient({
+        events: EVENTS,
+        summariesError: { code: 'XX000', message: 'boom' },
+      });
+      const { root, screen } = mountHome({ client });
+      await screen;
+      expect(root.querySelector('[data-tone="error"]')).toBeNull();
+      expect(rowNames(root)).toContain('Brunei Cup Tasters Open');
+      expect(root.querySelector('.events-row-summary')).toBeNull();
+      spy.mockRestore();
+    });
+
+    it('a describeEvent that throws costs that row its words, not the page', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { root, screen } = mountHome({
+        describeEvent: () => {
+          throw new Error('format bug');
+        },
+      });
+      await screen;
+      expect(rowNames(root)).toContain('Brunei Cup Tasters Open');
+      spy.mockRestore();
+    });
+
+    it('test data is tagged on its row (violet state) and on the featured card (D9), whatever else is true', async () => {
+      const { root, screen } = mountHome({ client: fakeClient({ events: EVENTS, summaries: [] }) });
+      await screen;
+      const featured = root.querySelector('.events-featured');
+      expect(featured.querySelector('.status[data-state="test"]').textContent).toBe('Test data');
+      await screen;
+      root.querySelector('#events-finished-toggle').click();
+      const old = root.querySelector('[data-event-id="old2"]');
+      expect(old.querySelector('.status[data-state="test"]').textContent).toBe('Test data');
+      expect(old.querySelector('.status[data-state="done"]').textContent).toBe('Finished');
+    });
+
+    it('a LIVE test event wears the test tag on the Live now card too (D9)', async () => {
+      const events = EVENTS.map((e) => (e.id === 'live' ? { ...e, is_test: true } : e));
+      const { root, screen } = mountHome({ client: fakeClient({ events, summaries: SUMMARIES }) });
+      await screen;
+      expect(
+        root.querySelector('.events-featured--live .status[data-state="test"]').textContent,
+      ).toBe('Test data');
+    });
+
+    describe('the format filter', () => {
+      it('is drawn only when more than one format is configured', async () => {
+        for (const formatOptions of [undefined, [FORMATS[0]]]) {
+          const { root, screen } = mountHome({ formatOptions });
+          await screen;
+          expect(root.querySelector('.events-filter')).toBeNull();
+        }
+        const { root, screen } = mountHome();
+        await screen;
+        expect(root.querySelector('.events-filter')).not.toBeNull();
+      });
+
+      it('offers chips (wide) and a select (phone) with the same choices, All first', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        expect(
+          [...root.querySelectorAll('.events-choice')].map((chip) => [
+            chip.textContent,
+            chip.getAttribute('aria-pressed'),
+          ]),
+        ).toEqual([
+          ['All', 'true'],
+          ['Cup Taster', 'false'],
+          ['BTC', 'false'],
+          ['Throwdown', 'false'],
+        ]);
+        expect(
+          [...root.querySelectorAll('#events-filter-select option')].map((o) => o.textContent),
+        ).toEqual(['All formats', 'Cup Taster', 'BTC', 'Throwdown']);
+        expect(root.querySelector('label[for="events-filter-select"]')).not.toBeNull();
+      });
+
+      it('a chip narrows the list to that format, says which is pressed, and keeps focus on it', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        root.querySelector('#events-filter-chip-throwdown').click();
+        expect(rowNames(root.querySelector('.events-list'))).toEqual(['Latte Art Throwdown']);
+        const chip = root.querySelector('#events-filter-chip-throwdown');
+        expect(chip.getAttribute('aria-pressed')).toBe('true');
+        expect(root.querySelector('#events-filter-chip-all').getAttribute('aria-pressed')).toBe(
+          'false',
+        );
+        expect(document.activeElement).toBe(chip);
+        expect(root.querySelector('#events-filter-select').value).toBe('throwdown');
+        expect(root.querySelector('.events-group-heading').textContent).toBe(
+          'Coming up and in setup · 1',
+        );
+      });
+
+      it('the select does the same, and a format with no events says so in words', async () => {
+        const events = EVENTS.filter((event) => event.format !== 'throwdown');
+        const { root, screen } = mountHome({
+          client: fakeClient({ events, summaries: SUMMARIES }),
+        });
+        await screen;
+        const select = root.querySelector('#events-filter-select');
+        select.value = 'throwdown';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(root.querySelector('.events-group-none').textContent).toBe(
+          'No Throwdown events coming up.',
+        );
+        expect(document.activeElement).toBe(root.querySelector('#events-filter-select'));
+        // back to all
+        const again = root.querySelector('#events-filter-select');
+        again.value = 'all';
+        again.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(rowNames(root.querySelector('.events-list')).length).toBeGreaterThan(1);
+      });
+
+      it('narrows the list only: the live card, the counts and Needs attention still cover every format', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        root.querySelector('#events-filter-chip-cup_taster').click();
+        expect(root.querySelector('.events-featured--live h2').textContent).toBe(
+          'Borneo Team Brew-Off',
+        );
+        expect(root.querySelector('.events-counts').textContent).toBe(
+          '1 live · 3 coming up · 2 finished',
+        );
+        expect(root.querySelector('.ok-warn').textContent).toContain('Latte Art Throwdown');
+      });
+
+      it('filters the Finished group too', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        root.querySelector('#events-filter-chip-btc').click();
+        expect(root.querySelector('#events-finished-toggle').textContent).toContain('Finished · 1');
+        root.querySelector('#events-filter-chip-throwdown').click();
+        expect(root.querySelector('#events-finished-toggle')).toBeNull();
+      });
+    });
+
+    describe('Needs attention across events', () => {
+      it('collects the format items (named for their event), no-venue and test data left waiting, worst first', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        const card = root.querySelector('.ok-warn');
+        const items = [...card.querySelectorAll('.ok-warn-item')].map((li) => li.textContent);
+        expect(card.querySelector('h2').textContent).toContain('Needs attention');
+        expect(items.some((t) => t.includes('Latte Art Throwdown: has no judges yet.'))).toBe(true);
+        expect(items.some((t) => t.includes('Latte Art Throwdown has no venue yet.'))).toBe(true);
+        expect(
+          items.some((t) => t.includes('Rehearsal run is test data: delete it when you are done.')),
+        ).toBe(true);
+        // a warning outranks a note
+        expect(card.querySelector('.ok-warn-item').dataset.severity).toBe('warning');
+        const link = [...card.querySelectorAll('a')].find((a) =>
+          a.closest('li').textContent.includes('no judges'),
+        );
+        expect(link.getAttribute('href')).toBe('#/events/latte');
+      });
+
+      it("leaves out the live event's test-data note and every finished event", async () => {
+        const events = [
+          { ...EVENTS[0], is_test: true },
+          { ...EVENTS[4], venue: null },
+        ];
+        const { root, screen } = mountHome({
+          client: fakeClient({ events, summaries: SUMMARIES }),
+        });
+        await screen;
+        expect(root.querySelector('.ok-warn .ok-warn-item')).toBeNull();
+        expect(root.querySelector('.ok-warn').textContent).toContain('Nothing needs attention.');
+      });
+    });
+
+    describe("Finish and Delete are off the row's main line", () => {
+      it('sit behind a Manage toggle that names its event and says whether it is open', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        const toggle = root.querySelector('#manage-cup');
+        expect(toggle.getAttribute('aria-label')).toBe('Manage "Brunei Cup Tasters Open"');
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        const panel = root.querySelector(`#${toggle.getAttribute('aria-controls')}`);
+        expect(panel.hidden).toBe(true);
+        expect(panel.querySelector('#finish-event-cup')).not.toBeNull();
+        toggle.click();
+        expect(root.querySelector('#manage-cup').getAttribute('aria-expanded')).toBe('true');
+        expect(root.querySelector('#manage-panel-cup').hidden).toBe(false);
+        expect(document.activeElement).toBe(root.querySelector('#manage-cup'));
+        root.querySelector('#manage-cup').click();
+        expect(root.querySelector('#manage-panel-cup').hidden).toBe(true);
+      });
+
+      it('offers Delete only for test data, and no toggle at all where there is nothing to manage', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        expect(
+          root.querySelector('#manage-panel-rehearsal #delete-event-rehearsal'),
+        ).not.toBeNull();
+        expect(root.querySelector('#manage-panel-cup #delete-event-cup')).toBeNull();
+        root.querySelector('#events-finished-toggle').click();
+        // finished, real, no archive panel: nothing to manage
+        expect(root.querySelector('#manage-old1')).toBeNull();
+        // finished test data can still be deleted
+        expect(root.querySelector('#manage-panel-old2 #delete-event-old2')).not.toBeNull();
+      });
+
+      it('keeps the live event reachable: Finish is on its card', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        const panel = root.querySelector('.events-featured--live #manage-panel-live');
+        expect(panel.querySelector('#finish-event-live')).not.toBeNull();
+      });
+
+      it('a flow in progress keeps its panel open, and Cancel leaves it open with focus on the button', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        root.querySelector('#finish-event-cup').click();
+        expect(root.querySelector('#manage-panel-cup').hidden).toBe(false);
+        expect(document.activeElement).toBe(root.querySelector('#confirm-finish-cup'));
+        root.querySelector('#cancel-finish-cup').click();
+        expect(root.querySelector('#manage-panel-cup').hidden).toBe(false);
+        expect(document.activeElement).toBe(root.querySelector('#finish-event-cup'));
+      });
+
+      it('finishing moves the event to the Finished group and says so', async () => {
+        const { root, client, screen } = mountHome();
+        await screen;
+        root.querySelector('#finish-event-cup').click();
+        root.querySelector('#confirm-finish-cup').click();
+        await vi.waitFor(() =>
+          expect(client.calls).toContainEqual([
+            'rpc',
+            'finish_event',
+            { p_org_id: 'org1', p_event_id: 'cup' },
+          ]),
+        );
+        await vi.waitFor(() =>
+          expect(root.querySelector('.events-counts').textContent).toContain('3 finished'),
+        );
+        expect(rowNames(root.querySelector('.events-list'))).not.toContain(
+          'Brunei Cup Tasters Open',
+        );
+        expect(root.querySelector('.screen-feedback').textContent).toBe('Event finished.');
+      });
+
+      it('deleting test data inside the collapsed Finished group opens the group for the flow', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        root.querySelector('#delete-event-old2').click();
+        await vi.waitFor(() => expect(root.querySelector('#confirm-delete-old2')).not.toBeNull());
+        expect(root.querySelector('#events-finished-list').hidden).toBe(false);
+        expect(root.querySelector('#manage-panel-old2').hidden).toBe(false);
+        expect(document.activeElement).toBe(root.querySelector('#confirm-delete-old2'));
+      });
+    });
+
+    describe('the rail and the new-event link', () => {
+      it('lists the organisation links the caller gives, as links with their counts as text', async () => {
+        const { root, screen } = mountHome({
+          orgLinks: [
+            { label: 'People', href: '#/people', meta: '64' },
+            { label: 'Team logins', href: '#/team' },
+            { label: 'Published results', href: '/results/' },
+            { label: 'No link', href: null },
+          ],
+        });
+        await screen;
+        const links = [...root.querySelectorAll('.events-org-link')];
+        expect(links.map((a) => [a.firstChild.textContent, a.getAttribute('href')])).toEqual([
+          ['People', '#/people'],
+          ['Team logins', '#/team'],
+          ['Published results', '/results/'],
+        ]);
+        expect(links[0].querySelector('.events-org-meta').textContent).toBe('64');
+        expect(root.querySelector('#events-org-heading').textContent).toBe('Your organisation');
+      });
+
+      it('draws no organisation card when it has no links to give', async () => {
+        const { root, screen } = mountHome();
+        await screen;
+        expect(root.querySelector('.events-org')).toBeNull();
+      });
+
+      it('has one + New event link in the header and one after the list (CSS shows one at a time), both to the new-event route', async () => {
+        const { root, screen } = mountHome({ newEventHref: '#/events/new' });
+        await screen;
+        const links = [...root.querySelectorAll('a.events-new')];
+        expect(
+          links.map((a) => a.className.includes('--header') || a.className.includes('--foot')),
+        ).toEqual([true, true]);
+        for (const link of links) {
+          expect(link.getAttribute('href')).toBe('#/events/new');
+          expect(link.textContent).toBe('+ New event');
+          expect(link.classList.contains('btn-primary') && link.classList.contains('btn-lg')).toBe(
+            true,
+          );
+          expect(link.getAttribute('aria-label')).toBe('New event in Kopi Kaki Collective');
+        }
+        // the only bevelled primary button on the page
+        expect(root.querySelectorAll('.btn-primary.btn-lg')).toHaveLength(2);
+        expect(root.querySelectorAll('.btn-primary:not(.btn-lg)').length).toBeLessThanOrEqual(1);
+      });
+
+      it('puts needs attention before the list on a phone (DOM slots the stylesheet orders)', async () => {
+        const { root, screen } = mountHome({
+          audienceLinks: { phone: 'https://x/p', projector: 'https://x/pr', splash: 'https://x/s' },
+        });
+        await screen;
+        for (const slot of ['featured', 'attention', 'list', 'audience']) {
+          expect(root.querySelector(`.events-slot-${slot}`), slot).not.toBeNull();
+        }
+        expect(root.querySelector('.events-home-rail .events-slot-attention')).not.toBeNull();
+        expect(root.querySelector('.events-home-main .events-slot-list')).not.toBeNull();
+      });
+    });
+
+    it('redraws the organisation links when they really change after the screen is up, and not when they do not', async () => {
+      let isOwner = false;
+      let notify = () => {};
+      const unsubscribe = vi.fn();
+      const links = () => [
+        { label: 'People', href: '#/people' },
+        ...(isOwner ? [{ label: 'Team logins', href: '#/team' }] : []),
+      ];
+      const { root, screen } = mountHome({
+        orgLinks: links,
+        subscribeOrgLinks: (callback) => {
+          notify = callback;
+          return unsubscribe;
+        },
+      });
+      const handle = await screen;
+      const labels = () =>
+        [...root.querySelectorAll('.events-org-link')].map((a) => a.firstChild.textContent);
+      expect(labels()).toEqual(['People']);
+      const card = root.querySelector('.events-org');
+      notify();
+      expect(root.querySelector('.events-org')).toBe(card);
+      isOwner = true;
+      notify();
+      expect(labels()).toEqual(['People', 'Team logins']);
+      handle.unmount();
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('a late links change never paints over a superseded screen', async () => {
+      let notify = () => {};
+      let more = false;
+      const controller = new AbortController();
+      const { root, screen } = mountHome({
+        signal: controller.signal,
+        orgLinks: () => [
+          { label: 'People', href: '#/people' },
+          ...(more ? [{ label: 'Team logins', href: '#/team' }] : []),
+        ],
+        subscribeOrgLinks: (callback) => {
+          notify = callback;
+          return () => {};
+        },
+      });
+      await screen;
+      controller.abort();
+      root.innerHTML = '<p>the next screen</p>';
+      more = true;
+      notify();
+      expect(root.innerHTML).toBe('<p>the next screen</p>');
+    });
+
+    it('with no events at all says so and shows the way to a new one, no list, no filter', async () => {
+      const { root, screen } = mountHome({ client: fakeClient({ events: [], summaries: [] }) });
+      await screen;
+      expect(root.querySelector('#events-none-heading').textContent).toBe('No events yet');
+      expect(root.querySelector('.events-counts').textContent).toBe('No events yet');
+      expect(root.querySelector('.events-list')).toBeNull();
+      expect(root.querySelector('.events-featured')).toBeNull();
+      expect(root.querySelector('a.events-new--header')).not.toBeNull();
+    });
   });
 
-  it("shows each event's own format label in the list when more than one format option is given", async () => {
+  it("shows each event's own format label on its row when formats are configured", async () => {
     const root = document.createElement('div');
     const client = fakeClient({
       events: [
@@ -603,56 +1068,43 @@ describe('mountEventsScreen', () => {
     await mountEventsScreen(root, {
       orgId: 'org1',
       client,
-      defaultFormat: 'cup_taster',
       formatOptions: [
         { value: 'cup_taster', label: 'Cup Taster' },
         { value: 'btc', label: 'BTC' },
       ],
     });
-
-    const rows = [...root.querySelectorAll('.events-list li')];
-    expect(rows[0].textContent).toContain('Cup Taster');
-    expect(rows[1].textContent).toContain('BTC');
+    const text = [...root.querySelectorAll('.events-format-tag')].map((t) => t.textContent);
+    expect(text).toContain('Cup Taster');
+    expect(text).toContain('BTC');
   });
 
-  it('defaults the "This is test data" checkbox to unchecked (D9: opt in, never the reverse)', async () => {
+  it('draws no format tag when no formats are configured', async () => {
     const root = document.createElement('div');
-    const client = fakeClient({});
-    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
-    expect(root.querySelector('[data-field="isTest"]').checked).toBe(false);
+    const client = fakeClient({
+      events: [
+        { id: 'ev1', org_id: 'org1', name: 'October Cup', format: 'cup_taster', is_test: false },
+      ],
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client });
+    expect(root.querySelector('.events-format-tag')).toBeNull();
   });
 
-  it('creating an event clears the form, shows success, and re-lists the new event', async () => {
-    const root = document.createElement('div');
-    document.body.appendChild(root);
-    const client = fakeClient({});
-    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
-
-    const nameInput = root.querySelector('[data-field="name"]');
-    nameInput.value = 'October Cup';
-    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(root.querySelector('.screen-feedback').textContent).toBe('Event created.');
-    expect(root.textContent).toContain('October Cup');
-    expect(root.querySelector('[data-field="name"]').value).toBe('');
-  });
-
-  it('rejects a blank name without ever calling the client', async () => {
-    const root = document.createElement('div');
-    const client = fakeClient({});
-    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
-
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(client.calls.some(([action]) => action === 'insert')).toBe(false);
-    expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+  describe('renderFormatFilter', () => {
+    it('returns nothing for one format or none, and calls back with the value and where focus goes', () => {
+      expect(renderFormatFilter(undefined, 'all', () => {})).toBeNull();
+      expect(renderFormatFilter([{ value: 'a', label: 'A' }], 'all', () => {})).toBeNull();
+      const onChange = vi.fn();
+      const filter = renderFormatFilter(
+        [
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B' },
+        ],
+        'all',
+        onChange,
+      );
+      filter.querySelector('#events-filter-chip-b').click();
+      expect(onChange).toHaveBeenCalledWith('b', '#events-filter-chip-b');
+    });
   });
 
   it('renders a Retry-capable error state when the initial load fails', async () => {
@@ -688,7 +1140,6 @@ describe('mountEventsScreen', () => {
       const mountPromise = mountEventsScreen(root, {
         orgId: 'org1',
         client: hungClient,
-        defaultFormat: 'cup_taster',
       });
 
       await vi.advanceTimersByTimeAsync(0);
@@ -731,7 +1182,6 @@ describe('mountEventsScreen', () => {
     const mountPromise = mountEventsScreen(root, {
       orgId: 'org1',
       client: controllableClient,
-      defaultFormat: 'cup_taster',
       signal: controller.signal,
     });
 
@@ -777,7 +1227,6 @@ describe('mountEventsScreen', () => {
         mounted: mountEventsScreen(root, {
           orgId: 'org1',
           client,
-          defaultFormat: 'cup_taster',
           ...options,
         }),
       };
@@ -1054,52 +1503,40 @@ describe('mountEventsScreen', () => {
 describe('which organisation an event belongs to (T-TEN.C5)', () => {
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
   const h2s = (root) => [...root.querySelectorAll('h2')].map((h) => h.textContent);
-  async function createNamed(root, name) {
-    const field = root.querySelector('[data-field="name"]');
-    field.value = name;
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await tick();
-  }
+  const eyebrow = (root) => root.querySelector('.events-org-eyebrow')?.textContent ?? null;
 
-  it('the two headings name the organisation, and read as before without a name', () => {
-    expect(eventsListHeading('Alpha Coffee')).toBe('Events in Alpha Coffee');
-    expect(createEventHeading('Alpha Coffee')).toBe('Create an event in Alpha Coffee');
-    for (const none of [null, undefined, '', '   ']) {
-      expect(eventsListHeading(none)).toBe('Your events');
-      expect(createEventHeading(none)).toBe('Create event');
-    }
-  });
-
-  it('the screen names the organisation above the list and above the create form', async () => {
-    const root = document.createElement('div');
-    const client = fakeClient({
-      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
-    });
-    await mountEventsScreen(root, {
-      orgId: 'org1',
-      orgName: 'Alpha Coffee',
-      client,
-      defaultFormat: 'cup_taster',
-    });
-    expect(h2s(root)).toEqual(['Events in Alpha Coffee', 'Create an event in Alpha Coffee']);
-    // The create heading sits in the same card as the form it describes.
-    const card = [...root.querySelectorAll('.card')].find((c) => c.querySelector('form'));
-    expect(card.querySelector('h2').textContent).toBe('Create an event in Alpha Coffee');
-  });
-
-  it('without a name the headings are the ones it always had', async () => {
+  it('the home names the organisation above its heading, without the spaces around the name', async () => {
     const root = document.createElement('div');
     await mountEventsScreen(root, {
       orgId: 'org1',
+      orgName: '  Alpha Coffee  ',
       client: fakeClient({
         events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
       }),
-      defaultFormat: 'cup_taster',
     });
-    expect(h2s(root)).toEqual(['Your events', 'Create event']);
+    expect(eyebrow(root)).toBe('Alpha Coffee');
+    expect(root.querySelector('h1').textContent).toBe('Events');
+    expect(root.querySelector('a.events-new--header').getAttribute('aria-label')).toBe(
+      'New event in Alpha Coffee',
+    );
+  });
+
+  it('without a name there is no organisation line, and the headings read plainly', async () => {
+    for (const none of [undefined, null, '', '   ']) {
+      const root = document.createElement('div');
+      await mountEventsScreen(root, {
+        orgId: 'org1',
+        orgName: none,
+        client: fakeClient({
+          events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
+        }),
+      });
+      expect(eyebrow(root)).toBeNull();
+      expect(h2s(root)).toContain('Your events');
+      expect(root.querySelector('a.events-new--header').getAttribute('aria-label')).toBe(
+        'New event',
+      );
+    }
   });
 
   it('writes the name as text, never as markup', async () => {
@@ -1111,10 +1548,9 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
       client: fakeClient({
         events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
       }),
-      defaultFormat: 'cup_taster',
     });
     expect(root.querySelector('img')).toBeNull();
-    expect(h2s(root)).toContain(`Create an event in ${hostile}`);
+    expect(eyebrow(root)).toBe(hostile);
   });
 
   // A client that honours the organisation: one shared database, `eq('org_id')` filters, and a delete that
@@ -1130,6 +1566,7 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
         insertGate = gate;
       },
       rpc: (name, payload) => {
+        if (name === 'org_event_summaries') return Promise.resolve({ data: [], error: null });
         // The archive panel's plan read (T-ARC.4) is not one of the writes counted here.
         if (name === 'my_entitlements') return Promise.resolve({ data: null, error: null });
         calls.push(['rpc', name, payload]);
@@ -1186,7 +1623,6 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
       orgId,
       orgName,
       client,
-      defaultFormat: 'cup_taster',
       ...extra,
     });
     return { root, screen };
@@ -1203,42 +1639,14 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
     expect(root.textContent).not.toContain('Alpha Test Run');
   });
 
-  it('creates in that organisation, re-lists it (still only its events), and says where the event went', async () => {
+  it('reads the list for the organisation it was mounted for, and for no other', async () => {
     const client = orgClient(BOTH);
-    const { root, screen } = mountFor('org2', 'Bravo Roasters', client);
+    const { screen } = mountFor('org2', 'Bravo Roasters', client);
     await screen;
-    await createNamed(root, 'Bravo Open');
-    const insert = client.calls.find(([kind]) => kind === 'insert');
-    expect(insert[2]).toMatchObject({ org_id: 'org2', name: 'Bravo Open' });
-    // The list was read for org2 twice (mount, then after creating), never for another organisation.
     const listed = client.calls
       .filter(([kind, , column]) => kind === 'eq' && column === 'org_id')
       .map(([, , , value]) => value);
-    expect(listed).toEqual(['org2', 'org2']);
-    expect(root.textContent).toContain('Bravo Open');
-    expect(root.textContent).toContain('Bravo Test Run');
-    expect(root.textContent).not.toContain('Alpha Test Run');
-    expect(root.querySelector('.screen-feedback').textContent).toBe(
-      'Event created in Bravo Roasters.',
-    );
-  });
-
-  it('names the organisation without the spaces around it', async () => {
-    const client = orgClient(BOTH);
-    const { root, screen } = mountFor('org2', '  Bravo Roasters  ', client);
-    await screen;
-    await createNamed(root, 'Bravo Open');
-    expect(root.querySelector('.screen-feedback').textContent).toBe(
-      'Event created in Bravo Roasters.',
-    );
-  });
-
-  it('says plain "Event created." when it has no name for the organisation', async () => {
-    const client = orgClient(BOTH);
-    const { root, screen } = mountFor('org2', null, client);
-    await screen;
-    await createNamed(root, 'Bravo Open');
-    expect(root.querySelector('.screen-feedback').textContent).toBe('Event created.');
+    expect(listed).toEqual(['org2']);
   });
 
   it("deletes in that organisation, and the other organisation's event is untouched", async () => {
@@ -1262,42 +1670,15 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
     const second = mountFor('org2', 'Bravo Roasters', client);
     await first.screen;
     await second.screen;
-    await createNamed(second.root, 'Bravo Open');
-    expect(first.root.textContent).not.toContain('Bravo');
+    expect(first.root.textContent).not.toContain('Bravo Test Run');
     expect(first.root.textContent).toContain('Alpha Test Run');
     expect(second.root.textContent).not.toContain('Alpha Test Run');
-    expect(h2s(first.root)).toEqual(['Events in Alpha Coffee', 'Create an event in Alpha Coffee']);
-    expect(h2s(second.root)).toEqual([
-      'Events in Bravo Roasters',
-      'Create an event in Bravo Roasters',
-    ]);
-  });
-
-  it('labels the create form with its heading, so someone who jumps to the form hears the organisation', async () => {
-    const client = orgClient(BOTH);
-    const { root, screen } = mountFor('org1', 'Alpha Coffee', client);
-    await screen;
-    const form = root.querySelector('form');
-    const heading = root.querySelector(`#${form.getAttribute('aria-labelledby')}`);
-    expect(heading.tagName).toBe('H2');
-    expect(heading.textContent).toBe('Create an event in Alpha Coffee');
+    expect(second.root.textContent).toContain('Bravo Test Run');
+    expect(eyebrow(first.root)).toBe('Alpha Coffee');
+    expect(eyebrow(second.root)).toBe('Bravo Roasters');
   });
 
   describe('a screen that has been superseded sends nothing', () => {
-    it('a create submitted after the signal was aborted is not sent, and nothing is painted', async () => {
-      const client = orgClient(BOTH);
-      const controller = new AbortController();
-      const { root, screen } = mountFor('org1', 'Alpha Coffee', client, {
-        signal: controller.signal,
-      });
-      await screen;
-      const before = root.innerHTML;
-      controller.abort();
-      await createNamed(root, 'Too Late');
-      expect(client.calls.some(([kind]) => kind === 'insert')).toBe(false);
-      expect(root.innerHTML).toBe(before);
-    });
-
     it('a delete confirmed after the signal was aborted is not sent', async () => {
       const client = orgClient(BOTH);
       const controller = new AbortController();
@@ -1313,42 +1694,40 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
       expect(client.db.events.map((row) => row.id)).toContain('ev-a');
     });
 
-    it('a create already in flight when the organisation changes lands in the old organisation, and paints nothing over the new screen', async () => {
+    it('a finish confirmed after the signal was aborted is not sent', async () => {
+      const client = orgClient([
+        { id: 'ev-open', org_id: 'org1', name: 'Open Cup', is_test: false, ended_at: null },
+      ]);
+      const controller = new AbortController();
+      const { root, screen } = mountFor('org1', 'Alpha Coffee', client, {
+        signal: controller.signal,
+      });
+      await screen;
+      root.querySelector('#finish-event-ev-open').click();
+      controller.abort();
+      root.querySelector('#confirm-finish-ev-open').click();
+      await tick();
+      expect(client.calls.some(([kind]) => kind === 'rpc')).toBe(false);
+    });
+
+    it('a screen superseded mid-load paints nothing over the next one', async () => {
       const client = orgClient(BOTH);
-      let release;
-      client.holdInserts(new Promise((resolve) => (release = resolve)));
       const controller = new AbortController();
       const root = document.createElement('div');
       document.body.appendChild(root);
       mounted.push(root);
-      await mountEventsScreen(root, {
+      const first = mountEventsScreen(root, {
         orgId: 'org1',
         orgName: 'Alpha Coffee',
         client,
-        defaultFormat: 'cup_taster',
         signal: controller.signal,
       });
-      // Submit in the old organisation (the insert is held), then the console moves to the other one.
-      const submitting = createNamed(root, 'Alpha Open');
-      await tick();
       controller.abort();
-      await mountEventsScreen(root, {
-        orgId: 'org2',
-        orgName: 'Bravo Roasters',
-        client,
-        defaultFormat: 'cup_taster',
-      });
-      release();
-      await submitting;
+      await mountEventsScreen(root, { orgId: 'org2', orgName: 'Bravo Roasters', client });
+      await first;
       await tick();
-
-      // The event was created where the person was when they pressed Create…
-      const insert = client.calls.find(([kind]) => kind === 'insert');
-      expect(insert[2].org_id).toBe('org1');
-      // …and the screen now showing belongs to the new organisation and was not painted over.
-      expect(h2s(root)).toEqual(['Events in Bravo Roasters', 'Create an event in Bravo Roasters']);
-      expect(root.textContent).not.toContain('Alpha Open');
-      expect(root.textContent).not.toContain('Event created');
+      expect(eyebrow(root)).toBe('Bravo Roasters');
+      expect(root.textContent).not.toContain('Alpha Test Run');
     });
   });
 });
@@ -1368,7 +1747,6 @@ describe('the audience links card on the Events screen (T-TEN.D4)', () => {
       orgName: 'Alpha Coffee',
       audienceLinks: LINKS,
       client: fakeClient({ events: [] }),
-      defaultFormat: 'cup_taster',
     });
     expect(root.querySelector('#audience-links-heading').textContent).toBe(
       'Share with your audience',
@@ -1380,26 +1758,23 @@ describe('the audience links card on the Events screen (T-TEN.D4)', () => {
     ]);
   });
 
-  it('offers a link to the People screen only when the caller gives one', async () => {
+  it('offers the organisation links only when the caller gives some, each a real tap target', async () => {
     const withLink = document.createElement('div');
     await mountEventsScreen(withLink, {
       orgId: 'org1',
-      peopleHref: '#/people',
+      orgLinks: [{ label: 'People', href: '#/people' }],
       client: fakeClient({ events: [] }),
-      defaultFormat: 'cup_taster',
     });
-    const link = withLink.querySelector('.events-people-card a');
+    const link = withLink.querySelector('.events-org a');
     expect(link.getAttribute('href')).toBe('#/people');
-    expect(link.textContent).toBe('Open People');
-    expect(link.classList.contains('tap-target')).toBe(true);
+    expect(link.textContent).toBe('People');
 
     const without = document.createElement('div');
     await mountEventsScreen(without, {
       orgId: 'org1',
       client: fakeClient({ events: [] }),
-      defaultFormat: 'cup_taster',
     });
-    expect(without.querySelector('.events-people-card')).toBeNull();
+    expect(without.querySelector('.events-org')).toBeNull();
   });
 
   it('shows no card when there are no links to give', async () => {
@@ -1407,41 +1782,47 @@ describe('the audience links card on the Events screen (T-TEN.D4)', () => {
     await mountEventsScreen(root, {
       orgId: 'org1',
       client: fakeClient({ events: [] }),
-      defaultFormat: 'cup_taster',
     });
     expect(root.querySelector('.audience-links-card')).toBeNull();
   });
 
-  it('comes after the events list and the create form, so the working screen is unchanged', async () => {
+  it('sits in the rail after Needs attention, never before the events themselves', async () => {
     const root = document.createElement('div');
     await mountEventsScreen(root, {
       orgId: 'org1',
       audienceLinks: LINKS,
       client: fakeClient({ events: [] }),
-      defaultFormat: 'cup_taster',
     });
     const headings = [...root.querySelectorAll('h1, h2')].map((h) => h.textContent);
-    expect(headings.at(-1)).toBe('Share with your audience');
     expect(headings[0]).toBe('Events');
+    expect(headings.indexOf('Needs attention')).toBeLessThan(
+      headings.indexOf('Share with your audience'),
+    );
+    expect(root.querySelector('.events-home-rail .audience-links-card')).not.toBeNull();
   });
 
-  it('is the same card after the screen redraws (creating an event): its QR and its "copied" line survive', async () => {
+  it('is the same card after the screen redraws (a format filter, a Manage toggle): its QR and its "copied" line survive', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
     await mountEventsScreen(root, {
       orgId: 'org1',
       audienceLinks: LINKS,
-      client: fakeClient({ events: [] }),
-      defaultFormat: 'cup_taster',
+      client: fakeClient({
+        events: [
+          { id: 'e1', org_id: 'org1', name: 'Open', is_test: false, ended_at: null },
+          {
+            id: 'e2',
+            org_id: 'org1',
+            name: 'Done',
+            is_test: false,
+            ended_at: '2026-10-01T00:00:00Z',
+          },
+        ],
+      }),
     });
     const card = root.querySelector('.audience-links-card');
-    const field = root.querySelector('[data-field="name"]');
-    field.value = 'New Cup';
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-    root
-      .querySelector('form')
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await tick();
+    root.querySelector('#events-finished-toggle')?.click();
+    root.querySelector('.events-manage-toggle')?.click();
     await tick();
     expect(root.querySelector('.audience-links-card')).toBe(card);
     root.remove();

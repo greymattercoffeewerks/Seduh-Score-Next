@@ -338,3 +338,13 @@ _Database: `supabase/migrations/20261013150000_e3_advisor_followups.sql`, `supab
 ## Known open items from Petrol Kaizen P4 (feedback ladder, 2026-11-13)
 
 - **Team and Events keep older inline confirms** (`#team-confirm-*` and the events screen's equivalents). Move them to `confirmInPlace` or `confirmDialog` from `src/core/feedback.js` as the ladder in `DESIGN.md` says. Not done in P4.
+
+## Known open items from Organiser home (events rebuild, 2026-11-17)
+
+Found by `ui-accessibility-reviewer` on the `#/events` rebuild (`src/core/eventsScreen.js`, `eventHome.js`, `newEventScreen.js`). Logged, not fixed in that change.
+
+- **"Coming up" count can disagree with its group** when the next event is featured above the group: the header counts every upcoming event, the group lists the rest. (`eventHome.js` `countsLine` / `buildHome`.)
+- **Manage cannot close mid-flow**: the Manage panel on an event row has no close while a step is in progress. (`eventsScreen.js`.)
+- **Breadcrumb tap target is too small** for touch (the reviewer's measure, not re-checked at 360px). (`eventsScreen.js` breadcrumb.)
+- **Focus is dropped when the organisation links redraw late** (a `subscribeOrgLinks` redraw after the user has moved focus). (`eventsScreen.js` / `organiserHome.js`.)
+- **Enter submits the new-event form** (a native form submit; the reviewer asked for it to be reconsidered). (`newEventScreen.js`.)

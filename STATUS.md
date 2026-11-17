@@ -11,6 +11,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0) built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
+- **Organiser home** (`#/events` rebuild, `/events/new`, the `org_event_summaries` door): branch `claude/upbeat-montalcini-e8e5a8`, PR #496; planned 4.17.0 (after #497's 4.16.0). Not final: migration `20261124100000` not in the cloud; uncommitted reviewer fixes; one audience e2e unexplained. See CHANGELOG.
 - **Country pages** (4.10.2): database (#465) and pages (#466) in `dev`. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
 - **Petrol Kaizen P4** (PR #457) and **P5** (vocabulary, draft PR on P4's branch) built; tablet checks owed. **P6** (token roles, density) in a PR; iPad owed.
 - **Open, not merged or not in the cloud** (check `CHANGELOG.md`): password recovery D-PW2 to
@@ -30,24 +31,9 @@ selectable. Registration opens January 2027. Round 2's by-results method is stro
 
 **Organiser UX (five stages, per the approved mockup).** S1, the shared core kit, is a PR into `dev` from `claude/organiser-ux-s1-core-kit-1f2e99`, not merged. S2, the BTC event dashboard as a run sheet, is on `claude/organiser-ux-s2-btc-dashboard-6ca85a` (no PR yet); its Records card now has the two BTC scores CSVs (4.5.0). S3, the BTC matches screen grouped by round (4.3.0), is merged into `dev`. S4, the cut to the top 8 and its sign-off sheet (4.4.0), is a PR into `dev` from `claude/organiser-ux-s4-the-cut-8e554b`, not merged; a real-tablet check and a printed-PDF check are owed. S5 (copy pass, 4.4.1) is committed, not pushed; B5 sign-off wording is unresolved (see CHANGELOG).
 
-## Handover (2026-11-08, cloud session to a local session)
+## Handover (2026-11-08)
 
-- **Branch `ccr-dd9e5a6c-bxhucc`, PR #427 into `dev` (open).** #426 (docs trim, STATUS.md, backlog triage, the first plan)
-  is merged into `dev`. #427 is docs only: the plan and the engine spec follow the owner's answers. No code, migration or
-  cloud change exists for BTC yet. Start with `git fetch origin && git checkout ccr-dd9e5a6c-bxhucc`, then `npm ci`.
-- **Next step:** the engine spec's tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
-  check, B draw and `create_btc_round`, C ties on points only (built on `claude/btc-c-points-ties-8a4f2f`, PR into `dev`, migration `20261110100000` not in the cloud). E, A and D are in `dev`; B part 1 (the draw engine: pure
-  functions, `btc_round_draws`, `create_btc_round`, no screen) shipped in release 3.6.7 (check `CHANGELOG.md` for whether its
-  migration `20261109100000` is in the cloud); B part 2 (the Draw panel on the matches screen, front end only) is built on `claude/btc-b2-draw-panel-9d6d63` with a PR into `dev`; B part 3 (redraw a round: migration `20261109110000`, not in the cloud) is on `claude/btc-b3-redraw-round-9d6d63`, PR stacked on part 2's. Each has its reviewers in section
-  8 of the spec; the C migration and the draw are scoring and tenancy gates.
-- **Waiting on the committee (none blocks the first tasks):** the real team count and round-2 method; which round has the
-  10-minute limit and which the 15 (the default is 10:00 preliminary, 15:00 knockout, one function to edit); odd team
-  count or a withdrawal (KIV, the draw refuses meanwhile); whether a round-2 rematch is allowed (setting, default
-  avoid); what decides a tie when both teams hit the time limit. Registration opens January 2027.
-- **Owner-only actions still open:** the backlog items listed in `docs/backlog/README.md` ("Triage"), including closing the
-  `btc_matches_write FOR ALL` gap before any beta, the `/results/` indexing decision and republishing the live event.
-- **Local session notes:** `state.json` is gitignored; `Handoffs and Specs/` is on the owner's machine only. Run `npm run check:docs` after any doc change; `ROADMAP.md` and
-  `CHANGELOG.md` have size budgets. Every migration is pushed to the cloud by hand after merge (see `CLAUDE.md`).
+Moved verbatim to [`docs/archive/status/handover-2026-11-08.md`](docs/archive/status/handover-2026-11-08.md): the BTC engine tasks (E, A, D, B, C) and the committee questions. Start there for BTC work.
 
 ## Where to find things (look up, do not read whole)
 

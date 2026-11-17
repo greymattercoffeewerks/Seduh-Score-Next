@@ -22,6 +22,7 @@ const mountLoginScreen = vi.fn();
 const mountSetPasswordScreen = vi.fn();
 const mountTeamScreen = vi.fn();
 const mountPeopleScreen = vi.fn();
+const mountNewEventScreen = vi.fn();
 const canManageTeam = vi.fn(() => Promise.resolve(false));
 
 vi.mock('./core/eventsScreen.js', () => ({
@@ -61,6 +62,9 @@ vi.mock('./liveSurfaces.js', () => ({
 }));
 vi.mock('./core/setPasswordScreen.js', () => ({
   mountSetPasswordScreen: (...args) => mountSetPasswordScreen(...args),
+}));
+vi.mock('./core/newEventScreen.js', () => ({
+  mountNewEventScreen: (...args) => mountNewEventScreen(...args),
 }));
 vi.mock('./core/peopleScreen.js', () => ({
   mountPeopleScreen: (...args) => mountPeopleScreen(...args),
@@ -295,7 +299,7 @@ describe('mountApp routing', () => {
     expect(location.hash).toBe('');
     expect(mountEventsScreen).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ orgId: 'org1', defaultFormat: 'cup_taster' }),
+      expect.objectContaining({ orgId: 'org1', newEventHref: '#/events/new' }),
     );
   });
 
@@ -359,19 +363,44 @@ describe('mountApp routing', () => {
     expect(findEvent).toHaveBeenCalledTimes(2);
   });
 
-  it('passes every configured format to the events screen as formatOptions', async () => {
+  it('passes every configured format to the events screen as formatOptions, each with its words, and the home its describer', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     await startApp();
-    expect(mountEventsScreen).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        formatOptions: [
-          { value: 'cup_taster', label: 'Cup Taster' },
-          { value: 'btc', label: 'BTC' },
-          { value: 'throwdown', label: 'Throwdown' },
-        ],
-      }),
-    );
+    const props = mountEventsScreen.mock.calls[0][1];
+    expect(props.formatOptions.map((option) => [option.value, option.label])).toEqual([
+      ['cup_taster', 'Cup Taster'],
+      ['btc', 'BTC'],
+      ['throwdown', 'Throwdown'],
+    ]);
+    for (const option of props.formatOptions) expect(option.description).toBeTruthy();
+    expect(props.describeEvent).toBeTypeOf('function');
+  });
+
+  it('#/events/new mounts the new-event screen (and not an event called "new") with the formats, behind the sign-in gate', async () => {
+    stubScreen(mountNewEventScreen, 'NEW_EVENT_SCREEN');
+    stubScreen(mountEventDashboardScreen, 'EVENT_DASHBOARD');
+    location.hash = '#/events/new';
+    const { root } = await startApp();
+    expect(root.textContent).toContain('NEW_EVENT_SCREEN');
+    expect(mountEventDashboardScreen).not.toHaveBeenCalled();
+    const props = mountNewEventScreen.mock.calls[0][1];
+    expect(props.orgId).toBe('org1');
+    expect(props.defaultFormat).toBe('cup_taster');
+    expect(props.formatOptions.map((option) => option.value)).toEqual([
+      'cup_taster',
+      'btc',
+      'throwdown',
+    ]);
+    expect(props.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('#/events/new is behind the sign-in gate', async () => {
+    stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    stubScreen(mountNewEventScreen, 'NEW_EVENT_SCREEN');
+    location.hash = '#/events/new';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('LOGIN_SCREEN');
+    expect(mountNewEventScreen).not.toHaveBeenCalled();
   });
 
   it('#/events/:eventId/btc/setup routes to the BTC setup screen with the right param', async () => {
@@ -2136,6 +2165,40 @@ describe('team accounts wiring', () => {
     expect(teamLink(root)).not.toBeNull();
     expect(teamLink(root).textContent).toBe('Team');
     expect(canManageTeam).toHaveBeenCalledWith('org1', client);
+  });
+
+  it('gives the events home the organisation links: People and Published results, with Team logins only once an owner is known, and tells it when that changes', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    let answer;
+    canManageTeam.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const client = reactiveClient(signedIn());
+    await startApp({ client });
+    const props = mountEventsScreen.mock.calls[0][1];
+    const labels = () => props.orgLinks().map((link) => link.label);
+    expect(labels()).toEqual(['People', 'Published results']);
+    expect(typeof props.subscribeOrgLinks).toBe('function');
+    const changed = vi.fn();
+    const unsubscribe = props.subscribeOrgLinks(changed);
+    // asked of the database a moment after the screen is up: the link arrives later, and the screen is told
+    answer(true);
+    await vi.waitFor(() => expect(labels()).toContain('Team logins'));
+    expect(changed).toHaveBeenCalled();
+    expect(labels()).toEqual(['People', 'Team logins', 'Published results']);
+    expect(props.orgLinks().find((link) => link.label === 'Team logins').href).toBe('#/team');
+    unsubscribe();
+    canManageTeam.mockResolvedValue(false);
+  });
+
+  it('a person who does not own the organisation is offered no Team logins on the events home', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    canManageTeam.mockResolvedValue(false);
+    await startApp({ client: reactiveClient(signedIn()) });
+    await settle();
+    await settle();
+    expect(mountEventsScreen.mock.calls[0][1].orgLinks().map((link) => link.label)).toEqual([
+      'People',
+      'Published results',
+    ]);
   });
 
   it('puts the Team link before the audience links, which open in new tabs', async () => {

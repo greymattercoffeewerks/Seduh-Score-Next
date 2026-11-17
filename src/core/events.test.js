@@ -5,6 +5,7 @@ import {
   findEventOrgId,
   findLatestEventForOrg,
   listEventsForOrg,
+  listEventSummaries,
   deleteTestEvent,
   finishEvent,
 } from './events.js';
@@ -326,5 +327,42 @@ describe('the organisation id is the one given, at the module layer (T-TEN.C5)',
     };
     await deleteTestEvent('org-xyz', 'ev1', client);
     expect(calls).toEqual([['delete_test_event', { p_org_id: 'org-xyz', p_event_id: 'ev1' }]]);
+  });
+});
+
+describe('listEventSummaries', () => {
+  const rpcClient = (response) => {
+    const calls = [];
+    return { calls, rpc: (name, args) => (calls.push([name, args]), Promise.resolve(response)) };
+  };
+
+  it('asks ONE door for the organisation, and answers a Map of event id to its live flag and counts', async () => {
+    const client = rpcClient({
+      data: [
+        { event_id: 'a', is_live: true, facts: { teams: 4 } },
+        { event_id: 'b', is_live: false, facts: null },
+      ],
+      error: null,
+    });
+    const map = await listEventSummaries('org1', client);
+    expect(client.calls).toEqual([['org_event_summaries', { p_org_id: 'org1' }]]);
+    expect([...map.entries()]).toEqual([
+      ['a', { isLive: true, facts: { teams: 4 } }],
+      ['b', { isLive: false, facts: {} }],
+    ]);
+  });
+
+  it('an organisation with no events is an empty Map, not an error', async () => {
+    expect((await listEventSummaries('org1', rpcClient({ data: [], error: null }))).size).toBe(0);
+  });
+
+  it('throws on a refused or malformed answer, so the caller can tell "no summaries" from "no events"', async () => {
+    const refused = { code: '42501', message: 'organisation not found' };
+    await expect(
+      listEventSummaries('org1', rpcClient({ data: null, error: refused })),
+    ).rejects.toBe(refused);
+    await expect(
+      listEventSummaries('org1', rpcClient({ data: { not: 'a list' }, error: null })),
+    ).rejects.toThrow('unexpected response');
   });
 });

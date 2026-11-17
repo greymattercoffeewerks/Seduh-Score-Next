@@ -54,6 +54,7 @@ Every section moved out of `ROADMAP.md`'s open-items run, by heading, with the f
 - Known open items from T-TEN.E2 (2026-10-13) → [`tenancy.md`](tenancy.md)
 - Known open items from the event-link guard (2026-10-13) → [`tenancy.md`](tenancy.md)
 - Known open items from T-TEN.E3 (2026-10-13) → [`tenancy.md`](tenancy.md)
+- Known open items from Organiser home (events rebuild, 2026-11-17) → [`tenancy.md`](tenancy.md)
 - Known open items from the Plan panel (T-GATE.C, admin Plan panel, gating step 3; shipped dark, 2026-10-23) → [`admin-gating-branding.md`](admin-gating-branding.md)
 - Known open items from T-GATE.B5 (Per-event 5-day window lock; shipped dark, 2026-10-23) → [`admin-gating-branding.md`](admin-gating-branding.md)
 - Known open items from T-GATE.B4 (one open event, finish and release, BTC at go-live; shipped dark, 2026-10-23) → [`admin-gating-branding.md`](admin-gating-branding.md)
