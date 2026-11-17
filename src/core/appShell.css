@@ -736,7 +736,7 @@
 }
 
 .event-bar-crumb + .event-bar-crumb::before {
-  content: '/';
+  content: '/' / '';
   margin-inline-end: var(--space-2);
   color: var(--color-text-secondary);
 }
@@ -753,8 +753,10 @@
 .event-bar-link {
   display: inline-flex;
   align-items: center;
-  /* A real tap target for each link. */
+  /* A real tap target for each link: tall and at least as wide as it is tall. */
   min-height: var(--tap-target-min);
+  min-width: var(--tap-target-min);
+  justify-content: center;
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
@@ -782,14 +784,4 @@
 .event-bar-section[aria-current='page'] {
   background: var(--color-surface-sunken);
   font-weight: var(--font-weight-bold);
-}
-
-.app-shell-breadcrumb-link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.app-shell-breadcrumb-link:hover,
-.app-shell-breadcrumb-link:focus-visible {
-  text-decoration: underline;
 }

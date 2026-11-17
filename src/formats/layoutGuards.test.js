@@ -20,6 +20,10 @@ describe('BTC roster add form (desktop)', () => {
   it('keeps the Add button in a field of its own with a spacer label', () => {
     expect(read('src', 'formats', 'btc', 'setupScreen.js')).toContain('btc-roster-submit');
     expect(rule(css, '.btc-roster-form .btc-roster-submit')).toMatch(/flex:\s*0 0 auto/);
+    // the spacer label inside the wrapper is what lines Add up with the inputs
+    expect(read('src', 'formats', 'btc', 'setupScreen.js')).toMatch(
+      /btc-roster-submit'\s*\},\s*\[\s*el\('span',\s*\{\s*className:\s*'form-field-label'/,
+    );
   });
 });
 
@@ -41,6 +45,7 @@ describe('success feedback and status focus (shared)', () => {
   it('success is a left marker, not the sunken field fill or a full box', () => {
     const r = rule(css, ".screen-feedback[data-tone='success']");
     expect(r).not.toMatch(/surface-sunken/);
+    expect(r).toMatch(/(^|[\s;{])border:\s*0\s*;/);
     expect(r).toMatch(/border-inline-start:[^;]*var\(--color-success\)/);
     expect(r).toMatch(/color:\s*var\(--color-text\)/);
   });

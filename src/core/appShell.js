@@ -933,6 +933,9 @@ export function mountAppShell(
   // in this app.
   let cachedEventId = null;
   let cachedEvent = null;
+  // The newest setNav call's describer: a fetch that resolves after a later call (same event, another screen)
+  // must paint for the screen now showing, not the one it started on.
+  let latestEventBar = null;
 
   // `eventBar` is the caller's function from (event) to { sections, currentKey, currentLabel }, or null: which
   // sections an event has is the composition root's decision, never this file's.
@@ -1162,6 +1165,7 @@ export function mountAppShell(
   }
 
   async function setNav({ eventId = null, links = [], eventBar = null } = {}) {
+    latestEventBar = eventBar;
     navEl.innerHTML = '';
     for (const link of links) {
       const linkAttrs = { href: link.href };
@@ -1268,15 +1272,8 @@ export function mountAppShell(
       // started, this result is stale, drop it.
       if (cachedEventId !== eventId) return;
       cachedEvent = event;
-      // The header's event name is a link to the event's home (it used to be a plain, clickable-looking span).
-      breadcrumbEl.replaceChildren(
-        el('a', {
-          className: 'app-shell-breadcrumb-link',
-          text: event.name,
-          attrs: { href: `#/events/${eventId}` },
-        }),
-      );
-      paintEventBar(eventBar);
+      breadcrumbEl.textContent = event.name;
+      paintEventBar(latestEventBar);
     } catch {
       if (cachedEventId !== eventId) return;
       breadcrumbEl.textContent = '';

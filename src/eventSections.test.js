@@ -1,7 +1,34 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { describeEventBar } from './eventSections.js';
 
 const ev = (format) => ({ id: 'e1', format, name: 'N' });
+
+describe('route patterns', () => {
+  it('every pattern the bar knows is a real route in main.js (a renamed route would silently drop the bar)', () => {
+    const main = readFileSync(join(process.cwd(), 'src', 'main.js'), 'utf8');
+    const routes = new Set([...main.matchAll(/pattern:\s*'([^']+)'/g)].map((m) => m[1]));
+    const patterns = [
+      '/events/:eventId',
+      '/events/:eventId/setup',
+      '/events/:eventId/roster',
+      '/events/:eventId/report',
+      '/events/:eventId/stages/:stageId/heats',
+      '/events/:eventId/stages/:stageId/standings',
+      '/events/:eventId/heats/:heatId/timing',
+      '/events/:eventId/heats/:heatId/scoring',
+      '/events/:eventId/btc/setup',
+      '/events/:eventId/btc/matches',
+      '/events/:eventId/btc/standings',
+      '/events/:eventId/btc/bracket',
+      '/events/:eventId/btc/sign-off',
+      '/events/:eventId/btc/matches/:matchId/scoring',
+      '/events/:eventId/throwdown/results',
+    ];
+    for (const p of patterns) expect(routes.has(p), p).toBe(true);
+  });
+});
 
 describe('describeEventBar', () => {
   it('Cup Taster: Setup, Roster and Report are sections; the one for the route is current', () => {

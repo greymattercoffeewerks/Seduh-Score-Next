@@ -681,14 +681,6 @@ describe('mountAppShell', () => {
     expect(root.querySelector('.app-shell-breadcrumb').textContent).toBe('October Cup');
   });
 
-  it('the header event name links to the event home', async () => {
-    const client = fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } });
-    const root = document.createElement('div');
-    const { setNav } = mountAppShell(root, { client });
-    await setNav({ eventId: 'ev1', links: [] });
-    expect(root.querySelector('.app-shell-breadcrumb a').getAttribute('href')).toBe('#/events/ev1');
-  });
-
   describe('the event bar', () => {
     const describe_ = (screen) => () => ({
       sections: [
@@ -722,7 +714,32 @@ describe('mountAppShell', () => {
       expect(client.calls.filter(([table]) => table === 'events')).toHaveLength(1);
     });
 
-    it('is empty off an event screen, when the format has no sections, and when the event cannot be read', async () => {
+    it('paints for the newest screen when the event fetch resolves after a later setNav for the same event', async () => {
+      const client = fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } });
+      const root = document.createElement('div');
+      const { setNav } = mountAppShell(root, { client });
+      const first = setNav({ eventId: 'ev1', links: [], eventBar: describe_('home') });
+      const second = setNav({ eventId: 'ev1', links: [], eventBar: describe_('roster') });
+      await Promise.all([first, second]);
+      expect(root.querySelector('.event-bar-sections [aria-current="page"]').textContent).toBe(
+        'Roster',
+      );
+    });
+
+    it('is empty when the event cannot be read', async () => {
+      const client = {
+        auth: fakeAuth(),
+        from: () => ({
+          select: () => ({ eq: () => ({ single: () => Promise.reject(new Error('boom')) }) }),
+        }),
+      };
+      const root = document.createElement('div');
+      const { setNav } = mountAppShell(root, { client });
+      await setNav({ eventId: 'ev1', links: [], eventBar: describe_('home') });
+      expect(root.querySelector('.event-bar')).toBeNull();
+    });
+
+    it('is empty when the describer gives nothing, and off an event screen', async () => {
       const client = fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } });
       const root = document.createElement('div');
       const { setNav } = mountAppShell(root, { client });
