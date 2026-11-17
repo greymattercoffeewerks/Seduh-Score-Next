@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(98);
+select plan(100);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -129,6 +129,7 @@ insert into e1.rpc (name, sql, org_only) values
   ('redraw_btc_round', 'select public.redraw_btc_round(e1.u(''@'',100), e1.u(''%'',1), 1::smallint)', false),
   ('create_btc_match', 'select public.create_btc_match(e1.u(''%'',1), ''preliminary'', e1.u(''%'',9), e1.u(''%'',10), array[e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)])', false),
   ('team_list_members', 'select * from public.team_list_members(e1.u(''@'',100))', true),
+  ('org_event_summaries', 'select * from public.org_event_summaries(e1.u(''@'',100))', true),
   ('team_list_removed_members', 'select * from public.team_list_removed_members(e1.u(''@'',100))', true),
   ('finish_event', 'select public.finish_event(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('my_entitlements', 'select public.my_entitlements(e1.u(''@'',100), e1.u(''%'',1))', false),
@@ -166,7 +167,7 @@ update e1.rpc set own_expect = case name
   when 'issue_seduh_claim_link'      then 'P0001: This person has no Seduh ID yet'
   when 'revoke_seduh_claim_link'     then 'P0001: There is no open claim link for this person'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 40, 'the matrix covers 40 RPCs');
+select is((select count(*)::int from e1.rpc), 41, 'the matrix covers 41 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
@@ -209,6 +210,8 @@ begin
      and not (r.name like 'team\_%' and c.caller = 'user_ab' and c.kind = 'own')
      -- only the owner-only (org_only) functions are attacked by an organiser who is not an owner: for the others it is an ordinary call
      and not (c.kind = 'attack_nonowner' and not r.org_only)
+     -- org_event_summaries is organisation-only but for any MEMBER (the organiser home), so a non-owner organiser is a normal caller
+     and not (c.kind = 'attack_nonowner' and r.name = 'org_event_summaries')
      and not (not r.org_arg and c.kind = 'attack'
               and (who = 'user_ab' or (who = 'user_a' and c.res = 'aaaa') or (who = 'user_b' and c.res = 'bbbb')));
 end $$;

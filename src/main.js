@@ -20,6 +20,8 @@ import { cacheGet, cacheSet } from './core/db.js';
 import { findMatchEventId } from './formats/btc/matches.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
 import { mountEventsScreen } from './core/eventsScreen.js';
+import { mountNewEventScreen } from './core/newEventScreen.js';
+import { FORMAT_OPTIONS, describeEventForHome } from './organiserHome.js';
 import { mountLoginScreen } from './core/loginScreen.js';
 import { mountSetPasswordScreen } from './core/setPasswordScreen.js';
 import { mountForgotPasswordScreen } from './core/forgotPasswordScreen.js';
@@ -62,16 +64,6 @@ import {
 import { mountThrowdownEventScreen } from './formats/throwdown/eventScreen.js';
 import { mountThrowdownResultsScreen } from './formats/throwdown/resultsScreen.js';
 import { trackInputModality } from './core/inputModality.js';
-
-// Every configured format an organiser can create an event as — passed into
-// core/eventsScreen.js as `formatOptions` so its create form can offer a real choice
-// once more than one format exists (see that file's own comment: it never hardcodes a
-// format itself, this is the one composition-root file allowed to know both).
-const FORMAT_OPTIONS = [
-  { value: 'cup_taster', label: 'Cup Taster' },
-  { value: 'btc', label: 'BTC' },
-  { value: 'throwdown', label: 'Throwdown' },
-];
 
 // Same "unreliable venue wifi" holding-state pattern this project already
 // established for setupScreen.js/rosterScreen.js/eventsScreen.js's own
@@ -822,6 +814,9 @@ export function buildRoutes({
     message: 'This event belongs to another of your organisations, which could not be opened.',
   }),
   getRecoveryFlow = () => null,
+  // Whether the signed-in person owns the active organisation (the Team link on the Events home).
+  isTeamOwner = () => false,
+  subscribeTeamOwner = () => () => {},
 }) {
   const auth = {
     routerRef,
@@ -854,13 +849,35 @@ export function buildRoutes({
             orgId,
             orgName,
             audienceLinks: audienceLinksFor(orgSlug),
-            peopleHref: '#/people',
+            orgLinks: () => [
+              { label: 'People', href: '#/people' },
+              ...(isTeamOwner() ? [{ label: 'Team logins', href: '#/team' }] : []),
+              { label: 'Published results', href: '/results/' },
+            ],
+            subscribeOrgLinks: subscribeTeamOwner,
+            newEventHref: '#/events/new',
             client,
-            defaultFormat: 'cup_taster',
             formatOptions: FORMAT_OPTIONS,
+            describeEvent: describeEventForHome,
             // Only Cup Taster has a manual publish (its report screen); other formats get no "Publish now" link.
             archivePublishHrefFor: (event) =>
               event.format === 'cup_taster' ? `#/events/${event.id}/report` : null,
+            signal,
+          }),
+        auth,
+      ),
+    },
+    {
+      // Listed before '/events/:eventId', which would otherwise read "new" as an event id.
+      pattern: '/events/new',
+      mount: requireAuth(
+        (outlet, { client, signal, orgId, orgName }) =>
+          mountNewEventScreen(outlet, {
+            orgId,
+            orgName,
+            client,
+            formatOptions: FORMAT_OPTIONS,
+            defaultFormat: 'cup_taster',
             signal,
           }),
         auth,
@@ -1270,10 +1287,17 @@ export function mountApp(
   let teamOwnerOrgId = null;
   let ownerCheckSeq = 0;
   let lastNav = null;
+  // Screens that show the Team link too (the Events home's organisation card) hear about a change here.
+  const teamOwnerListeners = new Set();
+  function subscribeTeamOwner(listener) {
+    teamOwnerListeners.add(listener);
+    return () => teamOwnerListeners.delete(listener);
+  }
   function setTeamOwner(value) {
     if (value === isTeamOwner) return;
     isTeamOwner = value;
     if (lastNav) renderNav(lastNav.route, lastNav.params);
+    for (const listener of [...teamOwnerListeners]) listener();
   }
   function refreshTeamOwnership(session) {
     ownerCheckSeq += 1;
@@ -1373,6 +1397,8 @@ export function mountApp(
   // screen is mounted (the Team screen reports it again if it needs to).
   let teamHoldsSecret = false;
   const routes = buildRoutes({
+    isTeamOwner: () => isTeamOwner,
+    subscribeTeamOwner,
     legacyAudienceOrgId,
     legacyAudienceOrgSlug,
     orgContext,

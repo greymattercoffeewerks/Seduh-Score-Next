@@ -4,26 +4,507 @@
    established token-only styling — no new
    one-off colors/spacing/shadows beyond what this file itself needs. */
 
+/* ---- The organiser home (2026-11-17): header, the live / next card, the grouped list, the filter, the rail. Tokens
+        only, square corners (the organiser kit's shape rules), mono figures. Phone width first (360px); the tablet
+        layout is `.ok-dashboard` (a 380px rail from 64rem). ---- */
+
+.events-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.events-heading-block h1 {
+  margin: var(--space-1) 0 0;
+}
+
+.events-org-eyebrow {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.events-counts {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.events-new {
+  text-decoration: none;
+  align-self: stretch;
+  justify-content: center;
+}
+
+/* One "+ New event" in the tree at a time: in the header from 40rem, after the list below it. */
+.events-new--header {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .events-header {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .events-new--header {
+    display: inline-flex;
+    align-self: auto;
+  }
+
+  .events-new--foot {
+    display: none;
+  }
+}
+
+/* Below 64rem the main column and the rail dissolve into the one column so the phone order is the approved one:
+   live or next, needs attention, the list, New event, audience links, organisation links. */
+@media (max-width: 63.999rem) {
+  .events-home-main,
+  .events-home-rail {
+    display: contents;
+  }
+}
+
+.events-slot-featured {
+  order: 1;
+}
+.events-slot-attention {
+  order: 2;
+}
+.events-slot-list,
+.events-none {
+  order: 3;
+}
+.events-new--foot {
+  order: 4;
+}
+.events-slot-audience {
+  order: 5;
+}
+.events-slot-org {
+  order: 6;
+}
+
+.events-format-tag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Live now / Coming up next */
+.events-featured--live {
+  border-color: var(--color-accent);
+}
+
+.events-featured-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.events-featured-eyebrow {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.events-featured-meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.events-featured-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.events-featured-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  flex: 1 1 auto;
+}
+
+.events-featured-title {
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+.events-featured-state {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.events-featured .meter {
+  max-inline-size: 26rem;
+}
+
+.events-featured-figures {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.events-featured-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+@media (min-width: 40rem) {
+  .events-featured-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+  }
+
+  .events-featured-actions {
+    flex: none;
+  }
+}
+
+/* Your events */
+.events-list-card {
+  padding: 0;
+  gap: 0;
+}
+
+.events-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.events-filter-group {
+  display: none;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.events-filter-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 12rem;
+}
+
+@media (min-width: 40rem) {
+  .events-filter-group {
+    display: flex;
+  }
+
+  .events-filter-select {
+    display: none;
+  }
+}
+
+.events-group-heading,
+.events-group-none {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+}
+
+.events-group-heading {
+  background: var(--color-surface-sunken);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.events-group-none {
+  padding-block: var(--space-4);
+}
+
 .events-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
+}
+
+.events-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.events-row:first-child {
+  border-top: none;
+}
+
+.events-row-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+}
+
+.events-row-title {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.events-row-title a {
+  overflow-wrap: anywhere;
+}
+
+/* the trailing arrow of the legacy list is not part of this row */
+.events-list .events-row-title a::after {
+  content: none;
+}
+
+.events-manage-toggle {
+  margin-inline-start: auto;
+}
+
+.events-row-summary {
+  flex: 0 1 14rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.events-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (min-width: 40rem) {
+  .events-row-main {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .events-row-main .events-format-tag {
+    align-self: center;
+    min-inline-size: 5.5rem;
+    text-align: center;
+  }
+}
+
+/* Finish / Delete, off the row's main line: a Manage toggle and its panel. The panel's own display would beat
+   the [hidden] attribute, so it is restated. */
+.events-row-panel {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border);
+}
+
+.events-row-panel[hidden] {
+  display: none;
+}
+
+.events-finished-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: var(--tap-target-min);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-top: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-align: start;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.events-finished-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.events-finished-hint {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: normal;
+  text-transform: none;
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+.events-finished-list[hidden] {
+  display: none;
+}
+
+/* Your organisation */
+.events-org-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.events-org-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: var(--tap-target-min);
+  border-top: var(--border-hairline) solid var(--color-border);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.events-org-link:hover,
+.events-org-link:focus-visible {
+  text-decoration: underline;
+}
+
+.events-org-meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+/* ---- New event (#/events/new) ---- */
+.events-breadcrumb {
+  margin: 0;
+}
+
+.events-format-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
 }
 
-.events-list li {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border-bottom: var(--border-hairline) solid var(--color-border);
+.events-format-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
 }
 
-.events-list li:last-child {
-  border-bottom: none;
+.events-format-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.events-format-card:has(:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.events-format-kind {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.events-format-name {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+}
+
+.events-format-description {
+  color: var(--color-text-secondary);
+}
+
+.events-details-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+/* Test data is violet and dashed, even before it is ticked (D9). */
+.events-test-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-hairline) dashed var(--color-test);
+}
+
+.events-test-field p {
+  margin: 0;
+}
+
+.events-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.events-form-actions .btn {
+  text-decoration: none;
+}
+
+.events-form-actions .stage-meta {
+  flex: 1 1 14rem;
+  margin: 0;
+}
+
+@media (min-width: 48rem) {
+  .events-format-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .events-details-grid {
+    grid-template-columns: 2fr 1fr;
+  }
 }
 
 /* Found in the app-wiring holistic pass: this link was plain inline text
