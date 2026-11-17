@@ -53,3 +53,9 @@ The shared `.page-hero` on Tour, Community hub, Pricing and Results (CHANGELOG e
 The shared public header and the landing nav now read one list (CHANGELOG entry of the same date). One item came out of it.
 
 - **The shared header's mobile menu has no Escape handler.** The landing page's mobile toggle closes on Escape; the shared header's toggle (Tour, Pricing, Community, Results, trust pages, country pages) does not. Pre-existing: the shared header's toggle predates this change. Found by `ui-accessibility-reviewer`; logged, not fixed in that change. **CLOSED (2026-11-15):** the panel already closed on Escape; the toggle now does too (`src/marketing/publicHeader.js`, tests in `publicHeader.test.js`).
+
+## Known open items from the Menu bars forced-colors fix (4.17.2, 2026-11-17)
+
+The console's Menu button bars were fixed under forced colours (CHANGELOG entry of the same date). One item came out of it.
+
+- **The brand lockup's SVG mark under forced colours is unverified.** The fix covers the Menu button's CSS bars only. The lockup's mark is an SVG, which Windows high-contrast may or may not repaint, on the public header and the console header alike. Found by `ui-accessibility-reviewer`; not reproducible here (forced colours cannot be emulated in this environment). Check it in Windows high-contrast on the public header and the console header, and fix the mark's fill with `forced-color-adjust` or a system colour if it vanishes.

@@ -7,7 +7,22 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Events home: the "Event finished." line survives redraws · 4.17.1 · 2026-11-17
+## Console Menu button: bars visible in forced colours · 4.17.2 · 2026-11-17
+
+**Status: NOT FINAL.** Code, test and reviews are done. Open: a real Windows high-contrast render has not been seen (forced colours cannot be emulated here), so the owner check is owed before this is called verified. Branch `fix/menu-bars-forced-colors`, no PR yet. No §14 task ID: backlog item "Forced-colors mode hides the Menu button's three bars" (triage 2026-11-07, Accessibility; flagged earlier in the T-HARDEN.header-sync-chip and T-TEN.C3 open items). **Version 4.17.2 (patch: a fix, no new capability).**
+
+- **What changed.** In forced-colors mode (Windows high contrast) the browser drops author background colours. The console's Menu button draws its three bars as 2px spans with only a `background`, so at phone width, where the button has no "Menu" label, it looked empty. `.app-shell-nav-toggle-bar` now sets `background: ButtonText` and `forced-color-adjust: none` under `@media (forced-colors: active)`. `ButtonText` is the system colour of the button's own label, so the bars match the text the user would otherwise see. It is the same system-colour pattern as `src/ui/tokens/vocabulary.css`.
+- **Why not the public pages.** The public `.menu-toggle` (`src/ui/tokens/base.css`) draws its icon as an SVG, which forced colours do not strip, so it was not affected and is unchanged.
+- **Files.** `src/core/appShell.css` (the media block, 9 lines); `src/core/appShell.test.js` (one guard); `package.json` and `package-lock.json` (4.17.2); `CHANGELOG.md`; `STATUS.md` (version line); `docs/backlog/cup-taster.md`, `docs/backlog/tenancy.md` and `docs/backlog/README.md` (item closed in each place, plus the triage summary); `docs/backlog/public-site.md` (the new open item, and its index line in `README.md`).
+- **Test.** `src/core/appShell.test.js`: a stylesheet guard finds the `forced-colors: active` block by its text, then matches the bars rule by its exact selector (not a substring, so a scoped `:hover .app-shell-nav-toggle-bar` rule cannot pass for it) and asserts both declarations. Accepts `background` or `background-color`. Confirmed to fail with the CSS rule removed. `appShell.test.js`: 207 passed.
+- **Reviews.**
+  - `module-boundary-checker`: clean.
+  - `code-reviewer`: 0 Important. Nit 1, the assertions ran on the whole media block, so a sibling rule's `ButtonText` could pass: fixed by extracting the rule body. Nit 2 applied as part of the same fix.
+  - `ui-accessibility-reviewer`: 0 Important. Same Nit as code-reviewer (fixed). Confirmed `ButtonText` is the right system colour, that `forced-color-adjust: none` is safe on an empty `aria-hidden` span, and that the 360px layout is unaffected. Scope note: the brand lockup's SVG mark under forced colours is unverified; logged as an open item (`docs/backlog/public-site.md`).
+  - `test-auditor`: 0 Important. Nit 1, a substring selector match let a scoped `.hover .app-shell-nav-toggle-bar` rule pass: fixed with an exact-selector match. `background-color` is now also accepted, so the guard checks the declaration, not one spelling of it.
+- **Follow-ups.**
+  - Owner check in Windows high-contrast (Settings, Accessibility, Contrast themes) at phone width: the console Menu button shows three visible bars on the console header.
+  - The brand lockup's SVG mark under forced colours, on the public header and the console header (`docs/backlog/public-site.md`).
 
 **Status: NOT FINAL.** Code, tests and reviews are done. Open before the release PR: the 360px check for this screen is not recorded in the review (§11, UI changes), and a real screen-reader check is owed. Branch `fix/event-finished-message`, no PR yet. No §14 task ID: owner-reported UI bug #5 (the UI/UX bug list), found 2026-11-17 while building #496. **Version 4.17.1 (patch: a fix, no new capability).**
 
