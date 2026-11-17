@@ -35,15 +35,27 @@ import {
   validateEntryForm,
 } from './meFlow.js';
 import { formatFoundingNumber } from './claimFlow.js';
+import { photoSrc } from '../core/seduhProfile.js';
+import { PHOTO, prepareAvatar } from './photoPipeline.js';
+import { initialsOf } from './profileFormat.js';
 
 const KIND_WORD = Object.fromEntries(KIND_CHOICES);
 const TABS = [
   ['record', 'My record'],
   ['teams', 'My teams'],
+  ['photo', 'Photo'],
   ['privacy', 'Privacy'],
 ];
 
-export function mountMeScreen(root, { api, thisYear = new Date().getUTCFullYear() } = {}) {
+export function mountMeScreen(
+  root,
+  {
+    api,
+    thisYear = new Date().getUTCFullYear(),
+    prepare = prepareAvatar,
+    supabaseUrl = import.meta.env?.VITE_SUPABASE_URL,
+  } = {},
+) {
   let destroyed = false;
   let email = '';
 
@@ -343,7 +355,13 @@ export function mountMeScreen(root, { api, thisYear = new Date().getUTCFullYear(
 
     function draw() {
       panel.replaceChildren(
-        tab === 'record' ? recordPanel() : tab === 'teams' ? teamsPanel() : privacyPanel(),
+        tab === 'record'
+          ? recordPanel()
+          : tab === 'teams'
+            ? teamsPanel()
+            : tab === 'photo'
+              ? photoPanel()
+              : privacyPanel(),
       );
     }
 
@@ -905,6 +923,172 @@ export function mountMeScreen(root, { api, thisYear = new Date().getUTCFullYear(
     }
 
     // ---- Privacy ----
+
+    // ---- Photo (T-ID2.C2) ----
+    // Choose, crop square, resize to 512, re-encode, check 200 KB (photoPipeline.js), upload with this person's own session, record.
+    // The picture is shown as a preview before anything is sent; the original file never leaves the browser.
+    function photoPanel() {
+      let prepared = null;
+      let previewUrl = null;
+      const currentSrc = photoSrc(record.account.photoUrl, supabaseUrl);
+      const name = record.account.displayName ?? record.account.handle;
+      const status = statusLine('me-photo-status');
+
+      const frame = el('div', { className: 'me-photo-frame' });
+      function showInitials() {
+        frame.replaceChildren(
+          el('span', {
+            className: 'me-photo-initials',
+            text: initialsOf(name),
+            attrs: { role: 'img', 'aria-label': 'No photo yet: your initials show instead' },
+          }),
+        );
+      }
+      function showImage(src, alt) {
+        const img = el('img', {
+          className: 'me-photo-img',
+          attrs: { src, alt, width: String(PHOTO.size), height: String(PHOTO.size) },
+        });
+        img.addEventListener('error', () => showInitials(), { once: true });
+        frame.replaceChildren(img);
+      }
+      if (currentSrc) showImage(currentSrc, `Photo of ${name}`);
+      else showInitials();
+
+      const input = el('input', {
+        className: 'me-photo-file',
+        attrs: {
+          type: 'file',
+          id: 'me-photo-file',
+          accept: 'image/jpeg,image/png,image/webp,image/gif,image/avif,image/heic',
+          'aria-describedby': 'me-photo-help me-photo-status',
+        },
+      });
+      const save = button('Save photo', { primary: true, id: 'me-photo-save' });
+      save.hidden = true;
+      const removeBtn = button('Remove my photo', { id: 'me-photo-remove' });
+      removeBtn.hidden = !currentSrc;
+      const actions = el('div', { className: 'claim-actions' }, [save, removeBtn]);
+      const ask = el('div', { className: 'me-photo-ask' });
+
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        prepared = null;
+        save.hidden = true;
+        setStatus(status, '');
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+        if (!file) return;
+        setStatus(status, 'Preparing your photo…');
+        const result = await prepare(file);
+        if (destroyed) return;
+        if (!result.ok) {
+          input.value = '';
+          setStatus(status, describeMeHint(result.hint), 'error');
+          return;
+        }
+        prepared = result;
+        previewUrl = URL.createObjectURL(result.blob);
+        showImage(previewUrl, 'Preview of your new photo');
+        setStatus(
+          status,
+          `Ready: ${Math.round(result.size / 1024)} KB, ${PHOTO.size} × ${PHOTO.size}. Press the button to use it.`,
+        );
+        save.hidden = false;
+        save.textContent = currentSrc ? 'Replace my photo' : 'Save photo';
+      });
+
+      save.addEventListener('click', async () => {
+        if (!prepared) return;
+        busy([save, removeBtn, input], true);
+        setStatus(status, 'Uploading…');
+        const result = await api.setPhoto({
+          prepared,
+          handle: record.account.handle,
+          previousUrl: record.account.photoUrl,
+        });
+        if (destroyed) return;
+        if (!result.ok) {
+          busy([save, removeBtn, input], false);
+          const words = failed(result);
+          if (words) setStatus(status, words, 'error');
+          return;
+        }
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        say('Photo saved.');
+        if (await refresh()) document.getElementById('me-photo-file')?.focus();
+      });
+
+      removeBtn.addEventListener('click', () => {
+        const yes = button('Yes, remove it', {
+          primary: true,
+          id: 'me-photo-remove-yes',
+          className: 'me-danger',
+        });
+        const keep = button('Keep it', {
+          onClick: () => {
+            ask.replaceChildren();
+            removeBtn.focus();
+          },
+        });
+        const note = el('p', {
+          className: 'claim-message',
+          text: 'Remove your photo? Your page will show your initials again.',
+          attrs: { id: 'me-photo-remove-q', role: 'alert' },
+        });
+        yes.setAttribute('aria-describedby', note.id);
+        yes.addEventListener('click', async () => {
+          busy([yes, keep], true);
+          const result = await api.removePhoto(record.account.photoUrl);
+          if (destroyed) return;
+          if (!result.ok) {
+            busy([yes, keep], false);
+            failed(result);
+            return;
+          }
+          say('Photo removed.');
+          if (await refresh()) document.getElementById('me-photo-file')?.focus();
+        });
+        ask.replaceChildren(note, el('div', { className: 'claim-actions' }, [yes, keep]));
+        keep.focus();
+      });
+
+      return el(
+        'div',
+        { className: 'me-photo' },
+        [
+          el('h2', {
+            id: 'me-photo-title',
+            className: 'claim-h2',
+            text: 'My photo',
+            attrs: { tabindex: '-1' },
+          }),
+          el('p', {
+            className: 'claim-hint',
+            id: 'me-photo-help',
+            text: 'Your photo shows on your public page while your name is public. We crop it to a square, shrink it and remove any location data before it is uploaded. Anyone can report a photo, and you can remove yours at any time.',
+          }),
+          frame,
+          el('div', { className: 'claim-field' }, [
+            el('label', {
+              className: 'claim-label',
+              text: 'Choose a photo (JPEG, PNG or WebP, up to 10 MB)',
+              attrs: { for: 'me-photo-file' },
+            }),
+            input,
+            status,
+          ]),
+          actions,
+          ask,
+          record.settings.vis_identity !== 'public'
+            ? el('p', {
+                className: 'claim-hint',
+                text: 'Your name is hidden on your public page, so your photo is hidden too. Change that under Privacy.',
+              })
+            : null,
+        ].filter(Boolean),
+      );
+    }
 
     function privacyPanel() {
       const rows = SETTINGS.map((s) => {

@@ -544,3 +544,70 @@ describe('sections with no data are hidden, not shown empty', () => {
     expect(root.querySelector('#profile-h2h-title, #profile-works-title')).toBeNull();
   });
 });
+
+// T-ID2.C2: the photo in the avatar circle, its alt text, the initials fallback and the report link.
+describe('the profile photo', () => {
+  const SUPABASE = 'https://proj.supabase.co';
+  const PATH = `/storage/v1/object/public/seduh-avatars/syafiqah/${'ab'.repeat(16)}.webp`;
+  const withPhoto = (photo) =>
+    door({
+      identity: {
+        display_name: 'Syafiqah Omar',
+        country_code: 'BN',
+        founding_number: 7,
+        photo_url: photo,
+      },
+    });
+
+  it('draws the photo in the avatar circle with the alt text, and a report link with the handle and the address as text', async () => {
+    const { root } = await mount(withPhoto(PATH), { supabaseUrl: SUPABASE });
+    const img = root.querySelector('img.profile-avatar');
+    expect(img.getAttribute('src')).toBe(`${SUPABASE}${PATH}`);
+    expect(img.getAttribute('alt')).toBe('Photo of Syafiqah Omar');
+    const link = root.querySelector('.profile-report-link');
+    expect(link.textContent).toBe('Report this photo');
+    expect(decodeURIComponent(link.getAttribute('href'))).toContain('syafiqah');
+    expect(link.getAttribute('href')).toMatch(/^mailto:hello@seduhscore\.com\?subject=/);
+    expect(root.querySelector('.profile-report').textContent).toContain('hello@seduhscore.com');
+  });
+
+  it('shows the initials, and no report link, when there is no photo', async () => {
+    const { root } = await mount(withPhoto(null), { supabaseUrl: SUPABASE });
+    expect(root.querySelector('img.profile-avatar')).toBeNull();
+    expect(root.querySelector('span.profile-avatar').textContent).toBe('SO');
+    expect(root.querySelector('.profile-report')).toBeNull();
+  });
+
+  it('falls back to the initials, and drops the report link, when the picture fails to load', async () => {
+    const { root } = await mount(withPhoto(PATH), { supabaseUrl: SUPABASE });
+    root.querySelector('img.profile-avatar').dispatchEvent(new Event('error'));
+    expect(root.querySelector('img.profile-avatar')).toBeNull();
+    expect(root.querySelector('span.profile-avatar').textContent).toBe('SO');
+    expect(root.querySelector('.profile-report')).toBeNull();
+  });
+
+  it.each([
+    [
+      'a path outside the avatar bucket',
+      '/storage/v1/object/public/other/syafiqah/' + 'ab'.repeat(16) + '.webp',
+    ],
+    [
+      "another person's folder",
+      `/storage/v1/object/public/seduh-avatars/someone/${'ab'.repeat(16)}.webp`,
+    ],
+    ['an absolute address', `https://evil.example${PATH}`],
+    ['a script address', 'javascript:alert(1)'],
+    ['a path with a query', `${PATH}?x=1`],
+  ])('never draws %s', async (_label, bad) => {
+    const { root } = await mount(withPhoto(bad), { supabaseUrl: SUPABASE });
+    expect(root.querySelector('img')).toBeNull();
+    expect(root.querySelector('.profile-report')).toBeNull();
+  });
+
+  it('draws nothing without a safe Supabase address (not https, not on this machine)', async () => {
+    const { root } = await mount(withPhoto(PATH), { supabaseUrl: 'http://proj.supabase.co' });
+    expect(root.querySelector('img')).toBeNull();
+    const local = await mount(withPhoto(PATH), { supabaseUrl: 'http://127.0.0.1:54421' });
+    expect(local.root.querySelector('img.profile-avatar')).not.toBeNull();
+  });
+});

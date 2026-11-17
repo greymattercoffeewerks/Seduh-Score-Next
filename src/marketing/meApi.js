@@ -12,11 +12,14 @@
 // per-address one would reveal a known address. A minimum answer time keeps this call from being the quicker oracle.
 import { raceTimeout } from '../core/timeout.js';
 import { getClaimClient } from './claimClient.js';
+import { photoObjectName } from '../core/seduhProfile.js';
+import { randomHex32 } from './photoPipeline.js';
 import { normaliseMyRecord, normaliseTeamOptions } from './meFlow.js';
 
 const CALL_TIMEOUT_MS = 20000;
 const MIN_REQUEST_CODE_MS = 1500;
 const HINT = /^[a-z_]{1,40}$/;
+const AVATAR_BUCKET = 'seduh-avatars';
 
 function hintFromRpcError(error, status) {
   if (typeof error?.hint === 'string' && HINT.test(error.hint)) return error.hint;
@@ -130,6 +133,65 @@ export function createMeApi({ client, minRequestCodeMs = MIN_REQUEST_CODE_MS } =
     },
     async removeTeamLink(id) {
       return door('seduh_remove_team_link', { p_link_id: id });
+    },
+
+    // The photo (T-ID2.C2). `prepared` is photoPipeline.prepareAvatar's answer ({ blob, type, ext }); `handle` is the caller's own (it
+    // names their folder); `previousUrl` is the record's current photo_url. Order: upload the new file, remove the old one through the
+    // Storage API (frees its bytes; best effort), then the door records the new path (and deletes any row still left in the folder).
+    async setPhoto({ prepared, handle, previousUrl = null, random = randomHex32 }) {
+      const path = `${handle}/${random()}.${prepared.ext}`;
+      try {
+        const bucket = getClient().storage.from(AVATAR_BUCKET);
+        const { error } = await raceTimeout(
+          bucket.upload(path, prepared.blob, {
+            contentType: prepared.type,
+            upsert: false,
+            cacheControl: '31536000',
+          }),
+          CALL_TIMEOUT_MS * 3,
+        );
+        if (error) {
+          const status = Number(error.statusCode ?? error.status);
+          if (status === 413) return { ok: false, hint: 'photo_too_big' };
+          if (status === 415) return { ok: false, hint: 'photo_bad_type' };
+          if (status === 401) return { ok: false, hint: 'signed_out' };
+          return { ok: false, hint: 'photo_upload_failed' };
+        }
+      } catch (thrown) {
+        return { ok: false, hint: thrown?.timedOut ? 'timeout' : 'photo_upload_failed' };
+      }
+      // Remove the old file through the Storage API first (only the API frees the bytes; the door deletes a leftover ROW, which kills
+      // the address but leaves the bytes). If the door then fails, the old address is dead until the person tries again: the page shows initials.
+      const old = photoObjectName(previousUrl);
+      if (old && old !== path) {
+        try {
+          await getClient().storage.from(AVATAR_BUCKET).remove([old]);
+        } catch {
+          // the door below deletes a leftover row, so the address is dead either way
+        }
+      }
+      const answer = await door('seduh_set_my_photo', { p_path: path });
+      if (!answer.ok) {
+        // the new file is not recorded: take it back out so it does not sit in the folder (best effort; the next save sweeps it)
+        try {
+          await getClient().storage.from(AVATAR_BUCKET).remove([path]);
+        } catch {
+          // swept by the next successful save
+        }
+        return answer;
+      }
+      return { ok: true };
+    },
+    async removePhoto(previousUrl = null) {
+      const old = photoObjectName(previousUrl);
+      if (old) {
+        try {
+          await getClient().storage.from(AVATAR_BUCKET).remove([old]);
+        } catch {
+          // the door below deletes the row, so the address is dead either way
+        }
+      }
+      return door('seduh_remove_my_photo');
     },
 
     async setSettings(settings) {

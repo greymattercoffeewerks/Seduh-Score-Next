@@ -208,6 +208,36 @@ function normaliseAffiliation(raw) {
   return name ? { name, role: text(raw.role, 60) } : null;
 }
 
+// ---- the profile photo (T-ID2.C2) ----
+// The door returns a RELATIVE path under the project's public Storage (the database cannot know the project's address). Only that
+// exact shape is accepted, so a malformed value can never become an <img src>; the page adds its own Supabase origin.
+const AVATAR_URL =
+  /^\/storage\/v1\/object\/public\/seduh-avatars\/([a-z0-9](?:-?[a-z0-9])*)\/([0-9a-f]{32}\.(?:webp|jpg))$/;
+/** Pure. The photo's relative URL when it has the one accepted shape (and, when a handle is given, is in that handle's folder), else null. */
+export function cleanPhotoUrl(value, handle = null) {
+  if (typeof value !== 'string' || value.length > 160) return null;
+  const match = AVATAR_URL.exec(value);
+  if (!match) return null;
+  return handle && match[1] !== handle ? null : value;
+}
+/** Pure. 'folder/file.ext' (the Storage object name) from a cleaned relative URL, or null. */
+export function photoObjectName(photoUrl) {
+  const match = AVATAR_URL.exec(String(photoUrl ?? ''));
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+/** Pure. The absolute address of a cleaned photo URL on the given Supabase origin, or null (https, or http on this machine only). */
+export function photoSrc(photoUrl, supabaseUrl) {
+  if (!cleanPhotoUrl(photoUrl)) return null;
+  try {
+    const base = new URL(String(supabaseUrl));
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname);
+    if (base.protocol !== 'https:' && !(base.protocol === 'http:' && local)) return null;
+    return base.origin + photoUrl;
+  } catch {
+    return null;
+  }
+}
+
 export const EMPTY_PROFILE = Object.freeze({
   hasProfile: false,
   handle: null,
@@ -243,7 +273,8 @@ export function normaliseProfile(raw) {
           displayName,
           countryCode: /^[A-Z]{2}$/.test(country) ? country : null,
           foundingNumber: founding !== null && founding >= 1 ? founding : null,
-          // SEAM Phase C2: photo_url is null today and ignored; C2 validates and draws it.
+          // null unless the door sent the one accepted relative shape (a hidden identity never gets here: displayName is null).
+          photoUrl: cleanPhotoUrl(id.photo_url, handle),
         }
       : null,
     entries,
