@@ -348,3 +348,9 @@ Found by `ui-accessibility-reviewer` on the `#/events` rebuild (`src/core/events
 - **Breadcrumb tap target is too small** for touch (the reviewer's measure, not re-checked at 360px). (`eventsScreen.js` breadcrumb.)
 - **Focus is dropped when the organisation links redraw late** (a `subscribeOrgLinks` redraw after the user has moved focus). (`eventsScreen.js` / `organiserHome.js`.)
 - **Enter submits the new-event form** (a native form submit; the reviewer asked for it to be reconsidered). (`newEventScreen.js`.)
+
+## Known open items from the Events finished message (UI bug #5, 2026-11-17)
+
+Found by `ui-accessibility-reviewer` on the `#/events` outcome line (`src/core/eventsScreen.js`). Logged, not fixed in that change.
+
+- **The `.screen-feedback:not(:empty)` entry animation has no reduced-motion guard.** `src/ui/tokens/components.css` runs a 4px rise and fade on every feedback line; the `prefers-reduced-motion: no-preference` block covers the button busy line only. Shared by every screen that uses `.screen-feedback`, not just the events screen, so the fix belongs in the token file. Pre-existing, not introduced by 4.17.1.

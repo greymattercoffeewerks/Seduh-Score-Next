@@ -1,12 +1,31 @@
 # Changelog — Seduh Score Next
 
-Newest first. **This file holds only the last ~two weeks** (entries dated 2026-10-31 or later). Older
-entries are moved verbatim to `docs/archive/changelog/<period>.md`; find one by task id or title in
+Newest first. **This file holds only the last ~two weeks.** Older entries are moved verbatim to `docs/archive/changelog/<period>.md`; find one by task id or title in
 [`CHANGELOG-INDEX.md`](CHANGELOG-INDEX.md) (one line per archived entry), or `grep -r` the directory.
 A new entry goes at the top of this file. When it passes ~200 KB, move the oldest entries to the
 archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
+
+## Events home: the "Event finished." line survives redraws · 4.17.1 · 2026-11-17
+
+**Status: NOT FINAL.** Code, tests and reviews are done. Open before the release PR: the 360px check for this screen is not recorded in the review (§11, UI changes), and a real screen-reader check is owed. Branch `fix/event-finished-message`, no PR yet. No §14 task ID: owner-reported UI bug #5 (the UI/UX bug list), found 2026-11-17 while building #496. **Version 4.17.1 (patch: a fix, no new capability).**
+
+- **What changed.** On `#/events`, the "Event finished." confirmation disappeared when the organiser opened the Finished group. Every `render()` rebuilt the outcome line and cleared it after one paint. The `role="status"` line is now built once per mount and re-appended on each redraw, so it survives the Finished toggle, Manage toggles, the format filter and the archive panel arriving. It is cleared only when a new Finish or Delete starts. Focus moves to it only for a **new** error: an old error no longer pulls focus back on a late redraw (the org-links subscription). When a redraw re-inserts the kept line, `aria-live` is set to `off` for that insertion and back to `polite` on the next tick, so a screen reader that announces a live region on insertion does not repeat it. `setFeedback` lost its redundant node parameter.
+- **Why built once.** A node created inside `render()` is lost on the next redraw, and rebuilding it with the old text would re-announce it. One node per mount means a redraw has nothing to lose. The `aria-live` mute is the cheap guard for the re-insertion; a live-region rewrite was not needed.
+- **Files.** `src/core/eventsScreen.js`; `src/core/eventsScreen.test.js` (three new cases); `package.json` and `package-lock.json` (4.17.1); `CHANGELOG.md`; `STATUS.md`; `CONVENTIONS.md` (the kept-status-line pattern); `docs/backlog/tenancy.md` and `docs/backlog/README.md` (the reduced-motion item). Budget: `CHANGELOG.md` was 201,345 bytes
+  with this entry, over its 200,000 budget, so the 13 entries from 2026-11-03 to 2026-11-09 (from "BTC Build A" to the v3.6.1
+  entry) moved verbatim to `docs/archive/changelog/2026-11-H2.md` and were added to `CHANGELOG-INDEX.md`; now 168,774 bytes.
+- **Tests.** Three new cases: the line survives Finished, Manage and filter redraws with the same node, tone and the `aria-live` mute; it is cleared on a new Finish; it is cleared on a Delete. The first was confirmed to fail without the fix. `eventsScreen.test.js` re-run in this session: 92 passed. Full unit suite 7060 passed in the implementing session; one unrelated failure on a first run did not repeat.
+- **Reviews.**
+  - `module-boundary-checker`: clean.
+  - `code-reviewer`: 0 Important. Nit 1, a kept error line re-took focus and scroll on unrelated redraws: fixed with `freshError`. Nit 2, redundant `setFeedback` parameter: fixed.
+  - `ui-accessibility-reviewer`: 0 Important. Nit 1, possible re-announcement when the kept line is re-inserted (unverified without a screen reader): mitigated by the `aria-live` mute; real check owed. Nit 2, the same focus pull as code-reviewer's Nit 1: fixed. Pre-existing, logged not fixed: the `.screen-feedback:not(:empty)` entry animation in `src/ui/tokens/components.css` has no `prefers-reduced-motion` guard (`docs/backlog/tenancy.md`).
+  - `test-auditor`: 0 Important. Four Nits, all applied: open Manage before the second Finish instead of clicking a hidden button; cover the Manage toggle and filter redraws; test that Delete clears the line; stop claiming node identity proves no re-announcement.
+- **Follow-ups.**
+  - 360px check of the events screen (§11): not recorded in the review; confirm before the release PR.
+  - Real screen-reader check (iPhone or iPad VoiceOver, and a desktop reader) that the kept line is not re-read on the Finished toggle.
+  - Reduced-motion guard for the `.screen-feedback` entry animation (pre-existing; backlog).
 
 ## Organiser home: the events rebuild, new-event screen and org event summaries · 2026-11-17
 
@@ -722,188 +741,3 @@ Upgrading the CLI is now a deliberate one-line change in `.github/workflows/ci.y
   - `test-auditor`: no red. 14 mutations, all caught except one vacuous test (locked-blur), which was replaced. The round-trip loop was split.
 - **Not final, Definition of Done outstanding:** the Honor phone and iPad checks, and the `ui-accessibility-reviewer` re-run after the `inputmode` removal. Also the PR merge, which the owner does when CI is green.
 - **Open follow-up:** O6 (the 10:00 and 15:00 limits) waits on the committee. The optional hardening is in spec section 6: the RPC does not enforce the preliminary-requires-both-times rule, so it is client-side only.
-
----
-
-## BTC Build A: a preliminary round number on btc_matches · 2026-11-08
-
-**Task:** item A of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (section 3), database only: two preliminary rounds can now be told apart. Built in a side session, PR into `dev`; **the migration is NOT yet in the cloud** (merging does not push it).
-
-- **Database:** migration `20261108200000_btc_prelim_round.sql`: `btc_matches.prelim_round smallint null`, check `btc_matches_prelim_round_valid` (`null` or `round = 'preliminary'` and `>= 1`, no upper bound), partial index `btc_matches_event_prelim_round_idx (event_id, prelim_round) where round = 'preliminary'`. `btc_standings` unchanged (sums both rounds). No backfill: existing rows stay NULL and read as round 1 in the UI later. No new table, function, policy or grant, so `040`/`041` need no entry (re-run, pass).
-- **Decided in the task, not in the spec:** `prelim_round` is **logged**, like `round`. The same migration replaces `app.log_score_change` (from its latest body, `20261009110000_btc_knockout_tiebreak.sql`; diffed, one key added, revoke re-issued) and `018` has the bucket row. `get_dispute_pack` exports whole match rows so it carries the column (organiser-only); `get_scoring_record` shows log values generically and needs no change.
-- **Tests:** pgTAP `074` (40 assertions): 1, 2, 3 and NULL accepted; 0, negative and any number on a knockout round refused 23514 (insert and update, and a numbered preliminary cannot become a knockout); log rows written for a change and none for an unchanged value; standings 35 + 35 = 70 across both rounds; another organisation and a stranger update and read zero rows, anon 42501; the scored demo leaves every number NULL. Full pgTAP suite passes (75 files). `db:reset` from empty applies; rollback run in a transaction and re-applied (function restored without the key, then back).
-- **Reviews:** `schema-guardian` clean. `security-reviewer` clean (function posture identical, no grant or policy change, no anon door). `code-reviewer` clean (nit left: `012` does not mention the constraint). `test-auditor`: no red; mutation checks all caught; nit 1 (demo assertion vacuous, ran unscored) and nit 2 (cross-org update also hit the knockout row, so a broken RLS would error rather than count) fixed; nit 3 left: "existing rows untouched" is held by the migration having no backfill, not by a test.
-- **Not done here:** merge and the cloud push. After merge compare `supabase/migrations/` with the cloud list and push `20261108200000`.
-
----
-
-## BTC Build E part 2: team country in the live payload and on the audience surfaces · 2026-11-08
-
-**Task:** `docs/specs/BTC-E-TEAM-JUDGE-COUNTRY-PLAN.md` section 6. Builds on part 1 (PR #428, released as 3.6.4).
-
-- **Public payload, one new field:** `country: { code, name } | null` on each TEAM object (standings rows, up next, then next, result sides, bracket slots, decided podium places). `btc_teams` is read as `id, name, country_code`; judges stay `id, name`, so a **judge's country is never published** (decision D5). The name comes from `core/country.js` at publish time. A code outside the list is shown as the code.
-- **Surfaces:** the phone shows `Country · Name` (`words.js` `withCountry`; the up-next headline uses `matchHeadline`; the tight "Then:" and footer lines keep plain names). The projector's two-sided match card puts the country on its own small line above the name; standings, champion and podium line use the label; the bracket slot writes `Country · Name` on one line and cuts a long country at its own end, never the team name (checked at 1080p with "Democratic Republic of the Congo": the fourth quarterfinal still fits). Rank headlines and the result sentences keep plain names. `demoLivePayload.js` gives the rehearsal teams countries (one with none).
-- **Reviews:** `security-reviewer` and `module-boundary-checker` clean. `code-reviewer` clean (nits only). `ui-accessibility-reviewer`, four rounds on the bracket slot, all fixed: (1) a long country cut the team name; (2) the first fix, a second line, pushed the fourth quarterfinal off a 1080p screen; (3) the one-line layout let a name run into the THROUGH mark at 1024x768, fixed by letting the country shrink to nothing inside a clipping wrapper; (4) a review of that fix found the wrapper's flex gap stayed when the country was 0 wide, so a name within 0.5ch of the slot lost its last glyph. It was fixed by dropping the gap and carrying the separator inside the country as non-breaking spaces, with a regression test, and the delta re-review was clean. `test-auditor`: four reds (no test for country on the phone Recent results, the phone standings, the projector up-next page and the result-reveal moment, each with a surviving mutant) and one nit, all fixed with tests. The round 2 re-run found one more surviving mutant (the up-next card's second side), now covered.
-- **Not done here:** the payload field reaches the display only after a republish; no migration (part 1 holds the database change).
-
----
-
-## Petrol V2 public pages · 2026-11-09
-
-**Task:** make the public pages draw from the same Petrol V2 layer as the console. Branch `claude/petrol-v2-public-16c90b`, cut from the drift guard (0dc2e3f), not merged. No version bump.
-
-- **Shared primitives** in `base.css` (every page loads it): `.tag` (+ `-solid`, `-dashed`, `--tag-edge`/`--tag-ink`), `.panel` (card edge, 6px), `.icon-frame` (3px), `.menu-toggle`, `.action` (+ `-primary`, `-outline`); the live dot is the existing `.status-live-dot` and the big CTA the existing `.btn-bevel`. Not `components.css`, for the reason its header gives; `.card` keeps the same edge and corner as `.panel` and a test holds them equal.
-- **Migrated:** landing (tags, nav toggle, actions, pricing plate, live-bar dot), public header and footer (toggle, Start free, live dot, version chip), pricing (cards, rows, CTAs, "Planned" word), tour (status marks, icons, cups, photo, board, cards, links), results (latest card, table, sheet button; record rows get a 3px corner), community hub (cards, status, instruments, note mark). Page rules lost their copies of border, fill, corner and button shape. The two `rgba(238,242,241,a)` colour allowlist entries are gone (outline uses `--color-border-input`, the strip a `color-mix`). Dead CSS deleted: `.results-sample-banner` and `.results-sample-badge` (no markup).
-- **Visible changes:** card and tag edges use the card-edge token (a little lighter than the old soft border on stage), tags are 11px mono caps with a 3px corner, cards and the landing plate are 6px, the header and landing buttons share one hover. Layout unchanged.
-- **Stays square:** full-bleed roots and bands, header bar and mobile panel, ticker, live bar, edge-to-edge rows, the printable results sheet, a flag glyph, decorative fills (`SQUARE_ALLOWLIST`, DESIGN.md "Public pages").
-- **Guard:** `tokenDrift.test.js` fails a painted box with no token radius (unless the JS pairs the class with a shared shape class) and a page-local `-tag`/`-badge`/`-dot`/`-toggle` copy; the allowlist is exact both ways. New `src/marketing/sharedPrimitives.test.js` checks the markup carries the shared classes and the primitives are defined once.
-- **Checked** at 360px then 1280px on landing, pricing, tour, community and privacy: no horizontal overflow, 3px/6px/bevel corners as computed, keyboard focus ring visible. The results page shows only its error state without a Supabase `.env`, so its data states are tests-only.
-- **Reviews.** First round of all four stalled (no output) and was rerun with narrower scopes. `module-boundary-checker`: clean. `ui-accessibility-reviewer`: no red; edges meet 3:1 (`--color-border-card` 4.46:1 on stage), 44px targets and no clipped focus rings; nit fixed (the footer version chip is a link, so its edge takes `--color-border-input`, not the decorative tag edge at 1.34:1). `code-reviewer`: no red; nits judged: `.action` adds a 1px transparent border (intended, matches `.btn`), "Planned" is now 11px mono caps (intended, it is a tag; look at it on a device), the `color: inherit` on the footer chip is intentional. `test-auditor`: 2 red-equivalents fixed (the markup exemption read any string, now only `className:` values; pricing and header loops had no count check, now asserted non-empty) and nits fixed (an explicit `border-radius: 0` no longer counts as a corner, grouped selectors checked per member, stray `console.log` removed, scan asserts the public stylesheets are found). Known gaps: the exemption is by class name across the public scripts, not per element; longhand borders and `box-shadow` boxes are not seen. Full run: all suites pass except 38 files that cannot load here (`libphonenumber-js` is not installed in this checkout) and the known Windows `brokenLinks` failure.
-
----
-
-## Petrol V2 drift guard · 2026-11-08
-
-**Task:** the last Petrol V2 phase, on branch `claude/petrol-v2-guard-cf745e` (cut from the combined `claude/petrol-v2-2a4279`, 85cae05), not merged. No version bump.
-
-- **Guard.** `src/ui/tokens/tokenDrift.test.js` scans every `*.css` under `src/` outside `src/ui/tokens/` and the inline `<style>` of HTML pages (not `public/bts/index.html`, `design/`, `*.preview.html`) and fails on a raw colour, an off-token `border-radius`, a time/easing literal in `transition`/`animation`, or `clip-path: polygon()`. The `ALLOWLIST` pins file + kind + selector chain + literal + reason, with exact counts (new drift in an allowlisted rule fails, a stale entry fails). It also checks the scan is not vacuous and runs the four rules and the CSS reader on synthetic input (the reader fails closed on unbalanced blocks).
-- **Found on this commit:** 50 colour, 38 motion, 1 radius, 0 `clip-path` (89 literals). Fixed onto tokens (look unchanged): landing/header `rgba(255,255,255|11,14,16|15,181,163,a)` to `color-mix(in srgb, var(--clr-*) a%, transparent)`; three `#fff`/`#ffffff` QR plates to `--clr-white`; two mask gradients `#000` to `--clr-black`; `.archive-panel` radius fallback `var(--radius-md, 8px)` to `var(--radius-md)`; a stale comment in `landing.css` rewritten. Allowlisted by a named DESIGN.md exception: live-blip breathe, splash intro and glow, Guess the Bean float/bob and celebration, landing hero fade and marquee, Random Selector flip, timer blink, the reduced-motion reset (0.01ms).
-- **Judgment calls, flagged:** `.gtb-spinner` (0.8s linear) and `.gtb-display-countdown strong` (0.72s) are allowlisted but DESIGN.md does not name them; `rgba(238,242,241,a)` on `.petrol-action-outline` and `.petrol-stat-strip` (no token equals #eef2f1) is allowlisted rather than shift the landing look; the `*.preview.html` demo-control hexes are out of scope (dev harnesses).
-- **Reviews.** `test-auditor`: 1 red judged out of scope (the task names duration and easing; longhand `animation-delay`/`transition-delay` stagger offsets stay unchecked: 10 sites in `stageMoments.css`, `splashScreen.css`, GTB `displayScreen.css`, listed as a known gap in DESIGN.md, a follow-up if wanted), nits fixed (vendor-prefixed props, `var()` fallback literals) or logged as known gaps (custom-property indirection, named colours, string-unaware comment stripper). `code-reviewer`: no red, 5 nits fixed. `module-boundary-checker`: clean. `ui-accessibility-reviewer` not run (token swaps render identically). `kb-sync` not run.
-- DESIGN.md has a new "Drift guard" paragraph.
-
----
-
-## Petrol V2 P2: shared components · 2026-11-08
-
-**Task:** the second Petrol V2 phase, on branch `claude/petrol-v2-p2-335063` (cut from P1), not merged; the owner combines the phases.
-
-- **Bevel.** `.btn-bevel` (shape only, `base.css`, for CTAs that are not `.btn`) and `.btn .btn-primary .btn-lg` (`components.css`): `corner-shape: bevel round bevel round` inside `@supports`, asymmetric `border-radius` fallback, never `clip-path`. Applied to Start heat, Confirm heat, BTC Confirm match, the landing primary, pricing tier buttons, tour primary links, random selector DRAW ENTRY and KEEP RESULT, Brew Planner primary buttons.
-- **`.cut-*` retired** from buttons: `.cut-sm`/`.cut-md` and `--cut-sm/md` removed; `.cut-lg` kept for the random selector board frame only. The three focus-ring workarounds (pricing, random selector, Brew Planner) are deleted. Small marketing/tool buttons now take `--radius-sm`.
-- **States.** `.btn` hover/colour transitions (`--dur-fast`), press (`--dur-press`, 1px sink, darker fill), `[aria-busy='true']` bottom-edge line (static under reduced motion), `.screen-feedback` enters over `--dur-base` (keyframe, empty-region behaviour unchanged), `.is-selected` / `.selectable` (tint, 2px edge, check mark). Selected classes are not applied anywhere yet; candidates for P3: appShell and admin nav `aria-current`, Brew Planner step, heats list.
-- **Input edges.** New `--color-border-input` (petrol-400): 4.00:1 against the paper surface (3.38:1 canvas), 4.16:1 against the stage surface; was 2.09:1 (canvas) / 2.47:1 (surface).
-- **Reviews.** `code-reviewer`: 3 red, all fixed (`.btn-lg` rule duplicated in `base.css` failing `components.test.js`, `base.css` counted as a reliant sheet, corrupted check glyph). `ui-accessibility-reviewer`: no red; nit fixed (function name in comments); logged pre-existing: `.btn[aria-disabled]` opacity .6 dims a busy label to about 3:1. `module-boundary-checker` clean. Not verified: focus ring look on a bevel in a real browser, forced-colors. `kb-sync` not run.
-
----
-
-## Petrol V2 P3: surfaces · 2026-11-08
-
-**Task:** the third Petrol V2 phase (screens), on branch `claude/petrol-v2-p3-56ecc7`, cut from P1 and not merged; P2 (components) is a sibling branch. No version bump.
-
-**What shipped:** `core/rankMotion.js` + `.css` (rows slide to their new rank by FLIP, changed numbers tick in, `--dur-stage`/`--ease-out`, instant under reduced motion, a duplicated or hidden row is left alone), wired once into `viewer-shell` (every phone body) and `stagePageLoop` (every projector standings page); Cup Taster and BTC mark their rows, Throwdown has no standings list yet. `core/skeletonBoard.js`: a hollow, dashed, never-animated, aria-hidden board placeholder under "Connecting…" (connecting phase only; the TEST banner is untouched). The live blip is a 4s opacity breathe (connection lost already differs: "Reconnecting…" in the danger colour, no dot). Long names in the phone standings are cut with an ellipsis (BTC: two lines at most, so touch can read them), "(tied)" never is; `text-wrap: balance` on stage titles and holding titles. Panels (nav, org notice, sync detail) open over `--dur-base`; hover transitions on `appShell`, `eventsScreen`, `publicHeader`, `trust`, `brewPlanner`, `randomSelector` (the `.btn`, pricing CTA and header CTA are P2's and untouched). Motion tokens replace hand-written durations in landing, results, tour, community hub, Guess the Bean, stage moments and `public/bts` (which carries a token copy held equal by `btsPalette.test.js`). Colours: `colors.css` gained `--clr-white`, `--clr-black`, `--clr-chart-1..8`; `reportScreen.css` and `results.css` have no raw hex left; the four `border-radius: 50%` are `--radius-full`; the six `border-radius: 0` in `randomSelector.css` are `--radius-sm` (they restated the V1 zero radius; V2's Hybrid gives small elements 3px). The named motion exceptions are listed in `DESIGN.md`.
-
-**Reviews:** `ui-accessibility-reviewer` (no blocking; a duplicate-key motion nit fixed, touch access to cut names fixed by letting the name wrap, "Not live" badge while connecting is pre-existing and logged), `code-reviewer` (hidden-row position nit fixed, motion calls made non-fatal in the shell, test gaps closed), `module-boundary-checker` (clean), `test-auditor` (reduced-motion, duplicate-key and wiring tests added). `offline-sync-auditor` not run (no sync change). Not run in a browser or Playwright.
-
-**Left for later:** a 360px and 16:9 visual pass in a real browser; Throwdown standings when they exist; a shared `prefersReducedMotion()` helper (four copies, three pre-existing); the "Not live" badge while connecting.
-
----
-
-## Petrol V2 P1: design tokens · 2026-11-08
-
-**Task:** the first of three Petrol V2 phases (tokens, components, screens), on branch `claude/petrol-v2-2a4279`, not merged; the owner merges after every phase.
-
-- **Tokens:** Hybrid radii (`--radius-sm/md/lg` 3/6/10px, `--radius-full` 9999px for circles only), `--bevel-md/lg` (unused until P2), new `motion.css` (`--dur-*`, `--ease-out`), one global reduced-motion rule in `base.css`, teal tints and `--color-accent-tint(-text)` in both modes with contrast rows in DESIGN.md. `.status-live-dot` is 3px; `.card` border is a hairline.
-- **Knock-on:** 14 `--radius-full` pills and badges in eight CSS files moved to `--radius-sm` so none became a pill (splash glow stays round). Every `--radius-*` consumer (inputs, buttons, cards, admin, timer) now has soft corners, and cards lose the 2px black frame.
-- **Reviews:** `code-reviewer` no red (nit: the `.card:focus-visible` rule is now redundant; kept, `components.test.js` pins the selector). `ui-accessibility-reviewer` no red; found the hairline card edge too faint (2.1:1); fixed in a follow-up commit with `--color-border-card` (3.4:1 paper, 4.5:1 stage); motion doc clarified. `module-boundary-checker` clean.
-- **Not done here:** bevel buttons, press/busy states, selected classes (P2); screens and drift-guard test (P3). P2 note: a selected tint is 1.14:1 against paper, so it needs a non-colour cue.
-
----
-
-## BTC Build E: country on teams and judges (PR 1) · 2026-11-08
-
-**Task:** `docs/specs/BTC-E-TEAM-JUDGE-COUNTRY-PLAN.md`, PR 1 (sections 4 and 5): the data and organiser screens for the judge-off-own-country rule that the draw (Build B) builds on. PR 2 (country in the live payload) is not started.
-
-- **Database:** migration `20261108100000_btc_team_judge_country.sql` adds `btc_teams.country_code`, `btc_teams.represents` (1 to 60 characters, trimmed) and `btc_judges.country_code` (shape `^[A-Z]{2}$`, nullable, not unique). No new table, function, policy or grant. Rollback run in a transaction and re-applied with an identical fingerprint. pgTAP `073` (38 assertions); the full suite passes. `get_scoring_record` and `public_event_summary` emit no team or judge row, and the live payload reads judges as `id, name`, so judge country reaches no public surface. `get_dispute_pack` emits whole rows, so it now carries the columns (organiser-only; no test pins those keys).
-- **Front end:** `core/country.js` (one country list; `phone.js` delegates, its tests unchanged); `teams.js`/`judges.js` take options on create (**signature change**: `createTeam(eventId, name, { countryCode, represents }, client)`) and gain `updateTeam`/`updateJudge`; `countryConflicts.js` (pure; B reuses it); `words.js` `teamLabel`; `countrySelect.js`; setup add and inline edit forms (one row at a time; only a team change republishes); the matches screen shows `Country · Name` and warns, never blocks, when a ticked judge shares a team's country.
-- **Deviations from the plan:** `countryName` returns the code itself for a code outside the list (Intl would say "Unknown Region"). A team with a stored country but a judge with none never conflicts (as planned). The console has no dark theme, so the light/dark check was light only (dark exists only on the projector).
-- **Reviews:** `schema-guardian` clean (nit: `btrim` strips spaces only, left). `security-reviewer` clean. `module-boundary-checker` clean (one comment nit, fixed). `test-auditor`: no red; mutation checks all caught; one nit fixed (unknown code now pins `ZZ · Team Kopi`). `code-reviewer`: one red, `format:check` failing on five files, fixed with Prettier (a real miss, mine); nits left. `ui-accessibility-reviewer`: one provisional red, the judge-country warning is a polite status node that the render loop rebuilds each time, so a screen reader may not announce it (the "N of 3 selected" line has the same pre-existing pattern). Not fixed, no independent check run: a persistent live region needs a change to the render loop; the warning is also read via `aria-describedby` and is visible text. Open for the owner. Also open: edits typed while a save is in flight are dropped; the Save has no timeout.
-- **Not done here:** merge, and pushing the migration to the cloud project. `tools/check-doc-budgets.test.js` fails on this Windows checkout only (a POSIX path assumption), unrelated.
-
----
-
-## Landing page: new hero tagline · 2026-11-06
-
-**Task:** a test panel found the hero headline ("One tablet. One projector. Zero fall-apart.") disconnected and confusing, with no link to coffee.
-
-**Changed:** `landingScreen.js` hero is now "Every cup brewed. / Every score counted. / Every result trusted." (owner-chosen wording; the last line keeps the accent colour). `landingScreen.test.js` asserts the three lines and the accent span; `tests/e2e/smoke.spec.js`'s raw-response check and `tools/prerender-public-pages.mjs`'s landing marker look for "Every cup brewed" instead of "One tablet". The prerender marker was missed at first and failed `npm run build`, so the Cloudflare Workers build went red; a search for the old headline must include `.mjs` files. The body copy still carries "no install and no dependency on venue wifi". Version 3.6.3 (CI's version gate).
-
-**Verified:** at 360px the headline wraps to six lines with no horizontal overflow (the page width equals the viewport); at 1280px it is three lines. No reviewers run (one text change).
-
-## Landing page: Throwdown shown as live (3 formats) · 2026-11-06
-
-**Task:** the landing page still said 2 formats were live after Throwdown shipped (T-TD.1, 2026-11-03).
-
-**Changed (`src/marketing/landingScreen.js`, `landingScreen.test.js`):** hero stat "3 formats live"; nav indicator "Live — Cup Taster, BTC, Throwdown"; Throwdown's row is now live and links to `/app/#/events` like the other two. Its blurb describes what shipped (seeded or random draw, judge votes, 3rd place match, live audience view) and says redemption and revival rounds are coming as add-on modules; the old "redemption & revival draw" claim is gone. Liga Seduh stays dimmed. Tests updated to 3 live rows and 1 dimmed row.
-
-**Follow-up pass, same day:** the Tour (new live Throwdown section, planned grid now Liga Seduh only), the shared header indicator, the Pricing FAQ, the About page (`trustContent.js` and its draft) and `src/marketing/CLAUDE.md` now say Throwdown is live.
-
-**Verified:** full vitest 5969 of 5969, eslint and prettier clean. No reviewers run (copy-only; the new Tour section reuses BTC's existing markup and classes).
-
-## T-TD.1.9 Throwdown: the 3rd place match after a walkover: built and in review, PR into `dev`; migration NOT yet in the cloud · 2026-11-03
-
-**Task:** owner decision (2026-11-03): play the 3rd place match whenever BOTH semi-final losers exist and are active (`event_entries.withdrawn` is false). Before, `app.td_advance` made none if any semi-final was a bye or a walkover.
-
-**State, plainly:** built and tested locally; PR into `dev`; the owner says when CI is green and the main session merges, releases and applies the migration. **Not in the cloud:** `20261103140000_throwdown_third_place_walkover.sql` (a new migration; the four T-TD.1 migrations are already in the cloud and were not edited). It replaces only the body of `app.td_advance`; apply it with `apply_migration`, then compare `list_migrations`. The version is not bumped here.
-
-**The rule now:** a walkover no longer blocks the match (its loser is the other slot's competitor); a bye still does (a bye match has no loser); a withdrawn loser blocks it, a withdrawn winner does not. The usual real-world walkover, where the no-show is also withdrawn on the roster, therefore still gets no 3rd place match; an organiser who records a walkover without withdrawing the no-show gets the match. Idempotent as before (the round is only made when the latest main round is decided and has no successor); the 3rd place match and the Final are made together and are live at once. The decision is taken once, when the semi-finals complete.
-
-**Files:** the migration (rollback block restores the 20261103120000 body, run and verified inside a rolled-back transaction); `supabase/tests/072_throwdown.sql` (139 asserts, up from 116: walkover semi-final, bye semi-final (existing 5-competitor case), withdrawn loser, withdrawn winner, withdrawn no-show, two walkover semi-finals, a direct second run of `app.td_advance`, and the old "no 3rd place after a walkover" assertion reversed); `src/formats/throwdown/bracket.test.js` (a real walkover semi-final, 3rd place and Final); the Playwright event now has a walkover in the quarter-finals AND the semi-finals and checks the 3rd place match was played; stale lines fixed in this file, `ROADMAP.md` and `src/formats/throwdown/CLAUDE.md`. No JS predicts the rule (the bracket is derived from rows), so none needed changing.
-
-**Reviews:** schema-guardian (clean; rollback text identical to the old body), security-reviewer (clean), scoring-auditor (no Important; test-gap nits fixed), test-auditor (4 Important test gaps, all fixed: the withdrawn check is about losers only, withdrawn no-show, two walkovers, advancement re-run directly; plus a mislabelled vitest case and an e2e assertion), code-reviewer (1 Important: this entry was missing, now written; stale comment fixed). offline-sync-auditor not needed (no outbox change). Verified: full pgTAP suite, vitest, eslint, prettier, Playwright `dev-throwdown`.
-
-## T-TD.1 Throwdown core knockout: built and in review, PR into `dev`; migrations now in the cloud · 2026-11-03
-
-**Task:** T-TD.1 (ROADMAP "Throwdown (third format) — Phase TD.1 Core"; tasks T-TD.1.1 to .8) on branch `claude/throwdown-td1-core-d41fad`. Throwdown is the third format: a single-elimination knockout core with entitlement keys, schema, RPCs, pure modules, data layer, organiser console, projector and phone bodies, a printable organiser results page, and a full 8-competitor test event.
-
-**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **In the cloud (updated 2026-11-03):** `20261103101000` (entitlement keys), `20261103111000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) were applied to the cloud project by the main session after the release (#416, #417, v3.6.0).
-
-**Decisions (the spec is silent or left them open; the owner may overrule):**
-
-- Timer is display-only: no elapsed time is stored, so `clampElapsed` does not apply.
-- The random draw stores its shuffle seed, so a draw can be re-run and explained afterwards. The database stores the seed but cannot replay the browser shuffle (see follow-ups).
-- Any judge count is accepted. Confirm is disabled while votes are level; an extra tap resolves an even panel (Q5).
-- Competitor status is `event_entries.withdrawn`, so Q8b can be settled later without a schema change.
-- No call site branches on tier (D14).
-- No third-place match when either semi-final was a bye or a walkover (the loser may have withdrawn). **Superseded 2026-11-03 by T-TD.1.9:** a walkover no longer blocks it; see the T-TD.1.9 entry.
-- Cross-check (spec section 11): `core/ranking` and `core/advancement` cannot express a knockout. Both take one ranked list and a cutoff; a knockout has per-match winners that feed the next round. Advancement therefore stays in `src/formats/throwdown/` and in the SQL RPC that writes it. The one generic primitive lifted is `core/seededShuffle.js`, which Liga heats and the lucky-loser draw can reuse. Bracket layout stays Throwdown-only until a second knockout format exists. No other `core/` file was edited.
-
-**Files:** the four migrations above; `supabase/tests/072_throwdown.sql` (116 asserts); `040` (34 tables) and `041` (35 RPCs) matrices; count updates in `052`, `056`, `057` and `069`; `src/core/seededShuffle.js`; `src/formats/throwdown/*` (votes, bracket, seeding, modules, data, liveSession, outboxHandlers, eventScreen, resultsScreen, viewerBody, projectorScreens and projectorBody, words); `main.js` and `liveSurfaces.js` wiring; Playwright project `dev-throwdown`.
-
-**Verified:** vitest 5966 of 5966 pass; eslint and prettier clean; full pgTAP suite passes; `dev-throwdown` passes the full 8-competitor test event.
-
-**Reviews** (fixes in `3bd152d` unless stated):
-
-- schema-guardian: no Important. Nits: walkover check coalesce (fixed); indexes (fixed); server cap on `judge_count` deliberately not added (ROADMAP open question).
-- security-reviewer: no Important. Ledger-scope nit is pre-existing (all RPCs), logged in ROADMAP.
-- scoring-auditor: no Important. Truncated vote reads (fixed: paged); Confirm now takes `p_expected_winner_slot_id` (fixed).
-- offline-sync-auditor: 2 Important, both fixed: a queued decision now closes voting; the pending read is stable. Round 2: 2 nits, fixed.
-- module-boundary-checker: clean. 4 comment and doc nits, fixed or noted.
-- test-auditor: 9 Important test gaps, all fixed with new pgTAP and vitest cases.
-- ui-accessibility-reviewer: 5 nits, fixed (focus, tap targets, persistent live region, overflow, details). This was a review, not a 360px browser run (see outstanding items).
-- code-reviewer: no Important. Dead code removed; refusal copy added.
-
-**Outstanding (why this entry is provisional, DoD §11):**
-
-- The 360px browser pass and the 16:9 pass, and a screen-reader pass, for the console and the projector and phone bodies, are owed (ROADMAP, TD.1 status).
-- The cloud push of the four migrations, after merge (above). Migrations are not yet in the cloud, so the "applies in the cloud, never edited again" item is pending.
-- Footer version not bumped in this session: the closing brief limited edits to this entry and `state.json`. The bump belongs with the release to `main`, where the CI version guard applies.
-- `ROADMAP.md` at-a-glance (line 58, "remain planned") was not updated in this session, for the same reason.
-
-**Follow-ups (ROADMAP, TD.1 status; none block TD.1):**
-
-- Owner decision: repeat byes. With an odd number of winners, the last one gets a bye in every round; the Round 1 bye competitor can get a second bye and reach the Final having played one match (5 competitors). Spec section 5 is silent.
-- Owner decision: third place after a walkover or bye. **Decided 2026-11-03 and built as T-TD.1.9:** played whenever both semi-final losers exist and are active (a walkover no longer blocks it; a bye or a withdrawn loser still does).
-- Owner decision: a server cap on `judge_count` (today advisory).
-- Q8b (withdrawn competitor and the 8-player cap): open, no schema change needed either way.
-- Corrections after a confirm (wrong winner tapped): not in TD.1. A reopen must also undo the next round if nothing in it has started; design with the owner.
-- The draw is recorded, not verified: a recompute check at start is possible client-side only.
-- Ledger scope: `processed_operations` lookups are global by id across all RPCs. Guessing a v4 id is infeasible; scope it in one migration for every RPC.
-- Replay after the Per-event window closes is reported as a dropped write (the window guard runs before the ledger check).
-- Pool matches (TD.3): the loser join in `app.td_advance` assumes pair matches.
-- Public results and the formatted report are TD.2 (archive write and PDF). TD.1 ships an organiser-facing printable results page only.
-
-**Working tree at close:** five files are modified and not committed on this branch (`CLAUDE.md`, `ROADMAP.md`, `src/core/seededShuffle.js`, `src/formats/throwdown/CLAUDE.md`, `src/formats/throwdown/eventScreen.js`). They must be committed in the PR; this entry does not cover them as separate changes.
-
-## v3.6.1: contact and Data Protection Officer address is hello@seduhscore.com; Seduh ID opt-out time limits published · 2026-11-04
-
-**What the number covers:** the one public contact address, `CONTACT_EMAIL` (and the app's `SEDUH_SCORE_EMAIL`, which a test pins to it), changes from the temporary Outlook address to `hello@seduhscore.com`, which forwards to the owner's mailbox through Cloudflare Email Routing (the owner set it up and tested it on 2026-11-04); the Privacy page's Seduh ID opt-out now promises acknowledgement within 10 days and completion within 30 days (#419); and the Seduh ID feed rollout record (#418). A patch: wording and one address. **Not done:** replies still go out from the owner's own mailbox, not from `hello@`; the drafts under `design/copy/` still show the old address as history.
