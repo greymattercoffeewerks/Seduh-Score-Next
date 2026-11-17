@@ -1,37 +1,25 @@
-// Events list/create screen (2026-08-29 app-wiring pass) — the organiser's
-// real landing page, closing a gap that blocked the whole app from being
-// usable at all: without this, creating the one real event for October
-// meant a manual Studio insert, which contradicts this project's own
-// "project quality, reliability and trustworthiness" bar for its first
-// live/audience use.
+// The organiser's home (2026-08-29 app-wiring pass; rebuilt 2026-11-17 as the "Organiser home", the approved design
+// canvas of that date): the organisation's live event (or the one coming up next), its events grouped as coming up
+// and in setup / finished with a format filter, and a right rail of what needs attention across events, the audience
+// links and the organisation's own links. Creating an event is its own screen (core/newEventScreen.js, `+ New event`).
 //
-// Lives in `core/`, not `formats/cup-taster/` — `core/events.js` already
-// treats `format` as plain caller-supplied input (a future format calls
-// `createEvent`/`listEventsForOrg` unedited), so the screen listing/
-// creating those same rows is the same kind of module. The one rule this
-// file must hold to: it never hardcodes `'cup_taster'` internally —
-// `defaultFormat` is a caller-supplied prop (main.js's own route wiring
-// passes it in), keeping that literal in the one composition-root file
-// already allowed to know about Cup Taster.
+// Lives in `core/`, not in a format: `core/events.js` treats `format` as plain caller-supplied input, so this screen
+// is the same kind of module. It never names a format. What a format's count means ("4 heats drawn", "no judges
+// yet"), its names, descriptions and progress arrive from the composition root (src/organiserHome.js, through
+// main.js) as `formatOptions` and `describeEvent`; the pure grouping is core/eventHome.js. The per-event facts come
+// from ONE read for the organisation (`org_event_summaries`), and if that read fails the home still lists every
+// event, with the state lines left out.
 import { getSupabase } from './supabaseClient.js';
-import { el, labeledField, setBusyDisabled } from './dom.js';
+import { el, setBusyDisabled } from './dom.js';
 import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
-import { createEvent, listEventsForOrg, deleteTestEvent, finishEvent } from './events.js';
+import { listEventsForOrg, listEventSummaries, deleteTestEvent, finishEvent } from './events.js';
+import { buildEventWarnings } from './eventWarnings.js';
+import { buildMeter, statusMark } from './vocabulary.js';
+import { buildHome, countsLine, describeSafely, eventMeta, rowTags } from './eventHome.js';
 import { countOperationsInOrg } from './outbox.js';
 import { buildAudienceLinksCard } from './audienceLinksCard.js';
 import { createArchiveController } from './archivePanel.js';
-
-export function blankDraft(defaultFormat) {
-  return { name: '', eventDate: '', venue: '', city: '', isTest: false, format: defaultFormat };
-}
-
-// Pure. Name is the only required field — date/venue are optional
-// metadata, matching createEvent's own `?? null` handling for them.
-export function validateDraft(draft) {
-  if (!draft.name.trim()) return 'Name is required.';
-  return null;
-}
 
 // Delete is only ever offered for is_test events — matches
 // delete_test_event's own server-side guard (supabase/migrations/
@@ -198,223 +186,311 @@ function renderFinishAction(
   ]);
 }
 
+// How many "Needs attention" items the rail lists before saying how many more there are.
+const MAX_ATTENTION = 8;
+
+// The summary read is a second, softer read: it must never hold the landing page up for as long as the event list may.
+const SUMMARIES_TIMEOUT_MS = 4000;
+
+const formatLabelFor = (formatOptions, formatValue) =>
+  formatOptions?.find((option) => option.value === formatValue)?.label ?? formatValue;
+
+// What a row needs to draw an event it has no summary for (a bare list, or a failed summary read).
+function bareView(event) {
+  return { event, isLive: false, info: describeSafely(null, event, null) };
+}
+
+// The Finish / Delete actions of one row, kept off its main line: behind a "Manage" toggle, in a panel that stays
+// in the DOM (hidden) so a flow in progress never loses its buttons.
+function renderManage(event, view, ctx) {
+  const actions = [];
+  const deleteAction = renderDeleteAction(
+    event,
+    ctx.deleteStates?.[event.id],
+    ctx.deleteHandlers ?? {},
+    ctx.unsyncedWrites,
+  );
+  if (deleteAction) actions.push(deleteAction);
+  if (!event.ended_at) {
+    actions.push(
+      renderFinishAction(
+        event,
+        ctx.finishStates?.[event.id],
+        ctx.finishErrors?.[event.id],
+        ctx.finishHandlers ?? {},
+        ctx.archiveFinishNoteFor?.(event) ?? null,
+      ),
+    );
+  }
+  if (actions.length === 0) return null;
+  const panelId = `manage-panel-${event.id}`;
+  const toggleId = `manage-${event.id}`;
+  const open =
+    Boolean(ctx.openRows?.has(event.id)) ||
+    Boolean(ctx.deleteStates?.[event.id]) ||
+    Boolean(ctx.finishStates?.[event.id]) ||
+    Boolean(ctx.finishErrors?.[event.id]);
+  const toggle = el('button', {
+    className: 'btn btn-outline tap-target events-manage-toggle',
+    id: toggleId,
+    text: 'Manage',
+    attrs: {
+      type: 'button',
+      // The accessible name must contain the visible label (WCAG 2.5.3).
+      'aria-label': `Manage "${event.name}"`,
+      'aria-expanded': open ? 'true' : 'false',
+      'aria-controls': panelId,
+    },
+  });
+  toggle.addEventListener('click', () => ctx.onToggleManage?.(event.id));
+  const panel = el('div', { className: 'events-row-panel', id: panelId }, actions);
+  panel.hidden = !open;
+  return { toggle, panel };
+}
+
+function renderRow(view, ctx) {
+  const { event, info } = view;
+  const children = [];
+  const main = el('div', { className: 'events-row-main' });
+  if (ctx.formatOptions) {
+    main.appendChild(
+      el('span', {
+        className: 'events-format-tag',
+        text: formatLabelFor(ctx.formatOptions, event.format),
+      }),
+    );
+  }
+  const title = el('div', { className: 'events-row-title' }, [
+    el('a', { text: event.name, attrs: { href: `#/events/${event.id}` } }),
+  ]);
+  const meta = eventMeta(event, ctx.now);
+  if (meta) title.appendChild(el('span', { className: 'stage-meta', text: meta }));
+  main.appendChild(title);
+  children.push(main);
+  if (info.summary) {
+    children.push(el('span', { className: 'events-row-summary', text: info.summary }));
+  }
+  const tags = rowTags(view).map((tag) =>
+    statusMark(tag.state, tag.label, { light: tag.state !== 'test' }),
+  );
+  if (tags.length) children.push(el('span', { className: 'events-row-tags' }, tags));
+  const manage = renderManage(event, view, ctx);
+  if (manage) children.push(manage.toggle, manage.panel);
+  const archivePanel = ctx.archivePanelFor?.(event) ?? null;
+  if (archivePanel) children.push(archivePanel);
+  return el('li', { className: 'events-row', attrs: { 'data-event-id': event.id } }, children);
+}
+
+// One group's rows. `viewsById` (event id to its view) is optional: a caller with no summaries gets plain rows.
 export function renderEventsList(
   events,
   {
+    viewsById = new Map(),
     deleteStates = {},
     deleteHandlers = {},
     finishStates = {},
     finishErrors = {},
     finishHandlers = {},
+    openRows = new Set(),
+    onToggleManage,
     // T-ARC.4: the archive sentence for the Finish confirmation, and the panel under a row (both null while dark).
     archiveFinishNoteFor = () => null,
     archivePanelFor = () => null,
     formatOptions,
     unsyncedWrites,
+    now = new Date(),
   } = {},
 ) {
   if (events.length === 0) {
-    return el('p', { className: 'stage-meta', text: 'No events yet — create one below.' });
+    return el('p', { className: 'stage-meta', text: 'No events yet. Create your first event.' });
   }
-  // Only shown when more than one format is actually configured
-  // (formatOptions.length > 1) — with a single format there's nothing for the label to
-  // distinguish, and every existing single-format caller (every test that doesn't pass
-  // formatOptions at all) keeps its exact prior list shape.
-  const formatLabel = (formatValue) =>
-    formatOptions?.find((option) => option.value === formatValue)?.label ?? formatValue;
-  const items = events.map((event) => {
-    const link = el('a', {
-      text: event.name,
-      attrs: { href: `#/events/${event.id}` },
-    });
-    const meta = [event.event_date, event.venue, event.city].filter(Boolean).join(' · ');
-    const children = [link];
-    if (formatOptions?.length > 1) {
-      children.push(el('span', { className: 'stage-meta', text: formatLabel(event.format) }));
-    }
-    if (meta) children.push(el('span', { className: 'stage-meta', text: meta }));
-    if (event.is_test) {
-      children.push(el('span', { className: 'is-test-indicator', text: 'Test data' }));
-    }
-    const deleteAction = renderDeleteAction(
-      event,
-      deleteStates[event.id],
-      deleteHandlers,
-      unsyncedWrites,
-    );
-    if (deleteAction) children.push(deleteAction);
-    children.push(
-      renderFinishAction(
-        event,
-        finishStates[event.id],
-        finishErrors[event.id],
-        finishHandlers,
-        archiveFinishNoteFor(event),
-      ),
-    );
-    const archivePanel = archivePanelFor(event);
-    if (archivePanel) children.push(archivePanel);
-    return el('li', {}, children);
-  });
-  return el('ul', { className: 'events-list' }, items);
-}
-
-// `disabled`, not a checked-state-only lock — matches renderRegistrationForm's
-// own established shape (rosterScreen.js) for a create form disabled
-// in-flight.
-export function renderCreateForm(draft, { disabled, formatOptions }) {
-  // Only rendered when more than one format is actually configured — with a single
-  // format there's nothing to choose between, and draft.format already carries the
-  // caller's defaultFormat, so every existing single-format caller keeps creating
-  // exactly the same event shape with no new field in the form.
-  const formatField =
-    formatOptions?.length > 1
-      ? (() => {
-          const formatSelect = el('select', {
-            className: 'field-input',
-            attrs: { 'aria-label': 'Format', 'data-field': 'format' },
-          });
-          for (const option of formatOptions) {
-            const optionEl = el('option', { text: option.label, attrs: { value: option.value } });
-            if (option.value === draft.format) optionEl.selected = true;
-            formatSelect.appendChild(optionEl);
-          }
-          formatSelect.disabled = disabled;
-          formatSelect.addEventListener('change', () => {
-            draft.format = formatSelect.value;
-          });
-          return labeledField('Format', formatSelect);
-        })()
-      : null;
-
-  const nameInput = el('input', {
-    className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'Event name', 'data-field': 'name', required: 'required' },
-  });
-  nameInput.value = draft.name;
-  nameInput.disabled = disabled;
-  nameInput.addEventListener('input', () => {
-    draft.name = nameInput.value;
-  });
-
-  const dateInput = el('input', {
-    className: 'field-input',
-    attrs: { type: 'date', 'aria-label': 'Event date (optional)', 'data-field': 'eventDate' },
-  });
-  dateInput.value = draft.eventDate;
-  dateInput.disabled = disabled;
-  dateInput.addEventListener('input', () => {
-    draft.eventDate = dateInput.value;
-  });
-
-  const venueInput = el('input', {
-    className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'Venue (optional)', 'data-field': 'venue' },
-  });
-  venueInput.value = draft.venue;
-  venueInput.disabled = disabled;
-  venueInput.addEventListener('input', () => {
-    draft.venue = venueInput.value;
-  });
-
-  // Separate from Venue (a public results archive wants "City" and "Venue" as
-  // two distinct fields — user decision, 2026-09-17), not derived from it —
-  // an organiser could otherwise run the same venue in two different cities
-  // over time with no way to tell them apart on the archive page.
-  const cityInput = el('input', {
-    className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'City (optional)', 'data-field': 'city' },
-  });
-  cityInput.value = draft.city;
-  cityInput.disabled = disabled;
-  cityInput.addEventListener('input', () => {
-    draft.city = cityInput.value;
-  });
-
-  // Defaults UNCHECKED — D9's "unmistakable" bar means the organiser
-  // actively opts IN to marking something test data, never the reverse.
-  // Every other screen in this app only ever DISPLAYS is_test (the
-  // is-test-banner); this is the one place it's actually set.
-  const isTestInput = el('input', {
-    attrs: { type: 'checkbox', 'data-field': 'isTest' },
-  });
-  isTestInput.checked = draft.isTest;
-  isTestInput.disabled = disabled;
-  isTestInput.addEventListener('change', () => {
-    draft.isTest = isTestInput.checked;
-  });
-  const isTestField = el('label', { className: 'checkbox-field' }, [
-    isTestInput,
-    el('span', { text: 'This is test data' }),
-  ]);
-
-  const submitButton = el('button', {
-    className: 'btn btn-primary tap-target',
-    text: disabled ? 'Creating…' : 'Create event',
-    attrs: { type: 'submit' },
-  });
-  submitButton.disabled = disabled;
-
+  const ctx = {
+    deleteStates,
+    deleteHandlers,
+    finishStates,
+    finishErrors,
+    finishHandlers,
+    openRows,
+    onToggleManage,
+    archiveFinishNoteFor,
+    archivePanelFor,
+    formatOptions,
+    unsyncedWrites,
+    now,
+  };
   return el(
-    'form',
-    { className: 'create-event-form' },
-    [
-      formatField,
-      labeledField('Event name', nameInput),
-      // Visible label text now matches each input's own aria-label
-      // ("(optional)") — found in the app-wiring holistic pass: a sighted
-      // user had no visual cue these two fields were optional while a
-      // screen-reader user (hearing the aria-label) did; the two modalities
-      // must agree on the same information.
-      labeledField('Event date (optional)', dateInput),
-      labeledField('Venue (optional)', venueInput),
-      labeledField('City (optional)', cityInput),
-      isTestField,
-      submitButton,
-    ].filter(Boolean),
+    'ul',
+    { className: 'events-list' },
+    events.map((event) => renderRow(viewsById.get(event.id) ?? bareView(event), ctx)),
   );
 }
 
-// Which organisation the list belongs to and the new event will be created in, said where the person
-// reads it: someone who works in two organisations must never create an event in the wrong one.
-// The organisation is fixed when the screen mounts. The screen is replaced when it changes; until the
-// new one has drawn, a superseded screen is told to stop (its signal is aborted) and sends nothing.
-export function eventsListHeading(orgName) {
-  const name = orgName?.trim();
-  return name ? `Events in ${name}` : 'Your events';
+// The format filter: chips from 40rem up, a select below it (both drawn, one shown by CSS, kept in step by the one
+// `formatFilter` state). Only drawn when more than one format is configured.
+export function renderFormatFilter(formatOptions, current, onChange) {
+  if (!(formatOptions?.length > 1)) return null;
+  const options = [{ value: 'all', label: 'All' }, ...formatOptions];
+  const chips = el(
+    'div',
+    { className: 'events-filter-group', attrs: { role: 'group', 'aria-label': 'Show formats' } },
+    options.map((option) => {
+      const on = option.value === current;
+      const chip = el('button', {
+        className: `btn btn-outline tap-target events-choice${on ? ' is-selected' : ''}`,
+        id: `events-filter-chip-${option.value}`,
+        text: option.label,
+        attrs: { type: 'button', 'aria-pressed': on ? 'true' : 'false' },
+      });
+      chip.addEventListener('click', () =>
+        onChange(option.value, `#events-filter-chip-${option.value}`),
+      );
+      return chip;
+    }),
+  );
+  const select = el('select', {
+    className: 'field-input',
+    id: 'events-filter-select',
+    attrs: { 'aria-label': 'Show formats' },
+  });
+  for (const option of options) {
+    const optionEl = el('option', {
+      text: option.value === 'all' ? 'All formats' : option.label,
+      attrs: { value: option.value },
+    });
+    if (option.value === current) optionEl.selected = true;
+    select.appendChild(optionEl);
+  }
+  select.addEventListener('change', () => onChange(select.value, '#events-filter-select'));
+  return el('div', { className: 'events-filter' }, [
+    chips,
+    el('div', { className: 'events-filter-select' }, [
+      el('label', {
+        className: 'stage-meta',
+        text: 'Show',
+        attrs: { for: 'events-filter-select' },
+      }),
+      select,
+    ]),
+  ]);
 }
 
-export function createEventHeading(orgName) {
-  const name = orgName?.trim();
-  return name ? `Create an event in ${name}` : 'Create event';
+// "Live now" (with the progress and the next step) or "Coming up next". A test event says so here too (D9).
+function renderFeaturedCard(view, { live, formatOptions, now, formatLabel, rowCtx }) {
+  const { event, info } = view;
+  const headingId = `events-featured-heading`;
+  const kicker = el('div', { className: 'events-featured-kicker' }, [
+    live
+      ? statusMark('live', 'Live now')
+      : el('span', { className: 'events-featured-eyebrow', text: 'Coming up next' }),
+  ]);
+  if (formatOptions) {
+    kicker.appendChild(el('span', { className: 'events-format-tag', text: formatLabel }));
+  }
+  if (event.is_test) kicker.appendChild(statusMark('test', 'Test data'));
+  const meta = eventMeta(event, now);
+  if (meta) kicker.appendChild(el('span', { className: 'events-featured-meta', text: meta }));
+
+  const body = el('div', { className: 'events-featured-body' }, [
+    el('h2', {
+      id: headingId,
+      className: 'ok-card-heading events-featured-title',
+      text: event.name,
+    }),
+  ]);
+  const stateLine = [info.phase, info.next ?? (live ? null : info.summary)]
+    .filter(Boolean)
+    .join(' · ');
+  if (stateLine) body.appendChild(el('p', { className: 'events-featured-state', text: stateLine }));
+  if (info.progress) {
+    body.appendChild(
+      buildMeter({
+        label: `Progress of "${event.name}"`,
+        done: info.progress.done,
+        total: info.progress.total,
+        active: info.progress.active,
+        valueText: info.progress.text ?? undefined,
+      }),
+    );
+    if (info.progress.text) {
+      body.appendChild(el('p', { className: 'events-featured-figures', text: info.progress.text }));
+    }
+  }
+  const actions = el('div', { className: 'events-featured-actions' }, [
+    el('a', {
+      className: 'btn btn-primary tap-target',
+      text: 'Open event',
+      attrs: { href: `#/events/${event.id}`, 'aria-label': `Open event "${event.name}"` },
+    }),
+  ]);
+  if (info.action) {
+    actions.appendChild(
+      el('a', {
+        className: 'btn btn-outline tap-target',
+        text: info.action.label,
+        attrs: { href: info.action.href },
+      }),
+    );
+  }
+  // The featured event is left out of the list below, so its Finish / Delete live here, behind the same toggle.
+  const manage = renderManage(event, view, rowCtx);
+  if (manage) actions.appendChild(manage.toggle);
+  const archivePanel = rowCtx.archivePanelFor?.(event) ?? null;
+  return el(
+    'section',
+    {
+      className: `ok-card events-featured${live ? ' events-featured--live' : ''}`,
+      attrs: { 'aria-labelledby': headingId },
+    },
+    [
+      kicker,
+      el('div', { className: 'events-featured-row' }, [body, actions]),
+      ...(manage ? [manage.panel] : []),
+      // the featured event is left out of the list, so its archive panel (an Annual organiser's tick box) is here
+      ...(archivePanel ? [archivePanel] : []),
+    ],
+  );
 }
 
 export async function mountEventsScreen(
   root,
   {
     orgId,
-    // What to call the organisation in the headings (the caller knows it; this screen only receives the id).
+    // What to call the organisation above the heading (the caller knows it; this screen only receives the id).
     orgName = null,
     // The audience links for this organisation ({ phone, projector, splash }: absolute, slug-qualified), or
     // null when there are none to show. Built by the caller, which knows the routes.
     audienceLinks = null,
-    // Where the People screen is (a hash link), or null to leave the link out. The header has no room for
-    // another link (it must stay one row), so the Events screen is the organisation-level way in.
-    peopleHref = null,
+    // The organisation's own links ([{ label, href, meta? }]: People, Team for owners, Published results), or a
+    // function returning them (asked at every draw). The header has no room for them (it must stay one row), so
+    // this screen is the organisation-level way in.
+    orgLinks = [],
+    // (callback) => unsubscribe, for links that arrive after the screen is up (whether the person owns the
+    // organisation is asked of the database a moment after sign-in). The screen redraws when they really change.
+    subscribeOrgLinks = null,
+    // Where "+ New event" goes.
+    newEventHref = '#/events/new',
     client = getSupabase(),
-    defaultFormat,
+    // [{ value, label }] for every configured format: the format tag on a row, and the filter (drawn only when
+    // more than one). Supplied by the composition root; this file never names one.
     formatOptions,
+    // (event, facts, { isLive }) => the row/card words (see core/eventHome.js). Optional: without it the home
+    // lists events with no state lines.
+    describeEvent = null,
     signal,
     // How long Delete waits for the unsynced-writes count before falling
     // back to "Couldn't check" — overridable for tests.
     unsyncedCheckTimeoutMs = UNSYNCED_CHECK_TIMEOUT_MS,
     // Where an event's manual publish lives (a hash link), or null. The format owns that screen, so the caller says.
     archivePublishHrefFor = () => null,
+    // The clock, for "today" and the dates (a test passes a fixed one).
+    now = () => new Date(),
   } = {},
 ) {
   let events = [];
-  let draft = blankDraft(defaultFormat);
-  let creating = false;
+  let summariesById = new Map();
+  let formatFilter = 'all';
+  let finishedOpen = false;
+  let openRows = new Set();
   let loading = false;
   let pendingError = null;
   let pendingSuccess = null;
@@ -451,8 +527,18 @@ export async function mountEventsScreen(
     else delete feedback.dataset.tone;
   }
 
+  // The event list is the read that matters; the summaries are an extra that never fails the screen.
   async function loadPersisted() {
-    return listEventsForOrg(orgId, client);
+    const summariesRead = raceTimeout(
+      Promise.resolve().then(() => listEventSummaries(orgId, client)),
+      SUMMARIES_TIMEOUT_MS,
+    ).catch((err) => {
+      console.error('eventsScreen: event summaries unavailable', err);
+      return null;
+    });
+    const list = await listEventsForOrg(orgId, client);
+    summariesById = (await summariesRead) ?? new Map();
+    return list;
   }
 
   function renderLoading() {
@@ -525,44 +611,24 @@ export async function mountEventsScreen(
     }
   }
 
-  async function handleCreate(event) {
-    event.preventDefault();
-    // Superseded (the organisation changed and this screen is still on show while the new one loads):
-    // sending a create now would put the event in the organisation the person has just left, with no
-    // sign of it in the one they are looking at.
-    if (signal?.aborted) return;
-    const validationError = validateDraft(draft);
-    if (validationError) {
-      pendingError = validationError;
-      render();
-      return;
-    }
-    if (creating) return;
-    creating = true;
+  function handleFilter(value, focusSelector) {
+    formatFilter = value;
+    focusAfterRender = focusSelector;
     render();
+  }
 
-    try {
-      await createEvent(
-        orgId,
-        {
-          format: draft.format,
-          name: draft.name.trim(),
-          eventDate: draft.eventDate || null,
-          venue: draft.venue.trim() || null,
-          city: draft.city.trim() || null,
-          isTest: draft.isTest,
-        },
-        client,
-      );
-      draft = blankDraft(defaultFormat);
-      events = await listEventsForOrg(orgId, client);
-      pendingSuccess = orgName?.trim() ? `Event created in ${orgName.trim()}.` : 'Event created.';
-      focusAfterRender = '#events-heading';
-    } catch (err) {
-      pendingError = describeError(err);
-    }
+  function handleToggleManage(eventId) {
+    const next = new Set(openRows);
+    if (next.has(eventId)) next.delete(eventId);
+    else next.add(eventId);
+    openRows = next;
+    focusAfterRender = `#manage-${eventId}`;
+    render();
+  }
 
-    creating = false;
+  function handleToggleFinished() {
+    finishedOpen = !finishedOpen;
+    focusAfterRender = '#events-finished-toggle';
     render();
   }
 
@@ -576,6 +642,7 @@ export async function mountEventsScreen(
     // does nothing: without this, a late read could reopen the confirm step
     // over a delete already in flight (code-reviewer, 2026-09-27).
     if (deleteStates[eventId]) return;
+    openRows = new Set(openRows).add(eventId);
     deleteStates = { ...deleteStates, [eventId]: 'checking' };
     // Read before showing the confirm step so its warning is in place when
     // focus lands on "Confirm delete" (see unsyncedWritesWarning). Bounded:
@@ -623,12 +690,14 @@ export async function mountEventsScreen(
     focusAfterRender = '#events-heading';
     render();
     try {
-      await deleteTestEvent(orgId, eventId, client);
+      await raceTimeout(deleteTestEvent(orgId, eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
       events = events.filter((event) => event.id !== eventId);
       pendingSuccess = 'Event deleted.';
       focusAfterRender = '#events-heading';
     } catch (err) {
-      pendingError = describeError(err);
+      pendingError = err.timedOut
+        ? 'This is taking longer than expected. Check your connection, then look at the list before trying again.'
+        : describeError(err);
       focusAfterRender = null;
     }
     // Matches handleCancelDelete's own one-line idiom — found in review
@@ -641,6 +710,7 @@ export async function mountEventsScreen(
 
   function handleFinishClick(eventId) {
     if (finishStates[eventId]) return;
+    openRows = new Set(openRows).add(eventId);
     finishErrors = { ...finishErrors, [eventId]: undefined };
     finishStates = { ...finishStates, [eventId]: 'confirming' };
     focusAfterRender = `#confirm-finish-${eventId}`;
@@ -659,7 +729,7 @@ export async function mountEventsScreen(
     focusAfterRender = '#events-heading';
     render();
     try {
-      await finishEvent(orgId, eventId, client);
+      await raceTimeout(finishEvent(orgId, eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
       events = events.map((event) =>
         event.id === eventId ? { ...event, ended_at: new Date().toISOString() } : event,
       );
@@ -678,9 +748,144 @@ export async function mountEventsScreen(
     render();
   }
 
+  // A flow in progress on a row inside the collapsed Finished group (Delete on a finished test event) must show.
+  function flowOpenOn(eventId) {
+    return Boolean(deleteStates[eventId] || finishStates[eventId] || finishErrors[eventId]);
+  }
+
+  function renderListCard(home, rowCtx) {
+    const card = el('section', {
+      className: 'ok-card events-list-card',
+      attrs: { 'aria-labelledby': 'events-list-heading' },
+    });
+    card.appendChild(
+      el(
+        'div',
+        { className: 'events-list-head' },
+        [
+          el('h2', {
+            id: 'events-list-heading',
+            className: 'ok-card-heading',
+            text: 'Your events',
+          }),
+          renderFormatFilter(formatOptions, formatFilter, handleFilter),
+        ].filter(Boolean),
+      ),
+    );
+
+    const filterLabel = formatFilter === 'all' ? null : formatLabelFor(formatOptions, formatFilter);
+    const upcomingEvents = home.upcoming.map((view) => view.event);
+    card.appendChild(
+      el('h3', {
+        className: 'events-group-heading',
+        text: `Coming up and in setup · ${upcomingEvents.length}`,
+      }),
+    );
+    card.appendChild(
+      upcomingEvents.length === 0
+        ? el('p', {
+            className: 'stage-meta events-group-none',
+            text: filterLabel ? `No ${filterLabel} events coming up.` : 'Nothing else coming up.',
+          })
+        : renderEventsList(upcomingEvents, rowCtx),
+    );
+
+    const finishedEvents = home.finished.map((view) => view.event);
+    if (finishedEvents.length > 0) {
+      const mustShow = finishedEvents.some((event) => flowOpenOn(event.id));
+      const open = finishedOpen || mustShow;
+      const listId = 'events-finished-list';
+      const latest = finishedEvents[0];
+      const toggle = el(
+        'button',
+        {
+          className: 'events-finished-toggle',
+          id: 'events-finished-toggle',
+          attrs: {
+            type: 'button',
+            'aria-expanded': open ? 'true' : 'false',
+            'aria-controls': listId,
+          },
+        },
+        [
+          el('span', {
+            className: 'events-finished-label',
+            text: `Finished · ${finishedEvents.length}`,
+          }),
+          el('span', {
+            className: 'events-finished-hint',
+            text: open ? 'Hide' : `Latest: ${latest.name}`,
+          }),
+        ],
+      );
+      toggle.addEventListener('click', handleToggleFinished);
+      const finishedList = el('div', { id: listId, className: 'events-finished-list' }, [
+        renderEventsList(finishedEvents, rowCtx),
+      ]);
+      finishedList.hidden = !open;
+      card.appendChild(toggle);
+      card.appendChild(finishedList);
+    }
+    return card;
+  }
+
+  const currentOrgLinks = () =>
+    (typeof orgLinks === 'function' ? orgLinks() : orgLinks).filter(
+      (link) => typeof link?.href === 'string' && link.label,
+    );
+  const orgLinksKey = (links) =>
+    JSON.stringify(links.map((link) => [link.label, link.href, link.meta]));
+  let drawnOrgLinks = orgLinksKey(currentOrgLinks());
+
+  function renderOrgLinks() {
+    const links = currentOrgLinks();
+    drawnOrgLinks = orgLinksKey(links);
+    if (links.length === 0) return null;
+    return el(
+      'section',
+      { className: 'ok-card events-org', attrs: { 'aria-labelledby': 'events-org-heading' } },
+      [
+        el('h2', {
+          id: 'events-org-heading',
+          className: 'ok-card-heading',
+          text: 'Your organisation',
+        }),
+        el(
+          'ul',
+          { className: 'events-org-links', attrs: { role: 'list' } },
+          links.map((link) =>
+            el('li', {}, [
+              el('a', { className: 'events-org-link', attrs: { href: link.href } }, [
+                el('span', { text: link.label }),
+                ...(link.meta
+                  ? [el('span', { className: 'events-org-meta', text: link.meta })]
+                  : []),
+              ]),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  function renderAttention(home) {
+    const shown = home.attention.slice(0, MAX_ATTENTION);
+    const card = buildEventWarnings(shown, {
+      heading: 'Needs attention',
+      emptyText: 'Nothing needs attention.',
+    });
+    const rest = home.attention.length - shown.length;
+    if (rest > 0) {
+      card.appendChild(
+        el('p', { className: 'stage-meta', text: `and ${rest} more across your events.` }),
+      );
+    }
+    return card;
+  }
+
   function render() {
     // A discarded-but-still-in-flight mount (this screen's OWN attemptLoad
-    // or a post-await handler like handleCreate, still resolving after the
+    // or a post-await handler like handleConfirmDelete, still resolving after the
     // router already navigated elsewhere) must never write to `root` again
     // — router.js aborts `signal` the instant a newer navigation starts,
     // well before this screen's own promise chain gets a chance to
@@ -693,10 +898,41 @@ export async function mountEventsScreen(
       return;
     }
 
+    const clock = now();
+    const home = buildHome({
+      events,
+      summariesById,
+      describeEvent,
+      formatFilter,
+      today: [
+        clock.getFullYear(),
+        String(clock.getMonth() + 1).padStart(2, '0'),
+        String(clock.getDate()).padStart(2, '0'),
+      ].join('-'),
+    });
+
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container events-screen' });
-    container.appendChild(
+
+    const newEventLink = (variant) =>
+      el('a', {
+        className: `btn btn-primary btn-lg tap-target events-new events-new--${variant}`,
+        text: '+ New event',
+        attrs: {
+          href: newEventHref,
+          'aria-label': orgName?.trim() ? `New event in ${orgName.trim()}` : 'New event',
+        },
+      });
+
+    const heading = el('div', { className: 'events-heading-block' }, [
+      ...(orgName?.trim()
+        ? [el('p', { className: 'events-org-eyebrow', text: orgName.trim() })]
+        : []),
       el('h1', { id: 'events-heading', text: 'Events', attrs: { tabindex: '-1' } }),
+      el('p', { className: 'events-counts', text: countsLine(home.counts) }),
+    ]);
+    container.appendChild(
+      el('div', { className: 'events-header' }, [heading, newEventLink('header')]),
     );
 
     const feedback = el('div', {
@@ -710,71 +946,93 @@ export async function mountEventsScreen(
       setFeedback(feedback, pendingSuccess, 'success');
       pendingSuccess = null;
     }
-    // Appended right after the heading, not after both cards (found in
-    // production UI/UX feedback: a message rendered at the very bottom of
-    // the page, below the create-event form, was easy to miss entirely for
-    // an organiser working near the top — the scrollIntoView call below
-    // compensated for error tone, but jumping the viewport is itself a
-    // jarring way to surface a message someone should just see). `.card`'s
-    // own take-no-room-when-empty rule (src/ui/tokens/components.css's
-    // `.screen-feedback:empty`) means this costs nothing when there's nothing to show.
+    // Appended right after the heading, not at the bottom (found in production UI/UX feedback: a message at the
+    // very bottom of the page was easy to miss). `.screen-feedback:empty` takes no room when there is nothing to show.
     container.appendChild(feedback);
 
-    container.appendChild(
-      el('div', { className: 'card' }, [
-        el('h2', { text: eventsListHeading(orgName) }),
-        renderEventsList(events, {
-          deleteStates,
-          deleteHandlers: {
-            onDeleteClick: handleDeleteClick,
-            onConfirmDelete: handleConfirmDelete,
-            onCancelDelete: handleCancelDelete,
+    const rowCtx = {
+      viewsById: home.views,
+      deleteStates,
+      deleteHandlers: {
+        onDeleteClick: handleDeleteClick,
+        onConfirmDelete: handleConfirmDelete,
+        onCancelDelete: handleCancelDelete,
+      },
+      finishStates,
+      finishErrors,
+      finishHandlers: {
+        onFinishClick: handleFinishClick,
+        onConfirmFinish: handleConfirmFinish,
+        onCancelFinish: handleCancelFinish,
+      },
+      openRows,
+      onToggleManage: handleToggleManage,
+      archiveFinishNoteFor: (event) => archive.finishNote(event),
+      archivePanelFor: (event) => archive.renderFor(event),
+      formatOptions,
+      unsyncedWrites,
+      now: clock,
+    };
+
+    const main = el('div', { className: 'ok-dashboard-main events-home-main' });
+    const rail = el('div', { className: 'ok-dashboard-rail events-home-rail' });
+
+    const featuredView = home.liveView ?? home.nextView;
+    if (featuredView) {
+      const featured = renderFeaturedCard(featuredView, {
+        live: Boolean(home.liveView),
+        formatOptions,
+        now: clock,
+        formatLabel: formatLabelFor(formatOptions, featuredView.event.format),
+        rowCtx,
+      });
+      featured.classList.add('events-slot-featured');
+      main.appendChild(featured);
+    }
+    if (events.length === 0) {
+      main.appendChild(
+        el(
+          'section',
+          {
+            className: 'ok-card events-none',
+            attrs: { 'aria-labelledby': 'events-none-heading' },
           },
-          finishStates,
-          finishErrors,
-          finishHandlers: {
-            onFinishClick: handleFinishClick,
-            onConfirmFinish: handleConfirmFinish,
-            onCancelFinish: handleCancelFinish,
-          },
-          archiveFinishNoteFor: (event) => archive.finishNote(event),
-          archivePanelFor: (event) => archive.renderFor(event),
-          formatOptions,
-          unsyncedWrites,
-        }),
-      ]),
-    );
-
-    const form = renderCreateForm(draft, { disabled: creating, formatOptions });
-    // Named by its heading, so someone who jumps straight to the form hears which organisation it is for.
-    form.setAttribute('aria-labelledby', 'create-event-heading');
-    form.addEventListener('submit', handleCreate);
-    container.appendChild(
-      el('div', { className: 'card' }, [
-        el('h2', { id: 'create-event-heading', text: createEventHeading(orgName) }),
-        form,
-      ]),
-    );
-
-    if (audienceCard) container.appendChild(audienceCard);
-
-    if (peopleHref) {
-      container.appendChild(
-        el('div', { className: 'card events-people-card' }, [
-          el('h2', { text: 'People' }),
-          el('p', {
-            className: 'stage-meta',
-            text: 'Mark the people in your organisation as staff or affiliates.',
-          }),
-          el('a', {
-            className: 'btn btn-outline tap-target',
-            text: 'Open People',
-            attrs: { href: peopleHref },
-          }),
-        ]),
+          [
+            el('h2', {
+              id: 'events-none-heading',
+              className: 'ok-card-heading',
+              text: 'No events yet',
+            }),
+            el('p', {
+              className: 'stage-meta',
+              text: orgName?.trim()
+                ? `Create the first event for ${orgName.trim()}.`
+                : 'Create your first event.',
+            }),
+          ],
+        ),
       );
+    } else {
+      const listCard = renderListCard(home, rowCtx);
+      listCard.classList.add('events-slot-list');
+      main.appendChild(listCard);
+    }
+    main.appendChild(newEventLink('foot'));
+
+    const attentionCard = renderAttention(home);
+    attentionCard.classList.add('events-slot-attention');
+    rail.appendChild(attentionCard);
+    if (audienceCard) {
+      audienceCard.classList.add('events-slot-audience');
+      rail.appendChild(audienceCard);
+    }
+    const orgCard = renderOrgLinks();
+    if (orgCard) {
+      orgCard.classList.add('events-slot-org');
+      rail.appendChild(orgCard);
     }
 
+    container.appendChild(el('div', { className: 'ok-dashboard events-home' }, [main, rail]));
     root.appendChild(container);
 
     if (focusAfterRender) {
@@ -787,12 +1045,19 @@ export async function mountEventsScreen(
     }
   }
 
+  // Redraw only when the links really changed and the screen is showing its list (not loading, not failed), so a
+  // late answer never steals the place of someone already working on the page.
+  const unsubscribeOrgLinks = subscribeOrgLinks?.(() => {
+    if (signal?.aborted || loading || loadFailedMessage) return;
+    if (orgLinksKey(currentOrgLinks()) === drawnOrgLinks) return;
+    render();
+  });
+
   await attemptLoad();
 
   return {
     unmount() {
-      // No live state, no listeners beyond the DOM subtree itself (removed
-      // wholesale by the caller), no timers — nothing to tear down.
+      unsubscribeOrgLinks?.();
     },
   };
 }

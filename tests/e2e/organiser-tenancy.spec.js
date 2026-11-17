@@ -1,3 +1,4 @@
+import { createEventViaUi } from './support/newEvent.js';
 import { test, expect as baseExpect } from '@playwright/test';
 import { addMember, createLoneUser, createTenant } from './support/tenants.js';
 
@@ -83,7 +84,14 @@ test.describe('the organiser console with real organisations (real app, real loc
 
   const orgSelect = (page) => page.getByRole('combobox', { name: 'Organisation' });
   const eventLink = (page, name) => page.getByRole('link', { name });
-  const listedEvents = (page) => page.locator('.events-list a');
+  // every event the home shows: the featured one's heading plus the rows of the list
+  const listedEvents = (page) =>
+    page.locator('.events-list .events-row-title a, .events-featured h2');
+  // by route, not by link text: the header's Events link and the event bar's breadcrumb share that name
+  const backToEvents = (page) =>
+    page.evaluate(() => {
+      location.hash = '#/events';
+    });
 
   // Which organisation an event of this name belongs to, as the database itself says.
   const owningOrg = (page, name) =>
@@ -103,7 +111,7 @@ test.describe('the organiser console with real organisations (real app, real loc
     test.setTimeout(60000);
     await signInAs(page, personB);
 
-    await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgB.orgName);
     // exactly one event is listed, and it is theirs: no other organisation's event is there, named or not
     await expect(eventLink(page, `Console B event ${uniq}`)).toBeVisible();
     await expect(listedEvents(page)).toHaveCount(1);
@@ -113,8 +121,8 @@ test.describe('the organiser console with real organisations (real app, real loc
 
     // an event they create lands in their organisation, and in the database
     const created = `Only in B ${uniq}`;
-    await page.getByLabel('Event name').fill(created);
-    await page.getByRole('button', { name: 'Create event' }).click();
+    await createEventViaUi(page, created);
+    await backToEvents(page);
     await expect(eventLink(page, created)).toBeVisible();
     await expect(listedEvents(page)).toHaveCount(2);
     expect(await owningOrg(page, created)).toEqual({ rows: 1, org: orgB.orgId, error: null });
@@ -134,7 +142,7 @@ test.describe('the organiser console with real organisations (real app, real loc
 
     // work in A
     await select.selectOption(orgA.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgA.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgA.orgName);
     await expect(eventLink(page, `Console A event ${uniq}`)).toBeVisible();
     await expect(listedEvents(page)).toHaveCount(1);
     await expect(page.getByText(`Console B event ${uniq}`)).toHaveCount(0);
@@ -144,22 +152,27 @@ test.describe('the organiser console with real organisations (real app, real loc
     await expect(page.locator('#app-shell-org-notice')).toHaveText(
       `Now working in ${orgB.orgName}. Showing Events.`,
     );
-    await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgB.orgName);
     await expect(eventLink(page, `Console B event ${uniq}`)).toBeVisible();
     await expect(page.getByText(`Console A event ${uniq}`)).toHaveCount(0);
 
-    // create an event in B (the form says where it will go)
-    await expect(
-      page.getByRole('heading', { name: `Create an event in ${orgB.orgName}` }),
-    ).toBeVisible();
+    // create an event in B (the new-event screen says where it will go)
+    await page
+      .getByRole('link', { name: /New event/ })
+      .and(page.locator(':visible'))
+      .first()
+      .click();
+    await expect(page.getByRole('heading', { name: `New event in ${orgB.orgName}` })).toBeVisible();
     const created = `Made in B ${uniq}`;
     await page.getByLabel('Event name').fill(created);
-    await page.getByRole('button', { name: 'Create event' }).click();
+    await page.getByRole('button', { name: /^Create/ }).click();
+    await expect(page.getByRole('heading', { name: created })).toBeVisible();
+    await backToEvents(page);
     await expect(eventLink(page, created)).toBeVisible();
 
     // back in A, the new event is not in the list; in the database it belongs to B
     await select.selectOption(orgA.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgA.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgA.orgName);
     await expect(eventLink(page, `Console A event ${uniq}`)).toBeVisible();
     await expect(listedEvents(page)).toHaveCount(1);
     await expect(page.getByText(created)).toHaveCount(0);
@@ -173,7 +186,7 @@ test.describe('the organiser console with real organisations (real app, real loc
     await signInAs(page, personAB);
     const select = orgSelect(page);
     await select.selectOption(orgA.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgA.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgA.orgName);
 
     // B's event, followed from inside the app while working in A
     await navigateHash(page, `#/events/${orgB.eventId}`);
@@ -187,7 +200,7 @@ test.describe('the organiser console with real organisations (real app, real loc
     // The common real case: the same link opened COLD (an emailed link, a new tab) while the console last worked in A.
     await navigateHash(page, '#/events');
     await select.selectOption(orgA.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgA.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgA.orgName);
     await page.goto('about:blank');
     await page.goto(`/app/#/events/${orgB.eventId}`);
     await expect(page.locator('#app-shell-org-notice')).toHaveText(
@@ -204,7 +217,7 @@ test.describe('the organiser console with real organisations (real app, real loc
     await signInAs(page, personAB);
     const select = orgSelect(page);
     await select.selectOption(orgA.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgA.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgA.orgName);
 
     // C's event is real, but C is not one of their organisations: the guard that works out which organisation a link
     // belongs to finds it is none of theirs
@@ -223,7 +236,7 @@ test.describe('the organiser console with real organisations (real app, real loc
   }) => {
     test.setTimeout(60000);
     await signInAs(page, personB);
-    await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgB.orgName);
 
     // A's event is real, but not theirs: the database shows them nothing, and the console says so (a person with
     // ONE organisation is asked whose event a link is too, so it is not left to fail with a Retry that cannot work)
@@ -237,7 +250,7 @@ test.describe('the organiser console with real organisations (real app, real loc
     await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
     // and their own organisation, and their own events, are still theirs
     await navigateHash(page, '#/events');
-    await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgB.orgName);
     await navigateHash(page, `#/events/${orgB.eventId}`);
     await expect(page.getByRole('heading', { name: `Console B event ${uniq}` })).toBeVisible();
   });
@@ -249,7 +262,7 @@ test.describe('the organiser console with real organisations (real app, real loc
     await signInAs(page, personAB);
     const select = orgSelect(page);
     await select.selectOption(orgA.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgA.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgA.orgName);
 
     // something this device has not yet sent
     await page.evaluate(async () => {
@@ -266,7 +279,7 @@ test.describe('the organiser console with real organisations (real app, real loc
     );
     // nothing moved: still A, on A's list
     await expect(select).toHaveValue(orgA.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgA.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgA.orgName);
     await expect(page.getByText(`Console B event ${uniq}`)).toHaveCount(0);
 
     // the refusal is not permanent: once nothing is waiting, the same choice goes through
@@ -274,9 +287,9 @@ test.describe('the organiser console with real organisations (real app, real loc
       const db = await import('/src/core/db.js');
       for (const operation of await db.outboxListAll()) await db.outboxRemove(operation.id);
     });
-    await page.locator('.app-shell-outlet h1').first().click(); // a tap puts the refusal away
+    await page.mouse.click(700, 700); // a tap anywhere puts the refusal away (it overlays the top of the page)
     await select.selectOption(orgB.orgId);
-    await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toHaveText(orgB.orgName);
     await expect(select).toHaveValue(orgB.orgId);
   });
 

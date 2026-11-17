@@ -20,7 +20,7 @@ import { derivePodium } from './podium.js';
 import { blockingGroups, seedingTieGroups } from './seeding.js';
 import { roundLabel } from './roundNames.js';
 
-const MIN_JUDGES = 3;
+export const MIN_JUDGES = 3;
 const KNOCKOUT_ROUNDS = ['quarterfinal', 'semifinal', 'final', 'third_place'];
 const KNOCKOUT_SHORT = {
   quarterfinal: 'QF',

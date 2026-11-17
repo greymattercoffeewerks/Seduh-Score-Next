@@ -105,6 +105,5 @@ const client = {
 mountEventsScreen(document.getElementById('root'), {
   orgId: 'org1',
   client,
-  defaultFormat: 'cup_taster',
   archivePublishHrefFor: (event) => `#/events/${event.id}/report`,
 });

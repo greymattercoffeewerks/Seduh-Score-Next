@@ -42,7 +42,34 @@ async function signInAs(page, { email, password }) {
 
 async function openEvents(page, tenant) {
   await signInAs(page, tenant);
-  await expect(page.getByRole('heading', { name: `Events in ${tenant.orgName}` })).toBeVisible();
+  await expect(page.locator('.events-org-eyebrow')).toHaveText(tenant.orgName);
+  // Finished events (which carry the archive panel) sit in a collapsed group on the home.
+  const finished = page.locator('#events-finished-toggle');
+  if ((await finished.count()) > 0 && (await finished.getAttribute('aria-expanded')) === 'false')
+    await finished.click();
+}
+
+// Finish and Delete sit behind each row's Manage toggle on the organiser home.
+async function openManage(page, id) {
+  const toggle = page.locator(`#manage-${id}`);
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+}
+
+// A finished event moves into the collapsed Finished group: open it to see its archive panel.
+async function showFinished(page) {
+  const toggle = page.locator('#events-finished-toggle');
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+}
+
+// A reload lands on a collapsed Finished group again: open it (when there is one) once the list has drawn.
+async function reloadShowingFinished(page) {
+  await page.reload();
+  await page.locator('#events-heading').waitFor();
+  const toggle = page.locator('#events-finished-toggle');
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) === 'false') {
+    await toggle.click();
+  }
 }
 
 const panel = (page, id) => page.locator(`#archive-panel-${id}`);
@@ -54,8 +81,10 @@ async function newEvent(tenant, name) {
 }
 
 async function finishViaUi(page, id) {
+  await openManage(page, id);
   await page.locator(`#finish-event-${id}`).click();
   await page.locator(`#confirm-finish-${id}`).click();
+  await showFinished(page);
   await expect(page.locator(`#finish-event-${id}`)).toHaveCount(0);
 }
 
@@ -130,12 +159,14 @@ test('INERT while the key is off: no panel, no archive words, nothing asked of t
   await openEvents(page, w.com);
   await expect(page.getByRole('link', { name: `dark ${tag}` })).toBeVisible();
   await snapshotAnswered; // the plan snapshot has been read, so an absent panel is the answer to it, not a race
+  await openManage(page, id);
   await page.locator(`#finish-event-${id}`).click();
   const copy = page.locator(`#finish-copy-${id}`);
   await expect(copy).toContainText('Finish this event?');
   await expect(copy).not.toContainText(/archive/i);
   await page.locator(`#confirm-finish-${id}`).click();
   await expect(page.getByText('Event finished.', { exact: true })).toBeVisible();
+  await showFinished(page);
   await expect(page.locator('.archive-panel')).toHaveCount(0);
   await expect(page.locator('[id^="archive-"]')).toHaveCount(0);
   expect(archiveCalls, 'the archive doors are not called while the pipeline is dark').toEqual([]);
@@ -153,6 +184,7 @@ test('Community: Finish says what follows, then the panel shows a scheduled podi
   await openEvents(page, w.com);
   // a running Community event has no panel: the Finish step says what follows
   await expect(panel(page, id)).toHaveCount(0);
+  await openManage(page, id);
   await page.locator(`#finish-event-${id}`).click();
   await expect(page.locator(`#finish-copy-${id}`)).toContainText(
     'About 24 hours after you finish, the podium is published to the public archive automatically',
@@ -161,8 +193,9 @@ test('Community: Finish says what follows, then the panel shows a scheduled podi
   await expect(
     page.getByText(/Event finished\. The podium goes to the public archive at about/),
   ).toBeVisible();
+  await showFinished(page);
 
-  await page.reload();
+  await reloadShowingFinished(page);
   const p = panel(page, id);
   await expect(p).toHaveAttribute('data-archive-state', 'scheduled');
   await expect(p).toHaveAttribute('data-archive-mode', 'compulsory');
@@ -257,7 +290,7 @@ test('Community take-down is two steps, recorded, survives a reload and is not r
   expect(ledgerRow(id)).toMatchObject({ state: 'removed', removed_from: expect.any(String) });
 
   // the database remembers it, not this device: a brand-new browser profile (no storage at all) signs in and sees it
-  await page.reload();
+  await reloadShowingFinished(page);
   await expect(panel(page, id)).toHaveAttribute('data-archive-state', 'taken_down');
   const otherDevice = await browser.newContext({
     baseURL: test.info().project.use.baseURL,
@@ -273,7 +306,7 @@ test('Community take-down is two steps, recorded, survives a reload and is not r
   makeDue(id);
   runTick(null);
   expect(resultCount(id), 'a taken-down result stays down').toBe(0);
-  await page.reload();
+  await reloadShowingFinished(page);
   await expect(panel(page, id)).toHaveAttribute('data-archive-state', 'taken_down');
   await expect(page.locator(`#archive-publish-now-${id}`)).toBeVisible();
 });
@@ -301,28 +334,30 @@ test('Annual: the tick box is unticked by default, the choice survives a reload,
   );
   await expect(box, 'focus stays on the tick box after the save').toBeFocused();
   await expect.poll(() => ledgerRow(listed)?.listing_choice).toBe('list');
-  await page.reload();
+  await reloadShowingFinished(page);
   await expect(box).toBeChecked();
   await expect(page.locator(`#archive-listing-${unlisted}`)).not.toBeChecked();
 
   // unticking saves too
   await box.uncheck();
   await expect.poll(() => ledgerRow(listed)?.listing_choice).toBe('named_only');
-  await page.reload();
+  await reloadShowingFinished(page);
   await expect(box).not.toBeChecked();
   await box.check();
   await expect.poll(() => ledgerRow(listed)?.listing_choice).toBe('list');
 
   // finish both from the screen: the sentence differs for a paid plan, and the panel says what each will do
-  await page.reload();
+  await reloadShowingFinished(page);
+  await openManage(page, listed);
   await page.locator(`#finish-event-${listed}`).click();
   await expect(page.locator(`#finish-copy-${listed}`)).toContainText(
     'The podium is included only if you tick "List the podium" on the event.',
   );
   await page.locator(`#confirm-finish-${listed}`).click();
+  await showFinished(page);
   await expect(page.locator(`#finish-event-${listed}`)).toHaveCount(0);
   await finishViaUi(page, unlisted);
-  await page.reload();
+  await reloadShowingFinished(page);
   await expect(panel(page, listed)).toHaveAttribute('data-archive-state', 'scheduled');
   await expect(panel(page, unlisted)).toHaveAttribute('data-archive-state', 'scheduled_named_only');
   await expect(panel(page, unlisted)).toContainText(
@@ -337,7 +372,7 @@ test('Annual: the tick box is unticked by default, the choice survives a reload,
   makeDue(unlisted);
   runTick(null);
 
-  await page.reload();
+  await reloadShowingFinished(page);
   await expect(panel(page, listed)).toHaveAttribute('data-archive-state', 'published');
   await expect(page.locator(`#archive-listing-${listed}`)).toHaveCount(0); // decided: the box closes
   await expect(panel(page, unlisted)).toHaveAttribute('data-archive-state', 'listed_named_only');
@@ -455,7 +490,7 @@ test('retrying and failed show a safe reason only: never the raw error text', as
   await expect(page.locator(`#archive-publish-now-${id}`)).toBeVisible();
 
   forceLedger(id, { state: 'failed', attempts: 5, lastError: '22P02' });
-  await page.reload();
+  await reloadShowingFinished(page);
   await expect(panel(page, id)).toHaveAttribute('data-archive-state', 'failed');
   await expect(panel(page, id)).toContainText(
     'The automatic publish did not work. Nothing is published.',
@@ -475,17 +510,19 @@ test('a test event is marked, never offered the archive, and never told it will 
   });
   expect(flip.status).toBe(204);
   await openEvents(page, w.ann);
-  const row = page.locator('.events-list li', { hasText: `t1 ${tag}` });
-  await expect(row.locator('.is-test-indicator')).toHaveText('Test data');
+  const row = page.locator('.events-row, .events-featured', { hasText: `t1 ${tag}` });
+  await expect(row.locator('.status[data-state="test"]')).toHaveText('Test data');
   await expect(panel(page, id)).toHaveAttribute('data-archive-state', 'test');
   await expect(panel(page, id)).toContainText('Test data is never published to the archive.');
   await expect(page.locator(`#archive-listing-${id}`)).toHaveCount(0);
   await expect(page.locator(`#archive-publish-now-${id}`)).toHaveCount(0);
+  await openManage(page, id);
   await page.locator(`#finish-event-${id}`).click();
   await expect(page.locator(`#finish-copy-${id}`)).not.toContainText(/archive/i);
   await page.locator(`#confirm-finish-${id}`).click();
   // the success line for a test event is exactly this (an archive sentence would make the text longer, and exact: true fails)
   await expect(page.getByText('Event finished.', { exact: true })).toBeVisible();
+  await showFinished(page);
   runTick(floorNow());
   makeDue(id);
   runTick(null);

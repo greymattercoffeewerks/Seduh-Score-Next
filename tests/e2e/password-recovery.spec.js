@@ -115,7 +115,7 @@ test.describe('password recovery (D-PW1)', () => {
     await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeFocused();
     expect(page.url()).not.toContain('access_token');
     expect(page.url()).not.toContain('#');
-    await expect(page.getByRole('heading', { name: /Events in/ })).toHaveCount(0);
+    await expect(page.locator('.events-org-eyebrow')).toHaveCount(0);
 
     // 4. Choose the password; the console follows Continue.
     await page.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
@@ -123,11 +123,11 @@ test.describe('password recovery (D-PW1)', () => {
     await page.getByRole('button', { name: 'Save password' }).click();
     await expect(page.getByRole('heading', { name: 'Password changed' })).toBeVisible();
     await page.getByRole('button', { name: 'Continue' }).click();
-    await expect(page.getByRole('heading', { name: /Events in/ })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toBeVisible();
 
     // 5. A reload never brings the form or the token back (the address was cleaned in place: no history entry holds it).
     await page.reload();
-    await expect(page.getByRole('heading', { name: /Events in/ })).toBeVisible();
+    await expect(page.locator('.events-org-eyebrow')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Choose a new password' })).toHaveCount(0);
 
     // 6. The old password is dead, the new one works, and the other session was ended.
