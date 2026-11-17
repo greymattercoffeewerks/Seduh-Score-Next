@@ -11,7 +11,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0) built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
-- **Organiser home** (`#/events` rebuild, `/events/new`, the `org_event_summaries` door): branch `claude/upbeat-montalcini-e8e5a8`, PR #496; planned 4.16.0 (after #495). Not final: migration `20261124100000` not in the cloud; uncommitted reviewer fixes; one audience e2e unexplained. See CHANGELOG.
+- **Organiser home** (`#/events` rebuild, `/events/new`, the `org_event_summaries` door): branch `claude/upbeat-montalcini-e8e5a8`, PR #496; planned 4.17.0 (after #497's 4.16.0). Not final: migration `20261124100000` not in the cloud; uncommitted reviewer fixes; one audience e2e unexplained. See CHANGELOG.
 - **Country pages** (4.10.2): database (#465) and pages (#466) in `dev`. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
 - **Petrol Kaizen P4** (PR #457) and **P5** (vocabulary, draft PR on P4's branch) built; tablet checks owed. **P6** (token roles, density) in a PR; iPad owed.
 - **Open, not merged or not in the cloud** (check `CHANGELOG.md`): password recovery D-PW2 to

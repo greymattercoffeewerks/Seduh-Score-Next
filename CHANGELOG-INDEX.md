@@ -239,7 +239,3 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. Entries sin
 - T-ARC.Z: archive pipeline close-out (built, deployed, dark; never published anything) and the version bump to 3.5.0 · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - Reconciliation and housekeeping: version-bump guard, leak item closed, Seduh ID owner checks, branch pruning · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
 - T-ARC.7 close: the gating keys flipped and the archive tick given its floor (switched on, nothing published yet) · 2026-11-02 → [`2026-11-H1`](docs/archive/changelog/2026-11-H1.md)
-- v3.6.1: contact and Data Protection Officer address is hello@seduhscore.com; Seduh ID opt-out time limits published · 2026-11-04 → [`2026-11-H1.md`](docs/archive/changelog/2026-11-H1.md)
-- T-ID.D1 rollout: feed migrations pushed, mode set to `queue` (nothing queued yet) · 2026-11-03 → [`2026-11-H1.md`](docs/archive/changelog/2026-11-H1.md)
-- v3.5.1: Seduh ID feed released, Privacy sentence published · 2026-11-03 → [`2026-11-H1.md`](docs/archive/changelog/2026-11-H1.md)
-- T-ID.D1: Seduh ID archive feed (Layer 1b), review-queue mode · 2026-11-03 → [`2026-11-H1.md`](docs/archive/changelog/2026-11-H1.md)
