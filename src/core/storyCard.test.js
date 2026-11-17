@@ -36,7 +36,8 @@ const SPEC = {
     { value: '3', label: 'championships' },
     { value: '5', label: 'teams sent' },
     { value: '2–1', label: 'matches won–lost' },
-    { value: '99', label: 'a fourth one that must not be drawn' },
+    { value: '7', label: 'a fourth one' },
+    { value: '99', label: 'a fifth one that must not be drawn' },
   ],
   highlight: { label: 'Best finish', text: '4th place', detail: 'Alpha Brew · 2025' },
   provenance: 'From the organiser’s records.',
@@ -82,11 +83,11 @@ describe('drawStoryCard', () => {
     expect(said).toContain('BEST FINISH');
   });
 
-  it('draws at most three headline numbers', () => {
+  it('draws at most four headline numbers', () => {
     const { ctx, texts } = recordingContext();
     drawStoryCard(ctx, SPEC);
     const said = texts.map((t) => t.text);
-    expect(said).toEqual(expect.arrayContaining(['3', '5', '2–1']));
+    expect(said).toEqual(expect.arrayContaining(['3', '5', '2–1', '7']));
     expect(said).not.toContain('99');
   });
 
@@ -115,6 +116,46 @@ describe('drawStoryCard', () => {
     const dark = qrRun.rects.filter((r) => r.fill === '#000000');
     expect(dark).toHaveLength(5); // the 5 dark cells of a 3 x 3 checkerboard
     expect(plain.rects.filter((r) => r.fill === '#000000')).toEqual([]);
+  });
+
+  it('draws a photo cropped square from its middle, or initials when there is none, and the flag wins over both', () => {
+    const spec = { ...SPEC, tileWidth: 240, tileInitials: 'SO' };
+    const photo = { naturalWidth: 400, naturalHeight: 300 };
+    const withPhoto = recordingContext();
+    drawStoryCard(withPhoto.ctx, spec, { photo });
+    expect(withPhoto.images).toHaveLength(1);
+    const [img, sx, sy, sw, sh, , , dw, dh] = withPhoto.images[0];
+    expect(img).toBe(photo);
+    expect([sx, sy, sw, sh]).toEqual([50, 0, 300, 300]);
+    expect([dw, dh]).toEqual([240, 240]);
+    expect(withPhoto.texts.map((t) => t.text)).not.toContain('SO');
+
+    const noPhoto = recordingContext();
+    drawStoryCard(noPhoto.ctx, spec, {});
+    expect(noPhoto.images).toHaveLength(0);
+    expect(noPhoto.texts.map((t) => t.text)).toContain('SO');
+
+    const both = recordingContext();
+    const flag = {};
+    drawStoryCard(both.ctx, spec, { flag, photo });
+    expect(both.images).toHaveLength(1);
+    expect(both.images[0][0]).toBe(flag);
+  });
+
+  it('draws an optional tagline under the name, and nothing moves when there is none', () => {
+    const plain = recordingContext();
+    drawStoryCard(plain.ctx, SPEC);
+    const withLine = recordingContext();
+    drawStoryCard(withLine.ctx, { ...SPEC, tagline: 'Head Barista' });
+    const said = withLine.texts.map((t) => t.text);
+    expect(said).toContain('Head Barista');
+    expect(plain.texts.map((t) => t.text)).not.toContain('Head Barista');
+    const y = (r, t) => r.texts.find((x) => x.text === t).y;
+    expect(y(withLine, 'Head Barista')).toBeGreaterThan(y(withLine, 'Testland'));
+    // the footer is pinned to the bottom, so only what is above it shifts
+    expect(y(withLine, 'seduhscore.com/id/country/xa')).toBe(
+      y(plain, 'seduhscore.com/id/country/xa'),
+    );
   });
 
   it('places each dark QR cell at its own row and column (not transposed)', () => {
@@ -218,6 +259,46 @@ describe('renderStoryCard', () => {
     const result = await renderStoryCard(SPEC, { canvasFactory: () => canvas });
     expect(result).toBe(blob);
     expect([canvas.width, canvas.height]).toEqual([1080, 1920]);
+  });
+  it('loads a photo anonymously (CORS) and draws it; a photo that fails to load leaves initials', async () => {
+    const made = [];
+    let failNext = false;
+    class FakeImage {
+      constructor() {
+        this.failing = failNext;
+        made.push(this);
+      }
+      set src(value) {
+        this.requested = value;
+        setTimeout(() => (this.failing ? this.onerror() : this.onload()), 0);
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+    try {
+      const blob = new Blob(['png']);
+      const run = async (fail) => {
+        const { ctx, images, texts } = recordingContext();
+        const canvas = { getContext: () => ctx, toBlob: (cb) => cb(blob) };
+        const before = made.length;
+        failNext = fail;
+        const promise = renderStoryCard(
+          { ...SPEC, tileInitials: 'SO' },
+          { canvasFactory: () => canvas, photoUrl: 'https://x.test/p.webp' },
+        );
+        await promise;
+        return { image: made[before], images, texts };
+      };
+      const ok = await run(false);
+      expect(ok.image.crossOrigin).toBe('anonymous');
+      expect(ok.image.requested).toBe('https://x.test/p.webp');
+      expect(ok.images).toHaveLength(1);
+      expect(ok.images[0][0]).toBe(ok.image);
+      const bad = await run(true);
+      expect(bad.images).toHaveLength(0);
+      expect(bad.texts.map((t) => t.text)).toContain('SO');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
   it('rejects when there is no canvas context, or no picture', async () => {
     await expect(

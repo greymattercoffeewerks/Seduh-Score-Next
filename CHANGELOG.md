@@ -8,6 +8,20 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID Layer 2, C3: the person share-to-story card · 2026-11-17
+
+**Task:** T-ID2.C3. Branch `claude/l2-c3-story-card-a7cc70`, PR into `dev`. No migration, no door change, no cloud change. **Minor bump to 4.16.0** (a person can share their page as a story picture).
+
+- **Share button** on `/id/<handle>/` (`profileShare.js`): opens a dialog with the card drawn as a preview, two styles ("Whole record", "Latest result"), Share picture (`navigator.share` with the file where `canShare` accepts it, else a download) and Close. The picture is drawn when the dialog opens or the style changes, so the share tap stays a gesture. Holding state, a 10 s timeout, plain-words failure with Try again. No button when the name is hidden.
+- **Card content** (`profileStory.js`, pure): highlights only: name, `#0001`-style founding number, country, up to four headline counts, ONE result (best, or newest placed), address and QR. Provenance words are the entry's own; "Best verified result" only by the page's own rule; self-reported says so, plus "Totals include self-reported entries." Photo (C2) loaded CORS-safe, initials if it fails or is absent.
+- **One drawing implementation:** `core/storyCard.js` gained a photo tile (cropped square) and initials, `tileWidth`, up to four stats, an optional `tagline` line under the name (reserved, not given today), and a CORS image load. The country card is unchanged.
+- **Found on the way:** a person who hides their name but shows results crashed the page hero (`appendChild(null)`); fixed with a filter and covered.
+- **Tests:** unit (`storyCard`, `profileStory`, `profileShare`) and Playwright `seduh-profile-page-live.spec.js` (real canvas, 360px, both styles, PNG is 1080 x 1920, the two styles differ).
+- **Not changed:** the Privacy page (the picture is made in the browser; nothing new is held or sent). Link-preview image (Worker) is later.
+- **Reviews:** `code-reviewer`: no 🔴; 🟡 backdrop close also fired on the dialog padding (fixed), a redundant name check (fixed). `module-boundary-checker`: no 🔴; 🟡 the share-control flow is now written twice (country and person pages), a candidate core helper (deferred, not a violation). `ui-accessibility-reviewer`: no 🔴; 🟡 layout jump when the preview arrives (slot reserved), disabled button looked enabled (styled), no retry after failure (Try again added), padding close (fixed), a literal `black` in the backdrop (left, decorative). `test-auditor`: three 🔴 test gaps (best-vs-first selection, highlights-only, photo wiring) all closed with new tests; 🟡 latest ignores unplaced, disabled-while-drawing, e2e style difference compared by bytes (done), the stalled-render timeout (not tested).
+
+---
+
 ## Console UI: event bar, BTC roster form, success feedback, Cup Taster phone field · 2026-11-17
 
 **Task:** the four owner-reported console UI bugs (no handoff §14 task ID; the owner's UI/UX bug list, not in `docs/backlog/`). Branch `claude/nice-kowalevski-29e4b5`, commits `6420850` and `dcc6823`. No migration, no cloud change. **Minor bump to 4.15.0**: the event bar is a new way to move around an event (a capability), so the release is a minor though three of the four items are fixes (highest change wins, `docs/versioning.md`).

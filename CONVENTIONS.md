@@ -919,6 +919,16 @@ A claimed person's own record: **self-reported entries** and **team links**. The
 
 `/id/me/` is the front end of the contract above (`src/marketing/me*.js`, details in `src/marketing/CLAUDE.md`). What a later change must keep: the page uses only the competitor client (`claimClient.js`); sign-in is an emailed code with `shouldCreateUser: false` and an answer that never depends on whether the email has an account; every hint of the eight doors has its own words in `meFlow.js` (add a hint there in the same change as a new one in SQL; `meFlow.test.js` lists them); a destructive action asks inside the page; every write is followed by a reload of `seduh_my_record`. The Privacy page describes the settings and the self-reported entries ("What you add to your Seduh ID yourself"): change it in the same release as any change to what a person can add or hide. The person page (`/id/<handle>/`) draws the two record shapes as pinned in `core/seduhProfile.js`.
 
+### Seduh ID: the person story card (T-ID2.C3, 4.16.0)
+
+A "Share" button on the person page draws a 1080 x 1920 picture on a canvas and shares it (`navigator.share` with the file where `canShare` accepts it, else a download). No migration, no Instagram API. What a later change must keep:
+
+- **One drawing implementation.** `core/storyCard.js` draws the country card and the person card; the person's tile is a photo cropped square from its middle (`assets.photo`) or `spec.tileInitials`, the country's is a flag. Do not fork it.
+- **Content is the page's own, highlights only** (`marketing/profileStory.js`, pure): name, `#` founding number, country, up to four headline counts (competed, judged, organised, podiums, as `computeStats` derives them), ONE result, address and QR. The result is `bestResult()` ("Whole record") or the newest placed competed entry ("Latest result"; offered only when one exists). Its provenance words are the entry's own labels, plus "Totals include self-reported entries." when any are; a result is called verified only by `bestResult`'s own rule (recorded by Seduh Score, or a confirmed membership).
+- **A hidden name means no card:** `profile.identity` is null, so `buildShareControl` returns null (no button).
+- **Photo:** the door's relative path made absolute by `photoSrc` and loaded with `crossOrigin = 'anonymous'` so the canvas is not tainted (a server without CORS makes the load fail, which shows the initials). Nothing about the person leaves the device: the card is made in the browser.
+- **The share tap must stay a gesture:** the picture is drawn when the dialog opens or the style changes, never on the share tap.
+
 ### Seduh ID: the profile photo (T-ID2.C2, 20261123100000, 4.14.0)
 
 A claimed person may add one photo. Spec section 5; the design choices are in the migration header. What a later change must keep:
