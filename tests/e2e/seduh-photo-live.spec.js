@@ -392,13 +392,11 @@ test.describe('the photo in a real browser', () => {
     await page.getByLabel('6-digit code').fill(await codeFor(me.user.email));
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.getByRole('button', { name: 'Photo', exact: true }).click();
-    await page
-      .locator('#me-photo-file')
-      .setInputFiles({
-        name: 'notes.pdf',
-        mimeType: 'application/pdf',
-        buffer: Buffer.from('%PDF-1.4 fictional'),
-      });
+    await page.locator('#me-photo-file').setInputFiles({
+      name: 'notes.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4 fictional'),
+    });
     await expect(page.locator('#me-photo-status')).toContainText('not a picture');
     await expect(page.locator('#me-photo-save')).toBeHidden();
     expect((await profile(me.handle)).identity.photo_url).toBeNull();
