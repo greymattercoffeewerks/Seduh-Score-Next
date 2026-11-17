@@ -399,7 +399,7 @@ the owner's concept (`design/seduh-id-layer2-concept.html`, local) on the countr
   a seam that starts returning rows needs only its row shape pinned in `seduhProfile.js` (two are pinned since D-b; `judging_roles` is still PROVISIONAL). Provenance is forced by seam (a `self_reported` row can never claim to be recorded). Filter buttons (kinds
   present only, hidden when one), year groups (`<details>`, newest open), a polite status line. **Totals count everything and the best-result card
   prefers a verified result and says which** (changed in D-b; see below), so a person cannot silently raise a verified number.
-- **Seams, marked in the code.** C2 photo (`photo_url` is ignored; the avatar is initials), C3 "Share to story" (none yet), C5 links
+- **Seams, marked in the code.** C2 photo (`photo_url` is ignored; the avatar is initials), C5 links
   into profiles (none: opponents are plain text). The country chip is plain text unless `buildCountryChip` is enabled, which
   reads `COUNTRY_PAGES_PUBLIC`; this page does not import the switch itself.
 - **Tests.** Unit (`seduhProfile`, `profileFormat`, `profileScreen` incl. a 60-entry mixed fixture) and Playwright
@@ -438,6 +438,10 @@ hint in words, 360px first) are in `CONVENTIONS.md`, "Seduh ID claim". Three thi
 ## The profile photo (2026-11-17, Layer 2 task C2)
 
 The person page draws the photo in the avatar circle (`profileScreen.js`, `avatar()`; alt "Photo of <name>"), with the initials as the fallback for no photo, a failed load, or a hidden name, plus a "Report this photo" mailto (handle in the subject, the address also as text; shown only while a photo is). My Seduh ID has a fourth tab, **Photo** (`photoPipeline.js` does the crop, 512 x 512 resize, re-encode and 200 KB loop; `meApi.setPhoto` and `removePhoto` upload with the competitor client). The contract and the Storage rules are in `CONVENTIONS.md`, "Seduh ID: the profile photo". The `hidden` attribute is re-asserted in `me.css` (`.me-photo [hidden]`) because `.action` sets `display`. **Privacy changed in the same release** (`trustContent.js`, "A profile photo, if you add one").
+
+## The person story card (2026-11-17, Layer 2 task C3)
+
+`profileShare.js` is the hero's Share button: it opens a native `<dialog>` (added to the page on the first tap, so the page itself holds only the button) with the card drawn as a preview, the two styles ("Whole record", "Latest result"; toggle buttons with `aria-pressed`), a polite status line, Share picture and Close. `profileStory.js` is the pure content of the card (highlights only, provenance words, no card without a public name); drawing is `core/storyCard.js`. The contract is in `CONVENTIONS.md`, "Seduh ID: the person story card". Not built: a link-preview image for WhatsApp (a Worker, spec section 7 "Later").
 
 ## Results sheet (2026-10-06)
 
