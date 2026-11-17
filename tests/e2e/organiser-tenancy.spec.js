@@ -87,7 +87,11 @@ test.describe('the organiser console with real organisations (real app, real loc
   // every event the home shows: the featured one's heading plus the rows of the list
   const listedEvents = (page) =>
     page.locator('.events-list .events-row-title a, .events-featured h2');
-  const backToEvents = (page) => page.getByRole('link', { name: 'Events', exact: true }).click();
+  // by route, not by link text: the header's Events link and the event bar's breadcrumb share that name
+  const backToEvents = (page) =>
+    page.evaluate(() => {
+      location.hash = '#/events';
+    });
 
   // Which organisation an event of this name belongs to, as the database itself says.
   const owningOrg = (page, name) =>
@@ -283,7 +287,7 @@ test.describe('the organiser console with real organisations (real app, real loc
       const db = await import('/src/core/db.js');
       for (const operation of await db.outboxListAll()) await db.outboxRemove(operation.id);
     });
-    await page.locator('.app-shell-outlet h1').first().click(); // a tap puts the refusal away
+    await page.mouse.click(700, 700); // a tap anywhere puts the refusal away (it overlays the top of the page)
     await select.selectOption(orgB.orgId);
     await expect(page.locator('.events-org-eyebrow')).toHaveText(orgB.orgName);
     await expect(select).toHaveValue(orgB.orgId);

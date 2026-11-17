@@ -43,7 +43,7 @@ async function signInAs(page, { email, password }) {
 }
 
 async function openPeople(page, orgName) {
-  await page.getByRole('link', { name: 'Open People' }).click();
+  await page.locator('.events-org').getByRole('link', { name: 'People' }).click();
   await expect(page.getByRole('heading', { name: `People in ${orgName}` })).toBeVisible();
 }
 
