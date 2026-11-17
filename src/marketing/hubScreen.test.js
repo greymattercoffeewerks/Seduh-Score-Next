@@ -175,8 +175,31 @@ describe('hub: open', () => {
 
 describe('statusText', () => {
   it('says there is more when the door said so', () => {
-    expect(statusText({ query: 'ab', count: 20, more: true })).toContain(
-      'Showing the first 20 people',
-    );
+    expect(statusText({ count: 20, more: true })).toContain('Showing the first 20 people');
+  });
+  it('a real search for the word "short" still reports its results', () => {
+    expect(statusText({ count: 3 })).toBe('3 people found.');
+  });
+});
+
+describe('hub: a newer run supersedes an older one in flight', () => {
+  it('clearing the box while a search is pending leaves no stale results', async () => {
+    let release;
+    const slow = () =>
+      new Promise((resolve) => {
+        release = () =>
+          resolve({
+            open: true,
+            more: false,
+            results: [{ handle: 'alpha-t88', name: 'Alpha', countryCode: null, photoUrl: null }],
+          });
+      });
+    const root = await mount({ loadCountries: open(), search: slow });
+    submit(root, 'ab');
+    submit(root, '');
+    release();
+    await flush();
+    expect(root.querySelector('.hub-results').children).toHaveLength(0);
+    expect(root.querySelector('#hub-note').textContent).toBe('');
   });
 });

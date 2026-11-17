@@ -22,9 +22,9 @@ const INTRO =
   'Search Seduh IDs by name, handle or café, or browse by country. Only people who have claimed their Seduh ID and chosen to show it appear here.';
 
 /** Pure. The words under the search box. */
-export function statusText({ query, country, count, more }) {
+export function statusText({ tooShort = false, country, count, more }) {
   const where = country ? ` in ${countryName(country) ?? country}` : '';
-  if (query === 'short') return `Type at least ${SEARCH_MIN} letters to search.`;
+  if (tooShort) return `Type at least ${SEARCH_MIN} letters to search.`;
   if (count === 0)
     return `No one found${where}. People who keep their Seduh ID private do not appear in search.`;
   const people = count === 1 ? '1 person' : `${count} people`;
@@ -105,7 +105,7 @@ export async function mountHub(
     return;
   }
 
-  // Switch off (or nothing public yet is not "closed": an open hub with no one listed still has a search box).
+  // Switch off. (An open hub with no one listed is not closed: it still has a search box.)
   if (!countries.open) {
     pageShell(
       root,
@@ -185,6 +185,8 @@ export async function mountHub(
   }
 
   async function run() {
+    // Every run supersedes any earlier one in flight, including runs that end below without asking.
+    const mine = ++seq;
     const raw = input.value.trim();
     const q = cleanQuery(raw);
     syncUrl(raw);
@@ -192,7 +194,7 @@ export async function mountHub(
       list.replaceChildren();
       status.textContent =
         raw.length < SEARCH_MIN
-          ? statusText({ query: 'short' })
+          ? statusText({ tooShort: true })
           : `Search for ${SEARCH_MAX} characters or fewer.`;
       return;
     }
@@ -201,7 +203,6 @@ export async function mountHub(
       status.textContent = '';
       return;
     }
-    const mine = ++seq;
     status.textContent = 'Searching…';
     let answer;
     try {
@@ -223,7 +224,6 @@ export async function mountHub(
     }
     list.replaceChildren(...answer.results.map((p) => personRow(p, supabaseUrl)));
     status.textContent = statusText({
-      query: q,
       country: activeCountry,
       count: answer.results.length,
       more: answer.more,
