@@ -8,6 +8,25 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Console UI: event bar, BTC roster form, success feedback, Cup Taster phone field · 2026-11-17
+
+**Task:** the four owner-reported console UI bugs (no handoff §14 task ID; the owner's UI/UX bug list, not in `docs/backlog/`). Branch `claude/nice-kowalevski-29e4b5`, commits `6420850` and `dcc6823`. No migration, no cloud change. **Minor bump to 4.15.0**: the event bar is a new way to move around an event (a capability), so the release is a minor though three of the four items are fixes (highest change wins, `docs/versioning.md`).
+
+- **Event bar** (bug 1: no way to see or move between an event's screens): `core/eventBar.js` draws a breadcrumb ("Events / event name / this screen", the leaf unlinked) and the event's section links, `aria-current="page"` on the current one. `core/appShell.js` mounts it between the header and the screen via `setNav({eventBar})`. Per-format sections live in `src/eventSections.js` (beside `main.js`), the one place that knows routes and formats; core never does (module boundary). A route that is not a section (heat timing, match scoring) still gets the trail with its own leaf label. The header's event name stays plain text: the header link was dropped, since the breadcrumb is the one link to the event home and the header link missed the 44px target.
+- **BTC Setup, Teams and Judges add forms** (bug 2: misaligned add row): `align-items: start`, and Add sits in its own `.form-field` with a spacer label so it lines up with the inputs, not the labels.
+- **Success feedback** (bug 3): the shared `.screen-feedback` success tone is a green left marker on the plain surface (was a filled panel); status regions with `tabindex="-1"` get a 1px hairline focus ring; BTC confirm feedback has `--space-4` above it.
+- **Cup Taster roster phone field** (bug 4): its own `22rem` flex basis, and every roster field `min-width: 0`, so the row no longer pushes the form wider than 360px.
+- **Files:** `src/core/eventBar.js` (+test), `src/eventSections.js` (+test), `src/core/appShell.js` (+test cases), `src/core/appShell.css`, `src/main.js` (one wiring line), `src/formats/btc/setupScreen.js` and `setupScreen.css`, `src/formats/btc/scoringScreen.css`, `src/formats/cup-taster/rosterScreen.css`, `src/formats/layoutGuards.test.js`, `src/ui/tokens/components.css`, `src/core/CLAUDE.md` (eventBar paragraph), `package.json` and `package-lock.json` (version), `CHANGELOG.md`, `STATUS.md` (version line).
+- **Tests:** `eventBar.test.js`, `eventSections.test.js`, `layoutGuards.test.js` (incl. the spacer-label guard, `border: 0` guard, and the failed-read case), new `appShell.test.js` cases; route patterns checked against `main.js`. Full suite 7241 pass and eslint clean, per the implementing session. This pass re-ran the four affected files (226 pass) and prettier.
+- **Verified:** the preview harnesses at 360px, then 1024 to 1440px. **Not run against a real event in the full shell.**
+- **Reviews:**
+  - `code-reviewer`: 🔴 a stale event bar when a same-event `setNav` arrives before the event fetch resolves. Fixed: `latestEventBar` plus a test.
+  - `ui-accessibility-reviewer`: the same race (fixed as above); 🔴 two targets under 44px (the header link was dropped; event-bar links got `min-width`); nits: the separator is now the content `/` (not a CSS pseudo-element) so it is read as text; the 1px status focus ring is kept on purpose (a status region is focused by script, never tabbed to, so a heavier ring would be noise).
+  - `module-boundary-checker`: clean. `eventSections.js` is a composition file, not core.
+  - `test-auditor`: 0 important; 4 nits, all fixed (spacer-label guard, `border: 0` guard, a failed-read case, route patterns checked against `main.js`).
+- **Open follow-up:** check the event bar on a real event (owner's device, and the 360px layout with a long event name) before calling it closed. No review findings left open.
+- **Not touched:** `CONVENTIONS.md` (the composition-file pattern is documented in `src/core/CLAUDE.md` only, as the brief asked). `state.json` does not exist in this worktree, so there was nothing to reset.
+
 ## Seduh ID Layer 2, C2: profile photos · 2026-11-17
 
 **Task:** T-ID2.C2. Branch `claude/l2-c2-photo-cf7493`, PR into `dev`. Migration `20261123100000_seduh_photo.sql` (not in the cloud until pushed by hand). **Minor bump to 4.14.0** (a person can add a photo).
