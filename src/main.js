@@ -41,6 +41,7 @@ import { mountStandingsScreen } from './formats/cup-taster/standingsScreen.js';
 import { mountTimingRouteScreen } from './formats/cup-taster/timingRouteScreen.js';
 import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
 import { mountProjector, mountPhone, mountSplash } from './liveSurfaces.js';
+import { describeEventBar } from './eventSections.js';
 import { mountBtcEventDashboardScreen } from './formats/btc/eventDashboardScreen.js';
 import { mountSetupScreen as mountBtcSetupScreen } from './formats/btc/setupScreen.js';
 import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/matchesScreen.js';
@@ -1518,7 +1519,11 @@ export function mountApp(
         { label: 'Phone view', href: audienceHash(activeSlug, 'phone'), openInNewTab: true },
       );
     }
-    shell.setNav({ eventId: params.eventId ?? null, links });
+    shell.setNav({
+      eventId: params.eventId ?? null,
+      links,
+      eventBar: (event) => describeEventBar(event, route.pattern),
+    });
   }
 
   const router = createRouter({

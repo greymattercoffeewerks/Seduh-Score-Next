@@ -25,11 +25,19 @@
 @media (min-width: 640px) {
   .btc-roster-form {
     flex-direction: row;
-    align-items: flex-end;
+    /* start, not flex-end: only the name field has a hint under its input, so bottom alignment lifted that
+       label above the others. Every label now shares a top line and every input a baseline; the Add button
+       sits in its own .form-field with a spacer label (see setupScreen.js) so it matches the inputs. */
+    align-items: flex-start;
   }
 
   .btc-roster-form .form-field {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .btc-roster-form .btc-roster-submit {
+    flex: 0 0 auto;
   }
 }
 
@@ -77,10 +85,4 @@
 .btc-roster-editing .btc-roster-edit-form {
   flex: 1 1 100%;
   margin-bottom: 0;
-}
-
-@media (min-width: 640px) {
-  .btc-roster-form .btc-roster-actions {
-    align-self: flex-end;
-  }
 }

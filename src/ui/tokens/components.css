@@ -316,10 +316,21 @@
   color: var(--color-danger);
 }
 
+/* Success is a status, not a field: no sunken-input fill and no full box. A success-coloured left marker on the
+   plain surface, with the words in the body text colour (the marker carries the tone, the text keeps its contrast). */
 .screen-feedback[data-tone='success'] {
-  background: var(--color-surface-sunken);
-  border: var(--border-hairline) solid var(--color-success);
-  color: var(--color-success);
+  background: transparent;
+  border: 0;
+  border-inline-start: var(--space-1) solid var(--color-success);
+  border-radius: 0;
+  color: var(--color-text);
+}
+
+/* A status region takes programmatic focus (so a screen reader announces the result) but is not a control: a
+   thin ring, not the heavy 2px+offset ring that made the message read as an input. Keyboard focus stays visible. */
+.screen-feedback[tabindex='-1']:focus-visible {
+  outline-width: var(--border-hairline);
+  outline-offset: 0;
 }
 
 /* Neutral, not an error: something is saved and still on its way (a correction
