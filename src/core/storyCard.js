@@ -1,7 +1,8 @@
 // A share-to-story picture: 1080 x 1920 (9:16, an Instagram or WhatsApp story), drawn on a canvas, then shared with the
 // phone's own share sheet or saved as a file. Reusable and free of anything specific to countries or formats: the caller
 // says what the card shows (a tile, a title, up to three headline numbers, one highlight, a provenance line, the page
-// address) and this draws it. Country pages are the first user; the Layer 2 person pages are the second.
+// address) and this draws it. Country pages are the first user; the Layer 2 person pages (T-ID2.C3) are the second: the
+// tile is a flag (fitted) for a country and a photo (cropped to fill) or initials for a person.
 //
 // Three honest limits. (1) It draws only what it is given and never reads the page, so what is on the card is what the
 // caller chose to publish. (2) The card is one deliberate dark look whatever the page's theme, but its colours are read
@@ -16,7 +17,8 @@ import { loadQrFactory } from './audienceLinksCard.js';
 export const STORY_WIDTH = 1080;
 export const STORY_HEIGHT = 1920;
 const MARGIN = 96;
-const MAX_STATS = 3;
+const MAX_STATS = 4;
+const DEFAULT_TILE_WIDTH = 360;
 
 const DEFAULT_THEME = {
   background: '#0e1a1d',
@@ -97,13 +99,18 @@ const font = (weight, size, family) => `${weight} ${size}px ${family}`;
  * Draws the card. Everything comes from `spec`, `theme` and `assets`; nothing is read from the page.
  * @param {CanvasRenderingContext2D} ctx
  * @param {{
- *   brand?: string, eyebrow?: string, tile?: string, title: string, subtitle?: string,
+ *   brand?: string, eyebrow?: string, tile?: string, tileWidth?: number, tileInitials?: string, title: string, subtitle?: string, tagline?: string,
  *   stats?: { value: string, label: string }[],
  *   highlight?: { label: string, text: string, detail?: string }|null,
  *   provenance?: string, address: string }} spec
- * @param {{ theme?: object, flag?: CanvasImageSource|null, qr?: { size: number, isDark: (r: number, c: number) => boolean }|null }} assets
+ * `tile` is the text beside the picture; `tileInitials` stands in the frame when there is neither a flag nor a photo.
+ * @param {{ theme?: object, flag?: CanvasImageSource|null, photo?: CanvasImageSource|null, qr?: { size: number, isDark: (r: number, c: number) => boolean }|null }} assets
  */
-export function drawStoryCard(ctx, spec, { theme = DEFAULT_THEME, flag = null, qr = null } = {}) {
+export function drawStoryCard(
+  ctx,
+  spec,
+  { theme = DEFAULT_THEME, flag = null, photo = null, qr = null } = {},
+) {
   const W = STORY_WIDTH;
   const H = STORY_HEIGHT;
   const inner = W - MARGIN * 2;
@@ -129,7 +136,7 @@ export function drawStoryCard(ctx, spec, { theme = DEFAULT_THEME, flag = null, q
   }
 
   // The tile: the flag (or a plain frame) and the code beside it, as text.
-  const tileW = 360;
+  const tileW = spec.tileWidth ?? DEFAULT_TILE_WIDTH;
   const tileH = 240;
   ctx.fillStyle = theme.surface;
   ctx.fillRect(MARGIN, y, tileW, tileH);
@@ -139,6 +146,21 @@ export function drawStoryCard(ctx, spec, { theme = DEFAULT_THEME, flag = null, q
     const w = Math.min(tileW, tileH * ratio);
     const h = w / ratio;
     ctx.drawImage(flag, MARGIN + (tileW - w) / 2, y + (tileH - h) / 2, w, h);
+  }
+  if (!flag && photo) {
+    // A photo fills the frame, cropped from the middle (never stretched).
+    const pw = photo.naturalWidth || photo.width || 1;
+    const ph = photo.naturalHeight || photo.height || 1;
+    const side = Math.min(pw, ph);
+    ctx.drawImage(photo, (pw - side) / 2, (ph - side) / 2, side, side, MARGIN, y, tileW, tileH);
+  } else if (!flag && spec.tileInitials) {
+    ctx.fillStyle = theme.accent;
+    ctx.font = font(700, 110, theme.displayFont);
+    ctx.fillText(
+      spec.tileInitials,
+      MARGIN + (tileW - measure(spec.tileInitials)) / 2,
+      y + tileH / 2 + 38,
+    );
   }
   ctx.strokeStyle = theme.border;
   ctx.lineWidth = 4;
@@ -168,6 +190,16 @@ export function drawStoryCard(ctx, spec, { theme = DEFAULT_THEME, flag = null, q
     ctx.fillStyle = theme.muted;
     ctx.font = font(500, 40, theme.bodyFont);
     for (const line of wrapLines(spec.subtitle, measure, inner, 1)) {
+      ctx.fillText(line, MARGIN, y + 10);
+      y += 56;
+    }
+  }
+  // One optional short line under the name (a later "Head Barista · <cafe>" or a certification). Not given now: nothing is
+  // drawn and nothing moves.
+  if (spec.tagline) {
+    ctx.fillStyle = theme.muted;
+    ctx.font = font(500, 40, theme.bodyFont);
+    for (const line of wrapLines(spec.tagline, measure, inner, 1)) {
       ctx.fillText(line, MARGIN, y + 10);
       y += 56;
     }
@@ -264,9 +296,12 @@ export async function qrMatrixFor(url, loadQr = loadQrFactory) {
   }
 }
 
-function loadImage(url) {
+// `cors` asks for an anonymous cross-origin load, so a picture from another address (a person's photo on Storage) does not
+// taint the canvas; a server that does not allow it makes the load fail, which is the same as no picture.
+function loadImage(url, { cors = false } = {}) {
   return new Promise((resolve) => {
     const image = new Image();
+    if (cors) image.crossOrigin = 'anonymous';
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
     image.src = url;
@@ -274,7 +309,7 @@ function loadImage(url) {
 }
 
 /**
- * Browser. Draws the card on a new canvas and answers a PNG Blob. `flagUrl` is optional (a picture that fails to load
+ * Browser. Draws the card on a new canvas and answers a PNG Blob. `flagUrl` and `photoUrl` are optional (a picture that fails to load
  * is left out: the card still says everything in words). Rejects when no canvas or picture can be had.
  * @returns {Promise<Blob>}
  */
@@ -283,6 +318,7 @@ export async function renderStoryCard(
   {
     theme = DEFAULT_THEME,
     flagUrl = null,
+    photoUrl = null,
     qrUrl = null,
     loadQr = loadQrFactory,
     canvasFactory,
@@ -305,11 +341,12 @@ export async function renderStoryCard(
   } catch {
     // A font that will not load is a plainer card, not a failed one.
   }
-  const [flag, qr] = await Promise.all([
+  const [flag, photo, qr] = await Promise.all([
     flagUrl ? loadImage(flagUrl) : null,
+    photoUrl ? loadImage(photoUrl, { cors: true }) : null,
     qrUrl ? qrMatrixFor(qrUrl, loadQr) : null,
   ]);
-  drawStoryCard(ctx, spec, { theme, flag, qr });
+  drawStoryCard(ctx, spec, { theme, flag, photo, qr });
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('no picture'))), 'image/png');
   });

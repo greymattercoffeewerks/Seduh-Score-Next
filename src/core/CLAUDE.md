@@ -97,6 +97,14 @@ unsubscribes in the shell's own `unmount()`. Its breadcrumb fetch (`setNav` ->
 gate, is what actually protects that read (found in security review; documented with a
 comment at the call site rather than restructured).
 
+`eventBar` (2026-11-17, console UI fixes) — `renderEventBar()`: a breadcrumb ("Events / <event name> / <this screen>",
+the leaf unlinked) and the event's section links (`aria-current="page"` on the current one). Pure DOM, format-agnostic:
+it is handed plain data and never names a format or a route. `appShell` mounts it between the header and the screen
+via `setNav({eventBar})`. Which sections an event has, and which one a route is, is the composition root's call in
+`src/eventSections.js` (beside `main.js`; the one place that knows both the routes and the formats). A same-event
+`setNav` that lands before the event fetch resolves repaints from `latestEventBar`, never a stale copy. The header's
+event name stays plain text, so the breadcrumb is the one link to the event home.
+
 `config` (same pass) — originally `getDefaultOrgId()`, which read `VITE_DEFAULT_ORG_ID` and threw if
 unset. Since T-TEN.C2 (2026-10-11) the organiser console takes its organisation from the signed-in person's
 memberships (`orgContext`), and `config` only offers `getLegacyAudienceOrgId()`: the one organisation the

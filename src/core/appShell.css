@@ -695,3 +695,93 @@
     color var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out);
 }
+
+/* The in-event bar (core/eventBar.js): a small breadcrumb trail on the left, the event's sections on the right,
+   above the screen's own heading. Wraps rather than scrolls at 360px: the trail on one line, the sections under
+   it. Empty off an event screen, where it takes no room. */
+.app-shell-event-bar:empty {
+  display: none;
+}
+
+.event-bar {
+  max-width: var(--max-width-content);
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.event-bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+.event-bar-trail {
+  font-size: var(--text-sm);
+  min-width: 0;
+}
+
+.event-bar-crumb {
+  align-items: center;
+  display: inline-flex;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.event-bar-crumb + .event-bar-crumb::before {
+  content: '/' / '';
+  margin-inline-end: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.event-bar-link,
+.event-bar-here {
+  color: var(--color-text);
+}
+
+.event-bar-here {
+  font-weight: var(--font-weight-bold);
+}
+
+.event-bar-link {
+  display: inline-flex;
+  align-items: center;
+  /* A real tap target for each link: tall and at least as wide as it is tall. */
+  min-height: var(--tap-target-min);
+  min-width: var(--tap-target-min);
+  justify-content: center;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.event-bar-sections .event-bar-list {
+  gap: var(--space-2);
+}
+
+.event-bar-section {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-selector);
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.event-bar-section:hover {
+  text-decoration: underline;
+}
+
+.event-bar-section[aria-current='page'] {
+  background: var(--color-surface-sunken);
+  font-weight: var(--font-weight-bold);
+}

@@ -11,7 +11,6 @@
 // no results yet, and the full page. Text goes in through textContent only (el()).
 //
 // Not built yet, on purpose, each a marked seam:
-//   - SEAM C3: "Share to story" (the person story card; core/storyCard.js is ready for a person spec).
 //   - SEAM C5: links INTO profiles (discovery). Nothing here links to another profile.
 import { el } from '../core/dom.js';
 import { countryName } from '../core/country.js';
@@ -20,6 +19,7 @@ import { fetchSeduhProfile, handleFromPath, photoSrc } from '../core/seduhProfil
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
+import { buildShareControl } from './profileShare.js';
 import { CONTACT_EMAIL } from './trustContent.js';
 import {
   KIND_LABELS,
@@ -256,19 +256,24 @@ function heroFull(profile, options) {
       el('p', { className: 'page-hero-kicker', text: KICKER }),
       el('div', { className: 'profile-identity' }, [
         avatar(name, src, () => report?.remove()),
-        el('div', { className: 'profile-identity-text' }, [
-          el('h1', { id: 'profile-title', text: name, attrs: { tabindex: '-1' } }),
-          // The handle is shown beside a name only (a name is not unique); alone it is already the title.
-          identity
-            ? el('p', { className: 'profile-handle', text: `seduhscore.com/id/${handle}` })
-            : null,
-        ]),
+        el(
+          'div',
+          { className: 'profile-identity-text' },
+          [
+            el('h1', { id: 'profile-title', text: name, attrs: { tabindex: '-1' } }),
+            // The handle is shown beside a name only (a name is not unique); alone it is already the title.
+            identity
+              ? el('p', { className: 'profile-handle', text: `seduhscore.com/id/${handle}` })
+              : null,
+          ].filter(Boolean),
+        ),
       ]),
       chips.length
         ? el('ul', { className: 'profile-labels', attrs: { role: 'list' } }, chips)
         : null,
       report,
-      // SEAM C3: the "Share to story" button goes here.
+      // Null when the name is hidden (then there is no identity, and no card).
+      buildShareControl(profile, options),
     ].filter(Boolean),
   );
 }

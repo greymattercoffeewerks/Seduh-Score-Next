@@ -162,3 +162,67 @@ test('an unknown handle shows the empty page and says nothing about why', async 
   await page.goto('/id/ab/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('No Seduh ID here.');
 });
+
+// T-ID2.C3: the share-to-story card, drawn by a real canvas from the real door's answer. Chromium has no file share here, so
+// the picture is SAVED (the same branch a desktop takes); the PNG must be the 1080 x 1920 card.
+test('Share draws the 1080 x 1920 story card at 360px, in both styles, and saves it', async ({
+  page,
+}) => {
+  const handle = seedClaimed({
+    prefix: 'story',
+    name: 'Story Proof Person',
+    events: [
+      ['Proof Open 2026', '2026-11-02', 1],
+      ['Proof Classic 2025', '2025-08-01', 3],
+    ],
+  });
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto(`/id/${handle}/`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Story Proof Person');
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share to story' });
+  await expect(dialog).toBeVisible();
+  const preview = dialog.locator('img.profile-share-preview');
+  await expect(preview).toBeVisible();
+  expect(await overflow(page)).toBe(0);
+  const first = await preview.getAttribute('src');
+  await dialog.getByRole('button', { name: 'Latest result' }).click();
+  await expect(dialog.getByRole('button', { name: 'Latest result' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(preview).toBeVisible();
+  await expect(preview).not.toHaveAttribute('src', first);
+  await expect(dialog.getByRole('button', { name: 'Share picture' })).toBeEnabled();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    dialog.getByRole('button', { name: 'Share picture' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(`seduh-id-${handle}-story.png`);
+  await expect(dialog.getByRole('status')).toContainText('Picture saved');
+  const path = await download.path();
+  const { readFileSync } = await import('node:fs');
+  const bytes = readFileSync(path);
+  expect(bytes.subarray(1, 4).toString()).toBe('PNG');
+  expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual([1080, 1920]);
+  // the two styles are two different pictures (the page's own preview address changes on every redraw, so compare bytes)
+  await dialog.getByRole('button', { name: 'Whole record' }).click();
+  await expect(dialog.getByRole('button', { name: 'Whole record' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(dialog.getByRole('button', { name: 'Share picture' })).toBeEnabled();
+  const [rec] = await Promise.all([
+    page.waitForEvent('download'),
+    dialog.getByRole('button', { name: 'Share picture' }).click(),
+  ]);
+  expect(readFileSync(await rec.path()).equals(bytes)).toBe(false);
+  if (shotDir) {
+    await download.saveAs(join(shotDir, 'story-latest.png'));
+    await rec.saveAs(join(shotDir, 'story-record.png'));
+    await shot(page, 'share-dialog-360');
+  }
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeFocused();
+});

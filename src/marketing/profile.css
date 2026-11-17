@@ -173,13 +173,15 @@ body {
   margin: 0 0 var(--space-3);
   color: var(--color-text-secondary);
 }
-.profile-filters {
+.profile-filters,
+.profile-share-styles {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
-.profile-filter {
+.profile-filter,
+.profile-share-style {
   min-block-size: var(--tap-target-min);
   padding-inline: var(--space-3);
   background: transparent;
@@ -190,7 +192,8 @@ body {
   font-size: var(--text-sm);
   cursor: pointer;
 }
-.profile-filter[aria-pressed='true'] {
+.profile-filter[aria-pressed='true'],
+.profile-share-style[aria-pressed='true'] {
   background: var(--color-accent);
   border-radius: var(--radius-field);
   border-color: var(--color-accent);
@@ -369,4 +372,59 @@ body {
     grid-column: 2;
     grid-row: 1 / span 2;
   }
+}
+
+/* ---- Share to story (T-ID2.C3): the button in the hero and the dialog with the card preview ---- */
+.profile-share {
+  margin-top: var(--space-4);
+}
+.profile-share .action,
+.profile-share-dialog .action {
+  min-block-size: var(--tap-target-min);
+}
+.profile-share-dialog {
+  inline-size: min(92vw, 28rem);
+  max-block-size: 92dvh;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-box);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.profile-share-dialog::backdrop {
+  background: color-mix(in srgb, black 65%, transparent);
+}
+.profile-share-slot {
+  /* the room the preview will take, so the dialog does not jump when it arrives */
+  min-block-size: calc(min(26rem, 40dvh) + var(--space-3) * 2);
+}
+.profile-share-dialog .action:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+.profile-share-preview {
+  display: block;
+  block-size: min(26rem, 40dvh);
+  inline-size: auto;
+  max-inline-size: 100%;
+  aspect-ratio: 9 / 16;
+  margin: var(--space-3) auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-box);
+}
+.profile-share-how,
+.profile-share-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.profile-share-note {
+  min-block-size: 1.5em;
+}
+.profile-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }

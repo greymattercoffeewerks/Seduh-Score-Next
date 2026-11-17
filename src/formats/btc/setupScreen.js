@@ -579,7 +579,16 @@ export async function mountSetupScreen(
             ),
           ]
         : []),
-      submitButton,
+      // A spacer label with the same metrics as the real ones, so at desktop width the button lines up with
+      // the inputs (not with the hint under the name input) without a magic offset.
+      el('div', { className: 'form-field btc-roster-submit' }, [
+        el('span', {
+          className: 'form-field-label',
+          text: ' ',
+          attrs: { 'aria-hidden': 'true' },
+        }),
+        submitButton,
+      ]),
     ]);
     form.addEventListener('submit', onSubmit);
 
