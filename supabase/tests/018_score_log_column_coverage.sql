@@ -52,7 +52,7 @@ insert into _buckets values
   -- btc_cup_votes
   ('btc_cup_votes', 'id', 'immutable'), ('btc_cup_votes', 'match_id', 'immutable'),
   ('btc_cup_votes', 'cup_number', 'immutable'),
-  ('btc_cup_votes', 'team1_tokens', 'logged'),
+  ('btc_cup_votes', 'team1_tokens', 'logged'), ('btc_cup_votes', 'voided', 'logged'),
   ('btc_cup_votes', 'created_at', 'metadata'),
   -- btc_match_bonuses (keyed by match_id)
   ('btc_match_bonuses', 'match_id', 'immutable'),

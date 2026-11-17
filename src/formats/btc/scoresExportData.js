@@ -38,7 +38,7 @@ export async function loadScoresTables(eventId, client = getSupabase()) {
       'match_id, status, round, team1_id, team2_id, team1_tokens, team2_tokens, team1_total, team2_total',
       matchIds,
     ),
-    readByMatch(client, 'btc_cup_votes', 'match_id, cup_number, team1_tokens', matchIds),
+    readByMatch(client, 'btc_cup_votes', 'match_id, cup_number, team1_tokens, voided', matchIds),
     readByMatch(
       client,
       'btc_match_bonuses',

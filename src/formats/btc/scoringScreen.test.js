@@ -251,7 +251,8 @@ describe('mountScoringScreen', () => {
     expect(root.querySelector('h2').textContent).toBe('Alpha vs Beta');
     expect(root.textContent).toContain('Preliminary · 15 cups');
     expect(cupRows()).toHaveLength(15);
-    expect(tokenButtons(1)).toHaveLength(4);
+    // 0-3 and the fifth choice, Void (0–0).
+    expect(tokenButtons(1)).toHaveLength(5);
     expect(root.querySelector('.is-test-banner')).not.toBeNull();
   });
 
@@ -376,6 +377,80 @@ describe('mountScoringScreen', () => {
     tapCup(1, 0);
     expect(pressedValue(1)).toBe(0);
     expect(team2Value(1)).toBe('3');
+  });
+
+  describe('void cup', () => {
+    const voidButton = (cup) => tokenButtons(cup)[4];
+
+    it('has a fifth choice per cup, in plain words for a screen reader, after the four numbers', async () => {
+      await mount();
+      expect(voidButton(1).textContent).toBe('Void (0–0)');
+      expect(voidButton(1).getAttribute('aria-label')).toBe(
+        'Cup 1, void: no tokens for Alpha or Beta',
+      );
+      expect(voidButton(1).getAttribute('aria-pressed')).toBe('false');
+      expect(root.querySelector('#btc-token-help').textContent).toContain('Void (0–0)');
+    });
+
+    it('marks the cup void in words, gives both teams 0, and counts it as scored', async () => {
+      await mount();
+      expect(cupRows()[0].querySelector('.btc-cup-void-tag').hidden).toBe(true);
+      voidButton(1).click();
+      expect(voidButton(1).getAttribute('aria-pressed')).toBe('true');
+      expect(
+        tokenButtons(1)
+          .slice(0, 4)
+          .every((b) => b.getAttribute('aria-pressed') === 'false'),
+      ).toBe(true);
+      expect(team2Value(1)).toBe('0');
+      const tag = cupRows()[0].querySelector('.btc-cup-void-tag');
+      expect(tag.hidden).toBe(false);
+      expect(tag.textContent).toBe('Void');
+      expect(cupRows()[0].dataset.void).toBe('true');
+      expect(root.textContent).toContain('Alpha: 0 points (0 tokens)');
+      expect(root.textContent).toContain('Beta: 0 points (0 tokens)');
+      expect(root.textContent).toContain(
+        '1 void cup: no tokens to either team. The bonuses still count.',
+      );
+    });
+
+    it('announces the void cup, and tapping a number takes it back to a normal cup', async () => {
+      await mount();
+      const announce = root.querySelector('.sr-only[aria-live]');
+      voidButton(2).click();
+      expect(announce.textContent).toBe('Cup 2: void. No tokens for Alpha or Beta');
+      tapCup(2, 1);
+      expect(voidButton(2).getAttribute('aria-pressed')).toBe('false');
+      expect(pressedValue(2)).toBe(1);
+      expect(team2Value(2)).toBe('2');
+      expect(cupRows()[1].querySelector('.btc-cup-void-tag').hidden).toBe(true);
+      expect(root.textContent).not.toContain('void cup');
+    });
+
+    it('sends the void cup as voided with 0 tokens, and saves it in the local draft', async () => {
+      const { enqueueOperation } = await import('../../core/outbox.js');
+      await mount();
+      await fillAll();
+      voidButton(3).click();
+      await flush();
+      flushOutcome = 'offline';
+      confirmButton().click();
+      await flush();
+      const [, payload] = enqueueOperation.mock.calls.at(-1);
+      expect(payload.p_votes[2]).toEqual({ cup_number: 3, team1_tokens: 0, voided: true });
+      expect(payload.p_votes[0]).toEqual({ cup_number: 1, team1_tokens: 2 });
+      expect(cache.get('btc-scoring-draft:m1').voids).toEqual({ 3: true });
+    });
+
+    it('a locked screen leaves the void button inert', async () => {
+      await mount();
+      await fillAll();
+      flushOutcome = 'offline';
+      confirmButton().click();
+      await flush();
+      voidButton(5).click();
+      expect(voidButton(5).getAttribute('aria-pressed')).toBe('false');
+    });
   });
 
   it('announces each tap in a live region that already exists, so a screen reader hears it', async () => {

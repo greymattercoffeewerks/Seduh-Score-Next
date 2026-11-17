@@ -12,8 +12,12 @@ export function matchStatusView(match) {
 }
 
 // `score` is the match's btc_match_scores row ({ match_id, team1_tokens, team2_tokens, team1_total, team2_total })
-// or undefined. Cups have been voted when the tokens add up to more than 0 (each cup carries exactly 3).
+// or undefined, with `cups_scored`. Cups have been scored when any cup holds a score; a void cup is a scored cup with
+// no tokens, so the tokens alone cannot say. A row without `cups_scored` (an older fixture) falls back to the tokens.
 export function hasCupScores(score) {
+  if (score?.cups_scored !== undefined && score?.cups_scored !== null) {
+    return Number(score.cups_scored) > 0;
+  }
   return (Number(score?.team1_tokens) || 0) + (Number(score?.team2_tokens) || 0) > 0;
 }
 

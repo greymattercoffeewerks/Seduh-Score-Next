@@ -18,6 +18,12 @@ const sample = (name) =>
     .replace(/\r?\n$/, '')
     .split(/\r?\n/);
 const csvLines = (table) => buildCsv(table).split('\r\n');
+// The cups table's "Void cup" column (index 8) is not in the proposal's sample file.
+const dropVoidColumn = (line) => {
+  const fields = line.split(',');
+  fields.splice(8, 1);
+  return fields.join(',');
+};
 
 // A local-time timestamp, so the expected "Confirmed at" text does not depend on the machine's zone.
 const at = (y, mo, d, h, mi) => new Date(y, mo - 1, d, h, mi).toISOString();
@@ -148,7 +154,8 @@ describe('golden: the proposal samples', () => {
     const withoutMatch2 = lines.filter(
       (line) => !line.startsWith('SAMPLE ABTC 2027 Regional Final,Round 1,2,'),
     );
-    expect(withoutMatch2).toEqual(sample('btc-scores-cups-SAMPLE.csv'));
+    // The proposal predates the void cup: its sample has no "Void cup" column, so that column is dropped to compare.
+    expect(withoutMatch2.map(dropVoidColumn)).toEqual(sample('btc-scores-cups-SAMPLE.csv'));
     expect(lines.length).toBe(1 + 15 + 15 + 20);
   });
 
@@ -156,9 +163,16 @@ describe('golden: the proposal samples', () => {
     expect(MATCH_COLUMNS.map((c) => c.label)).toEqual(
       sample('btc-scores-matches-SAMPLE.csv')[0].split(','),
     );
-    expect(CUP_COLUMNS.map((c) => c.label)).toEqual(
+    expect(CUP_COLUMNS.map((c) => c.label).filter((label) => label !== 'Void cup')).toEqual(
       sample('btc-scores-cups-SAMPLE.csv')[0].split(','),
     );
+    // The one column added since: the committee's void-cup rule (2026-11-18), right after the token columns.
+    expect(CUP_COLUMNS.map((c) => c.label).slice(5, 9)).toEqual([
+      'Cup',
+      'Team 1 tokens',
+      'Team 2 tokens',
+      'Void cup',
+    ]);
   });
 });
 
@@ -333,6 +347,28 @@ describe('rows and edge cases', () => {
     const row = one({}, { team1_tokens: 26, team2_tokens: 34, team1_total: 28, team2_total: 41 });
     expect(row.winner).toBe('Second Crack');
     expect(row.moreTokens).toBe('Second Crack');
+  });
+
+  it('writes a void cup as 0 and 0, marked Yes, and won by nobody; the other cups are untouched', () => {
+    const rows0 = sampleRows();
+    // Round 1 match 2, cup 1 (3 tokens to team 1) and cup 13 (0 to team 1) are void.
+    const id = rows0.cupVotes.find((v) => v.cup_number === 1 && v.team1_tokens === 3).match_id;
+    const cupVotes = rows0.cupVotes.map((v) =>
+      v.match_id === id && (v.cup_number === 1 || v.cup_number === 13)
+        ? { ...v, team1_tokens: 0, voided: true }
+        : v,
+    );
+    const cups = buildScoresTables({ ...rows0, cupVotes }).cups;
+    const voided = cups.rows.filter((r) => r.voidCup === 'Yes');
+    expect(voided).toHaveLength(2);
+    for (const r of voided) {
+      expect([r.team1Tokens, r.team2Tokens, r.cupWonBy]).toEqual([0, 0, '']);
+    }
+    // Every other row says nothing in the marker column, and a normal 0-3 cup still gives team 2 all three.
+    expect(cups.rows.filter((r) => r.voidCup === '')).toHaveLength(cups.rows.length - 2);
+    const lines = csvLines(cups);
+    expect(lines[0]).toContain('Team 2 tokens,Void cup,Cup won by');
+    expect(lines.some((l) => l.includes(',1,0,0,Yes,'))).toBe(true);
   });
 
   it('writes the cups of Round 1 match 2 from its votes', () => {

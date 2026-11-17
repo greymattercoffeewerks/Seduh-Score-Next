@@ -61,6 +61,7 @@ export const CUP_COLUMNS = [
   { key: 'cup', label: 'Cup' },
   { key: 'team1Tokens', label: 'Team 1 tokens' },
   { key: 'team2Tokens', label: 'Team 2 tokens' },
+  { key: 'voidCup', label: 'Void cup' },
   { key: 'cupWonBy', label: 'Cup won by' },
 ];
 
@@ -126,7 +127,7 @@ function numberMatches(entries) {
  *   judges: {id: string, name: string}[],
  *   matches: { match: object, judgeIds: string[] }[]   // listEventMatches' shape
  *   scores: object[],     // btc_match_scores rows
- *   cupVotes: {match_id: string, cup_number: number, team1_tokens: number}[],
+ *   cupVotes: {match_id: string, cup_number: number, team1_tokens: number, voided?: boolean}[],
  *   bonuses: {match_id, fastest_team_id, team1_signature_beverage, team2_signature_beverage}[],  // btc_match_bonuses
  * }} rows
  * @returns {{ matches: {title: string, columns: object[], rows: object[]}, cups: {title: string, columns: object[], rows: object[]} }}
@@ -147,7 +148,10 @@ export function buildScoresTables({
   const votesByMatch = new Map();
   for (const vote of cupVotes) {
     if (!votesByMatch.has(vote.match_id)) votesByMatch.set(vote.match_id, new Map());
-    votesByMatch.get(vote.match_id).set(Number(vote.cup_number), Number(vote.team1_tokens));
+    votesByMatch.get(vote.match_id).set(Number(vote.cup_number), {
+      team1: Number(vote.team1_tokens),
+      voided: vote.voided === true,
+    });
   }
   const nameOf = (id) => safeText(teamsById.get(id)?.name ?? '');
   const eventName = safeText(eventLabel(event));
@@ -202,9 +206,11 @@ export function buildScoresTables({
       let team1CupsWon = 0;
       let team2CupsWon = 0;
       for (let cup = 1; cup <= cups; cup += 1) {
-        const team1Tokens = votes.get(cup);
-        if (team1Tokens === undefined) continue;
-        const team2Tokens = 3 - team1Tokens;
+        const vote = votes.get(cup);
+        if (vote === undefined) continue;
+        // A void cup (both teams failed to submit, or both submitted the wrong cup) is 0 and 0: it is won by nobody.
+        const team1Tokens = vote.voided ? 0 : vote.team1;
+        const team2Tokens = vote.voided ? 0 : 3 - vote.team1;
         if (team1Tokens >= 2) team1CupsWon += 1;
         if (team2Tokens >= 2) team2CupsWon += 1;
         cupRows.push({
@@ -216,7 +222,8 @@ export function buildScoresTables({
           cup,
           team1Tokens,
           team2Tokens,
-          cupWonBy: team1Tokens >= 2 ? row.team1 : row.team2,
+          voidCup: vote.voided ? 'Yes' : '',
+          cupWonBy: vote.voided ? '' : team1Tokens >= 2 ? row.team1 : row.team2,
         });
       }
       const t1 = Number(score.team1_tokens);

@@ -1,6 +1,8 @@
 // BTC match scoring (Phase T-BTC.2, scoring sub-step). Each cup holds exactly 3
 // tokens, split between the two teams: the scorer enters ONE number — team1's share
-// (0-3) — and team2's share is always the balance (3 - team1). Judges are still
+// (0-3) — and team2's share is always the balance (3 - team1). The one exception is a
+// VOID cup (committee rule, 2026-11-18: both teams failed to submit, or both submitted the
+// wrong cup): both teams get 0, and the bonuses are decided as usual. Judges are still
 // assigned to the match, exactly 3, and shown on the scoring screen for the record,
 // but no vote is attributed to one of them (design correction, 2026-09-22 — caught
 // against the legacy Seduh Score UI before this shipped; see
@@ -101,7 +103,8 @@ export function finishTimeProblems(draft, round) {
 // draft, so a reload can tell "confirmed", "still queued" and "rejected" apart.
 export function blankDraft() {
   return {
-    votes: {}, // votes[cupNumber] = team1's token share, 0-3 (team2 = 3 - that)
+    votes: {}, // votes[cupNumber] = team1's token share, 0-3 (team2 = 3 - that, or 0 on a void cup)
+    voids: {}, // voids[cupNumber] = true for a void cup (both teams 0); its votes entry is 0
     fastest: null, // 'team1' | 'team2' | null
     signature: { team1: false, team2: false },
     times: { team1: '', team2: '' },
@@ -117,7 +120,24 @@ export function withCupTokens(draft, cup, team1Tokens) {
   if (!Number.isInteger(team1Tokens) || team1Tokens < 0 || team1Tokens > TOKENS_PER_CUP) {
     throw new RangeError(`withCupTokens: team1Tokens must be 0-${TOKENS_PER_CUP}`);
   }
-  return { ...draft, votes: { ...draft.votes, [cup]: team1Tokens } };
+  // Scoring a cup with tokens makes it a normal cup again.
+  const voids = { ...(draft.voids ?? {}) };
+  delete voids[cup];
+  return { ...draft, votes: { ...draft.votes, [cup]: team1Tokens }, voids };
+}
+
+// Immutable update: the cup is void (both teams 0). It counts as scored. Its token entry is 0, which is also what the
+// database's check requires of a void cup.
+export function withCupVoid(draft, cup) {
+  return {
+    ...draft,
+    votes: { ...draft.votes, [cup]: 0 },
+    voids: { ...(draft.voids ?? {}), [cup]: true },
+  };
+}
+
+export function isCupVoid(draft, cup) {
+  return draft.voids?.[cup] === true && draft.votes[cup] != null;
 }
 
 // Only a cup inside the round counts — matches the SQL view's own filter, so the
@@ -129,11 +149,23 @@ function validCupEntries(draft, round) {
     .filter(([cup]) => cup >= 1 && cup <= cups);
 }
 
-// { team1, team2 } for one cup, or null if that cup has not been scored yet.
+// team2's share of one cup: the balance, or nothing on a void cup. THE one place the JS side derives it (mirrors
+// `case when voided then 0 else 3 - team1_tokens end` in the SQL views).
+function team2Share(team1Tokens, voided) {
+  return voided ? 0 : TOKENS_PER_CUP - team1Tokens;
+}
+
+// { team1, team2, voided } for one cup, or null if that cup has not been scored yet.
 export function cupTokens(draft, cup, round) {
   const team1 = draft.votes[cup];
   if (team1 == null || cup < 1 || cup > cupsForRound(round)) return null;
-  return { team1, team2: TOKENS_PER_CUP - team1 };
+  const voided = isCupVoid(draft, cup);
+  return { team1: voided ? 0 : team1, team2: team2Share(team1, voided), voided };
+}
+
+// How many cups of the round are void.
+export function voidCupCount(draft, round) {
+  return validCupEntries(draft, round).filter(([cup]) => isCupVoid(draft, cup)).length;
 }
 
 export function missingCupCount(draft, round) {
@@ -163,8 +195,14 @@ function teamTotal(own, opponent, isFastest, hasSignature, knockout) {
 // PREVIEW of btc_match_scores (see the header).
 export function computeScores(draft, round) {
   const entries = validCupEntries(draft, round);
-  const team1Tokens = entries.reduce((sum, [, team1]) => sum + team1, 0);
-  const team2Tokens = entries.reduce((sum, [, team1]) => sum + (TOKENS_PER_CUP - team1), 0);
+  const team1Tokens = entries.reduce(
+    (sum, [cup, team1]) => sum + (isCupVoid(draft, cup) ? 0 : team1),
+    0,
+  );
+  const team2Tokens = entries.reduce(
+    (sum, [cup, team1]) => sum + team2Share(team1, isCupVoid(draft, cup)),
+    0,
+  );
   const knockout = round !== 'preliminary';
   return {
     team1Tokens,
@@ -193,10 +231,12 @@ export function computeScores(draft, round) {
 export function buildConfirmParams(match, draft, round) {
   const knockout = round !== 'preliminary';
   return {
-    p_votes: validCupEntries(draft, round).map(([cup, team1Tokens]) => ({
-      cup_number: cup,
-      team1_tokens: team1Tokens,
-    })),
+    // `voided` is sent only on a void cup, so a payload with no void cup is byte-for-byte what it was before.
+    p_votes: validCupEntries(draft, round).map(([cup, team1Tokens]) =>
+      isCupVoid(draft, cup)
+        ? { cup_number: cup, team1_tokens: 0, voided: true }
+        : { cup_number: cup, team1_tokens: team1Tokens },
+    ),
     p_fastest_team_id:
       draft.fastest === 'team1'
         ? match.team1_id
@@ -228,6 +268,8 @@ export async function loadDraft(matchId) {
   const base = blankDraft();
   return {
     votes: stored.votes,
+    // A draft saved before the void cup existed has no `voids`: every cup in it is a normal one.
+    voids: stored.voids && typeof stored.voids === 'object' ? stored.voids : {},
     fastest: stored.fastest ?? null,
     signature: { ...base.signature, ...stored.signature },
     times: { ...base.times, ...stored.times },
@@ -261,7 +303,11 @@ export async function loadConfirmedDraft(match, client = getSupabase()) {
   if (bonusError) throw bonusError;
 
   let draft = blankDraft();
-  for (const row of votes) draft = withCupTokens(draft, row.cup_number, row.team1_tokens);
+  for (const row of votes) {
+    draft = row.voided
+      ? withCupVoid(draft, row.cup_number)
+      : withCupTokens(draft, row.cup_number, row.team1_tokens);
+  }
   return {
     ...draft,
     fastest:
@@ -354,6 +400,7 @@ const CURATED_MESSAGES = [
   /^\d+ of \d+ cups are missing a score$/,
   /^cup numbers must be between \d+ and \d+ for a \w+ match$/,
   /^each cup's tokens must be between 0 and 3$/,
+  /^a void cup cannot hold tokens$/,
   /^the signature-beverage bonus does not apply in the preliminary round$/,
   /^match not found$/,
   /^match must have exactly \d+ judges \(has \d+\)$/,
