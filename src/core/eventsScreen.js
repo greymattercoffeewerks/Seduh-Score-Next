@@ -434,6 +434,7 @@ function renderFeaturedCard(view, { live, formatOptions, now, formatLabel, rowCt
   // The featured event is left out of the list below, so its Finish / Delete live here, behind the same toggle.
   const manage = renderManage(event, view, rowCtx);
   if (manage) actions.appendChild(manage.toggle);
+  const archivePanel = rowCtx.archivePanelFor?.(event) ?? null;
   return el(
     'section',
     {
@@ -444,6 +445,8 @@ function renderFeaturedCard(view, { live, formatOptions, now, formatLabel, rowCt
       kicker,
       el('div', { className: 'events-featured-row' }, [body, actions]),
       ...(manage ? [manage.panel] : []),
+      // the featured event is left out of the list, so its archive panel (an Annual organiser's tick box) is here
+      ...(archivePanel ? [archivePanel] : []),
     ],
   );
 }
