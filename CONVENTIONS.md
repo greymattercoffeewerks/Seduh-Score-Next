@@ -99,7 +99,20 @@ late redraw re-inserts. When a redraw re-inserts the kept line, set `aria-live="
 ## Migration workflow
 
 - Local dev: `npm run db:reset` (wraps `supabase db reset` — applies every migration to
-  a fresh local database).
+  a fresh local database). It runs under the database lock (`tools/db-lock.mjs`, exclusive) and waits for every pgTAP
+  run in progress, because it recreates the database container.
+- **pgTAP locally: `npm run db:test`** (`tools/db-test.mjs`, 2026-11-18). Each worktree tests in its own database,
+  `seduh_wt_<worktree>`, in the same container. It is built from a clean base (Supabase's own schemas, none of ours,
+  dumped once per Postgres image from a throwaway second project and kept in `.git/seduh-db/`) plus this worktree's
+  migrations and `seed.sql`, applied with psql; the build takes about a minute and is skipped while a fingerprint of the
+  migrations, seed and base still matches. The database has `statement_timeout` 120s and `lock_timeout` 30s, a run is
+  stopped after 15 minutes (`--timeout-mins N`), and a leftover query from a killed run is cleared before the next one.
+  Options: `--rebuild`, `--drop`, `--prune` (drops the databases of deleted worktrees). `npm run db:test:shared` is the
+  old run against the shared `postgres` database, under the lock. CI is unchanged (one fresh stack, `supabase test db`).
+- **The lock** (`npm run db:lock -- status | run [--shared] -- <cmd> | clear`): files in `.git/seduh-db-lock/`, shared
+  by every worktree. Exclusive for anything that uses or resets the shared database (reset, Playwright), shared for
+  per-worktree pgTAP. A holder whose process is gone, or older than 45 min (exclusive) / 30 min (shared), is cleared by
+  the next caller. Not a Postgres advisory lock, because a reset drops the database that would hold it.
 - Every migration needs a `-- rollback:` block, and the rollback must actually be run
   once, inside `begin; ... rollback;`, before the migration is considered done — a
   rollback block that looks correct and isn't (e.g. dropping policies but never
