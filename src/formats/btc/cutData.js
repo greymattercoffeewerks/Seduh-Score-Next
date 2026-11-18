@@ -13,7 +13,7 @@ import { positionsInOrder } from '../../core/ranking.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { formatDuration } from '../../core/duration.js';
 import { roundOf } from './drawPlan.js';
-import { cupsForRound, TOKENS_PER_CUP } from './scoring.js';
+import { cupsForRound } from './scoring.js';
 import { KNOCKOUT_PLACES } from './words.js';
 import { blockingGroups, fetchPrelimTimes, seedingTieGroups, teamTimeEvidence } from './seeding.js';
 
@@ -35,7 +35,7 @@ export async function fetchPreliminaryMatches(eventId, client = getSupabase()) {
 }
 
 const SCORE_COLUMNS =
-  'match_id, status, team1_id, team2_id, team1_tokens, team2_tokens, team1_total, team2_total';
+  'match_id, status, team1_id, team2_id, team1_tokens, team2_tokens, team1_total, team2_total, cups_scored';
 
 export async function fetchPreliminaryScores(matchIds, client = getSupabase()) {
   if (matchIds.length === 0) return [];
@@ -71,7 +71,7 @@ export async function loadCutExtras(eventId, client = getSupabase()) {
 export function pointsByRound(matches, scores) {
   if (matches === null || scores === null) return null;
   const roundOfMatch = new Map(matches.map((m) => [m.id, roundOf(m)]));
-  const complete = cupsForRound('preliminary') * TOKENS_PER_CUP;
+  const complete = cupsForRound('preliminary');
   const byTeam = new Map();
   const add = (teamId, round, points) => {
     if (!byTeam.has(teamId)) byTeam.set(teamId, new Map());
@@ -80,7 +80,8 @@ export function pointsByRound(matches, scores) {
   };
   for (const score of scores) {
     if (score.status !== 'confirmed' || !roundOfMatch.has(score.match_id)) continue;
-    if (Number(score.team1_tokens) + Number(score.team2_tokens) !== complete) continue;
+    // Every cup scored (a void cup is a scored cup, so tokens alone cannot say): the view's own count.
+    if (Number(score.cups_scored) !== complete) continue;
     const round = roundOfMatch.get(score.match_id);
     add(score.team1_id, round, score.team1_total);
     add(score.team2_id, round, score.team2_total);

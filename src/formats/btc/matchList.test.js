@@ -44,6 +44,13 @@ describe('hasCupScores', () => {
     expect(hasCupScores(unscored)).toBe(false);
     expect(hasCupScores(undefined)).toBe(false);
   });
+
+  it('counts a void cup as scored: an all-void match holds 0 tokens but 15 scored cups', () => {
+    expect(hasCupScores({ ...unscored, cups_scored: 15 })).toBe(true);
+    expect(hasCupScores({ ...unscored, cups_scored: 0 })).toBe(false);
+    // The view's count wins over the token sum when both are present.
+    expect(hasCupScores({ ...scored, cups_scored: 0 })).toBe(false);
+  });
 });
 
 describe('matchStatusView', () => {

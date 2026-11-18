@@ -302,7 +302,7 @@ describe('mountBtcEventDashboardScreen', () => {
       root.querySelectorAll('.ok-records button')[2].click();
       await vi.waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(2));
       expect(downloadCsv.mock.calls[1][1].split(CRLF)[0]).toBe(
-        'Event,Round,Match,Team 1,Team 2,Cup,Team 1 tokens,Team 2 tokens,Cup won by',
+        'Event,Round,Match,Team 1,Team 2,Cup,Team 1 tokens,Team 2 tokens,Void cup,Cup won by',
       );
     });
 
