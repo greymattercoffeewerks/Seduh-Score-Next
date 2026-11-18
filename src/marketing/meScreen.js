@@ -1328,7 +1328,7 @@ export function mountMeScreen(
                 text: when,
               }),
               course.on_card
-                ? el('span', { className: 'me-card-badge tag', text: 'Shown on your card' })
+                ? el('span', { className: 'me-on-card tag', text: 'Shown on your card' })
                 : null,
               course.note ? el('span', { className: 'me-entry-note', text: course.note }) : null,
             ].filter(Boolean),
