@@ -756,10 +756,92 @@ function ctaBand() {
   return inner;
 }
 
+// "Find a competitor" (Seduh ID discovery, T-ID2.C5). Absent from the static page and from the prerender: it exists only when
+// `loadDiscovery` resolves true, which is the database's own on/off switch (public.seduh_discovery_open), so while the owner has
+// not opened discovery nothing about it is on the page. A plain GET form to the hub (/id/?q=...), so it works without script
+// once drawn. The "Seduh ID" nav links are added with it.
+export const FIND_HREF = '/id/';
+function findSection() {
+  const input = el('input', {
+    className: 'petrol-find-input',
+    attrs: {
+      id: 'petrol-find-q',
+      name: 'q',
+      type: 'search',
+      minlength: '2',
+      maxlength: '40',
+      autocomplete: 'off',
+      autocapitalize: 'off',
+      spellcheck: 'false',
+      enterkeyhint: 'search',
+    },
+  });
+  const form = el(
+    'form',
+    {
+      className: 'petrol-find-form',
+      attrs: {
+        action: FIND_HREF,
+        method: 'get',
+        role: 'search',
+        'aria-label': 'Find a competitor',
+      },
+    },
+    [
+      el('label', {
+        className: 'petrol-find-label',
+        attrs: { for: 'petrol-find-q' },
+        text: 'Name, handle or café',
+      }),
+      el('div', { className: 'petrol-find-row' }, [
+        input,
+        el('button', {
+          className: 'petrol-action action action-primary',
+          text: 'Search',
+          attrs: { type: 'submit' },
+        }),
+      ]),
+    ],
+  );
+  return el(
+    'section',
+    { className: 'petrol-band petrol-find', attrs: { 'aria-labelledby': 'petrol-find-title' } },
+    [
+      el('div', { className: 'petrol-wrap' }, [
+        el('p', { className: 'petrol-eyebrow', text: 'Seduh ID' }),
+        el('h2', {
+          className: 'petrol-heading',
+          id: 'petrol-find-title',
+          text: 'Find a competitor',
+        }),
+        el('p', {
+          className: 'petrol-band-body',
+          text: 'Look up a competitor’s record by name, handle or café, or browse by country.',
+        }),
+        form,
+        el('a', {
+          className: 'petrol-find-link',
+          text: 'Open Seduh ID →',
+          attrs: { href: FIND_HREF },
+        }),
+      ]),
+    ],
+  );
+}
+
+function addDiscovery(page) {
+  const hero = page.querySelector('.petrol-hero');
+  if (!hero || page.querySelector('.petrol-find')) return;
+  hero.after(findSection());
+  page.querySelector('.petrol-nav-links')?.append(navLink('Seduh ID', FIND_HREF));
+  const mobile = page.querySelector('.petrol-nav-mobile-links');
+  if (mobile) mobile.insertBefore(navLink('Seduh ID', FIND_HREF), mobile.lastElementChild);
+}
+
 // `loadLatest` (optional) resolves the newest public_results row or null; `loadLive` (optional) resolves
 // `{ rows, total }` from core/publicLiveNow.js. Omitted, the page makes no request at all (tests, the
 // build-time prerender).
-export function mountLandingScreen(root, { loadLatest, loadLive } = {}) {
+export function mountLandingScreen(root, { loadLatest, loadLive, loadDiscovery } = {}) {
   const page = el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
     buildNav(),
     buildHero(),
@@ -776,6 +858,14 @@ export function mountLandingScreen(root, { loadLatest, loadLive } = {}) {
     }),
   ]);
   root.replaceChildren(page);
+  if (loadDiscovery) {
+    loadDiscovery().then(
+      (open) => {
+        if (open === true && root.contains(page)) addDiscovery(page);
+      },
+      () => {},
+    );
+  }
   if (loadLive) {
     loadLive().then(
       (answer) => {

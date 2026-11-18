@@ -45,7 +45,7 @@ const KICKER = 'Seduh Score / Seduh ID';
 
 // ---- shell and states ----
 
-function pageShell(root, ...children) {
+export function pageShell(root, ...children) {
   root.replaceChildren(
     // The header and footer sit beside <main>, not inside it, so they are the page's banner and contentinfo landmarks.
     el('div', { className: 'profile-page', attrs: { 'data-surface': 'stage' } }, [
@@ -56,7 +56,7 @@ function pageShell(root, ...children) {
   );
 }
 
-function plainHero({ title, intro, titleId = 'profile-title' }) {
+export function plainHero({ title, intro, titleId = 'profile-title' }) {
   return el(
     'section',
     { className: 'profile-hero page-hero', attrs: { 'aria-labelledby': titleId } },
@@ -69,7 +69,7 @@ function plainHero({ title, intro, titleId = 'profile-title' }) {
   );
 }
 
-function stateCard({ title, message, actions = [], role = 'status' }) {
+export function stateCard({ title, message, actions = [], role = 'status' }) {
   return el('section', { className: 'profile-body profile-state' }, [
     el(
       'div',
@@ -183,7 +183,7 @@ function initialsAvatar(name) {
   });
 }
 
-function avatar(name, src, onFailed) {
+export function avatar(name, src, onFailed) {
   if (!src) return initialsAvatar(name);
   const img = el('img', {
     className: 'profile-avatar profile-avatar-photo',

@@ -150,7 +150,7 @@ export default defineConfig({
       // organisations and identities.
       name: 'dev-identity',
       testMatch:
-        /(identity-link-live|seduh-feed-live|affiliations-live|affiliations-id-oracle-live|people-screen-live|seduh-claim-live|seduh-claim-ui-live|seduh-profile-page-live|seduh-my-record-live|seduh-my-seduh-id-live|seduh-photo-live)\.spec\.js/,
+        /(identity-link-live|seduh-feed-live|affiliations-live|affiliations-id-oracle-live|people-screen-live|seduh-claim-live|seduh-claim-ui-live|seduh-profile-page-live|seduh-my-record-live|seduh-my-seduh-id-live|seduh-photo-live|seduh-discovery-live)\.spec\.js/,
       dependencies: ['dev-gating'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
