@@ -5,9 +5,9 @@ import { sqlAsOwner } from './support/admins.js';
 
 // T-ID2.C6a/C6b: courses and certificates in a real browser against the real app and the real local Supabase stack, at 360px.
 // A fictional claimed person signs in with the emailed code (Mailpit), adds a current and an expired course, edits one, picks the
-// card certificate, hides and shows courses in Privacy, and deletes one; the PUBLIC page /id/<handle>/ reflects each change:
+// card certificate, hides and shows courses in Privacy, and deletes one; the PUBLIC page /id/<handle>/ reflects each change (the card picture itself is covered by unit tests of its spec and by pgTAP on the door):
 // the sub-section sits inside the record, is labelled self-reported, shows the expired one in muted text, never counts as entries,
-// and disappears (with the card choice) when the person hides courses. Everything is fictional.
+// and disappears when the person hides courses. Everything is fictional.
 
 const expect = baseExpect.configure({ timeout: 20000 });
 const MAILPIT = process.env.MAILPIT_URL || 'http://127.0.0.1:54424';
@@ -167,7 +167,7 @@ test.describe('Courses and certificates (real app, real local Supabase)', () => 
     await expect(page.locator('.profile-courses')).toBeVisible();
   });
 
-  test('the database never reports a certificate on the card once it has expired, and delete removes the course', async ({
+  test('an expired certificate has no card button, and delete removes the course', async ({
     page,
   }) => {
     // an owner-side expiry behind the doors' back: the public door must still say it is not on the card

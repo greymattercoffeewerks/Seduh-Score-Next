@@ -14,7 +14,7 @@
 --     expires it clears the choice; an expired one is never reported on the card by the public door; hiding courses hides the choice.
 --   * the migration's rollback block (the drops; the function restoration it lists first is not re-run here).
 begin;
-select plan(108);
+select plan(115);
 
 create schema t089;
 grant usage on schema t089 to anon, authenticated, service_role;
@@ -170,6 +170,11 @@ select is(t089.j(1, $$ select public.seduh_add_course('Q Grader', 'Q Inst', 2018
 select is((select count(*)::int from app.seduh_courses where account_id = t089.u(101)), 3, 'three rows exist for the person');
 
 select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y', 1979) $$), 'P0001/bad_year', 'a year before 1980 is refused');
+select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y', 1980, 2100) $$), 'ok', '...1980 is fine, and so is an end year of 2100');
+select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', repeat('p', 80), 2024, null, repeat('l', 40), repeat('n', 300)) $$), 'ok', '...and a provider of 80, a level of 40 and a note of 300 characters');
+select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y', 2024, null, 'a' || U&'\200Bb') $$), 'P0001/bad_level', 'a zero-width character in the level is refused');
+select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y', 2024, null, null, E'two\nlines') $$), 'P0001/bad_note', 'a control character in the note is refused');
+select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y' || U&'\202Eb', 2024) $$), 'P0001/bad_provider', 'a direction override in the provider is refused');
 select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y', (extract(year from now() + interval '14 hours'))::int + 1) $$), 'P0001/bad_year', 'a year after the current one (anywhere on Earth) is refused');
 select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y', (extract(year from now() + interval '14 hours'))::int) $$), 'ok', '...the current year is fine');
 select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'y', null) $$), 'P0001/bad_year', 'a null year is refused');
@@ -190,6 +195,7 @@ select is(t089.as_attempt(1, $$ select public.seduh_add_course('x', 'zero' || U&
 
 -- the cap: person 7 gets exactly 60
 select is((select count(*)::int from (select t089.j(7, format($$ select public.seduh_add_course('Course %s', 'P', 2020) $$, g)) from generate_series(1, 60) g) s), 60, 'sixty courses can be added');
+select is((select count(*)::int from app.seduh_courses where account_id = t089.u(107)), 60, '...and sixty rows exist');
 select is(t089.as_attempt(7, $$ select public.seduh_add_course('One too many', 'P', 2020) $$), 'P0001/too_many_courses', 'the 61st is refused');
 select is(t089.as_attempt(1, $$ select public.seduh_add_course('Fine', 'P', 2020) $$), 'ok', '...and the cap is per person (another person is unaffected)');
 
@@ -218,7 +224,7 @@ select throws_ok($$ update app.seduh_courses set account_id = gen_random_uuid() 
 select is(jsonb_typeof(t089.pub('alpha-t89') -> 'courses'), 'array', 'the public door has a courses list');
 select cmp_ok(jsonb_array_length(t089.pub('alpha-t89') -> 'courses'), '>=', 2, 'a public person''s courses are shown');
 select is((select count(*)::int from jsonb_array_elements(t089.pub('alpha-t89') -> 'courses') c where c ? 'id'), 0, 'no course has an id in the public door');
-select is((select count(*)::int from jsonb_array_elements(t089.pub('alpha-t89') -> 'courses') c where c -> 'provenance' <> '"self_reported"'::jsonb), 0, 'every one is labelled self_reported');
+select is((select count(*)::int from jsonb_array_elements(t089.pub('alpha-t89') -> 'courses') c where c -> 'provenance' is distinct from '"self_reported"'::jsonb), 0, 'every one is labelled self_reported');
 select is((select (c ->> 'current')::boolean from jsonb_array_elements(t089.pub('alpha-t89') -> 'courses') c where c ->> 'title' = 'Q Grader'), false, 'an expired certificate says current: false');
 select is((select (c ->> 'current')::boolean from jsonb_array_elements(t089.pub('alpha-t89') -> 'courses') c where c ->> 'title' = 'Roasting 101'), true, '...a certificate with no end year is current');
 select is((select array_agg((c ->> 'completed_year')::int) from jsonb_array_elements(t089.pub('alpha-t89') -> 'courses') c),
@@ -226,10 +232,11 @@ select is((select array_agg((c ->> 'completed_year')::int) from jsonb_array_elem
   'courses are newest first');
 
 -- courses are not entries
+select is(t089.j(1, $$ select public.seduh_add_entry(2024, 'T089 Open', 'competed') $$) ->> 'kind', 'competed', 'one real entry is added next to the courses');
 create temp table t089_before as select t089.j(1, $$ select public.seduh_my_record() $$) as rec;
-select is((select rec #> '{counts,entries}' from t089_before), '0'::jsonb, 'courses do not count as entries (counts.entries is 0 with courses present)');
-select is((select rec #> '{counts,by_kind}' from t089_before), '{"judged": 0, "coached": 0, "competed": 0, "organised": 0, "volunteered": 0}'::jsonb, '...nor in any kind');
-select is(t089.pub('alpha-t89') -> 'self_reported', '[]'::jsonb, '...and never appear in the public self_reported list');
+select is((select rec #> '{counts,entries}' from t089_before), '1'::jsonb, 'courses do not count as entries (counts.entries is 1 with the courses present)');
+select is((select rec #> '{counts,by_kind}' from t089_before), '{"judged": 0, "coached": 0, "competed": 1, "organised": 0, "volunteered": 0}'::jsonb, '...nor in any kind');
+select is((select jsonb_agg(e ->> 'competition_name') from jsonb_array_elements(t089.pub('alpha-t89') -> 'self_reported') e), '["T089 Open"]'::jsonb, '...and never appear in the public self_reported list (only the entry does)');
 select is(jsonb_array_length(t089.pub('alpha-t89') -> 'recorded_results'), 0, '...nor in recorded results');
 select is((select rec #> '{counts,courses}' from t089_before)::int, (select count(*)::int from app.seduh_courses where account_id = t089.u(101)), 'courses have their own count');
 
@@ -244,7 +251,7 @@ select is((select count(*)::int from jsonb_array_elements(t089.pub('alpha-t89') 
 -- the hide switch
 select is(t089.j(1, $$ select public.seduh_set_my_settings('{"vis_courses": "hidden"}'::jsonb) $$) ->> 'vis_courses', 'hidden', 'the person can hide their courses (the door returns the new setting)');
 select is(t089.pub('alpha-t89') -> 'courses', '[]'::jsonb, 'with vis_courses hidden the public door returns NO courses');
-select is(jsonb_array_length(t089.j(1, $$ select public.seduh_my_record() $$) -> 'courses') > 0, true, '...but the person still sees all of theirs');
+select is((select count(*)::int from jsonb_array_elements(t089.j(1, $$ select public.seduh_my_record() $$) -> 'courses') c where c ->> 'title' in ('Roasting 101', 'Q Grader')), 2, '...but the person still sees all of theirs, expired ones included');
 select is((select (t089.j(1, $$ select public.seduh_my_record() $$) #>> '{settings,vis_courses}')), 'hidden', '...and the setting is reported');
 select is(t089.as_attempt(1, $$ select public.seduh_set_my_settings('{"vis_courses": "organisers"}'::jsonb) $$), 'P0001/bad_setting', 'courses take only public or hidden (organisers is refused)');
 select is(t089.as_attempt(1, $$ select public.seduh_set_my_settings('{"vis_courses": true}'::jsonb) $$), 'P0001/bad_setting', '...and not a boolean');
