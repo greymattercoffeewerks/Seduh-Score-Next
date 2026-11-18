@@ -8,8 +8,10 @@ test('any /id/<handle>/ path serves the person-page shell with 200 and noindex',
   baseURL,
 }) => {
   const calls = [];
-  page.on('request', (r) => calls.push(new URL(r.url())));
+  let current = null;
+  page.on('request', (r) => calls.push({ path: current, url: new URL(r.url()) }));
   for (const path of ['/id/someone/', '/id/someone', '/id/No-Such-Person_1/', '/id/ab/', '/id/']) {
+    current = path;
     const res = await page.goto(path);
     expect(res.status(), path).toBe(200);
     // /id/ itself comes straight from the assets (no Worker), so it carries the meta tag only.
@@ -17,20 +19,26 @@ test('any /id/<handle>/ path serves the person-page shell with 200 and noindex',
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   }
-  // The page makes ONE data call, to the profile door (cross-origin, to the project's own API); everything else is this
-  // origin's page, its bundle, or its icons (no same-origin API path).
+  // A person page makes ONE data call, to the profile door; the bare /id/ is the discovery hub (T-ID2.C5), whose only call is
+  // the countries door (cross-origin, to the project's own API). Everything else is this origin's page, bundle or icons
+  // (no same-origin API path). Each door is allowed only on its own page.
   const origin = new URL(baseURL).origin;
-  const stray = calls.filter((u) =>
-    u.pathname === '/rest/v1/rpc/public_seduh_profile'
-      ? false
-      : u.origin !== origin ||
-        !(
-          u.pathname.startsWith('/id/') ||
-          u.pathname.startsWith('/assets/') ||
-          u.pathname.startsWith('/favicon')
-        ),
-  );
-  expect(stray.map((u) => u.href)).toEqual([]);
+  const DOOR = {
+    person: '/rest/v1/rpc/public_seduh_profile',
+    hub: '/rest/v1/rpc/seduh_discovery_countries',
+  };
+  const stray = calls.filter(({ path, url: u }) => {
+    if (u.pathname === (path === '/id/' ? DOOR.hub : DOOR.person)) return false;
+    return (
+      u.origin !== origin ||
+      !(
+        u.pathname.startsWith('/id/') ||
+        u.pathname.startsWith('/assets/') ||
+        u.pathname.startsWith('/favicon')
+      )
+    );
+  });
+  expect(stray.map((c) => c.url.href)).toEqual([]);
 });
 
 test('the person-page shell does not overflow a 360px screen', async ({ page }) => {
