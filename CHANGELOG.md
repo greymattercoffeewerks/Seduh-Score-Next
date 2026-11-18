@@ -7,9 +7,9 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Seduh ID discovery (C5): hub, search, one switch · unreleased · 2026-11-18
+## Seduh ID discovery (C5): hub, search, one switch · 4.17.3 · 2026-11-18
 
-**Status: NOT FINAL.** Built and reviewed; in a PR into `dev`. The migration is NOT pushed to the cloud and the switch is OFF: the owner opens it after the January pilot ([runbook](docs/runbooks/seduh-discovery.md)). Version not bumped (the release PR sets it).
+**Status: released as 4.17.3 (patch: groundwork nobody can use yet, since the switch is OFF; the release that opens it is the minor).** PR #505 into `dev`. Migration pushed to the cloud with the release; the switch stays OFF until the owner opens it after the January pilot ([runbook](docs/runbooks/seduh-discovery.md)).
 
 - **What.** A hub at `/id/` (search claimed, public people by name, handle or café; browse by country), a "Find a competitor" box and "Seduh ID" links on the landing page, and a claimed competitor's name linking to their page on `/results/` and the results sheet. New setting "Show me in Seduh ID search" (`listed_in_search`, ON by default) in My Seduh ID, Privacy. Privacy page wording added.
 - **One switch, enforced in SQL.** `app.seduh_discovery_switch.enabled` (OFF). While off, the four anonymous doors (`seduh_discovery_open`, `seduh_discovery_search`, `seduh_discovery_countries`, `seduh_results_profile_links`) return `open: false` and nothing; the pages show no box, no links, and the hub says search is not open. `app.seduh_discovery_people` is the one rule for who can be found (open, attested, active identity, public name, opted in).
