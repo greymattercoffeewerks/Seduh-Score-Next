@@ -136,7 +136,11 @@ describe('hub: open', () => {
   it('a search that comes back closed shows nothing', async () => {
     const root = await mount({
       loadCountries: open(),
-      search: async () => ({ open: false, results: [], more: false }),
+      search: async () => ({
+        open: false,
+        more: false,
+        results: [{ handle: 'alpha-t88', name: 'Alpha', countryCode: null, photoUrl: null }],
+      }),
     });
     submit(root, 'alpha');
     await flush();

@@ -23,7 +23,8 @@
 -- country, and the relative photo path (the profile's own `photo_url`, a public Storage path read by exact address).
 -- NEVER RETURNED: a uuid or internal id, email, phone, settings, or a count of anyone who is hidden or opted out.
 --
--- CAFE MATCH: a query also matches the cafe printed on a person's PUBLISHED results (the payload rows the profile itself
+-- CAFE MATCH (a policy choice, owner decision to confirm: it follows vis_recorded_results, not vis_cafe_affiliations, because the cafe
+-- and name are already printed together on the public results page): a query also matches the cafe printed on a person's PUBLISHED results (the payload rows the profile itself
 -- would show, same one-name-one-roster-entry rule, app.seduh_published_matches), and only while their vis_recorded_results is
 -- public. The cafe is matched, never returned. A roster cafe that was edited after publishing matches nothing (same as the profile).
 --
@@ -35,8 +36,9 @@
 --
 -- ROLLBACK (the switch and doors hold no data worth keeping; the column holds people's choice, so do not roll back once used):
 -- rollback:
---   -- restore the previous seduh_set_my_settings (20261122100000_seduh_my_record.sql) and app.seduh_my_record_json
---   -- (20261123100000_seduh_photo.sql) by re-running those two `create` statements as `create or replace`, then:
+--   -- restore the previous functions first: re-run `public.seduh_set_my_settings` from 20261122100000_seduh_my_record.sql (a plain
+--   -- `create function` there: run it as `create or replace`) and `app.seduh_my_record_json` from 20261123100000_seduh_photo.sql
+--   -- (already `create or replace`), then:
 --   drop function if exists public.seduh_results_profile_links(uuid);
 --   drop function if exists public.seduh_discovery_countries();
 --   drop function if exists public.seduh_discovery_search(text, text);
@@ -285,8 +287,8 @@ set search_path = ''
 as $$
 declare
   v_open    boolean := app.seduh_discovery_open();
-  v_q       text := btrim(regexp_replace(coalesce(p_query, ''), '\s+', ' ', 'g'));
-  v_country text := upper(btrim(coalesce(p_country, '')));
+  v_q       text;
+  v_country text;
   v_pat     text;
   v_prefix  text;
   v_cap     integer;
@@ -296,6 +298,12 @@ begin
   if not v_open then
     return jsonb_build_object('open', false, 'results', '[]'::jsonb, 'more', false);
   end if;
+  -- a huge input is refused before any regex work (the shape limits below are 40 and 2 characters)
+  if char_length(coalesce(p_query, '')) > 200 or char_length(coalesce(p_country, '')) > 20 then
+    return jsonb_build_object('open', true, 'results', '[]'::jsonb, 'more', false);
+  end if;
+  v_q := btrim(regexp_replace(coalesce(p_query, ''), '\s+', ' ', 'g'));
+  v_country := upper(btrim(coalesce(p_country, '')));
   -- shape limits: a bad query or country answers "nothing", never an error and never a wide read
   if (v_q <> '' and char_length(v_q) not between 2 and 40) or (v_country <> '' and v_country !~ '^[A-Z]{2}$')
      or (v_q = '' and v_country = '') then

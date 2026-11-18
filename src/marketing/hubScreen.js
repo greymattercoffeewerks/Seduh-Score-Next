@@ -147,7 +147,7 @@ export async function mountHub(
     className: 'hub-note',
     attrs: { role: 'status', 'aria-live': 'polite', id: 'hub-note' },
   });
-  const list = el('ul', { className: 'hub-results', attrs: { 'aria-labelledby': 'hub-note' } });
+  const list = el('ul', { className: 'hub-results', attrs: { 'aria-label': 'Search results' } });
   const chips = el('ul', { className: 'hub-countries' });
 
   function drawChips() {

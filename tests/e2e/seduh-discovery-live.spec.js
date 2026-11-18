@@ -58,16 +58,13 @@ const setSwitch = (on) =>
 const overflow = (page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-let shown;
-let optedOut;
-let hiddenName;
 let withResult;
 
 test.beforeAll(() => {
   setSwitch(false);
-  shown = seedClaimed({ name: `${WORD} Shown`, handle: `shown${run}` });
-  optedOut = seedClaimed({ name: `${WORD} Optedout`, handle: `optout${run}`, search: false });
-  hiddenName = seedClaimed({ name: `${WORD} Hidden`, handle: `hidden${run}`, nameVisible: false });
+  seedClaimed({ name: `${WORD} Shown`, handle: `shown${run}` });
+  seedClaimed({ name: `${WORD} Optedout`, handle: `optout${run}`, search: false });
+  seedClaimed({ name: `${WORD} Hidden`, handle: `hidden${run}`, nameVisible: false });
   withResult = seedClaimed({
     name: `${WORD} Finalist`,
     handle: `final${run}`,

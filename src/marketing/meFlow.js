@@ -239,7 +239,7 @@ export const COUNTRY_LISTING = {
 export const SEARCH_LISTING = {
   key: 'listed_in_search',
   label: 'Show me in Seduh ID search',
-  help: 'On unless you switch it off. When on, people can find your page by searching for your name, handle or café, or by browsing your country. It only works while your name is public. Your page itself stays open to anyone with the link.',
+  help: 'On unless you switch it off. When on, people can find your page by searching for your name, handle or café, or by browsing a country’s list of people (separate from the team members on a country page). It only works while your name is public. Your page itself stays open to anyone with the link.',
 };
 
 const VIS_VALUES = new Set(['public', 'organisers', 'hidden']);

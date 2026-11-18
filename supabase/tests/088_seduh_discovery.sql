@@ -13,7 +13,7 @@
 --     an empty search_path; nothing returned carries a uuid, email or phone;
 --   * the setting round-trips through seduh_set_my_settings and seduh_my_record, and a non-boolean is refused.
 begin;
-select plan(84);
+select plan(100);
 
 create schema t088;
 grant usage on schema t088 to anon, authenticated;
@@ -40,7 +40,7 @@ exception when others then
   return sqlstate;
 end $$;
 create function t088.names(j jsonb, key text default 'results') returns text language sql immutable as $$
-  select coalesce(string_agg(e ->> 'handle', ',' order by e ->> 'handle'), '') from jsonb_array_elements(j -> key) e
+  select coalesce(string_agg(e ->> 'handle', ',' order by e ->> 'handle') filter (where e ->> 'handle' like '%-t88'), '') from jsonb_array_elements(j -> key) e
 $$;
 grant execute on all functions in schema t088 to anon, authenticated;
 
@@ -98,11 +98,43 @@ insert into public.public_results (id, org_id, event_id, payload) values
      'podium', jsonb_build_array(jsonb_build_object('rank', 1, 'name', 'T088 Alpha', 'cafe', 'Cafe Zeta88', 'correct', 6, 'total', 6))));
 update events set is_test = true where id = t088.u(303);
 
+
+-- ---- extra fixtures for the PUBLISH and ROSTER boundaries of the cafe match (names avoid "T088" so earlier searches are unchanged) ----
+-- juliet: her only "Quebec88" entry is on an UNPUBLISHED event; kilo: roster cafe edited after publishing ("Lima88" now, "Mike88" printed);
+-- november: two identical payload rows (names nobody); oscar: the same cafe on the TEST event only
+insert into auth.users (id, email) select t088.u(n), 'u' || n || '@t088.seduh-next' from generate_series(10, 13) n;
+insert into app.seduh_identities (id, phone_e164, display_name, source, country_code)
+  select t088.u(n), '+67388000' || lpad(n::text, 2, '0'), nm, 'organiser_roster', 'ZZ'
+    from (values (10, 'Quux Juliet'), (11, 'Quux Kilo'), (12, 'Quux November'), (13, 'Quux Oscar')) v(n, nm);
+insert into app.seduh_accounts (id, identity_id, user_id, handle, claim_method, adult_attested_at)
+  select t088.u(100 + n), t088.u(n), t088.u(n), h, 'organiser_link', now()
+    from (values (10, 'juliet-t88'), (11, 'kilo-t88'), (12, 'november-t88'), (13, 'oscar-t88')) v(n, h);
+insert into people (id, org_id, display_name, phone)
+  select t088.u(200 + n), t088.u(901), 'T088 P' || n, '+67388100' || lpad(n::text, 2, '0') from generate_series(10, 13) n;
+select set_config('app.seduh_link_write', 'on', true);
+update people set global_person_id = t088.u(n) from generate_series(10, 13) n where people.id = t088.u(200 + n);
+select set_config('app.seduh_link_write', '', true);
+insert into event_entries (id, event_id, person_id, display_name, cafe) values
+  (t088.u(410), t088.u(302), t088.u(210), 'Quux Juliet', 'Cafe Quebec88'),
+  (t088.u(411), t088.u(301), t088.u(211), 'Quux Kilo', 'Cafe Lima88'),
+  (t088.u(412), t088.u(301), t088.u(212), 'Quux November', 'Cafe Oscar88'),
+  (t088.u(413), t088.u(303), t088.u(213), 'Quux Oscar', 'Cafe Papa88');
+update public.public_results set payload = jsonb_set(payload, '{standings}', (payload -> 'standings') || jsonb_build_array(
+    jsonb_build_object('place', 8, 'name', 'Quux Kilo', 'cafe', 'Cafe Mike88', 'round', 'Final', 'correct', 1, 'total', 6, 'timeSecs', 150),
+    jsonb_build_object('place', 9, 'name', 'Quux November', 'cafe', 'Cafe Oscar88', 'round', 'Final', 'correct', 1, 'total', 6, 'timeSecs', 151),
+    jsonb_build_object('place', 10, 'name', 'Quux November', 'cafe', 'Cafe Oscar88', 'round', 'Final', 'correct', 1, 'total', 6, 'timeSecs', 152)))
+  where id = t088.u(501);
+update events set is_test = false where id = t088.u(303);
+update public.public_results set payload = jsonb_set(payload, '{podium}', (payload -> 'podium') || jsonb_build_array(
+    jsonb_build_object('rank', 2, 'name', 'Quux Oscar', 'cafe', 'Cafe Papa88', 'correct', 1, 'total', 6)))
+  where id = t088.u(503);
+update events set is_test = true where id = t088.u(303);
+
 -- ============ shape, privileges ============
 
 select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), 'none') from pg_proc p
-    where p.pronamespace = 'public'::regnamespace and p.proname like 'seduh\_discovery\_%' or p.proname = 'seduh_results_profile_links'),
+    where p.pronamespace = 'public'::regnamespace and (p.proname like 'seduh\_discovery\_%' or p.proname = 'seduh_results_profile_links')),
   'seduh_discovery_countries, seduh_discovery_open, seduh_discovery_search, seduh_results_profile_links',
   'exactly four public discovery doors');
 select is(
@@ -148,11 +180,10 @@ select is(t088.anon($$ select public.seduh_discovery_search(null, 'BN') $$), '{"
 select is(t088.anon($$ select public.seduh_discovery_countries() $$), '{"open":false,"countries":[]}'::jsonb, 'OFF: no countries');
 select is(t088.anon($$ select public.seduh_results_profile_links('00000000-0000-0000-0000-000008830100') $$), '{"open":false,"links":[]}'::jsonb, 'OFF: no profile links');
 select is((select count(*)::int from app.seduh_discovery_people(false)), 0, 'OFF: the helper returns nobody');
-select is((select count(*)::int from app.seduh_published_matches(null, null) where false), 0, 'helper callable (control)');
 
 -- the person's setting works while off, and defaults ON
 select is((select listed_in_search from app.seduh_profile_settings where account_id = t088.u(101)), true, 'listed_in_search defaults to true');
-select is((select count(*)::int from app.seduh_profile_settings where listed_in_search is not true), 1, 'only bravo opted out');
+select is((select count(*)::int from app.seduh_profile_settings s join app.seduh_accounts a on a.id = s.account_id where a.handle like '%-t88' and s.listed_in_search is not true), 1, 'only bravo opted out');
 
 -- ============ the owner flips it ============
 
@@ -190,12 +221,17 @@ select is(t088.names(t088.anon($$ select public.seduh_discovery_search('t088', '
 select is(t088.names(t088.anon($$ select public.seduh_discovery_search(null, null) $$)), '', 'no query and no country returns nothing');
 select is(t088.names(t088.anon($$ select public.seduh_discovery_search('', '') $$)), '', '...also empty strings');
 
+select is(t088.names(t088.anon(format($$ select public.seduh_discovery_search(%L, null) $$, repeat('t088 ', 60)))), '', 'a 300-character query is refused up front');
+
 -- country browse
 select is(t088.names(t088.anon($$ select public.seduh_discovery_search(null, 'bn') $$)), 'alpha-t88', 'browse BN: alpha only (the rest are hidden, closed, opted out, merged or unclaimed)');
 select is(t088.names(t088.anon($$ select public.seduh_discovery_search(null, 'MY') $$)), 'foxtrot-t88,india-t88', 'browse MY');
 select is(t088.names(t088.anon($$ select public.seduh_discovery_search('t088', 'MY') $$)), 'foxtrot-t88,india-t88', 'query plus country');
-select is(t088.anon($$ select public.seduh_discovery_countries() $$), '{"open":true,"countries":[{"country_code":"MY","people":2},{"country_code":"BN","people":1}]}'::jsonb,
-  'the country list counts only people who can be found');
+select is(
+  (select (c ->> 'people')::int from jsonb_array_elements(t088.anon($$ select public.seduh_discovery_countries() $$) -> 'countries') c where c ->> 'country_code' = 'BN'),
+  (select count(*)::int from app.seduh_discovery_people(true) where country_code = 'BN'),
+  'the country list counts exactly the people the helper can find (BN)');
+select is((select count(*)::int from app.seduh_discovery_people(true) where country_code = 'BN' and handle like '%-t88'), 1, 'and of this fixture only alpha is findable in BN');
 
 -- the caps: 25 more people in a fresh country
 insert into app.seduh_identities (id, phone_e164, display_name, source, country_code)
@@ -213,12 +249,12 @@ select is((t088.anon($$ select public.seduh_discovery_search('t088 cap', null) $
 select is((select string_agg(t088.anon(format($$ select public.seduh_discovery_search(%L, null) $$, q))::text, ' ') ~* '[0-9a-f]{8}-[0-9a-f]{4}-|@|\+673|phone|email|user_id|identity_id'
              from unnest(array['t088', 'zeta88', 'alpha']) q), false, 'no uuid, email or phone in search output');
 select is(t088.anon($$ select public.seduh_discovery_countries() $$)::text ~* '[0-9a-f]{8}-|@|\+673', false, 'nor in the countries output');
+select is((select jsonb_array_length(t088.anon($$ select public.seduh_discovery_search('alpha-t88', null) $$) -> 'results')), 1, 'alpha is found (so the photo check below is not vacuous)');
 select is((t088.anon($$ select public.seduh_discovery_search('alpha', null) $$) -> 'results' -> 0) ->> 'photo_url', null, 'no photo: photo_url is null');
 
 -- ============ the results-page links ============
 
 select is(t088.names(t088.anon($$ select public.seduh_results_profile_links('00000000-0000-0000-0000-000008830100') $$), 'links'), '', 'unknown event: no links');
-select is(t088.names(t088.anon($$ select public.seduh_results_profile_links('00000000-0000-0000-0000-000008830100') $$), 'links'), '', '(control)');
 select is(t088.names(t088.anon(format($$ select public.seduh_results_profile_links(%L) $$, t088.u(301))), 'links'), 'alpha-t88,bravo-t88,india-t88',
   'the published event links alpha, bravo (opted out of SEARCH only) and india; not charlie (hidden name), foxtrot (recorded results hidden), golf (unclaimed), delta/echo/hotel (not linked here) or an unmatched name');
 select is(t088.anon(format($$ select public.seduh_results_profile_links(%L) $$, t088.u(301)))::text !~* '[0-9a-f]{8}-[0-9a-f]{4}-|@|\+673', true, 'link output has no uuid, email or phone');
@@ -240,6 +276,41 @@ select is(t088.names(t088.anon(format($$ select public.seduh_results_profile_lin
 select is(t088.names(t088.anon($$ select public.seduh_discovery_search('alpha', null) $$)), '', '...and no search result');
 select is(t088.names(t088.anon($$ select public.seduh_discovery_search(null, 'BN') $$)), '', '...and no browse result');
 update app.seduh_profile_settings set vis_identity = 'public' where account_id = t088.u(101);
+
+
+-- ---- the PUBLISH and ROSTER boundaries of the cafe match, and 'organisers' visibility ----
+update app.seduh_discovery_switch set enabled = true;
+select is(t088.names(t088.anon($$ select public.seduh_discovery_search('quebec88', null) $$)), '', 'a cafe only on an UNPUBLISHED event matches nobody');
+select is(t088.names(t088.anon($$ select public.seduh_discovery_search('papa88', null) $$)), '', 'a cafe only on a TEST event matches nobody');
+select is(t088.names(t088.anon($$ select public.seduh_discovery_search('lima88', null) $$)), '', 'a roster cafe edited after publishing matches nothing (the roster value was never printed)');
+select is(t088.names(t088.anon($$ select public.seduh_discovery_search('mike88', null) $$)), '', '...nor does the printed one (the roster no longer agrees)');
+select is(t088.names(t088.anon($$ select public.seduh_discovery_search('oscar88', null) $$)), '', 'two identical payload rows name nobody');
+select is(t088.names(t088.anon(format($$ select public.seduh_results_profile_links(%L) $$, t088.u(301))), 'links'), 'alpha-t88,bravo-t88,foxtrot-t88', 'none of those four is linked on the published event either');
+update app.seduh_profile_settings set vis_recorded_results = 'organisers' where account_id = t088.u(106);
+select is(t088.names(t088.anon($$ select public.seduh_discovery_search('zeta88', null) $$)), 'alpha-t88', 'recorded results organisers is not public: no cafe match for foxtrot');
+select is(t088.names(t088.anon(format($$ select public.seduh_results_profile_links(%L) $$, t088.u(301))), 'links'), 'alpha-t88,bravo-t88', '...and no link for foxtrot');
+update app.seduh_profile_settings set vis_recorded_results = 'public' where account_id = t088.u(106);
+
+-- a non-boolean for the new setting is REFUSED (not cast): as bravo, P0001 with the hint bad_setting, and nothing stored
+create function t088.attempt_as(n int, stmt text) returns text language plpgsql as $$
+declare v_hint text;
+begin
+  perform set_config('request.jwt.claim.sub', t088.u(n)::text, true);
+  set local role authenticated;
+  execute stmt;
+  reset role;
+  return 'ok';
+exception when others then
+  get stacked diagnostics v_hint = pg_exception_hint;
+  reset role;
+  return sqlstate || '/' || coalesce(v_hint, '');
+end $$;
+grant execute on function t088.attempt_as(int, text) to authenticated;
+select is((select listed_in_search from app.seduh_profile_settings where account_id = t088.u(102)), false, 'bravo is opted out (before)');
+select is(t088.attempt_as(2, $$ select public.seduh_set_my_settings('{"listed_in_search": "yes"}') $$), 'P0001/bad_setting', 'a string for listed_in_search is refused');
+select is(t088.attempt_as(2, $$ select public.seduh_set_my_settings('{"listed_in_search": 1}') $$), 'P0001/bad_setting', 'a number is refused');
+select is(t088.attempt_as(2, $$ select public.seduh_set_my_settings('{"listed_on_country_pages": "yes"}') $$), 'P0001/bad_setting', 'and for the country listing');
+select is((select listed_in_search from app.seduh_profile_settings where account_id = t088.u(102)), false, '...and nothing was stored (after)');
 
 -- ============ the switch closes it all again, even with the row gone ============
 
@@ -286,7 +357,9 @@ drop function app.seduh_discovery_people(boolean);
 drop function app.seduh_discovery_open();
 drop table app.seduh_discovery_switch;
 alter table app.seduh_profile_settings drop column listed_in_search;
-select is(t088.has_obj('public.seduh_discovery_search(text,text)') or t088.has_obj('app.seduh_discovery_people(boolean)'), false, 'the rollback copy removes the doors, helpers, switch and column');
+select is(t088.has_obj('public.seduh_discovery_search(text,text)') or t088.has_obj('app.seduh_discovery_people(boolean)'), false, 'the rollback copy removes the doors and helpers');
+select is(to_regclass('app.seduh_discovery_switch') is null, true, '...the switch table');
+select is((select count(*)::int from information_schema.columns where table_schema = 'app' and table_name = 'seduh_profile_settings' and column_name = 'listed_in_search'), 0, '...and the column');
 
 select * from finish();
 rollback;

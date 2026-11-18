@@ -170,9 +170,13 @@ describe('buildResultsSheet', () => {
 
   it('marks each competitor name with the exact name and cafe printed, so a claimed person can be linked (Seduh ID discovery)', () => {
     const sheet = buildResultsSheet(payload({ standings: STANDINGS }));
-    const first = sheet.querySelector('td.results-sheet-name');
-    expect(first.getAttribute('data-profile-name')).toBe('Alex');
-    expect(first.getAttribute('data-profile-cafe')).toBe('Kedai Runduk');
+    const cells = [...sheet.querySelectorAll('td.results-sheet-name')];
+    expect(cells.length).toBeGreaterThan(1);
+    for (const cell of cells) {
+      expect(cell.getAttribute('data-profile-name')).toBe(cell.textContent);
+      expect(cell.hasAttribute('data-profile-cafe')).toBe(true);
+    }
+    expect(cells[0].getAttribute('data-profile-cafe')).toBe('Kedai Runduk');
     // with nothing applied (discovery closed) the name is plain text, no link
     expect(sheet.querySelector('td.results-sheet-name a')).toBeNull();
   });

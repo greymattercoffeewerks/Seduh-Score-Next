@@ -7,6 +7,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID discovery (C5): hub, search, one switch · unreleased · 2026-11-18
+
+**Status: NOT FINAL.** Built and reviewed; in a PR into `dev`. The migration is NOT pushed to the cloud and the switch is OFF: the owner opens it after the January pilot ([runbook](docs/runbooks/seduh-discovery.md)). Version not bumped (the release PR sets it).
+
+- **What.** A hub at `/id/` (search claimed, public people by name, handle or café; browse by country), a "Find a competitor" box and "Seduh ID" links on the landing page, and a claimed competitor's name linking to their page on `/results/` and the results sheet. New setting "Show me in Seduh ID search" (`listed_in_search`, ON by default) in My Seduh ID, Privacy. Privacy page wording added.
+- **One switch, enforced in SQL.** `app.seduh_discovery_switch.enabled` (OFF). While off, the four anonymous doors (`seduh_discovery_open`, `seduh_discovery_search`, `seduh_discovery_countries`, `seduh_results_profile_links`) return `open: false` and nothing; the pages show no box, no links, and the hub says search is not open. `app.seduh_discovery_people` is the one rule for who can be found (open, attested, active identity, public name, opted in).
+- **Policy to confirm (owner).** Café search follows `vis_recorded_results`, not `vis_cafe_affiliations`; country browse is separate from `listed_on_country_pages`; the results-page link does not depend on the search opt-out (the name is already public there).
+- **Tests.** pgTAP `088` (100), `037`, `041`, `050`, `062` updated; vitest (`seduhDiscovery`, `hubScreen`, landing, me, results); Playwright `seduh-discovery-live` (360px, flips and restores the switch).
+- **Reviews.** `security-reviewer`: 0 privacy holes; 1 Important (CI pin `050` missed the new table: fixed), nits on cost (length guard added) and policy wording (noted above). `schema-guardian`: 0 Important; rollback verified in a rolled-back transaction; header text fixed. `code-reviewer`: 2 Important in the hub (stale search could overwrite newer input; a literal "short" query mis-worded): fixed with tests. `module-boundary-checker`: clean (nit: the Cup Taster match rule now exists twice in SQL, logged). `test-auditor`: 4 Important gaps (non-boolean refusal, `organisers` visibility, publish/roster boundaries, rollback not asserted): tests added. `ui-accessibility-reviewer`: 0 Important; nits left (forced-colours chip fill, 22px inline name link, photo alt read twice).
+
+---
+
 ## Console Menu button: bars visible in forced colours · 4.17.2 · 2026-11-17
 
 **Status: NOT FINAL.** Code, test and reviews are done. Open: a real Windows high-contrast render has not been seen (forced colours cannot be emulated here), so the owner check is owed before this is called verified. Branch `fix/menu-bars-forced-colors`, no PR yet. No §14 task ID: backlog item "Forced-colors mode hides the Menu button's three bars" (triage 2026-11-07, Accessibility; flagged earlier in the T-HARDEN.header-sync-chip and T-TEN.C3 open items). **Version 4.17.2 (patch: a fix, no new capability).**
