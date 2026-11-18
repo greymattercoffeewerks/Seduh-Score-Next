@@ -21,6 +21,9 @@ const {
   cupsForRound,
   blankDraft,
   withCupTokens,
+  withCupVoid,
+  isCupVoid,
+  voidCupCount,
   cupTokens,
   missingCupCount,
   isMatchComplete,
@@ -118,12 +121,12 @@ describe('withCupTokens', () => {
 describe('cupTokens', () => {
   it('team2 is always the balance to 3', () => {
     const draft = withCupTokens(blankDraft(), 1, 2);
-    expect(cupTokens(draft, 1, 'preliminary')).toEqual({ team1: 2, team2: 1 });
+    expect(cupTokens(draft, 1, 'preliminary')).toEqual({ team1: 2, team2: 1, voided: false });
   });
 
   it('0 is a real, explicit score (all 3 tokens to team2) — not "unscored"', () => {
     const draft = withCupTokens(blankDraft(), 1, 0);
-    expect(cupTokens(draft, 1, 'preliminary')).toEqual({ team1: 0, team2: 3 });
+    expect(cupTokens(draft, 1, 'preliminary')).toEqual({ team1: 0, team2: 3, voided: false });
   });
 
   it('is null for a cup that has never been tapped', () => {
@@ -245,6 +248,128 @@ describe('computeScores: pinned to the SQL btc_match_scores fixtures', () => {
   });
 });
 
+// Void cup (committee rule, 2026-11-18): both teams get 0 for that cup, every bonus is decided as usual. These
+// fixtures are mirrored, number for number, in supabase/tests/088_btc_void_cup.sql (V1-V4), so the SQL authority and
+// this preview cannot drift apart.
+function draftWithVoids(cups, pattern, voidCups) {
+  let draft = draftWith(cups, pattern);
+  for (const cup of voidCups) draft = withCupVoid(draft, cup);
+  return draft;
+}
+
+describe('void cup: computeScores pinned to supabase/tests/088_btc_void_cup.sql', () => {
+  it('V1 preliminary, cups 1-3 void, the rest split, fastest team 2 => 24/12 tokens, 29 / 14', () => {
+    const draft = { ...draftWithVoids(15, 'split', [1, 2, 3]), fastest: 'team2' };
+    expect(computeScores(draft, 'preliminary')).toEqual({
+      team1Tokens: 24,
+      team2Tokens: 12,
+      team1Total: 29,
+      team2Total: 14,
+    });
+  });
+
+  it('V2 an all-void preliminary is level 0/0: no win bonus, the fastest +2 still counts => 2 / 0', () => {
+    const all = Array.from({ length: 15 }, (_, i) => i + 1);
+    const draft = { ...draftWithVoids(15, 'split', all), fastest: 'team1' };
+    expect(computeScores(draft, 'preliminary')).toEqual({
+      team1Tokens: 0,
+      team2Tokens: 0,
+      team1Total: 2,
+      team2Total: 0,
+    });
+  });
+
+  it('V3 final, 4 cups void, the rest all to team 2, fastest team 1, signature team 1 => 0/48, 4 / 53', () => {
+    const draft = {
+      ...draftWithVoids(20, 'all2', [1, 2, 3, 4]),
+      fastest: 'team1',
+      signature: { team1: true, team2: false },
+    };
+    expect(computeScores(draft, 'final')).toEqual({
+      team1Tokens: 0,
+      team2Tokens: 48,
+      team1Total: 4,
+      team2Total: 53,
+    });
+  });
+
+  it('V4 voiding one cup of a token tie hands the +5 to the other team => 28/29, 28 / 34', () => {
+    const draft = draftWithVoids(20, 'tie', [1]);
+    expect(computeScores(draft, 'semifinal')).toEqual({
+      team1Tokens: 28,
+      team2Tokens: 29,
+      team1Total: 28,
+      team2Total: 34,
+    });
+  });
+});
+
+describe('void cup: draft helpers', () => {
+  it('withCupVoid scores the cup as 0 and 0 and counts it as scored', () => {
+    const draft = withCupVoid(blankDraft(), 4);
+    expect(cupTokens(draft, 4, 'preliminary')).toEqual({ team1: 0, team2: 0, voided: true });
+    expect(isCupVoid(draft, 4)).toBe(true);
+    expect(missingCupCount(draft, 'preliminary')).toBe(14);
+    expect(voidCupCount(draft, 'preliminary')).toBe(1);
+  });
+
+  it('scoring a void cup with tokens makes it a normal cup again, and the reverse', () => {
+    let draft = withCupVoid(blankDraft(), 4);
+    draft = withCupTokens(draft, 4, 1);
+    expect(cupTokens(draft, 4, 'preliminary')).toEqual({ team1: 1, team2: 2, voided: false });
+    expect(voidCupCount(draft, 'preliminary')).toBe(0);
+    draft = withCupVoid(draft, 4);
+    expect(cupTokens(draft, 4, 'preliminary')).toEqual({ team1: 0, team2: 0, voided: true });
+  });
+
+  it('withCupVoid and withCupTokens do not mutate the draft they are given', () => {
+    const before = withCupVoid(blankDraft(), 1);
+    const snapshot = JSON.stringify(before);
+    withCupTokens(before, 1, 3);
+    withCupVoid(before, 2);
+    expect(JSON.stringify(before)).toBe(snapshot);
+  });
+
+  it('a stale void flag with no vote is not a void cup, and a void cup past the round is ignored', () => {
+    const draft = { ...blankDraft(), voids: { 3: true, 99: true }, votes: { 99: 0 } };
+    expect(isCupVoid(draft, 3)).toBe(false);
+    expect(voidCupCount(draft, 'preliminary')).toBe(0);
+  });
+
+  it('sends a void cup as voided with 0 tokens, and leaves a payload with none unchanged', () => {
+    const params = buildConfirmParams(match, draftWithVoids(15, 'split', [2]), 'preliminary');
+    expect(params.p_votes[1]).toEqual({ cup_number: 2, team1_tokens: 0, voided: true });
+    expect(params.p_votes[0]).toEqual({ cup_number: 1, team1_tokens: 2 });
+    expect('voided' in params.p_votes[0]).toBe(false);
+  });
+
+  it('a draft saved before the void cup existed (no voids key) loads as all normal cups and still builds', async () => {
+    cache.set('btc-scoring-draft:old', { votes: { 1: 2, 2: 0 }, fastest: null });
+    const loaded = await loadDraft('old');
+    expect(loaded.voids).toEqual({});
+    expect(cupTokens(loaded, 2, 'preliminary')).toEqual({ team1: 0, team2: 3, voided: false });
+    expect(buildConfirmParams(match, loaded, 'preliminary').p_votes).toEqual([
+      { cup_number: 1, team1_tokens: 2 },
+      { cup_number: 2, team1_tokens: 0 },
+    ]);
+  });
+
+  it('round-trips a void cup through the stored draft', async () => {
+    await saveDraft('m1', withCupVoid(blankDraft(), 5));
+    const loaded = await loadDraft('m1');
+    expect(isCupVoid(loaded, 5)).toBe(true);
+  });
+
+  it('describes the RPC refusal of a void cup that holds tokens', () => {
+    expect(
+      describeConfirmError({
+        code: 'P0001',
+        message: 'confirm_btc_match: a void cup cannot hold tokens',
+      }),
+    ).toBe('Could not confirm: a void cup cannot hold tokens.');
+  });
+});
+
 describe('buildConfirmParams', () => {
   it('builds the RPC arguments, mapping fastest and signature, sending the tidied time text', () => {
     const draft = {
@@ -354,6 +479,21 @@ describe('loadConfirmedDraft', () => {
     expect(draft.fastest).toBe('team2');
     expect(draft.signature).toEqual({ team1: true, team2: false });
     expect(draft.times).toEqual({ team1: '8:42', team2: '' });
+  });
+
+  it('rebuilds a recorded void cup as void, not as team 2 holding 3 tokens', async () => {
+    const draft = await loadConfirmedDraft(
+      match,
+      client({
+        votes: [
+          { cup_number: 1, team1_tokens: 0, voided: true },
+          { cup_number: 2, team1_tokens: 0 },
+        ],
+        bonuses: null,
+      }),
+    );
+    expect(cupTokens(draft, 1, 'preliminary')).toEqual({ team1: 0, team2: 0, voided: true });
+    expect(cupTokens(draft, 2, 'preliminary')).toEqual({ team1: 0, team2: 3, voided: false });
   });
 
   it('copes with a match that has no bonuses row yet', async () => {

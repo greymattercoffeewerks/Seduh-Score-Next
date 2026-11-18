@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-18, app version 4.17.3, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-18, app version 4.18.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -18,6 +18,8 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
   and no unmerged branch adds a migration.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
+
+- **BTC void cup** (4.18.0, PR into `dev` from `claude/btc-void-cup-e36afe`, not merged): a cup where both teams get 0 tokens. **Its migration `20261125110000` must be in the cloud before or with the release** (an old RPC would score a void cup 0-3, silently).
 
 ## In flight: the March 2027 Board and a beta run
 

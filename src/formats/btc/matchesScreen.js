@@ -144,7 +144,9 @@ export async function mountMatchesScreen(
       // then "no scores" is unproven, so Remove is not offered (matchList.js canRemoveMatch).
       client
         .from('btc_match_scores')
-        .select('match_id, status, team1_tokens, team2_tokens, team1_total, team2_total')
+        .select(
+          'match_id, status, team1_tokens, team2_tokens, team1_total, team2_total, cups_scored',
+        )
         .eq('event_id', eventId)
         .then(({ data, error }) => (error ? null : (data ?? [])))
         .catch(() => null),

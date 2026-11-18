@@ -69,6 +69,23 @@
   scroll-margin-top: 4rem;
 }
 
+.btc-token-void {
+  width: 100%;
+  font-size: var(--text-base);
+}
+
+.btc-cup-void-tag {
+  margin-inline-start: var(--space-2);
+  padding: 0 var(--space-2);
+  border: var(--border-strong) solid var(--color-border-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.btc-cup-void-tag[hidden] {
+  display: none;
+}
+
 .btc-token[aria-pressed='true'] {
   background: var(--color-accent);
   border-color: var(--color-accent);

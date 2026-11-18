@@ -152,13 +152,14 @@ describe('roundProgress', () => {
 });
 
 describe('pointsByRound', () => {
-  const score = (match, t1, t2, p1, p2, tokens = [30, 15], status = 'confirmed') => ({
+  const score = (match, t1, t2, p1, p2, tokens = [30, 15], status = 'confirmed', cups = 15) => ({
     match_id: match,
     status,
     team1_id: t1,
     team2_id: t2,
     team1_tokens: tokens[0],
     team2_tokens: tokens[1],
+    cups_scored: cups,
     team1_total: p1,
     team2_total: p2,
   });
@@ -177,9 +178,16 @@ describe('pointsByRound', () => {
   it('leaves out a match that is not confirmed or not complete, as the standings view does', () => {
     const byTeam = pointsByRound(both, [
       score('m1', 't1', 't2', 37, 15, [30, 15], 'scoring'),
-      score('m2', 't1', 't3', 30, 20, [20, 20]),
+      score('m2', 't1', 't3', 30, 20, [20, 20], 'confirmed', 14),
     ]);
     expect(byTeam.size).toBe(0);
+  });
+
+  it('counts a match with a void cup: 14 of 15 cups hold tokens (42), but all 15 are scored', () => {
+    const byTeam = pointsByRound(both, [
+      score('m1', 't1', 't2', 30, 12, [28, 14], 'confirmed', 15),
+    ]);
+    expect(byTeam.get('t1').get(1)).toBe(30);
   });
 
   it('is null when either read failed', () => {
@@ -215,6 +223,7 @@ describe('deriveCutRows', () => {
         team2_id: 't2',
         team1_tokens: 30,
         team2_tokens: 15,
+        cups_scored: 15,
         team1_total: 37,
         team2_total: 15,
       },

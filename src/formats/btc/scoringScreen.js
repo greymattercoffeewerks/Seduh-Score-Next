@@ -1,6 +1,7 @@
 // BTC match scoring screen (Phase T-BTC.2, scoring sub-step). Each cup holds exactly
 // 3 tokens: the scorer taps one of 4 buttons (0/1/2/3) to set team1's share, and
-// team2's share is always shown as the balance. Judges are listed for the record
+// team2's share is always shown as the balance. A fifth button marks the cup VOID (both
+// teams 0: both failed to submit, or both submitted the wrong cup). Judges are listed for the record
 // (assigned via matches.js, not tied to a vote) but play no part in the vote UI. On
 // Confirm the whole match goes to the database as ONE outbox operation (see
 // scoring.js's header for the write model and the per-cup-token design correction).
@@ -32,7 +33,6 @@ import { listJudges } from './judges.js';
 import { findMatchById, listJudgeIdsForMatch } from './matches.js';
 import {
   JUDGES_PER_MATCH,
-  TOKENS_PER_CUP,
   blankDraft,
   buildConfirmParams,
   checkFinishTime,
@@ -53,9 +53,12 @@ import {
   missingCupCount,
   roundLabel,
   saveDraft,
+  team2Share,
   submitConfirmMatch,
   wasOperationProcessed,
+  voidCupCount,
   withCupTokens,
+  withCupVoid,
 } from './scoring.js';
 
 const STALE_MESSAGE =
@@ -222,11 +225,17 @@ export async function mountScoringScreen(
     const row = ui.cupRows.get(cup);
     const tokens = cupTokens(state.draft, cup, match.round);
     for (const button of row.buttons) {
-      const value = Number(button.dataset.value);
-      const selected = tokens?.team1 === value;
+      const selected =
+        button.dataset.value === 'void'
+          ? tokens?.voided === true
+          : tokens != null && !tokens.voided && tokens.team1 === Number(button.dataset.value);
       button.setAttribute('aria-pressed', String(selected));
     }
     row.team2Value.textContent = tokens ? String(tokens.team2) : '–';
+    // The word is the cue; colour only backs it up.
+    row.voidTag.hidden = !(tokens?.voided === true);
+    if (tokens?.voided) row.root.dataset.void = 'true';
+    else delete row.root.dataset.void;
   }
 
   function updateTotals() {
@@ -234,6 +243,12 @@ export async function mountScoringScreen(
     const scores = computeScores(state.draft, match.round);
     ui.totals.team1.textContent = `${scores.team1Total} points (${scores.team1Tokens} tokens)`;
     ui.totals.team2.textContent = `${scores.team2Total} points (${scores.team2Tokens} tokens)`;
+    const voided = voidCupCount(state.draft, state.data.match.round);
+    ui.voidNote.hidden = voided === 0;
+    ui.voidNote.textContent =
+      voided === 0
+        ? ''
+        : `${voided} void cup${voided === 1 ? '' : 's'}: no tokens to either team. The bonuses still count.`;
   }
 
   function timeProblemText({ which, status }) {
@@ -357,7 +372,10 @@ export async function mountScoringScreen(
 
   function onCupTap(cup, team1Tokens) {
     if (locked()) return;
-    state.draft = withCupTokens(state.draft, cup, team1Tokens);
+    state.draft =
+      team1Tokens === 'void'
+        ? withCupVoid(state.draft, cup)
+        : withCupTokens(state.draft, cup, team1Tokens);
     // An earlier message ("first missing: cup 3", "Match confirmed.") is out of date now.
     if (ui.feedback.textContent) setFeedback(null);
     updateCupControl(cup);
@@ -365,7 +383,10 @@ export async function mountScoringScreen(
     updateConfirm();
     persistDraft();
     // Sighted scorers see the buttons change; this is what a screen reader hears.
-    ui.announce.textContent = `Cup ${cup}: ${team1Tokens} for ${teamLabel('team1')}, ${TOKENS_PER_CUP - team1Tokens} for ${teamLabel('team2')}`;
+    ui.announce.textContent =
+      team1Tokens === 'void'
+        ? `Cup ${cup}: void. No tokens for ${teamLabel('team1')} or ${teamLabel('team2')}`
+        : `Cup ${cup}: ${team1Tokens} for ${teamLabel('team1')}, ${team2Share(team1Tokens, false)} for ${teamLabel('team2')}`;
   }
 
   function discardEdits() {
@@ -611,22 +632,46 @@ export async function mountScoringScreen(
       button.addEventListener('click', () => onCupTap(cup, value));
       return button;
     });
+    // The fifth choice: both teams get nothing. Its own full-width row at 360px, so the four numbers stay large.
+    const voidButton = el('button', {
+      className: 'btc-token btc-token-void tap-target',
+      text: 'Void (0–0)',
+      attrs: {
+        type: 'button',
+        'aria-pressed': 'false',
+        'aria-label': `Cup ${cup}, Void (0–0): no tokens for ${teamLabel('team1')} or ${teamLabel('team2')}`,
+        'aria-describedby': 'btc-token-help',
+        'data-value': 'void',
+      },
+    });
+    voidButton.addEventListener('click', () => onCupTap(cup, 'void'));
+    buttons.push(voidButton);
     const team2Value = el('span', { className: 'btc-cup-team2-value' });
-    ui.cupRows.set(cup, { buttons, team2Value });
-    return el(
+    const voidTag = el('span', {
+      className: 'btc-cup-void-tag',
+      text: 'Void',
+      attrs: { hidden: '' },
+    });
+    const root = el(
       'div',
       { className: 'btc-cup-row', attrs: { role: 'group', 'aria-label': `Cup ${cup}` } },
       [
         el('div', { className: 'btc-cup-head' }, [
-          el('span', { className: 'btc-cup-number', text: `Cup ${cup}` }),
+          el('span', {}, [
+            el('span', { className: 'btc-cup-number', text: `Cup ${cup}` }),
+            voidTag,
+          ]),
           el('span', { className: 'btc-cup-team2', attrs: { 'aria-hidden': 'true' } }, [
             el('span', { text: `${teamLabel('team2')}: ` }),
             team2Value,
           ]),
         ]),
-        el('div', { className: 'btc-cup-tokens' }, buttons),
+        el('div', { className: 'btc-cup-tokens' }, buttons.slice(0, TOKEN_OPTIONS.length)),
+        voidButton,
       ],
     );
+    ui.cupRows.set(cup, { buttons, team2Value, voidTag, root });
+    return root;
   }
 
   function buildBonuses() {
@@ -852,7 +897,7 @@ export async function mountScoringScreen(
         el('p', {
           id: 'btc-token-help',
           className: 'stage-meta',
-          text: `Each cup holds 3 tokens. Tap the number of tokens for ${teamLabel('team1')}; the rest go to ${teamLabel('team2')} automatically.`,
+          text: `Each cup holds 3 tokens. Tap the number of tokens for ${teamLabel('team1')}; the rest go to ${teamLabel('team2')} automatically. If both teams failed to submit the cup, or both submitted the wrong cup, tap Void (0–0): neither team gets tokens.`,
         }),
         el('div', { className: 'btc-cups' }, cupRows),
       ]),
@@ -862,11 +907,13 @@ export async function mountScoringScreen(
 
     ui.totals.team1 = el('strong');
     ui.totals.team2 = el('strong');
+    ui.voidNote = el('p', { className: 'stage-meta', attrs: { hidden: '' } });
     container.appendChild(
       el('div', { className: 'card' }, [
         el('h2', { text: 'Totals (preview)' }),
         el('p', {}, [el('span', { text: `${teamLabel('team1')}: ` }), ui.totals.team1]),
         el('p', {}, [el('span', { text: `${teamLabel('team2')}: ` }), ui.totals.team2]),
+        ui.voidNote,
         el('p', {
           className: 'stage-meta',
           text: 'Preview only. The official totals are worked out when you confirm.',
