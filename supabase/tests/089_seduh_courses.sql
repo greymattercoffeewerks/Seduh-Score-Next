@@ -1,4 +1,4 @@
--- T-ID2.C6a/C6b: courses and certificates (migration 20261126100000_seduh_courses.sql). Fictional data only.
+-- T-ID2.C6a/C6b: courses and certificates (migration 20261126110000_seduh_courses.sql). Fictional data only.
 -- Proves:
 --   * ACL: the four course doors are executable by `authenticated` only; every helper by no API role; the table is reachable by no
 --     API role (RLS on, no policy); the confirmation columns cannot be forged by a signed-in person.
@@ -14,7 +14,7 @@
 --     expires it clears the choice; an expired one is never reported on the card by the public door; hiding courses hides the choice.
 --   * the migration's rollback block (the drops; the function restoration it lists first is not re-run here).
 begin;
-select plan(107);
+select plan(108);
 
 create schema t089;
 grant usage on schema t089 to anon, authenticated, service_role;
@@ -276,6 +276,7 @@ select is((select count(*)::int from app.seduh_courses where account_id = t089.u
 -- expiring it behind the door's back (owner SQL) still never reaches the card
 update app.seduh_courses set on_card = true, valid_until_year = 2024 where id = (select (j ->> 'id')::bigint from t089_cur);
 select is((select (c ->> 'on_card')::boolean from jsonb_array_elements(t089.pub('alpha-t89') -> 'courses') c where c ->> 'title' = 'Current Cert'), false, 'a stale on_card on an expired course is never reported on the card');
+select is((select (c ->> 'on_card')::boolean from jsonb_array_elements(t089.j(1, $$ select public.seduh_my_record() $$) -> 'courses') c where c ->> 'title' = 'Current Cert'), false, '...and the person''s own door does not claim it is on the card either');
 update app.seduh_courses set on_card = false where account_id = t089.u(101);
 -- hidden courses hide the choice
 select is(t089.as_run(1, format($$ select public.seduh_set_card_course(%s) $$, (select (j ->> 'id') from t089_cur2))), 'ok', 'choose a certificate, then hide courses');

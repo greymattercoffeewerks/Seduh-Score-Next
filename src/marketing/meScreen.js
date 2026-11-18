@@ -1294,6 +1294,7 @@ export function mountMeScreen(
         const cardWord = course.on_card ? 'Remove from my card' : 'Show on my card';
         const card = course.current
           ? button(cardWord, {
+              id: `me-card-course-${course.id}`,
               label: `${cardWord}: ${course.title}`,
               onClick: async () => {
                 busy([card, edit, del], true);
@@ -1309,7 +1310,9 @@ export function mountMeScreen(
                     ? 'Removed from your card.'
                     : 'This certificate will show on your card.',
                 );
-                if (await refresh()) document.getElementById('me-courses-title')?.focus();
+                if (await refresh())
+                  document.getElementById(`me-card-course-${course.id}`)?.focus();
+                else busy([card, edit, del], false);
               },
             })
           : null;
@@ -1377,6 +1380,7 @@ export function mountMeScreen(
           }
           say('Course deleted.');
           if (await refresh()) document.getElementById('me-courses-title')?.focus();
+          else busy([confirmButton, keep], false);
         });
         row.replaceChildren(note, el('div', { className: 'claim-actions' }, [confirmButton, keep]));
         keep.focus();
@@ -1394,7 +1398,11 @@ export function mountMeScreen(
         const form = courseForm(null, {
           onDone: async (saved) => {
             if (saved) {
-              if (await refresh()) document.getElementById('me-add-course')?.focus();
+              if (await refresh()) {
+                // at the limit the add button is disabled and cannot take focus
+                const add = document.getElementById('me-add-course');
+                (add && !add.disabled ? add : document.getElementById('me-courses-title'))?.focus();
+              }
             } else {
               formHost.replaceChildren();
               addButton.focus();

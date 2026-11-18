@@ -450,8 +450,8 @@ drop function if exists app.seduh_my_account(boolean);
 drop function if exists app.seduh_team_key(uuid);
 drop function if exists app.seduh_entry_clean(integer, text, text, text, text, text, integer, text);
 drop function if exists app.seduh_clean_text(text, integer, boolean, text);
-drop function if exists app.seduh_course_json(app.seduh_courses); -- 20261126100000
-drop table if exists app.seduh_courses; -- 20261126100000 (it holds a check that uses seduh_text_ok)
+drop function if exists app.seduh_course_json(app.seduh_courses); -- 20261126110000
+drop table if exists app.seduh_courses; -- 20261126110000 (it holds a check that uses seduh_text_ok)
 drop table if exists app.seduh_team_memberships;
 drop table if exists app.seduh_self_reported_entries;
 drop function if exists app.seduh_text_ok(text);

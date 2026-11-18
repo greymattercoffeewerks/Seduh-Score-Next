@@ -939,7 +939,7 @@ A claimed person's own record: **self-reported entries** and **team links**. The
 
 `/id/me/` is the front end of the contract above (`src/marketing/me*.js`, details in `src/marketing/CLAUDE.md`). What a later change must keep: the page uses only the competitor client (`claimClient.js`); sign-in is an emailed code with `shouldCreateUser: false` and an answer that never depends on whether the email has an account; every hint of the eight doors has its own words in `meFlow.js` (add a hint there in the same change as a new one in SQL; `meFlow.test.js` lists them); a destructive action asks inside the page; every write is followed by a reload of `seduh_my_record`. The Privacy page describes the settings and the self-reported entries ("What you add to your Seduh ID yourself"): change it in the same release as any change to what a person can add or hide. The person page (`/id/<handle>/`) draws the two record shapes as pinned in `core/seduhProfile.js`.
 
-### Seduh ID: courses and certificates (T-ID2.C6a and C6b, 20261126100000, 4.19.0)
+### Seduh ID: courses and certificates (T-ID2.C6a and C6b, 20261126110000, 4.19.0)
 
 A claimed person lists training they completed (SCA Barista Skills, Q Arabica Grader). Owner decisions D1 to D3 (2026-11-18). What a later change must keep:
 

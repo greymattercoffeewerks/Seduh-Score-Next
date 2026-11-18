@@ -129,7 +129,10 @@ as $$
   select jsonb_build_object(
     'id', c.id, 'title', c.title, 'provider', c.provider, 'completed_year', c.completed_year,
     'valid_until_year', c.valid_until_year, 'level', c.level, 'note', c.note,
-    'current', app.seduh_course_current(c.valid_until_year), 'on_card', c.on_card,
+    -- on_card is reported only while the course is current, as the public door does, so the person is never told an expired
+    -- certificate is on their card
+    'current', app.seduh_course_current(c.valid_until_year),
+    'on_card', c.on_card and app.seduh_course_current(c.valid_until_year),
     'status', c.status, 'confirmed_by', c.confirmed_by, 'provenance', 'self_reported');
 $$;
 revoke all on function app.seduh_course_json(app.seduh_courses) from public, anon, authenticated, service_role;
