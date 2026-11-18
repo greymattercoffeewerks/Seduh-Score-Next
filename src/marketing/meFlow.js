@@ -65,7 +65,7 @@ const TEXT = {
   bad_role: `Your role can be up to ${LIMITS.role} characters of plain text.`,
   bad_result: `The result can be up to ${LIMITS.result_text} characters of plain text, for example “2nd” or “Finalist”.`,
   bad_placement: `A placing is a whole number from 1 to ${LIMITS.maxPlacement}, or leave it empty.`,
-  bad_note: `The note can be up to ${LIMITS.note} characters of plain text, on one line (no line breaks).`,
+  bad_note: `The note can be up to ${LIMITS.note} characters for an entry, or ${LIMITS.course_note} for a course, of plain text on one line (no line breaks).`,
   too_many_entries: `You have reached the limit of ${ENTRY_LIMIT} entries. Delete one to add another.`,
   // a course or certificate
   bad_title: `Enter the course's title (up to ${LIMITS.course_title} characters, plain text).`,
