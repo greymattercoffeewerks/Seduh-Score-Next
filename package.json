@@ -21,7 +21,7 @@
     "db:lock": "node tools/db-lock.mjs",
     "fixtures:phone": "node tools/generate-phone-fixture-sql.mjs",
     "db:test": "node tools/db-test.mjs",
-    "db:test:shared": "node tools/db-lock.mjs run -- supabase test db --local supabase/tests"
+    "db:test:shared": "node tools/db-lock.mjs run -- supabase test db supabase/tests"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",
@@ -38,7 +38,7 @@
     "jsdom": "^25.0.1",
     "otplib": "^13.5.0",
     "prettier": "^3.4.2",
-    "supabase": "^2.114.0",
+    "supabase": "^3.2.0",
     "vite": "^6.0.7",
     "vitest": "^4.1.11",
     "wrangler": "^4.131.0"

@@ -324,8 +324,9 @@ push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
   worktree's migrations only when they change; never a bare `supabase test db`. `npm run db:test -- <file>` runs one file.
 - **Anything that uses the shared `postgres` database goes under the lock:** `npm run db:reset` already does; wrap a
   Playwright run as `npm run db:lock -- run -- npm run test:e2e`. `npm run db:lock -- status` shows who holds it.
-- **Never point `supabase db reset --db-url` (or `db push`) at `127.0.0.1:54422`**: the CLI treats it as local and resets
-  the shared database and restarts the stack, whatever database the URL names.
+- **Never point `supabase db reset` (or `db push`) at a URL on `127.0.0.1:54422`** (`--db-url`, or CLI v3's
+  `--remote=<url>`): the CLI treats it as local and resets the shared database and restarts the stack, whatever database
+  the URL names. In CLI v3 a bare `db push` / `db reset` already targets the local stack; the cloud needs `--remote`.
 
 How it works: `CONVENTIONS.md`, "Migration workflow".
 

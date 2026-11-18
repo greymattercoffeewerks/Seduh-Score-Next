@@ -11,8 +11,9 @@ and §11 item 10 — that item's exact wording is the bar every migration must c
 Check every migration for:
 
 - **Forward-only, with a sharp edge.** No editing a migration file once it has been
-  pushed to the linked cloud project — a fix is a new migration. Check
-  `npx supabase migration list` before assuming a file is still safe to touch.
+  pushed to the linked cloud project — a fix is a new migration. Check the Supabase
+  MCP's `list_migrations` before assuming a file is still safe to touch (not a bare
+  `supabase migration list`: in CLI v3 that lists the shared LOCAL database).
 - **A `-- rollback:` header block**, and that it has actually been run once inside
   `begin; … rollback;` — not merely present as text. If you cannot run it locally (e.g.
   no Supabase local stack running), say so explicitly rather than assuming it passes.
