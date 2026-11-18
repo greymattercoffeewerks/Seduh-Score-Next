@@ -7,6 +7,17 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Supabase CLI 2.115 to 3.2 · tooling, no version · 2026-11-18
+
+**Status: NOT FINAL** until the PR is merged. Branch `chore/supabase-cli-v3`. Owner request. No version bump: tooling only, nothing a visitor or organiser sees.
+
+- **What changed.** `supabase` devDependency `^3.2.0`, CI's `setup-cli` pin `3.2.0` (both jobs). v3 breaking changes that touched this repo: `[experimental] orioledb_version` is removed (our config set it empty; v3 refuses to load it), so the line is gone; `tools/db-test.mjs` wrote `[inbucket]` into its throwaway base project's config, now `[local_smtp]`; `--local` is a no-op that warns, so `supabase test db --local` became `supabase test db` (CI, `db:test:shared`, the key-flip runbook); `[auth.email]` / `[auth.sms]` `enable_signup` renamed to `enabled` (same meaning: email on, SMS off; the old key already switched the whole provider). The `CLAUDE.md` rule about pointing `db reset` at `127.0.0.1:54422` now names v3's `--remote=<url>` too.
+- **Not affected.** Cloud migrations go through the Supabase MCP, not the CLI, so v3's "local by default" and `--yes` consent rules change nothing there. Config is not pushed with `config push`, so the auth key rename does not reach the cloud project.
+- **Verified.** `supabase status` loads the config with no warnings; `npm run db:test -- --rebuild` with v3 (fresh base from v3's throwaway stack): 90 files, 5,786 tests, PASS. The shared stack was not stopped or restarted. Seen in passing (🟣 pre-existing, not changed): `085_seduh_my_record` prints "planned 192 tests but ran 190" because its rollback-block checks run inside a savepoint that is rolled back before `finish()`, which also rolls back pgTAP's own counter; all 192 lines are `ok`.
+- **Reviews.** `code-reviewer`, one round: 0 Important, 2 Nits, both fixed. (1) `CONVENTIONS.md` and `schema-guardian` said to check `npx supabase migration list` before editing a migration; in v3 the bare command lists the shared LOCAL database, so it could answer "not pushed" for a migration that is in the cloud. Both now say to use the Supabase MCP's `list_migrations`. (2) `seed.sql`'s header named `db push --include-seed` as the risky form; v3's is `db push --remote --include-seed` / `db reset --remote`. The reviewer confirmed the `enabled` rename against the v3 binary: it is an alias of the old key, feeding the same `GOTRUE_EXTERNAL_EMAIL_ENABLED` / `_PHONE_ENABLED`.
+
+---
+
 ## BTC void cup · 4.18.0 · 2026-11-18
 
 **Status: NOT FINAL.** Code, tests and reviews are done; the PR into `dev` is open and not merged. **The migration `20261125110000_btc_void_cup.sql` is not in the cloud and must be pushed before or together with the release:** an old `confirm_btc_match` ignores the new `voided` key, so a void cup confirmed against the old database is stored as 0-3 with no error. Branch `claude/btc-void-cup-e36afe` (renamed to `20261125110000` after merging `dev`, whose `20261125100000_seduh_discovery` took that number; the cloud copy was applied through the MCP on 2026-11-18, before the merge). Owner rule, 2026-11-18.

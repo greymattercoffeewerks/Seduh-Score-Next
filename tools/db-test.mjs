@@ -15,7 +15,7 @@
 //      the rebuild while it still matches, so most runs go straight to the tests.
 //   3. pgTAP runs with the same pg_prove image the CLI uses, against this database only.
 //
-// Do NOT point `supabase db reset --db-url` at a per-worktree database: the CLI sees 127.0.0.1:54422 as "local" and
+// Do NOT point `supabase db reset --db-url` (v3: `--remote=<url>`) at a per-worktree database: the CLI sees 127.0.0.1:54422 as "local" and
 // resets the shared database and restarts the stack instead (found the hard way while building this).
 //
 // The run holds a SHARED db-lock hold (tools/db-lock.mjs): any number of these run side by side, but a `db:reset`
@@ -150,7 +150,7 @@ async function ensureBase() {
         '[db.seed]\nenabled = false',
         '[realtime]\nenabled = false',
         '[studio]\nenabled = false',
-        '[inbucket]\nenabled = false',
+        '[local_smtp]\nenabled = false',
         '[storage]\nenabled = true',
         '[auth]\nenabled = true\nsite_url = "http://127.0.0.1:3000"',
         '[edge_runtime]\nenabled = false',

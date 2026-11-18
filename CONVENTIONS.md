@@ -119,8 +119,9 @@ late redraw re-inserts. When a redraw re-inserts the kept line, set `aria-live="
   disabling RLS, leaving a table in a deny-all state instead of "RLS off") is a real
   failure mode, not a hypothetical one.
 - **Forward-only, with a sharp edge**: once a migration has been pushed to the linked
-  cloud project, don't edit that file again — write a new migration instead. Check
-  `npx supabase migration list` before deciding a file is still safe to touch.
+  cloud project, don't edit that file again — write a new migration instead. Check the Supabase
+  MCP's `list_migrations` before deciding a file is still safe to touch (not a bare
+  `supabase migration list`: in CLI v3 that lists the shared LOCAL database).
 - `correct` (or any tally/standings position) is never a migration-added column —
   `schema-guardian` blocks this.
 - NULL-aware uniqueness: anywhere two rows could both hold a relevant NULL (e.g.
