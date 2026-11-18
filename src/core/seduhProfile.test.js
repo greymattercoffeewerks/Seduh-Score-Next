@@ -319,3 +319,72 @@ describe('the profile photo address', () => {
     expect(photoSrc('bad', 'https://p.supabase.co')).toBeNull();
   });
 });
+
+import { cardCourse, courseEntry, courseValidityWords } from './seduhProfile.js';
+describe('courses and certificates (C6a)', () => {
+  const raw = (over = {}) => ({
+    title: ' Barista Skills ',
+    provider: 'Test Academy',
+    completed_year: 2024,
+    valid_until_year: 2027,
+    level: 'Intermediate',
+    note: null,
+    current: true,
+    on_card: false,
+    status: 'self_reported',
+    ...over,
+  });
+  const door = (courses) => ({
+    has_profile: true,
+    handle: 'abc',
+    identity: { display_name: 'A B', country_code: 'BN', founding_number: 1, photo_url: null },
+    recorded_results: [],
+    organiser_records: [],
+    self_reported: [],
+    courses,
+  });
+  it('rebuilds a course from known keys and never calls it confirmed unless the door says so', () => {
+    expect(courseEntry(raw())).toEqual({
+      id: null,
+      title: 'Barista Skills',
+      provider: 'Test Academy',
+      completedYear: 2024,
+      validUntilYear: 2027,
+      level: 'Intermediate',
+      note: null,
+      current: true,
+      onCard: false,
+      confirmed: false,
+    });
+    expect(courseEntry(raw({ status: 'verified' })).confirmed).toBe(false);
+    expect(courseEntry(raw({ status: 'confirmed' })).confirmed).toBe(true);
+  });
+  it('drops a malformed course and an end year before the completed year', () => {
+    expect(courseEntry(null)).toBeNull();
+    expect(courseEntry(raw({ title: '' }))).toBeNull();
+    expect(courseEntry(raw({ provider: null }))).toBeNull();
+    expect(courseEntry(raw({ completed_year: 'x' }))).toBeNull();
+    expect(courseEntry(raw({ valid_until_year: 2020 })).validUntilYear).toBeNull();
+  });
+  it('words the end year by the database word `current`, never the clock', () => {
+    expect(courseValidityWords(courseEntry(raw()))).toBe('Valid until 2027');
+    expect(courseValidityWords(courseEntry(raw({ current: false })))).toBe('Expired 2027');
+    expect(courseValidityWords(courseEntry(raw({ valid_until_year: null })))).toBeNull();
+  });
+  it('is its own list: courses never become entries', () => {
+    const p = normaliseProfile(door([raw()]));
+    expect(p.courses).toHaveLength(1);
+    expect(p.entries).toHaveLength(0);
+    expect(normaliseProfile(door(undefined)).courses).toEqual([]);
+    expect(normaliseProfile({ has_profile: false }).courses).toEqual([]);
+  });
+  it('the card certificate is the one chosen course that is current', () => {
+    const p = normaliseProfile(
+      door([raw({ on_card: true, title: 'Chosen' }), raw({ title: 'Other' })]),
+    );
+    expect(cardCourse(p.courses).title).toBe('Chosen');
+    const expired = normaliseProfile(door([raw({ on_card: true, current: false })]));
+    expect(cardCourse(expired.courses)).toBeNull();
+    expect(cardCourse([])).toBeNull();
+  });
+});

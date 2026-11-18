@@ -535,3 +535,5 @@ Petrol V2 tokens. It tells the version history, so **any question about versions
 [`docs/versioning.md`](../../docs/versioning.md)** first, which also lists what to change on the page when the place
 moves. `btsPage.test.js` fails when the page's current place or major version disagrees with `src/core/version.js`.
 How to add a chapter is in the comment at the top of `bts/index.html`.
+
+**Courses and certificates (T-ID2.C6a/C6b, 4.19.0).** The person page draws a "Courses and certificates" sub-section INSIDE the Record section (`profileScreen.js` `coursesBlock`; own count, expired rows muted, every row labelled self-reported); `core/seduhProfile.js` `courseEntry` / `cardCourse` rebuild the door's `courses` list, separate from `entries` so no stat counts them. My Seduh ID has a "Courses" tab (`meScreen.js` `coursesPanel`, `meFlow.js` `validateCourseForm`) and `vis_courses` in `SETTINGS`. The story card's "Certified: ..." line is `profileStory.js` `certifiedLine`, drawn in the card's existing `tagline` slot. See CONVENTIONS.md, "Seduh ID: courses and certificates".

@@ -5,7 +5,7 @@
 // card. Nothing is called "verified" unless the page's own rule says so (recorded by Seduh Score, or a confirmed membership).
 import { countryName } from '../core/country.js';
 import { PUBLIC_SITE_ORIGIN } from '../core/countryPages.js';
-import { photoSrc } from '../core/seduhProfile.js';
+import { cardCourse, photoSrc } from '../core/seduhProfile.js';
 import {
   bestDetail,
   bestResult,
@@ -57,6 +57,12 @@ function provenanceLine(entry, entries) {
   return parts.join(' ');
 }
 
+/** "Certified: <title>" for the card's one chosen current certificate, or null. */
+export function certifiedLine(profile) {
+  const course = cardCourse(profile?.courses);
+  return course ? `Certified: ${course.title}` : null;
+}
+
 /**
  * The spec for one style, or null when the profile has no public name.
  * @param {object} profile  a normalised, non-empty profile (core/seduhProfile.js)
@@ -93,11 +99,19 @@ export function personStorySpec(profile, style = 'record') {
     tileInitials: initialsOf(name),
     title: name,
     subtitle: country ?? '',
-    // Reserved: one optional short line under the name. The door sends none today, so it is empty and nothing is drawn.
-    tagline: identity.tagline ?? null,
+    // One optional short line under the name (C6b): "Certified: <title>", only for the ONE current certificate the person chose
+    // (the door sends `on_card` only while courses are public and the certificate is current). Self-reported, so the provenance
+    // line says so. Nothing is drawn when there is none.
+    tagline: certifiedLine(profile),
     stats,
     highlight,
-    provenance: provenanceLine(shown, entries) || 'Scan to see the full record.',
+    provenance:
+      [
+        provenanceLine(shown, entries),
+        cardCourse(profile.courses) ? 'Certificate self-reported.' : '',
+      ]
+        .filter(Boolean)
+        .join(' ') || 'Scan to see the full record.',
     address: personAddress(handle),
   };
 }

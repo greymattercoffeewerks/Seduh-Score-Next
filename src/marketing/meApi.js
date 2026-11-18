@@ -120,6 +120,20 @@ export function createMeApi({ client, minRequestCodeMs = MIN_REQUEST_CODE_MS } =
       return door('seduh_delete_entry', { p_entry_id: id });
     },
 
+    async addCourse(params) {
+      return door('seduh_add_course', params);
+    },
+    async updateCourse(id, params) {
+      return door('seduh_update_course', { p_course_id: id, ...params });
+    },
+    async deleteCourse(id) {
+      return door('seduh_delete_course', { p_course_id: id });
+    },
+    /** The ONE certificate shown on the story card; null clears it. */
+    async setCardCourse(id) {
+      return door('seduh_set_card_course', { p_course_id: id });
+    },
+
     async teamOptions(country) {
       const answer = await door('seduh_team_options', {
         p_country_code: country || null,

@@ -22,6 +22,7 @@ import {
   KIND_CHOICES,
   LIMITS,
   ORGANISERS_EXPLAINED,
+  COURSE_LIMIT,
   SETTINGS,
   TEAM_LINK_LIMIT,
   TEAM_ROLE_CHOICES,
@@ -33,6 +34,7 @@ import {
   normaliseEmail,
   teamResultWords,
   teamRoleWord,
+  validateCourseForm,
   validateEntryForm,
 } from './meFlow.js';
 import { formatFoundingNumber } from './claimFlow.js';
@@ -43,6 +45,7 @@ import { initialsOf } from './profileFormat.js';
 const KIND_WORD = Object.fromEntries(KIND_CHOICES);
 const TABS = [
   ['record', 'My record'],
+  ['courses', 'Courses'],
   ['teams', 'My teams'],
   ['photo', 'Photo'],
   ['privacy', 'Privacy'],
@@ -363,11 +366,13 @@ export function mountMeScreen(
       panel.replaceChildren(
         tab === 'record'
           ? recordPanel()
-          : tab === 'teams'
-            ? teamsPanel()
-            : tab === 'photo'
-              ? photoPanel()
-              : privacyPanel(),
+          : tab === 'courses'
+            ? coursesPanel()
+            : tab === 'teams'
+              ? teamsPanel()
+              : tab === 'photo'
+                ? photoPanel()
+                : privacyPanel(),
       );
     }
 
@@ -1127,6 +1132,320 @@ export function mountMeScreen(
             ? el('p', {
                 className: 'claim-hint',
                 text: 'Your name is hidden on your public page, so your photo is hidden there too. The picture stays stored until you remove it. Change your name setting under Privacy.',
+              })
+            : null,
+        ].filter(Boolean),
+      );
+    }
+
+    // ---- Courses and certificates (T-ID2.C6a, C6b) ----
+
+    function courseForm(course, { onDone }) {
+      const f = course
+        ? {
+            ...course,
+            year: String(course.completed_year),
+            valid_until_year: course.valid_until_year ?? '',
+          }
+        : { title: '', provider: '', year: '', valid_until_year: '', level: '', note: '' };
+      const uid = course ? `c${course.id}` : 'cnew';
+      const mk = (key, label, attrs, { hint, tag = 'input' } = {}) => {
+        const input = el(tag, { className: 'claim-input', attrs: { name: key, ...attrs } });
+        input.value = f[key] ?? '';
+        const status = statusLine(`me-${uid}-${key}-status`);
+        return {
+          key,
+          input,
+          status,
+          node: field({ id: `me-${uid}-${key}`, label, input, hint, status }),
+        };
+      };
+      const fields = [
+        mk('title', 'Course or certificate', {
+          type: 'text',
+          maxlength: String(LIMITS.course_title),
+          required: '',
+        }),
+        mk('provider', 'Who ran it', {
+          type: 'text',
+          maxlength: String(LIMITS.course_provider),
+          required: '',
+        }),
+        mk(
+          'year',
+          'Year completed',
+          { type: 'text', inputmode: 'numeric', maxlength: '4', required: '' },
+          { hint: 'From 1980 to this year.' },
+        ),
+        mk(
+          'valid_until_year',
+          'Valid until (optional)',
+          { type: 'text', inputmode: 'numeric', maxlength: '4' },
+          { hint: 'The year it runs out, if it does. Leave empty if it does not expire.' },
+        ),
+        mk(
+          'level',
+          'Level (optional)',
+          { type: 'text', maxlength: String(LIMITS.course_level) },
+          { hint: 'For example Intermediate.' },
+        ),
+        mk(
+          'note',
+          'Note (optional)',
+          { maxlength: String(LIMITS.course_note), rows: '3' },
+          { tag: 'textarea' },
+        ),
+      ];
+      const formStatus = statusLine(`me-${uid}-status`);
+      const submit = button(course ? 'Save changes' : 'Add course', {
+        primary: true,
+        type: 'submit',
+      });
+      const cancel = button('Cancel', { onClick: () => onDone(false) });
+      const form = el(
+        'form',
+        {
+          className: 'claim-form me-entry-form',
+          attrs: {
+            novalidate: '',
+            'aria-label': course ? `Edit ${course.title}` : 'Add a course or certificate',
+          },
+        },
+        [
+          el(
+            'div',
+            { className: 'me-form-grid' },
+            fields.map((x) => x.node),
+          ),
+          formStatus,
+          el('div', { className: 'claim-actions' }, [submit, cancel]),
+        ],
+      );
+      const mark = (errors) => {
+        let first = null;
+        for (const x of fields) {
+          const hint = errors[x.key];
+          setStatus(x.status, hint ? describeMeHint(hint) : '', hint ? 'error' : null);
+          if (hint) {
+            x.input.setAttribute('aria-invalid', 'true');
+            first ??= x.input;
+          } else x.input.removeAttribute('aria-invalid');
+        }
+        return first;
+      };
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const values = Object.fromEntries(fields.map((x) => [x.key, x.input.value]));
+        const checked = validateCourseForm(values, { thisYear });
+        if (!checked.ok) {
+          setStatus(
+            formStatus,
+            'Some details need a change. Check the fields marked Problem.',
+            'error',
+          );
+          mark(checked.errors)?.focus();
+          return;
+        }
+        mark({});
+        setStatus(formStatus, 'Saving…');
+        busy([submit, cancel], true);
+        const result = course
+          ? await api.updateCourse(course.id, checked.params)
+          : await api.addCourse(checked.params);
+        if (destroyed) return;
+        if (!result.ok) {
+          busy([submit, cancel], false);
+          if (isSignedOutHint(result.hint)) return void signedOut(result.hint);
+          const words = describeMeHint(result.hint);
+          const key = fieldForHint(result.hint);
+          if (fields.some((x) => x.key === key)) {
+            mark({ [key]: result.hint })?.focus();
+            setStatus(formStatus, 'That could not be saved.', 'error');
+          } else {
+            setStatus(formStatus, words, 'error');
+          }
+          say(words, 'error');
+          return;
+        }
+        say(course ? 'Course saved.' : 'Course added.');
+        busy([submit, cancel], false);
+        onDone(true);
+      });
+      return form;
+    }
+
+    function courseRow(course) {
+      const row = el('li', { className: 'me-entry' });
+      const showView = () => {
+        const when = [
+          `Completed ${course.completed_year}`,
+          course.valid_until_year === null
+            ? null
+            : course.current
+              ? `valid until ${course.valid_until_year}`
+              : `expired ${course.valid_until_year}`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        const meta = [course.provider, course.level].filter(Boolean).join(' · ');
+        const edit = button('Edit', { label: `Edit ${course.title}`, onClick: showEdit });
+        const del = button('Delete', { label: `Delete ${course.title}`, onClick: showDelete });
+        // C6b: ONE current certificate may be shown on the story card; off unless chosen
+        const cardWord = course.on_card ? 'Remove from my card' : 'Show on my card';
+        const card = course.current
+          ? button(cardWord, {
+              label: `${cardWord}: ${course.title}`,
+              onClick: async () => {
+                busy([card, edit, del], true);
+                const result = await api.setCardCourse(course.on_card ? null : course.id);
+                if (destroyed) return;
+                if (!result.ok) {
+                  busy([card, edit, del], false);
+                  failed(result);
+                  return;
+                }
+                say(
+                  course.on_card
+                    ? 'Removed from your card.'
+                    : 'This certificate will show on your card.',
+                );
+                if (await refresh()) document.getElementById('me-courses-title')?.focus();
+              },
+            })
+          : null;
+        row.replaceChildren(
+          el(
+            'div',
+            { className: 'me-entry-main' },
+            [
+              el('span', { className: 'me-entry-title', text: course.title }),
+              el('span', { className: 'me-entry-meta', text: meta }),
+              el('span', {
+                className: `me-entry-detail${course.current ? '' : ' me-course-expired'}`,
+                text: when,
+              }),
+              course.on_card
+                ? el('span', { className: 'me-card-badge tag', text: 'Shown on your card' })
+                : null,
+              course.note ? el('span', { className: 'me-entry-note', text: course.note }) : null,
+            ].filter(Boolean),
+          ),
+          el('div', { className: 'me-entry-actions' }, [edit, del, card].filter(Boolean)),
+        );
+        return { edit, del };
+      };
+      function showEdit() {
+        const form = courseForm(course, {
+          onDone: async (saved) => {
+            if (saved) {
+              if (await refresh()) document.getElementById('me-courses-title')?.focus();
+            } else {
+              const { edit } = showView();
+              edit.focus();
+            }
+          },
+        });
+        row.replaceChildren(form);
+        form.querySelector('input')?.focus();
+      }
+      function showDelete() {
+        const confirmButton = button('Yes, delete it', {
+          primary: true,
+          id: `me-delete-course-${course.id}`,
+          className: 'me-danger',
+        });
+        const keep = button('Keep it', {
+          onClick: () => {
+            const { del } = showView();
+            del.focus();
+          },
+        });
+        const note = el('p', {
+          className: 'claim-message',
+          text: `Delete “${course.title}” (${course.completed_year})? This cannot be undone.`,
+          attrs: { id: `me-delete-course-q-${course.id}`, role: 'alert' },
+        });
+        confirmButton.setAttribute('aria-describedby', note.id);
+        confirmButton.addEventListener('click', async () => {
+          busy([confirmButton, keep], true);
+          const result = await api.deleteCourse(course.id);
+          if (destroyed) return;
+          if (!result.ok) {
+            busy([confirmButton, keep], false);
+            failed(result);
+            return;
+          }
+          say('Course deleted.');
+          if (await refresh()) document.getElementById('me-courses-title')?.focus();
+        });
+        row.replaceChildren(note, el('div', { className: 'claim-actions' }, [confirmButton, keep]));
+        keep.focus();
+      }
+      showView();
+      return row;
+    }
+
+    function coursesPanel() {
+      const count = record.courses.length;
+      const formHost = el('div', { className: 'me-form-host' });
+      const addButton = button('Add a course', { primary: true, id: 'me-add-course' });
+      if (count >= COURSE_LIMIT) addButton.disabled = true;
+      addButton.addEventListener('click', () => {
+        const form = courseForm(null, {
+          onDone: async (saved) => {
+            if (saved) {
+              if (await refresh()) document.getElementById('me-add-course')?.focus();
+            } else {
+              formHost.replaceChildren();
+              addButton.focus();
+            }
+          },
+        });
+        formHost.replaceChildren(form);
+        form.querySelector('input')?.focus();
+      });
+      const hidden = shownValue('vis_courses') === 'hidden';
+      return el(
+        'section',
+        { className: 'me-section', attrs: { 'aria-labelledby': 'me-courses-title' } },
+        [
+          el('h2', {
+            id: 'me-courses-title',
+            className: 'claim-h2',
+            text: 'Courses and certificates',
+            attrs: { tabindex: '-1' },
+          }),
+          el('p', {
+            className: 'claim-hint',
+            text: 'Training you have completed, such as a barista or grading course. It shows in your record on your page, labelled “Self-reported, not verified by Seduh”, and does not count towards your entries or podiums. Only you can change it. No certificate numbers, pictures or links.',
+          }),
+          hidden
+            ? el('p', {
+                className: 'claim-hint',
+                text: 'Your courses are hidden: nobody sees them on your page. Change this under Privacy.',
+              })
+            : null,
+          el('p', { className: 'me-count', text: `${count} of ${COURSE_LIMIT} courses` }),
+          count >= COURSE_LIMIT
+            ? el('p', {
+                className: 'claim-feedback',
+                attrs: { 'data-tone': 'error' },
+                text: describeMeHint('too_many_courses'),
+              })
+            : null,
+          el('div', { className: 'claim-actions' }, [addButton]),
+          formHost,
+          count === 0
+            ? el('p', { className: 'claim-hint', text: 'You have not added any courses yet.' })
+            : el(
+                'ul',
+                { className: 'me-entry-list', attrs: { role: 'list' } },
+                record.courses.map(courseRow),
+              ),
+          count > 0
+            ? el('p', {
+                className: 'claim-hint',
+                text: 'You can show one current certificate as “Certified: …” under your name on your story card. It is off unless you choose it.',
               })
             : null,
         ].filter(Boolean),

@@ -611,3 +611,67 @@ describe('the profile photo', () => {
     expect(local.root.querySelector('img.profile-avatar')).not.toBeNull();
   });
 });
+
+describe('courses and certificates (C6a)', () => {
+  const course = (over = {}) => ({
+    title: 'Barista Skills',
+    provider: 'Test Academy',
+    completed_year: 2024,
+    valid_until_year: 2027,
+    level: 'Intermediate',
+    note: null,
+    current: true,
+    on_card: false,
+    status: 'self_reported',
+    ...over,
+  });
+  it('shows a sub-section inside the record with its own count, labelled self-reported', async () => {
+    const { root } = await mount(
+      door({
+        recorded_results: [recorded(1)],
+        courses: [
+          course(),
+          course({
+            title: 'Q Grader',
+            completed_year: 2019,
+            valid_until_year: 2022,
+            current: false,
+          }),
+        ],
+      }),
+    );
+    const record = root.querySelector('[aria-labelledby="profile-record-title"]');
+    const block = record.querySelector('.profile-courses');
+    expect(block).not.toBeNull();
+    expect(block.querySelector('h3').textContent).toBe('Courses and certificates · 2');
+    expect(block.textContent).toContain('Self-reported, not verified by Seduh');
+    expect(block.textContent).toContain('Valid until 2027');
+    expect(block.textContent).toContain('Expired 2022');
+    expect(block.querySelector('.is-expired')).not.toBeNull();
+  });
+  it('does not change the headline stats or the entry summary', async () => {
+    const without = await mount(door({ recorded_results: [recorded(1)] }));
+    const withCourses = await mount(
+      door({ recorded_results: [recorded(1)], courses: [course(), course({ title: 'B' })] }),
+    );
+    const summary = (r) => text(r.root.querySelector('.profile-summary'));
+    expect(summary(withCourses)).toBe(summary(without));
+    const block = (r) => text(r.root.querySelector('.profile-summary-block'));
+    expect(block(withCourses)).toBe(block(without));
+  });
+  it('shows no courses block when there are none, and a person with only courses is not an empty page', async () => {
+    const none = await mount(door({ recorded_results: [recorded(1)] }));
+    expect(none.root.querySelector('.profile-courses')).toBeNull();
+    const only = await mount(door({ courses: [course()] }));
+    expect(only.root.querySelector('.profile-courses')).not.toBeNull();
+    expect(text(only.root)).toContain('Barista Skills');
+  });
+  it('draws a course as text only, and says confirmed only for a confirmed one', async () => {
+    const { root } = await mount(
+      door({ courses: [course({ title: '<b>x</b>', status: 'confirmed' })] }),
+    );
+    expect(root.querySelector('.profile-courses b')).toBeNull();
+    expect(text(root)).toContain('<b>x</b>');
+    expect(text(root)).toContain('Confirmed by the provider');
+  });
+});

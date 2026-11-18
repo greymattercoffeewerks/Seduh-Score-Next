@@ -11,6 +11,7 @@ export { normaliseCode, normaliseEmail };
 
 export const ENTRY_LIMIT = 200;
 export const TEAM_LINK_LIMIT = 40;
+export const COURSE_LIMIT = 60;
 export const MIN_YEAR = 1980;
 
 // the database's own text limits (app.seduh_clean_text)
@@ -21,6 +22,11 @@ export const LIMITS = {
   result_text: 80,
   note: 500,
   maxPlacement: 500,
+  // courses and certificates (app.seduh_course_clean)
+  course_title: 120,
+  course_provider: 80,
+  course_level: 40,
+  course_note: 300,
 };
 
 export const KIND_CHOICES = [
@@ -61,6 +67,13 @@ const TEXT = {
   bad_placement: `A placing is a whole number from 1 to ${LIMITS.maxPlacement}, or leave it empty.`,
   bad_note: `The note can be up to ${LIMITS.note} characters of plain text, on one line (no line breaks).`,
   too_many_entries: `You have reached the limit of ${ENTRY_LIMIT} entries. Delete one to add another.`,
+  // a course or certificate
+  bad_title: `Enter the course's title (up to ${LIMITS.course_title} characters, plain text).`,
+  bad_provider: `Enter who ran it (up to ${LIMITS.course_provider} characters, plain text).`,
+  bad_valid_until: 'The “valid until” year cannot be before the year you completed it.',
+  bad_level: `The level can be up to ${LIMITS.course_level} characters of plain text, for example “Intermediate”.`,
+  too_many_courses: `You have reached the limit of ${COURSE_LIMIT} courses. Delete one to add another.`,
+  not_current: 'That certificate has expired, so it cannot be shown on your card.',
   not_found: 'That item is not there any more. Reload the page to see your current record.',
   // teams
   team_not_found: 'That team is no longer available to link.',
@@ -164,8 +177,61 @@ export function fieldForHint(hint) {
       bad_result: 'result_text',
       bad_placement: 'placement',
       bad_note: 'note',
+      bad_title: 'title',
+      bad_provider: 'provider',
+      bad_valid_until: 'valid_until_year',
+      bad_level: 'level',
     }[hint] ?? null
   );
+}
+
+/**
+ * Pure. Checks a course form the way the database will: `{ ok: true, params }` (the arguments of seduh_add_course /
+ * seduh_update_course) or `{ ok: false, errors }`. Fields: title, provider, year (completed), valid_until_year, level, note.
+ */
+export function validateCourseForm(form, { thisYear = new Date().getUTCFullYear() } = {}) {
+  const errors = {};
+  const year = clean(form.year);
+  const yearNumber = Number(year);
+  if (!/^\d{4}$/.test(year) || yearNumber < MIN_YEAR || yearNumber > thisYear + 1)
+    errors.year = 'bad_year';
+  const until = clean(form.valid_until_year);
+  let untilNumber = null;
+  if (until !== '') {
+    untilNumber = Number(until);
+    if (
+      !/^\d{4}$/.test(until) ||
+      untilNumber > 2100 ||
+      (!errors.year && untilNumber < yearNumber)
+    ) {
+      errors.valid_until_year = 'bad_valid_until';
+    }
+  }
+  const text = (key, limit, hint, required) => {
+    const value = clean(form[key]);
+    if (value === '') {
+      if (required) errors[key] = hint;
+      return null;
+    }
+    if ([...value].length > limit || BAD_CHARS.test(value)) errors[key] = hint;
+    return value;
+  };
+  const title = text('title', LIMITS.course_title, 'bad_title', true);
+  const provider = text('provider', LIMITS.course_provider, 'bad_provider', true);
+  const level = text('level', LIMITS.course_level, 'bad_level', false);
+  const note = text('note', LIMITS.course_note, 'bad_note', false);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    params: {
+      p_title: title,
+      p_provider: provider,
+      p_completed_year: yearNumber,
+      p_valid_until_year: untilNumber,
+      p_level: level,
+      p_note: note,
+    },
+  };
 }
 
 // ---- the settings, in plain words ----
@@ -215,6 +281,12 @@ export const SETTINGS = [
     choices: VIS3,
   },
   {
+    key: 'vis_courses',
+    label: 'Courses and certificates',
+    help: 'Training you listed yourself, shown in your record labelled “Self-reported, not verified by Seduh”. Hidden also takes the “Certified” line off your story card.',
+    choices: VIS2,
+  },
+  {
     key: 'vis_cafe_affiliations',
     label: 'Cafe links',
     help: 'Cafes you work with, once the cafe has confirmed it too.',
@@ -249,6 +321,7 @@ const VIS_DEFAULTS = {
   vis_organiser_results: 'public',
   vis_self_reported_results: 'public',
   vis_judging_roles: 'public',
+  vis_courses: 'public',
   vis_cafe_affiliations: 'public',
   vis_knockout_record: 'public',
 };
@@ -281,6 +354,28 @@ function normaliseEntry(raw) {
     result_text: text(raw.result_text, LIMITS.result_text),
     placement: placement !== null && placement >= 1 ? placement : null,
     note: text(raw.note, LIMITS.note),
+  };
+}
+
+function normaliseCourse(raw) {
+  const id = intOrNull(raw?.id);
+  const title = text(raw?.title, LIMITS.course_title);
+  const provider = text(raw?.provider, LIMITS.course_provider);
+  const year = intOrNull(raw?.completed_year);
+  if (id === null || !title || !provider || year === null) return null;
+  const until = intOrNull(raw.valid_until_year);
+  return {
+    id,
+    title,
+    provider,
+    completed_year: year,
+    valid_until_year: until !== null && until >= year ? until : null,
+    level: text(raw.level, LIMITS.course_level),
+    note: text(raw.note, LIMITS.course_note),
+    // the database says whether it is current; anything but an exact false is treated as current
+    current: raw.current !== false,
+    on_card: raw.on_card === true,
+    confirmed: raw.status === 'confirmed',
   };
 }
 
@@ -333,6 +428,7 @@ export function normaliseMyRecord(raw) {
     settings,
     entries: list(raw.entries).map(normaliseEntry).filter(Boolean),
     teamLinks: list(raw.team_links).map(normaliseTeamLink).filter(Boolean),
+    courses: list(raw.courses).map(normaliseCourse).filter(Boolean),
   };
 }
 
