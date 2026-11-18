@@ -596,3 +596,10 @@ body {
     break-inside: avoid;
   }
 }
+
+/* A claimed competitor's name on the public results pages (only while Seduh ID discovery is open). */
+.results-profile-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

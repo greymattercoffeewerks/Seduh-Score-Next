@@ -318,6 +318,17 @@ once verified — see the Repo section below for the project details and how the
 push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
 `supabase db push` — this machine isn't `supabase link`-ed to the cloud project yet).
 
+**The local database is shared by every worktree and session (2026-11-18).** One local stack serves them all, so:
+
+- **pgTAP: `npm run db:test` only.** It runs in this worktree's own database (`seduh_wt_<worktree>`), rebuilt from this
+  worktree's migrations only when they change; never a bare `supabase test db`. `npm run db:test -- <file>` runs one file.
+- **Anything that uses the shared `postgres` database goes under the lock:** `npm run db:reset` already does; wrap a
+  Playwright run as `npm run db:lock -- run -- npm run test:e2e`. `npm run db:lock -- status` shows who holds it.
+- **Never point `supabase db reset --db-url` (or `db push`) at `127.0.0.1:54422`**: the CLI treats it as local and resets
+  the shared database and restarts the stack, whatever database the URL names.
+
+How it works: `CONVENTIONS.md`, "Migration workflow".
+
 ---
 
 ## Architecture (map only — see scoped `CLAUDE.md` files for the "why")

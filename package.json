@@ -1,6 +1,6 @@
 {
   "name": "seduh-score-next",
-  "version": "4.17.2",
+  "version": "4.17.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,9 +17,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "supabase": "supabase",
-    "db:reset": "supabase db reset",
+    "db:reset": "node tools/db-lock.mjs run -- supabase db reset",
+    "db:lock": "node tools/db-lock.mjs",
     "fixtures:phone": "node tools/generate-phone-fixture-sql.mjs",
-    "db:test": "supabase test db --local supabase/tests"
+    "db:test": "node tools/db-test.mjs",
+    "db:test:shared": "node tools/db-lock.mjs run -- supabase test db --local supabase/tests"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",

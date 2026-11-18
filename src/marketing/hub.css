@@ -1,0 +1,95 @@
+/* The Seduh ID hub (/id/, T-ID2.C5). Layout only: tokens and the shared primitives (.panel, .tag, .action) do the painting.
+   Written for 360px first. */
+.hub-body {
+  display: grid;
+  gap: var(--space-5);
+}
+.hub-label {
+  display: block;
+  margin-block-end: var(--space-2);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.hub-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.hub-input {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+  min-block-size: var(--tap-target-min);
+  padding-inline: var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
+  font: inherit;
+}
+.hub-form-row .action {
+  min-block-size: var(--tap-target-min);
+}
+.hub-countries,
+.hub-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hub-country {
+  min-block-size: var(--tap-target-min);
+  cursor: pointer;
+  font: inherit;
+}
+.hub-note {
+  margin: 0;
+  min-block-size: 1.5em;
+  color: var(--color-text-secondary);
+}
+.hub-results {
+  display: grid;
+  gap: var(--space-3);
+}
+.hub-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--tap-target-min);
+  padding: var(--space-3);
+  color: inherit;
+  text-decoration: none;
+}
+.hub-person:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.hub-person-text {
+  display: grid;
+  min-inline-size: 0;
+}
+.hub-person-name {
+  overflow-wrap: anywhere;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+}
+.hub-person-meta {
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+@media (min-width: 640px) {
+  .hub-results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 960px) {
+  .hub-results {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
