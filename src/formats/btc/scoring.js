@@ -151,7 +151,7 @@ function validCupEntries(draft, round) {
 
 // team2's share of one cup: the balance, or nothing on a void cup. THE one place the JS side derives it (mirrors
 // `case when voided then 0 else 3 - team1_tokens end` in the SQL views).
-function team2Share(team1Tokens, voided) {
+export function team2Share(team1Tokens, voided) {
   return voided ? 0 : TOKENS_PER_CUP - team1Tokens;
 }
 

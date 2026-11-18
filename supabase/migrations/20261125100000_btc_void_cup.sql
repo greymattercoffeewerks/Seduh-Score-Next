@@ -53,9 +53,10 @@
 --   3. restore confirm_btc_match verbatim from 20261011140000_tenancy_rpc_null_org_guard.sql (CREATE OR REPLACE; same
 --      signature, so the grants stay);
 --   4. create or replace view btc_standings: the 20260922100000 definition (tokens = cups x 3 completeness);
---   5. create or replace view btc_match_scores and btc_match_totals with the 20260922100000 definitions. CREATE OR REPLACE
---      cannot drop columns, so cups_scored and cups_voided stay on both views, inert and unread (a limit of
---      views, not of the data; the old behaviour is restored because the formula no longer reads voided);
+--   5. create or replace view btc_match_scores and btc_match_totals with the 20260922100000 definitions PLUS the two
+--      appended columns (cups_scored; cups_voided, written as `count(cv.cup_number) filter (where false)` in totals),
+--      because CREATE OR REPLACE cannot drop columns: they stay on both views, inert and unread (the exact text is in
+--      supabase/tests/088_btc_void_cup.sql; the old behaviour is restored because the formula no longer reads voided);
 --   6. drop view btc_cup_totals; recreate it as in 20260922120000 and re-grant select to authenticated;
 --   7. alter table public.btc_cup_votes drop constraint btc_cup_votes_void_holds_no_tokens, drop column voided;
 --   (the score_change_log rows that recorded a void stay.)

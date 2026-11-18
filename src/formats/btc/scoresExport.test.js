@@ -155,6 +155,8 @@ describe('golden: the proposal samples', () => {
       (line) => !line.startsWith('SAMPLE ABTC 2027 Regional Final,Round 1,2,'),
     );
     // The proposal predates the void cup: its sample has no "Void cup" column, so that column is dropped to compare.
+    // No cup of the sample is void, so its marker column is empty on every row.
+    expect(withoutMatch2.slice(1).every((line) => line.split(',')[8] === '')).toBe(true);
     expect(withoutMatch2.map(dropVoidColumn)).toEqual(sample('btc-scores-cups-SAMPLE.csv'));
     expect(lines.length).toBe(1 + 15 + 15 + 20);
   });

@@ -386,7 +386,7 @@ describe('mountScoringScreen', () => {
       await mount();
       expect(voidButton(1).textContent).toBe('Void (0–0)');
       expect(voidButton(1).getAttribute('aria-label')).toBe(
-        'Cup 1, void: no tokens for Alpha or Beta',
+        'Cup 1, Void (0–0): no tokens for Alpha or Beta',
       );
       expect(voidButton(1).getAttribute('aria-pressed')).toBe('false');
       expect(root.querySelector('#btc-token-help').textContent).toContain('Void (0–0)');

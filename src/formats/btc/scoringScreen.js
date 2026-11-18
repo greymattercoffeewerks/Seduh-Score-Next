@@ -33,7 +33,6 @@ import { listJudges } from './judges.js';
 import { findMatchById, listJudgeIdsForMatch } from './matches.js';
 import {
   JUDGES_PER_MATCH,
-  TOKENS_PER_CUP,
   blankDraft,
   buildConfirmParams,
   checkFinishTime,
@@ -54,6 +53,7 @@ import {
   missingCupCount,
   roundLabel,
   saveDraft,
+  team2Share,
   submitConfirmMatch,
   wasOperationProcessed,
   voidCupCount,
@@ -386,7 +386,7 @@ export async function mountScoringScreen(
     ui.announce.textContent =
       team1Tokens === 'void'
         ? `Cup ${cup}: void. No tokens for ${teamLabel('team1')} or ${teamLabel('team2')}`
-        : `Cup ${cup}: ${team1Tokens} for ${teamLabel('team1')}, ${TOKENS_PER_CUP - team1Tokens} for ${teamLabel('team2')}`;
+        : `Cup ${cup}: ${team1Tokens} for ${teamLabel('team1')}, ${team2Share(team1Tokens, false)} for ${teamLabel('team2')}`;
   }
 
   function discardEdits() {
@@ -639,7 +639,7 @@ export async function mountScoringScreen(
       attrs: {
         type: 'button',
         'aria-pressed': 'false',
-        'aria-label': `Cup ${cup}, void: no tokens for ${teamLabel('team1')} or ${teamLabel('team2')}`,
+        'aria-label': `Cup ${cup}, Void (0–0): no tokens for ${teamLabel('team1')} or ${teamLabel('team2')}`,
         'aria-describedby': 'btc-token-help',
         'data-value': 'void',
       },
@@ -657,8 +657,10 @@ export async function mountScoringScreen(
       { className: 'btc-cup-row', attrs: { role: 'group', 'aria-label': `Cup ${cup}` } },
       [
         el('div', { className: 'btc-cup-head' }, [
-          el('span', { className: 'btc-cup-number', text: `Cup ${cup}` }),
-          voidTag,
+          el('span', {}, [
+            el('span', { className: 'btc-cup-number', text: `Cup ${cup}` }),
+            voidTag,
+          ]),
           el('span', { className: 'btc-cup-team2', attrs: { 'aria-hidden': 'true' } }, [
             el('span', { text: `${teamLabel('team2')}: ` }),
             team2Value,

@@ -13,7 +13,7 @@
 // cups with 2 or 3 tokens, a display count that is not part of the score).
 import { roundLabel as knockoutLabel } from './roundNames.js';
 import { recordedWinnerId } from './tiebreak.js';
-import { cupsForRound } from './scoring.js';
+import { cupsForRound, team2Share } from './scoring.js';
 import { formatGeneratedAt } from '../../core/signOffSheet.js';
 
 export const TEST_PREFIX = 'TEST · ';
@@ -210,7 +210,7 @@ export function buildScoresTables({
         if (vote === undefined) continue;
         // A void cup (both teams failed to submit, or both submitted the wrong cup) is 0 and 0: it is won by nobody.
         const team1Tokens = vote.voided ? 0 : vote.team1;
-        const team2Tokens = vote.voided ? 0 : 3 - vote.team1;
+        const team2Tokens = team2Share(vote.team1, vote.voided);
         if (team1Tokens >= 2) team1CupsWon += 1;
         if (team2Tokens >= 2) team2CupsWon += 1;
         cupRows.push({

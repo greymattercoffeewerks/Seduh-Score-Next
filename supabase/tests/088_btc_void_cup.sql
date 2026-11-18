@@ -11,7 +11,7 @@
 --
 -- Fixture ids are unique to this file (the local database is shared with parallel reviewers).
 begin;
-select plan(54);
+select plan(56);
 
 insert into auth.users (id, email) values
   ('88000000-0000-0000-0000-000000000001', 'void-member@test.seduh-next'),
@@ -255,6 +255,11 @@ select ok(
   'turning void cups normal after confirmation is logged (the old value says voided = true)'
 );
 select ok(
+  exists (select 1 from score_change_log
+           where event_id = '88000000-0000-0000-0000-0000000000e1' and table_name = 'btc_cup_votes' and action = 'insert'),
+  'cup-vote inserts are logged for the confirmed event (precondition of the next check)'
+);
+select ok(
   not exists (select 1 from score_change_log
                where event_id = '88000000-0000-0000-0000-0000000000e1' and table_name = 'btc_cup_votes'
                  and action = 'insert' and not (new_value ? 'voided')),
@@ -262,8 +267,9 @@ select ok(
 );
 
 -- ---------- the rollback restores the old behaviour ----------
--- The statements below are migration 20261125100000's rollback block, steps 1, 4, 5, 6 and 7 (steps 2 and 3, restoring
--- the two functions verbatim, are exercised by the manual run recorded in CHANGELOG.md: they copy long function bodies).
+-- The statements below are a copy of migration 20261125100000's rollback block, steps 1, 4, 5, 6 and 7. Steps 2 and 3
+-- (restoring the two functions verbatim from earlier migrations) are run by supabase/tests/manual/btc-void-cup-rollback.sh,
+-- which builds them from those migration files and checks the result (outcome recorded in CHANGELOG.md).
 
 select throws_ok(
   $$ do $do$ begin
@@ -275,6 +281,12 @@ select throws_ok(
 );
 -- V2, V3 and V4 still hold void cups here; clear the flag the way an operator would (scoring them again).
 update btc_cup_votes set voided = false where voided;
+select ok(
+  exists (select 1 from score_change_log
+           where event_id = '88000000-0000-0000-0000-0000000000e1' and table_name = 'btc_cup_votes'
+             and action = 'update' and after_confirm and old_value ->> 'voided' = 'true' and new_value ->> 'voided' = 'false'),
+  'an UPDATE that clears a void flag after confirmation is logged with both values'
+);
 select lives_ok($$ do $do$ begin
   if exists (select 1 from public.btc_cup_votes where voided) then raise exception 'void cups remain'; end if;
 end $do$ $$, 'step 1 passes once no void cup is recorded');
