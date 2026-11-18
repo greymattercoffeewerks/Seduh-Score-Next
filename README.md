@@ -67,8 +67,12 @@ defaults, so Studio is at `http://127.0.0.1:54423`:
 ```bash
 npm run supabase -- start
 npm run db:reset   # apply all migrations + supabase/seed.sql to a fresh local database
-npm run db:test    # pgTAP suite
+npm run db:test    # pgTAP suite, in this worktree's own database
 ```
+
+Every worktree shares one local stack. `db:test` runs in a database of its own; anything else that uses the shared
+database (`db:reset`, Playwright) takes a lock first, so parallel sessions queue instead of overwriting each other. See
+`CONVENTIONS.md`, "Migration workflow".
 
 `seed.sql` provisions a fixed local org and organiser login for development and CI only.
 
@@ -86,8 +90,10 @@ npm run db:test    # pgTAP suite
 | `npm run check:admin-leak`        | Fail if the operator console leaked into a public bundle |
 | `npm run lint`                    | ESLint                                                   |
 | `npm run format` / `format:check` | Prettier                                                 |
-| `npm run db:reset`                | Reset the local Supabase database from migrations        |
-| `npm run db:test`                 | Run the pgTAP suite against the local database           |
+| `npm run db:reset`                | Reset the local Supabase database (waits for the lock)   |
+| `npm run db:test`                 | pgTAP in this worktree's own database                    |
+| `npm run db:test:shared`          | pgTAP against the shared database (under the lock)       |
+| `npm run db:lock -- status`       | Who holds the local database lock                        |
 
 Every `dev-*` Playwright project (`dev-app`, `dev-audience`, `dev-tenancy`, `dev-admin`,
 `dev-recovery`, `dev-gating`) drives the real app against the local Supabase stack, so

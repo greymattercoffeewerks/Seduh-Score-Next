@@ -429,7 +429,9 @@ verify_jwt = true
 verify_jwt = true
 
 [analytics]
-enabled = true
+# Off locally (2026-11-18): the analytics container took ~550 MB of Docker's memory and its log shipper (vector) was in a
+# restart loop; nothing in this repo reads local logs. Turn it on for a session that needs Studio's log explorer.
+enabled = false
 port = 54427
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
