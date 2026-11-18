@@ -26,7 +26,9 @@ import {
   SETTINGS,
   TEAM_LINK_LIMIT,
   TEAM_ROLE_CHOICES,
+  DISPUTE_REASON_MAX,
   describeMeHint,
+  disputeWords,
   fieldForHint,
   groupEntriesByYear,
   isSignedOutHint,
@@ -40,12 +42,13 @@ import {
 import { formatFoundingNumber } from './claimFlow.js';
 import { photoSrc } from '../core/seduhProfile.js';
 import { PHOTO, prepareAvatar } from './photoPipeline.js';
-import { initialsOf } from './profileFormat.js';
+import { dateText, initialsOf } from './profileFormat.js';
 
 const KIND_WORD = Object.fromEntries(KIND_CHOICES);
 const TABS = [
   ['record', 'My record'],
   ['courses', 'Courses'],
+  ['recorded', 'Recorded results'],
   ['teams', 'My teams'],
   ['photo', 'Photo'],
   ['privacy', 'Privacy'],
@@ -368,6 +371,8 @@ export function mountMeScreen(
           ? recordPanel()
           : tab === 'courses'
             ? coursesPanel()
+            : tab === 'recorded'
+              ? recordedPanel()
             : tab === 'teams'
               ? teamsPanel()
               : tab === 'photo'
@@ -676,7 +681,7 @@ export function mountMeScreen(
           }),
           el('p', {
             className: 'claim-hint',
-            text: 'Entries you add here show on your page, labelled “Self-reported, not verified by Seduh”. Only you can change them. Results recorded by Seduh Score and team results from organisers are not listed here: they are not yours to edit.',
+            text: 'Entries you add here show on your page, labelled “Self-reported, not verified by Seduh”. Only you can change them. Results recorded by Seduh Score are under “Recorded results”, and team results from organisers are not yours to edit.',
           }),
           el('p', { className: 'me-count', text: `${count} of ${ENTRY_LIMIT} entries` }),
           count >= ENTRY_LIMIT
@@ -715,6 +720,152 @@ export function mountMeScreen(
                 ),
               ),
         ].filter(Boolean),
+      );
+    }
+
+    // ---- Recorded results: "This isn't mine" (T-ID2.NM) ----
+
+    function recordedRow(result) {
+      const row = el('li', { className: 'me-entry' });
+      const meta = [result.organiser, dateText({ date: result.date })].filter(Boolean).join(' · ');
+      const main = (extra) =>
+        el(
+          'div',
+          { className: 'me-entry-main' },
+          [
+            el('span', { className: 'me-entry-title', text: result.title }),
+            meta ? el('span', { className: 'me-entry-meta', text: meta }) : null,
+            result.detail
+              ? el('span', { className: 'me-entry-detail', text: result.detail })
+              : null,
+            ...extra,
+          ].filter(Boolean),
+        );
+      const showView = () => {
+        if (result.dispute) {
+          const buttons = [];
+          let undo = null;
+          if (result.dispute !== 'link_wrong') {
+            undo = button('Show it again', {
+              label: `Show it again: ${result.title}`,
+              onClick: async () => {
+                busy([undo], true);
+                const done = await api.withdrawDispute(result.key);
+                if (destroyed) return;
+                if (!done.ok) {
+                  busy([undo], false);
+                  failed(done);
+                  return;
+                }
+                say('That result is back on your page.');
+                if (await refresh()) document.getElementById('me-recorded-title')?.focus();
+              },
+            });
+            buttons.push(undo);
+          }
+          row.replaceChildren(
+            ...[
+              main([
+                el('span', { className: 'me-entry-note', text: disputeWords(result.dispute) }),
+              ]),
+              buttons.length ? el('div', { className: 'me-entry-actions' }, buttons) : null,
+            ].filter(Boolean),
+          );
+          return {};
+        }
+        const notMine = button('This isn’t mine', {
+          label: `This isn’t mine: ${result.title}`,
+          onClick: showConfirm,
+        });
+        row.replaceChildren(main([]), el('div', { className: 'me-entry-actions' }, [notMine]));
+        return { notMine };
+      };
+      function showConfirm() {
+        const note = el('p', {
+          className: 'claim-message',
+          text: `Hide “${result.title}” from your page? It disappears from your public page at once, and we check it with the organiser. The event’s own results page does not change. You can undo this.`,
+          attrs: { id: `me-nm-q-${result.key}`, role: 'alert' },
+        });
+        const reason = el('input', {
+          className: 'claim-input',
+          attrs: { name: 'reason', maxlength: String(DISPUTE_REASON_MAX), autocomplete: 'off' },
+        });
+        const reasonStatus = statusLine(`me-nm-reason-status-${result.key}`);
+        const confirmButton = button('Yes, hide it', {
+          primary: true,
+          id: `me-nm-yes-${result.key}`,
+          className: 'me-danger',
+        });
+        const keep = button('Keep it', {
+          onClick: () => {
+            const { notMine } = showView();
+            notMine?.focus();
+          },
+        });
+        confirmButton.setAttribute('aria-describedby', note.id);
+        confirmButton.addEventListener('click', async () => {
+          setStatus(reasonStatus, '');
+          reason.removeAttribute('aria-invalid');
+          busy([confirmButton, keep], true);
+          const done = await api.disputeResult(result.key, reason.value.trim());
+          if (destroyed) return;
+          if (!done.ok) {
+            busy([confirmButton, keep], false);
+            const words = failed(done);
+            if (words && done.hint === 'bad_reason') {
+              setStatus(reasonStatus, words, 'error');
+              reason.setAttribute('aria-invalid', 'true');
+              reason.focus();
+            }
+            return;
+          }
+          say('Hidden from your page. We will check it with the organiser.');
+          if (await refresh()) document.getElementById('me-recorded-title')?.focus();
+        });
+        row.replaceChildren(
+          note,
+          field({
+            id: `me-nm-reason-${result.key}`,
+            label: 'Why? (optional)',
+            hint: 'For example: wrong phone number. Plain text, up to 200 characters.',
+            input: reason,
+            status: reasonStatus,
+          }),
+          el('div', { className: 'claim-actions' }, [confirmButton, keep]),
+        );
+        keep.focus();
+      }
+      showView();
+      return row;
+    }
+
+    function recordedPanel() {
+      const rows = record.recorded;
+      return el(
+        'section',
+        { className: 'me-section', attrs: { 'aria-labelledby': 'me-recorded-title' } },
+        [
+          el('h2', {
+            id: 'me-recorded-title',
+            className: 'claim-h2',
+            text: 'Results recorded by Seduh Score',
+            attrs: { tabindex: '-1' },
+          }),
+          el('p', {
+            className: 'claim-hint',
+            text: 'These came from events an organiser ran on Seduh Score, matched to you by the phone number on their roster. If one is not yours, choose “This isn’t mine”: it leaves your page at once and we check it with the organiser. You see all of them here, whatever your privacy settings say.',
+          }),
+          rows.length === 0
+            ? el('p', {
+                className: 'claim-hint',
+                text: 'No recorded results are linked to you yet.',
+              })
+            : el(
+                'ul',
+                { className: 'me-entry-list', attrs: { role: 'list' } },
+                rows.map(recordedRow),
+              ),
+        ],
       );
     }
 

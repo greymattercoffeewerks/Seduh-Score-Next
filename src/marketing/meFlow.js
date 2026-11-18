@@ -6,6 +6,8 @@
 // shows the words here and never the server's own text. An unknown hint gets the generic sentence.
 import { normaliseCode, normaliseEmail } from './claimFlow.js';
 import { ENTRY_KINDS, cleanPhotoUrl, teamResultWords } from '../core/seduhProfile.js';
+import { formatDuration } from '../core/duration.js';
+import { ordinalLabel } from '../core/ordinal.js';
 
 export { normaliseCode, normaliseEmail };
 
@@ -13,6 +15,8 @@ export const ENTRY_LIMIT = 200;
 export const TEAM_LINK_LIMIT = 40;
 export const COURSE_LIMIT = 60;
 export const MIN_YEAR = 1980;
+export const DISPUTE_LIMIT = 50;
+export const DISPUTE_REASON_MAX = 200;
 
 // the database's own text limits (app.seduh_clean_text)
 export const LIMITS = {
@@ -75,6 +79,12 @@ const TEXT = {
   too_many_courses: `You have reached the limit of ${COURSE_LIMIT} courses. Delete one to add another.`,
   not_current: 'That certificate has expired, so it cannot be shown on your card.',
   not_found: 'That item is not there any more. Reload the page to see your current record.',
+  // "This isn't mine" (T-ID2.NM)
+  already_disputed: 'You already said that result is not yours.',
+  not_undoable:
+    'We checked that result and it is not yours, so it cannot be shown on your page again.',
+  bad_reason: `A reason can be up to ${DISPUTE_REASON_MAX} characters of plain text, on one line.`,
+  too_many_disputes: `You have reached the limit of ${DISPUTE_LIMIT} results marked as not yours.`,
   // teams
   team_not_found: 'That team is no longer available to link.',
   already_linked: 'You have already linked that team.',
@@ -401,6 +411,53 @@ function normaliseTeamLink(raw) {
   };
 }
 
+const DISPUTE_STATUSES = ['pending', 'stands', 'link_wrong'];
+
+function normaliseRecorded(raw) {
+  const key =
+    typeof raw?.result_key === 'string' && /^[0-9a-f]{32}$/.test(raw.result_key)
+      ? raw.result_key
+      : null;
+  const title = text(raw?.event_name, 120);
+  if (!key || !title) return null;
+  const placing = intOrNull(raw.placing);
+  const correct = intOrNull(raw.correct);
+  const total = intOrNull(raw.total);
+  const secs = intOrNull(raw.time_secs);
+  const status = DISPUTE_STATUSES.includes(raw.dispute?.status) ? raw.dispute.status : null;
+  return {
+    key,
+    title,
+    organiser: text(raw.organiser_name, 80),
+    date:
+      typeof raw.event_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.event_date)
+        ? raw.event_date
+        : null,
+    detail: [
+      placing !== null && placing >= 1 ? `${ordinalLabel(placing)} place` : null,
+      text(raw.stage, 60),
+      correct !== null && total !== null ? `${correct} / ${total} correct` : null,
+      secs !== null && secs >= 0 ? formatDuration(secs) : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    dispute: status,
+  };
+}
+
+/** Pure. A recorded result's dispute in words, for the person (null status: not disputed). */
+export function disputeWords(status) {
+  return (
+    {
+      pending: 'Hidden from your public page while we check it with the organiser.',
+      stands:
+        'We checked: this result is yours. It stays hidden from your page until you show it again.',
+      link_wrong:
+        'We checked: this result was linked to you by mistake, and it stays off your page.',
+    }[status] ?? ''
+  );
+}
+
 /** Pure. Rebuilds the `seduh_my_record` answer from known keys; null when it is not a usable record. */
 export function normaliseMyRecord(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -429,6 +486,7 @@ export function normaliseMyRecord(raw) {
     entries: list(raw.entries).map(normaliseEntry).filter(Boolean),
     teamLinks: list(raw.team_links).map(normaliseTeamLink).filter(Boolean),
     courses: list(raw.courses).map(normaliseCourse).filter(Boolean),
+    recorded: list(raw.recorded_results).map(normaliseRecorded).filter(Boolean),
   };
 }
 
