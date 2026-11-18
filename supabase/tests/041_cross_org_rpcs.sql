@@ -299,7 +299,7 @@ select is(
       -- of an organisation; the reads return aggregates and identity metadata only (048 pins their column lists), the
       -- writes wrap the service-role-only provisioning functions and audit every change (049 refuses anyone else); the entitlement grant functions are the same kind (053; admin_event_resnapshot: 054)
       and p.oid::regprocedure::text not in (
-        'public_event_summary(uuid)', 'team_can_manage(uuid,uuid)', 'team_can_restore(uuid,uuid)', 'get_scoring_record(uuid)',
+        'public_event_summary(uuid)', 'seduh_results_profile_links(uuid)', 'team_can_manage(uuid,uuid)', 'team_can_restore(uuid,uuid)', 'get_scoring_record(uuid)',
         'reset_guess_session_data(uuid)', 'session_bean_count(uuid)', 'session_display_guesses(uuid)',
         'submit_guess(uuid,text,integer,text,text)',
         'admin_org_detail(uuid)', 'admin_list_audit(integer,bigint,uuid)',

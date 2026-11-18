@@ -14,6 +14,7 @@ import { el, withSrExpansion } from '../core/dom.js';
 import { formatDuration, formatDurationLong } from '../core/duration.js';
 import { findPublishedResultForEvent, publishedOrgName } from '../core/publicResults.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
+import { linkClaimedNames } from '../core/seduhDiscovery.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
 import { formatDate, formatLabel, scoreCell } from './resultsScreen.js';
@@ -125,7 +126,11 @@ function buildTable({ kind, rows }, title) {
       rows.map((row) =>
         el('tr', {}, [
           el('td', { className: 'results-sheet-place tabular-nums', text: row.place ?? '—' }),
-          el('td', { className: 'results-sheet-name', text: row.name }),
+          el('td', {
+            className: 'results-sheet-name',
+            text: row.name,
+            attrs: { 'data-profile-name': row.name, 'data-profile-cafe': row.cafe ?? '' },
+          }),
           textCell(row.cafe),
           scoreOrDash(row),
           ...(standings ? [timeOrDash(row), textCell(row.round)] : []),
@@ -419,6 +424,8 @@ export async function mountResultsSheet(root, { eventId, client } = {}) {
       `Results sheet for ${cleanText(event.eventName) || 'this event'} is ready.`,
     );
     currentSheet = sheet;
+    // Claimed competitors' names become links only while discovery is open (database switch); never awaited.
+    void linkClaimedNames(sheet, event.eventId, client);
     syncScrollHint(sheet);
     // Web fonts change the table's width once they load.
     document.fonts?.ready?.then(() => currentSheet === sheet && syncScrollHint(sheet));

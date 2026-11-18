@@ -234,6 +234,14 @@ export const COUNTRY_LISTING = {
   help: 'Off unless you switch it on. When on, your name is listed among the members of your teams on the country page. It only shows while your name and your organisers’ results are public. You can switch it off at any time.',
 };
 
+// "Show me in Seduh ID search" (T-ID2.C5): ON by default. It only has an effect once the owner opens discovery, and it never
+// makes anyone appear who is hidden: a person is found only while their name is public.
+export const SEARCH_LISTING = {
+  key: 'listed_in_search',
+  label: 'Show me in Seduh ID search',
+  help: 'On unless you switch it off. When on, people can find your page by searching for your name, handle or café, or by browsing a country’s list of people (separate from the team members on a country page). It only works while your name is public. Your page itself stays open to anyone with the link.',
+};
+
 const VIS_VALUES = new Set(['public', 'organisers', 'hidden']);
 const VIS_DEFAULTS = {
   vis_identity: 'public',
@@ -305,7 +313,11 @@ export function normaliseMyRecord(raw) {
   const handle = text(account?.handle, 40);
   if (!handle) return null;
   const settingsRaw = raw.settings && typeof raw.settings === 'object' ? raw.settings : {};
-  const settings = { listed_on_country_pages: settingsRaw.listed_on_country_pages === true };
+  const settings = {
+    listed_on_country_pages: settingsRaw.listed_on_country_pages === true,
+    // on unless the record says exactly false (the database default is on)
+    listed_in_search: settingsRaw.listed_in_search !== false,
+  };
   for (const [key, fallback] of Object.entries(VIS_DEFAULTS)) {
     settings[key] = VIS_VALUES.has(settingsRaw[key]) ? settingsRaw[key] : fallback;
   }

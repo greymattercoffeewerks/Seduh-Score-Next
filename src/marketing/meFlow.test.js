@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   COUNTRY_LISTING,
+  SEARCH_LISTING,
   ENTRY_LIMIT,
   LIMITS,
   SETTINGS,
@@ -305,5 +306,17 @@ describe('grouping and words', () => {
     );
     expect(teamResultWords({ placement: null, stage_reached: 'champion' })).toBe('Champion');
     expect(teamResultWords({ placement: null, stage_reached: null })).toBe('');
+  });
+});
+
+describe('Show me in Seduh ID search (T-ID2.C5)', () => {
+  it('is on unless the record says exactly false', () => {
+    const rec = (settings) => normaliseMyRecord({ account: { handle: 'x' }, settings });
+    expect(rec({}).settings.listed_in_search).toBe(true);
+    expect(rec({ listed_in_search: true }).settings.listed_in_search).toBe(true);
+    expect(rec({ listed_in_search: false }).settings.listed_in_search).toBe(false);
+    expect(rec({ listed_in_search: 'no' }).settings.listed_in_search).toBe(true);
+    expect(SEARCH_LISTING.key).toBe('listed_in_search');
+    expect(SEARCH_LISTING.label).toBe('Show me in Seduh ID search');
   });
 });
