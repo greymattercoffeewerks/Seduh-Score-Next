@@ -8,6 +8,7 @@ import { raceTimeout } from '../core/timeout.js';
 
 const LATEST_TIMEOUT_MS = 6000;
 const LIVE_TIMEOUT_MS = 6000;
+const DISCOVERY_TIMEOUT_MS = 6000;
 // The prerender (tools/prerender-public-pages.mjs) installs a jsdom `window`; a bare `navigator` there is
 // Node's own, so read it from `window`.
 const prerendering = /jsdom/i.test(window.navigator?.userAgent ?? '');
@@ -27,5 +28,13 @@ mountLandingScreen(document.getElementById('app'), {
         raceTimeout(
           import('../core/publicLiveNow.js').then((m) => m.findLiveNow()),
           LIVE_TIMEOUT_MS,
+        ),
+  // Seduh ID discovery: the database's own switch. True shows the "Find a competitor" box and the Seduh ID links.
+  loadDiscovery: prerendering
+    ? undefined
+    : () =>
+        raceTimeout(
+          import('../core/seduhDiscovery.js').then((m) => m.fetchDiscoveryOpen()),
+          DISCOVERY_TIMEOUT_MS,
         ),
 });

@@ -17,6 +17,7 @@ import { buildPublicHeader } from './publicHeader.js';
 import { CONTACT_EMAIL } from './trustContent.js';
 import {
   COUNTRY_LISTING,
+  SEARCH_LISTING,
   ENTRY_LIMIT,
   KIND_CHOICES,
   LIMITS,
@@ -345,8 +346,10 @@ export function mountMeScreen(
     function syncControl(key) {
       if (tab !== 'privacy') return;
       const value = shownValue(key);
-      if (key === COUNTRY_LISTING.key) {
-        const box = panel.querySelector('#me-set-listed');
+      if (key === COUNTRY_LISTING.key || key === SEARCH_LISTING.key) {
+        const box = panel.querySelector(
+          key === SEARCH_LISTING.key ? '#me-set-search' : '#me-set-listed',
+        );
         if (box) box.checked = value === true;
       } else {
         const radio = panel.querySelector(`input[name="${key}"][value="${value}"]`);
@@ -1164,6 +1167,20 @@ export function mountMeScreen(
         save(COUNTRY_LISTING.key, listed.checked, listed.checked ? 'on' : 'off'),
       );
 
+      const searchBox = el('input', {
+        className: 'claim-checkbox',
+        attrs: {
+          type: 'checkbox',
+          id: 'me-set-search',
+          name: SEARCH_LISTING.key,
+          'aria-describedby': 'me-set-search-help',
+        },
+      });
+      searchBox.checked = shownValue(SEARCH_LISTING.key) !== false;
+      searchBox.addEventListener('change', () =>
+        save(SEARCH_LISTING.key, searchBox.checked, searchBox.checked ? 'on' : 'off'),
+      );
+
       // Each change is saved at once and announced. The controls are never disabled and the panel is never redrawn by a save,
       // so keyboard focus and whatever else the person is doing stay where they are; a refusal puts the control back to what
       // the record holds (syncControl), once no later change to the same setting is waiting.
@@ -1183,14 +1200,16 @@ export function mountMeScreen(
             failed(result);
             return;
           }
-          const label = SETTINGS.find((x) => x.key === key)?.label ?? COUNTRY_LISTING.label;
+          const label =
+            SETTINGS.find((x) => x.key === key)?.label ??
+            (key === SEARCH_LISTING.key ? SEARCH_LISTING.label : COUNTRY_LISTING.label);
           const next = result.data && typeof result.data === 'object' ? result.data : {};
           record = {
             ...record,
             settings: { ...record.settings, [key]: key in next ? next[key] : value },
           };
           say(
-            key === COUNTRY_LISTING.key
+            key === COUNTRY_LISTING.key || key === SEARCH_LISTING.key
               ? `${label}: ${value ? 'on' : 'off'}. Saved.`
               : `${label}: ${word}. Saved.`,
           );
@@ -1229,6 +1248,17 @@ export function mountMeScreen(
               className: 'claim-hint',
               id: 'me-set-listed-help',
               text: COUNTRY_LISTING.help,
+            }),
+          ]),
+          el('div', { className: 'me-setting' }, [
+            el('label', { className: 'claim-check', attrs: { for: 'me-set-search' } }, [
+              searchBox,
+              el('span', { text: SEARCH_LISTING.label }),
+            ]),
+            el('p', {
+              className: 'claim-hint',
+              id: 'me-set-search-help',
+              text: SEARCH_LISTING.help,
             }),
           ]),
           el('p', { className: 'claim-hint' }, [

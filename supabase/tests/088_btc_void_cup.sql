@@ -1,6 +1,6 @@
 -- BTC void cup (committee rule, owner 2026-11-18): a cup where both teams failed to submit, or both submitted the
 -- wrong cup, scores 0 tokens for BOTH teams. Per cup; every bonus is decided as usual. Migration
--- 20261125100000_btc_void_cup.sql.
+-- 20261125110000_btc_void_cup.sql.
 --
 -- The fixture numbers V1-V4 are mirrored, number for number, by src/formats/btc/scoring.test.js
 -- ("void cup: computeScores pinned to ..."), so the SQL authority (btc_match_scores) and the JS preview cannot drift.
@@ -267,7 +267,7 @@ select ok(
 );
 
 -- ---------- the rollback restores the old behaviour ----------
--- The statements below are a copy of migration 20261125100000's rollback block, steps 1, 4, 5, 6 and 7. Steps 2 and 3
+-- The statements below are a copy of migration 20261125110000's rollback block, steps 1, 4, 5, 6 and 7. Steps 2 and 3
 -- (restoring the two functions verbatim from earlier migrations) are run by supabase/tests/manual/btc-void-cup-rollback.sh,
 -- which builds them from those migration files and checks the result (outcome recorded in CHANGELOG.md).
 

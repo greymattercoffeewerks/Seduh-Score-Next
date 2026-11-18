@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs migration 20261125100000_btc_void_cup.sql's rollback block (steps 2 to 7) against the LOCAL database, inside a
+# Runs migration 20261125110000_btc_void_cup.sql's rollback block (steps 2 to 7) against the LOCAL database, inside a
 # transaction that is rolled back at the end, and prints what it finds. Run it after `npm run db:reset`.
 # Step 2/3 bodies are cut verbatim from the migrations the rollback block names; steps 4 to 7 from supabase/tests/088.
 # Expected output: log_has_voided=false, confirm_has_voided=false, column_gone=true, grants=authenticated,postgres,service_role

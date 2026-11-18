@@ -99,7 +99,20 @@ late redraw re-inserts. When a redraw re-inserts the kept line, set `aria-live="
 ## Migration workflow
 
 - Local dev: `npm run db:reset` (wraps `supabase db reset` — applies every migration to
-  a fresh local database).
+  a fresh local database). It runs under the database lock (`tools/db-lock.mjs`, exclusive) and waits for every pgTAP
+  run in progress, because it recreates the database container.
+- **pgTAP locally: `npm run db:test`** (`tools/db-test.mjs`, 2026-11-18). Each worktree tests in its own database,
+  `seduh_wt_<worktree>`, in the same container. It is built from a clean base (Supabase's own schemas, none of ours,
+  dumped once per Postgres image from a throwaway second project and kept in `.git/seduh-db/`) plus this worktree's
+  migrations and `seed.sql`, applied with psql; the build takes about a minute and is skipped while a fingerprint of the
+  migrations, seed and base still matches. The database has `statement_timeout` 120s and `lock_timeout` 30s, a run is
+  stopped after 15 minutes (`--timeout-mins N`), and a leftover query from a killed run is cleared before the next one.
+  Options: `--rebuild`, `--drop`, `--prune` (drops the databases of deleted worktrees). `npm run db:test:shared` is the
+  old run against the shared `postgres` database, under the lock. CI is unchanged (one fresh stack, `supabase test db`).
+- **The lock** (`npm run db:lock -- status | run [--shared] -- <cmd> | clear`): files in `.git/seduh-db-lock/`, shared
+  by every worktree. Exclusive for anything that uses or resets the shared database (reset, Playwright), shared for
+  per-worktree pgTAP. A holder whose process is gone, or older than 45 min (exclusive) / 30 min (shared), is cleared by
+  the next caller. Not a Postgres advisory lock, because a reset drops the database that would hold it.
 - Every migration needs a `-- rollback:` block, and the rollback must actually be run
   once, inside `begin; ... rollback;`, before the migration is considered done — a
   rollback block that looks correct and isn't (e.g. dropping policies but never
@@ -924,6 +937,10 @@ A claimed person's own record: **self-reported entries** and **team links**. The
 ### Seduh ID: My Seduh ID, the screens that call the person's doors (T-ID2.D-b, 4.13.0)
 
 `/id/me/` is the front end of the contract above (`src/marketing/me*.js`, details in `src/marketing/CLAUDE.md`). What a later change must keep: the page uses only the competitor client (`claimClient.js`); sign-in is an emailed code with `shouldCreateUser: false` and an answer that never depends on whether the email has an account; every hint of the eight doors has its own words in `meFlow.js` (add a hint there in the same change as a new one in SQL; `meFlow.test.js` lists them); a destructive action asks inside the page; every write is followed by a reload of `seduh_my_record`. The Privacy page describes the settings and the self-reported entries ("What you add to your Seduh ID yourself"): change it in the same release as any change to what a person can add or hide. The person page (`/id/<handle>/`) draws the two record shapes as pinned in `core/seduhProfile.js`.
+
+### Seduh ID: discovery (T-ID2.C5, 20261125100000)
+
+The hub at `/id/` (the same shell as the person pages: `profileMain.js` mounts `hubScreen.js` for the bare path), the landing page's "Find a competitor" box and the claimed-name links on the results pages. **One switch, `app.seduh_discovery_switch.enabled`, OFF until the owner opens it** ([docs/runbooks/seduh-discovery.md](docs/runbooks/seduh-discovery.md) is how). It is enforced in SQL: `app.seduh_discovery_people(boolean)` is the one place that decides who can be found and returns nobody while the switch is off, and the four anonymous doors (`seduh_discovery_open`, `seduh_discovery_search`, `seduh_discovery_countries`, `seduh_results_profile_links`) are built on it. What a later change must keep: a person is returned only if the account is open, attested, on an active identity, `vis_identity = 'public'` and (for search and browse) `listed_in_search` (the new setting, ON by default, edited through `seduh_set_my_settings`); a door returns only what the profile already shows (handle, public name, country, photo path), never an id; every field is rebuilt and checked in `core/seduhDiscovery.js` and a closed, failed or malformed answer shows nothing; the pages never test the switch themselves (they ask a door). The cafe match and the results-page link reuse the profile's matching rule in one helper (`app.seduh_published_matches`); change that rule in the profile door and the helper together. A new discovery door goes into pgTAP `088`, `037`'s anonymous list and (if it takes a uuid) `041`'s exemption list. The Privacy page ("Being found in Seduh ID search") changes in the same release as any change to what search shows.
 
 ### Seduh ID: the person story card (T-ID2.C3, 4.16.0)
 

@@ -338,3 +338,46 @@ describe('mountLandingScreen — live now bar', () => {
     expect(panel.textContent).toContain('and 2 more live now');
   });
 });
+
+describe('landing: Find a competitor (Seduh ID discovery)', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  beforeEach(() => vi.stubGlobal('matchMedia', () => ({ matches: true })));
+  function mount(loadDiscovery) {
+    const root = document.createElement('div');
+    mountLandingScreen(root, { loadDiscovery });
+    return root;
+  }
+  it('is absent without a loader, and when the switch is off, failed or malformed', async () => {
+    const before = mount(undefined).innerHTML;
+    for (const loader of [
+      async () => false,
+      async () => Promise.reject(new Error('x')),
+      async () => 'true',
+      async () => null,
+    ]) {
+      const root = mount(loader);
+      await settle();
+      expect(root.innerHTML).toBe(before);
+      expect(root.querySelector('.petrol-find')).toBeNull();
+      expect([...root.querySelectorAll('a')].some((a) => a.getAttribute('href') === '/id/')).toBe(
+        false,
+      );
+    }
+  });
+  it('when the switch is open: a labelled GET search form to the hub, and Seduh ID links in both navs', async () => {
+    const root = mount(async () => true);
+    await settle();
+    const form = root.querySelector('.petrol-find form');
+    expect(form.getAttribute('action')).toBe('/id/');
+    expect(form.getAttribute('method')).toBe('get');
+    expect(form.getAttribute('role')).toBe('search');
+    expect(root.querySelector('label[for="petrol-find-q"]').textContent).toBe(
+      'Name, handle or café',
+    );
+    expect(form.querySelector('input').getAttribute('name')).toBe('q');
+    expect(root.querySelector('.petrol-find h2').textContent).toBe('Find a competitor');
+    expect(root.querySelector('.petrol-nav-links a[href="/id/"]').textContent).toBe('Seduh ID');
+    expect(root.querySelector('.petrol-nav-mobile-links a[href="/id/"]')).not.toBeNull();
+    expect(root.querySelectorAll('.petrol-find')).toHaveLength(1);
+  });
+});

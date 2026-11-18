@@ -25,6 +25,7 @@ const rawRecord = (over = {}) => ({
     vis_cafe_affiliations: 'public',
     vis_knockout_record: 'public',
     listed_on_country_pages: false,
+    listed_in_search: true,
   },
   entries: [
     {
@@ -623,6 +624,27 @@ describe('privacy', () => {
     await settle();
     expect(api.setSettings).toHaveBeenLastCalledWith({ listed_on_country_pages: false });
     expect(root.querySelector('#me-status').textContent).toContain(': off. Saved.');
+  });
+
+  it('"Show me in Seduh ID search" is on by default and switches off and on, each sent at once', async () => {
+    const { root, api } = await mount();
+    await tab(root, 'Privacy');
+    const box = root.querySelector('#me-set-search');
+    expect(box.checked).toBe(true);
+    expect(root.querySelector('label[for="me-set-search"]').textContent).toBe(
+      'Show me in Seduh ID search',
+    );
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(api.setSettings).toHaveBeenLastCalledWith({ listed_in_search: false });
+    expect(root.querySelector('#me-status').textContent).toContain(
+      'Show me in Seduh ID search: off. Saved.',
+    );
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(api.setSettings).toHaveBeenLastCalledWith({ listed_in_search: true });
   });
 
   it('a failed save says so and puts the control back as it was', async () => {
