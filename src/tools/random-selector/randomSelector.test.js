@@ -102,7 +102,9 @@ describe('random selector draw settings', () => {
     expect(validSoundLevel(9)).toBe(1);
     expect(validSoundLevel(0)).toBe(0.1);
     expect(validBoardTitle('  Friday   Finals  ')).toBe('Friday Finals');
-    expect(validBoardTitle('')).toBe('PLAYER DRAW');
+    expect(validBoardTitle('')).toBe('Player draw');
+    // A title saved before the default changed case is kept as it was.
+    expect(validBoardTitle('PLAYER DRAW')).toBe('PLAYER DRAW');
     expect(validAccentColor('#D96135')).toBe('#d96135');
     // No custom accent is null (the Petrol token); the old built-in default means the same thing.
     expect(validAccentColor('orange')).toBeNull();

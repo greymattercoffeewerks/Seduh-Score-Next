@@ -1,0 +1,185 @@
+/* The shared frame around a community tool (toolChrome.js): the public header, the breadcrumb row that also
+   holds the tool's own controls, the "More free community tools" strip and the footer. Link it after
+   src/marketing/publicHeader.css. Every value is a token; the strip and footer sit on the stage surface. */
+
+.ct-top [hidden],
+.ct-bottom [hidden] {
+  display: none !important;
+}
+
+.ct-header {
+  background: var(--clr-petrol-800);
+}
+/* The shared header is sticky; keep it above the tool's own sticky parts. */
+.ct-header .public-header {
+  z-index: 30;
+}
+
+.ct-bar {
+  border-bottom: var(--border-hairline) solid var(--color-border-card);
+  background: var(--color-canvas);
+}
+.ct-bar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: var(--space-2) clamp(1rem, 3vw, 2rem);
+}
+.ct-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+.ct-crumb-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+.ct-crumb-sep {
+  color: var(--color-text-secondary);
+}
+.ct-crumb-current {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+.ct-present-brand {
+  --brand-lockup-size: 1.05rem;
+  color: var(--color-text);
+}
+.ct-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---- The strip: the other tools ---- */
+.ct-strip {
+  background: var(--clr-petrol-950);
+  color: var(--color-text);
+}
+.ct-strip-inner,
+.ct-footer-inner {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+}
+.ct-strip-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-block: var(--space-8) var(--space-8);
+}
+.ct-strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.ct-strip-kicker {
+  margin: 0 0 var(--space-1);
+  color: var(--color-accent);
+  font-family: var(--font-body);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.ct-strip h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+}
+.ct-strip-all {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-accent);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+}
+.ct-strip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+  gap: var(--space-4);
+}
+.ct-tool {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 9.5rem;
+  padding: var(--space-5);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  text-decoration: none;
+}
+.ct-tool:hover {
+  border-color: var(--color-accent);
+}
+.ct-tool-eyebrow {
+  color: var(--color-text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.ct-tool-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+}
+.ct-tool-body {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+.ct-tool-open {
+  margin-top: auto;
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+}
+.ct-tool:focus-visible,
+.ct-strip-all:focus-visible,
+.ct-crumb-link:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
+/* ---- Footer ---- */
+.ct-footer {
+  border-top: var(--border-hairline) solid var(--color-border);
+  background: var(--clr-petrol-950);
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+}
+.ct-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding-block: var(--space-4);
+}
+
+@media (max-width: 700px) {
+  .ct-bar-inner {
+    padding-inline: var(--space-3);
+  }
+  .ct-crumbs {
+    gap: var(--space-1);
+    font-size: var(--text-xs);
+  }
+}

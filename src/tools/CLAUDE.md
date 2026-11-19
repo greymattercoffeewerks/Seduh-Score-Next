@@ -20,7 +20,7 @@ note).
 A tool here MAY import from `src/core/` when a piece of it is genuinely format-agnostic
 engine logic (e.g. `core/countdown.js`, `core/dom.js`, `core/duration.js`) — that's the
 same direction `src/marketing/` already imports in, and `core/` has no reverse
-dependency on either. A tool here must never import from `src/formats/` — pulling in a
+dependency on either. A tool may also import `src/community/toolChrome.js` and `communityTools.js` (the shared tool frame; the Random Selector first), which in turn reads `src/marketing/publicHeader.js`; that is the one allowed path from a tool into `marketing/` and `community/`, and it carries the header's `COUNTRY_PAGES_PUBLIC` switch. A tool here must never import from `src/formats/` — pulling in a
 format's UI classes (e.g. Cup Taster's `.screen-container` in `heatsScreen.css`) would tie a
 supposedly standalone tool to one format's presentation, so each tool keeps its own
 self-contained CSS instead.
@@ -108,10 +108,52 @@ self-contained CSS instead.
     corrupt saved history records are dropped on load. REDRAW after "remove every selected
     entry" puts the entry back where it was and drops its history row; history numbering
     keeps counting past the 20 kept.
+  - **Tier 1 redesign (2026-11-19), the owner-approved canvas; the rules below supersede older wording in this
+    section** (button names, `cut-lg`, mono labels, CLEAR SESSION / LOAD EXAMPLE LIST, the top-bar count).
+    - **Layout.** Left column: board, then the draw row (checkbox "Remove winners after each draw" left, "or press Space" +
+      Draw right), then the winner card. Right panel: the shared tablist (`core/tablist.js`, so `role="tab"` stays in one
+      file) with **Entries (count)** and **History (count)**; both panels stay in the DOM and switch with `hidden`, so the
+      long-lived textarea is never moved by a tab change. Entries holds the list, Import CSV / Export CSV / Clear list, the
+      status line with Undo, three collapsible sections (Weights & odds, Draw settings, Board look; closed by default, each
+      with a one-line summary kept in step by `refreshSummaries()`; open state is `state.open`, not saved) and Copy share
+      link. **There is exactly one entry count: the tab badge** (no top-bar count, no "loaded"). It stacks below 700px,
+      where the Draw button is `position: fixed` at the bottom (safe-area padding; `.rs-page` pads its bottom so nothing
+      hides under it).
+    - **Names are centred** (`boardCells`, exported and tested): each row across the 14 flaps, the block of rows down the 4
+      (one line on row 2). Word wrap and the ellipsis rule are unchanged.
+    - **Present mode** fits a 16:9 screen with no scrolling: `--rs-cell-h` is the smaller of what the height and the width
+      allow, and `.rs-page.is-presenting` is `100dvh` with `overflow: hidden`. Measured at 1440x810, 1280x720 and 1920x1080
+      (everything above the viewport bottom, no page scroll). It adds **Fullscreen** (Fullscreen API on `.rs-page`; the button is
+      absent where `document.fullscreenEnabled` is false, e.g. iPhone) and the exit button reads "Exit (Esc)". Leaving Present
+      leaves Fullscreen. "Remove from list" is not offered in Present (it is a list edit).
+    - **One button family** (`base.css`): Draw is `.action .action-primary .btn-bevel` on the accent (`--rs-accent`, which may be
+      the visitor's colour, text `readableOn`); Keep result is `.action-primary`; Discard & redraw, Remove from list, Import,
+      Export, Copy share link, Present, Sound, Fullscreen, Exit, Undo and Reset colour are `.action-outline`; Clear list is a quiet
+      danger text button (`.rs-quiet-danger`); the three speeds are one segmented control (selected = ink fill, never the
+      accent). No underlined text-buttons for actions.
+    - **Fonts.** `--font-body` for buttons, tabs, labels, text and inputs; `--font-display` for headings and the winner's name;
+      `--font-mono` ONLY on `.selector-flap` and `.rs-history-n` (a test lists the selectors that may use it).
+    - **No grid lines, no cut corners.** The page background is the plain canvas; the board frame is `--radius-lg`, flaps
+      `--radius-sm` (`tokenDrift.test.js` `DIRECT_RADIUS` is now 3 for this sheet).
+    - **Copy** is the System artboard's table: "History", "No draws yet. Winners appear here, newest first.", "Winner · draw N",
+      "Still in the list, so NAME can be drawn again." / "Removed from the list, so NAME cannot be drawn again.", "Discard &
+      redraw", "Draw", "Names, one per line" + hint "Give a name more chances: write `Bella | 2` for double odds.", "Reset colour"
+      (shown only once a colour is picked). **Removed on purpose:** the Load example list button (Clear list + Undo cover the
+      path; `DEMO_ENTRIES` is still the first-visit list) and the "SAVED WITH SHARE LINK" line. **New:** "Remove from list"
+      (`removeWinner`) takes the winner's line out now, marks its history row removed, and Discard & redraw still puts it back.
+      The default board title is "Player draw" (shown upper-case by CSS; an older saved "PLAYER DRAW" still works).
+    - **The frame is shared, not local** (`src/community/toolChrome.js` + `toolChrome.css`): the public header
+      (Community Tools current), a breadcrumb "Community Tools / <tool>" whose row also holds the tool's own controls
+      (`controls` slot), the tool, a "More free community tools" strip and a footer line. The strip and the hub's cards both read
+      `src/community/communityTools.js` (pure data; `otherCommunityTools(id)` leaves a tool out of its own strip and never offers
+      the widget download), so a name or pitch changes in one place. `setPresenting(true)` hides the header, breadcrumb, strip and
+      footer and keeps the controls row. The Timer, Brew Planner and Guess the Bean can adopt it with no change to those files
+      (later PR; only the Random Selector uses it so far). Link `publicHeader.css`, `toolChrome.css`, then the tool's sheet.
+      The prerender marker is now `Split-flap edition` (footer, in `prerender-public-pages.mjs` and `smoke.spec.js`).
   - **Petrol (2026-10-14).** The tool follows the design system (`src/ui/tokens/DESIGN.md`):
     every colour in the stylesheet is a `--clr-*` / `--color-*` token (the first version had a
     brown wood frame and a dozen hard-coded hex values), the board frame is graphite with teal
-    rails and a `.cut-lg` corner, the primary actions (DRAW ENTRY, KEEP RESULT) are the accent
+    rails (square-cornered then; see the Tier 1 note above), the primary actions (DRAW ENTRY, KEEP RESULT) are the accent
     with the soft bevel (`.btn-bevel`, Petrol V2 P2; no `clip-path`, so no focus workaround), and there are no shadows. With no custom accent the tool uses the Petrol accent
     token (`PETROL_ACCENT_HEX` only fills the colour picker), so Present mode gets the stage
     teal for free; `accentColor` is `null` for that, a picked colour still wins, "USE PETROL
@@ -152,7 +194,7 @@ self-contained CSS instead.
     session export (`src/community/guess-the-bean/setupScreen.js`) now calls `downloadJson` too.
   - **Public entry points (2026-10-14):** listed in `public/sitemap.xml`, prerendered by
     `tools/prerender-public-pages.mjs` (root marker `<main class="random-selector"`, copy
-    `SPLIT-FLAP EDITION`) and asserted in `tests/e2e/smoke.spec.js`.
+    `Split-flap edition`) and asserted in `tests/e2e/smoke.spec.js`.
   - Persists to `localStorage` (`seduh-random-selector-v1`).
   - **Reviewer follow-ups (2026-10-14, not done, outside this tool):** Candidates to move into `core/`: the AudioContext click shared with the Timer,
     `browserStorage()` (the other tools' storage defaults still read `window.localStorage`

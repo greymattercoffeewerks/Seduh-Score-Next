@@ -1,4 +1,6 @@
-import { brandLockup, el, withFocusPreservation } from '../../core/dom.js';
+import { el, svgEl, withFocusPreservation } from '../../core/dom.js';
+import { buildTablist } from '../../core/tablist.js';
+import { buildCommunityToolChrome } from '../../community/toolChrome.js';
 import { copyText } from '../../core/clipboard.js';
 import { downloadCsv } from '../../core/export.js';
 import {
@@ -43,8 +45,9 @@ function button(text, className, onClick, attrs = {}) {
 
 // Lay a name out on the board: one character per flap by code point (an emoji is one flap, not a
 // split surrogate), words kept whole on a row where they fit, and an ellipsis in the last flap when
-// the name is still too long. The result panel below always shows the full name.
-function boardCells(value) {
+// the name is still too long. Each row is centred across the board, and the block of rows is centred
+// down it (one line sits on a middle row). The result panel below always shows the full name.
+export function boardCells(value) {
   const rows = [];
   let row = '';
   const push = () => {
@@ -64,11 +67,16 @@ function boardCells(value) {
     }
   }
   if (row) push();
-  const cells = rows.slice(0, ROWS).map((line) => {
-    const characters = Array.from(line);
-    return Array.from({ length: CELLS_PER_ROW }, (_, index) => characters[index] ?? ' ');
+  const shown = rows.slice(0, ROWS);
+  const top = Math.floor((ROWS - shown.length) / 2);
+  const cells = Array.from({ length: ROWS }, (_, index) => {
+    const characters = Array.from(shown[index - top] ?? '');
+    const pad = Math.floor((CELLS_PER_ROW - characters.length) / 2);
+    return Array.from(
+      { length: CELLS_PER_ROW },
+      (_cell, column) => characters[column - pad] ?? ' ',
+    );
   });
-  while (cells.length < ROWS) cells.push(Array(CELLS_PER_ROW).fill(' '));
   if (rows.length > ROWS) cells[ROWS - 1][CELLS_PER_ROW - 1] = '…';
   return cells.flat();
 }
@@ -227,7 +235,15 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         : '',
     presenting: false,
     undo: null,
+    // Which side tab is showing, and which of its three sections are open (neither is saved).
+    tab: 'entries',
+    open: { weights: false, draw: false, look: false },
   };
+  const chrome = buildCommunityToolChrome({
+    toolId: 'random-selector',
+    toolName: 'Random Selector',
+    edition: 'Split-flap edition',
+  });
   const ticker = createTicker();
   let tickHandle = null;
   let finishHandle = null;
@@ -238,7 +254,9 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     className: 'sr-only',
     attrs: { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' },
   });
-  const host = el('div');
+  const host = el('div', { className: 'rs-host' });
+  // One wrapper holds the chrome, the tool and the live region: Present mode and Fullscreen act on it.
+  const page = el('div', { className: 'rs-page' });
   let announcements = 0;
 
   // The entry list is one long-lived node, moved into each fresh tree, so its caret, scroll
@@ -250,7 +268,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
       rows: '10',
       spellcheck: 'false',
       'data-focus-key': 'entries',
-      'aria-describedby': 'rs-entries-warning',
+      'aria-describedby': 'rs-entries-hint rs-entries-warning',
     },
   });
   entriesField.addEventListener('input', () => onEntriesInput());
@@ -266,8 +284,9 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     colourCode: null,
     flaps: [],
     drawButton: null,
-    countTop: null,
-    countPanel: null,
+    countTab: null,
+    historyTab: null,
+    summaries: {},
     weightsList: null,
     colourInput: null,
     accentReset: null,
@@ -292,9 +311,33 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
       const fill = ui.oddsFills[index];
       if (fill) fill.style.width = `${(entry.weight / total) * 100}%`;
     });
-    if (ui.totalCell) ui.totalCell.textContent = `${total} TOTAL WEIGHT`;
+    if (ui.totalCell) ui.totalCell.textContent = `Total weight ${total}`;
     if (entriesField.value !== state.draft) entriesField.value = state.draft;
     showEntryProblems();
+    refreshSummaries();
+  }
+
+  // The one line each closed section shows, so a closed section still says what is set in it.
+  function summaryOf(key) {
+    if (key === 'weights') {
+      const count = state.entries.length;
+      if (!count) return 'No names yet';
+      const names = `${count} ${count === 1 ? 'name' : 'names'}`;
+      const equal = state.entries.every((entry) => entry.weight === state.entries[0].weight);
+      return equal ? `${names}, all ${(100 / count).toFixed(1)}%` : `${names}, weighted odds`;
+    }
+    if (key === 'draw') {
+      const preset = DRAW_PRESETS[state.drawPreset];
+      const sound = state.soundOn ? `sound ${Math.round(state.soundLevel * 100)}%` : 'sound off';
+      return `${preset.label} speed (${preset.duration / 1000} s) · ${sound}`;
+    }
+    return `Title “${state.boardTitle}” · ${state.accentColor ? state.accentColor.toUpperCase() : 'Petrol colour'}`;
+  }
+
+  function refreshSummaries() {
+    for (const key of Object.keys(ui.summaries)) {
+      if (ui.summaries[key]) ui.summaries[key].textContent = summaryOf(key);
+    }
   }
 
   // One row per entry: the name, a weight box with room around it, and the entry's share of the
@@ -379,8 +422,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     state.reveal = null;
     persist();
     const count = state.entries.length;
-    if (ui.countTop) ui.countTop.textContent = `${count} ENTRIES`;
-    if (ui.countPanel) ui.countPanel.textContent = `${count} loaded`;
+    if (ui.countTab) ui.countTab.textContent = String(count);
     if (ui.drawButton) {
       if (count) ui.drawButton.removeAttribute('aria-disabled');
       else ui.drawButton.setAttribute('aria-disabled', 'true');
@@ -421,6 +463,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     if (ui.colourInput) ui.colourInput.value = state.accentColor ?? PETROL_ACCENT_HEX;
     if (ui.colourCode) ui.colourCode.textContent = state.accentColor?.toUpperCase() ?? 'PETROL';
     if (ui.accentReset) ui.accentReset.hidden = !state.accentColor;
+    refreshSummaries();
   }
 
   // Says what the typed list is not doing (entries past the limit, nameless lines, weights outside
@@ -438,7 +481,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     lastWarning = found;
   }
 
-  // CLEAR SESSION, LOAD EXAMPLE LIST and a CSV import replace the whole list at once, so each keeps
+  // CLEAR LIST and a CSV import replace the whole list at once, so each keeps
   // what it replaced for one UNDO. It is dropped the moment anything else changes the list.
   function rememberForUndo(label) {
     state.undo = {
@@ -510,31 +553,18 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     render();
   }
 
-  function loadExample() {
-    if (state.spinning) return;
-    const example = DEMO_ENTRIES.join('\n');
-    // Loading what is already there changes nothing, so it must not replace an earlier UNDO.
-    const changes = state.draft !== example;
-    if (changes) rememberForUndo('Load example list');
-    updateEntries(example);
-    setNote('Example list loaded.', {
-      undoable: changes || state.undo?.note === 'Example list loaded.',
-    });
-    render();
-  }
-
   function clearSession() {
     if (state.spinning) return;
-    // Clearing an empty session changes nothing, so it must not replace an earlier UNDO.
+    // Clearing an empty list changes nothing, so it must not replace an earlier UNDO.
     const changes = Boolean(state.draft || state.history.length || state.drawn);
-    if (changes) rememberForUndo('Clear session');
+    if (changes) rememberForUndo('Clear list');
     state.draft = '';
     state.entries = [];
     state.history = [];
     state.winner = 'READY';
     state.drawn = null;
     state.reveal = null;
-    const cleared = 'Session cleared. Ready for a new draw.';
+    const cleared = 'List cleared. Ready for a new draw.';
     setNote(cleared, { undoable: changes || state.undo?.note === cleared });
     persist();
     render();
@@ -562,6 +592,22 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     render();
     // The result panel (and the button that was just pressed) is gone: hand focus to the draw button.
     ui.drawButton?.focus();
+  }
+
+  // "Remove from list" on the result card: the winner stays in the list after a draw unless "Remove winners
+  // after each draw" is on, and this takes just that entry out now. Only that entry's line goes.
+  function removeWinner() {
+    if (!state.reveal || state.reveal.removed || state.spinning) return;
+    const { entry, index } = state.reveal;
+    state.draft = removeDraftLine(state.draft, index);
+    state.entries = parseEntries(state.draft);
+    state.reveal = { ...state.reveal, removed: true };
+    const last = state.history.at(-1);
+    if (last) state.history = [...state.history.slice(0, -1), { ...last, removed: true }];
+    setNote(`${entry.name} removed from the list.`);
+    persist();
+    render();
+    ui.app?.querySelector('[data-focus-key="keep-result"]')?.focus();
   }
 
   function finishDraw(entry) {
@@ -665,6 +711,56 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     render();
   }
 
+  function icon(paths) {
+    const svg = svgEl('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'aria-hidden': 'true',
+      focusable: 'false',
+    });
+    paths.forEach((d) => svg.append(svgEl('path', { d })));
+    return svg;
+  }
+
+  const ICONS = {
+    sound: ['M4 9v6h4l5 4V5L8 9z', 'M16 9a4 4 0 0 1 0 6'],
+    present: ['M3 4h18v12H3z', 'M8 20h8M12 16v4'],
+    fullscreen: ['M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'],
+    link: [
+      'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1',
+      'M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1',
+    ],
+    chevron: ['M6 9l6 6 6-6'],
+  };
+
+  // A button with an icon in front of its label. On a phone the label is visually hidden (still its name).
+  function iconButton(label, iconKey, className, onClick, attrs) {
+    const node = button('', className, onClick, attrs);
+    node.append(icon(ICONS[iconKey]), el('span', { className: 'rs-btn-label', text: label }));
+    return node;
+  }
+
+  const fullscreenSupported = () =>
+    Boolean(document.fullscreenEnabled && typeof page.requestFullscreen === 'function');
+
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await page.requestFullscreen();
+    } catch {
+      // The browser refused (no gesture, or a policy): Present mode still works without it.
+    }
+  }
+
+  function setPresenting(on) {
+    state.presenting = on;
+    if (!on && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }
+
   function render() {
     const entriesFocused = document.activeElement === entriesField;
     const selection = [
@@ -687,9 +783,13 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             : {}),
         },
       });
+      page.className = `rs-page${state.presenting ? ' is-presenting' : ''}`;
+      page.dataset.surface = state.presenting ? 'stage' : 'paper';
+      chrome.setPresenting(state.presenting);
+
       const drawButton = button(
-        state.spinning ? 'DRAWING' : 'DRAW ENTRY',
-        'rs-draw-button btn-bevel',
+        state.spinning ? 'Drawing' : 'Draw',
+        'rs-draw-button action action-primary btn-bevel',
         startDraw,
         {
           'data-focus-key': 'draw',
@@ -699,49 +799,76 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         },
       );
       ui.drawButton = drawButton;
-      const soundButton = button(
-        state.soundOn ? 'SOUND ON' : 'SOUND OFF',
-        'rs-text-button',
+
+      // The tool's own controls sit on the breadcrumb row (the chrome's `controls` slot).
+      const soundButton = iconButton(
+        state.soundOn ? 'Sound on' : 'Sound off',
+        'sound',
+        'rs-tool-button action action-outline',
         () => {
           state.soundOn = !state.soundOn;
           persist();
           render();
         },
-        // The label itself says the state ("SOUND ON"), so aria-pressed would read it twice.
+        // The label itself says the state ("Sound on"), so aria-pressed would read it twice.
         { 'data-focus-key': 'sound', 'data-on': String(state.soundOn) },
       );
-      const presentButton = button(
-        state.presenting ? 'EXIT DISPLAY' : 'PRESENT',
-        'rs-text-button',
-        () => {
-          state.presenting = !state.presenting;
-          render();
-        },
-        { 'data-focus-key': 'present' },
-      );
-      app.append(
-        el('header', { className: 'rs-topbar' }, [
-          el('a', { className: 'rs-brand', attrs: { href: '/' } }, [brandLockup()]),
-          el('div', { className: 'rs-top-actions' }, [
-            (ui.countTop = el('span', {
-              className: 'rs-entry-count',
-              text: `${state.entries.length} ENTRIES`,
-            })),
-            soundButton,
-            presentButton,
-          ]),
-        ]),
-      );
+      const controls = [soundButton];
+      if (state.presenting) {
+        if (fullscreenSupported()) {
+          controls.push(
+            iconButton(
+              document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen',
+              'fullscreen',
+              'rs-tool-button action action-outline',
+              () => {
+                void toggleFullscreen();
+              },
+              { 'data-focus-key': 'fullscreen' },
+            ),
+          );
+        }
+        controls.push(
+          button(
+            'Exit (Esc)',
+            'rs-tool-button action action-outline',
+            () => {
+              setPresenting(false);
+              render();
+            },
+            { 'data-focus-key': 'present' },
+          ),
+        );
+      } else {
+        controls.push(
+          iconButton(
+            'Present',
+            'present',
+            'rs-tool-button action action-outline',
+            () => {
+              setPresenting(true);
+              render();
+            },
+            { 'data-focus-key': 'present' },
+          ),
+        );
+      }
+      chrome.controls.replaceChildren(...controls);
+
+      const lastDraw = state.history.at(-1)?.n;
+      const boardState = state.spinning
+        ? 'Drawing…'
+        : state.drawn && lastDraw
+          ? `Winner · draw ${lastDraw}`
+          : 'Ready';
       const picker = el(
         'section',
         { className: 'rs-picker', attrs: { 'aria-labelledby': 'selector-heading' } },
         [
-          el('div', { className: 'rs-section-line' }, [
-            el('h1', { id: 'selector-heading', text: 'RANDOM SELECTOR' }),
-          ]),
-          el('div', { className: 'rs-board-frame cut-lg' }, [
+          el('h1', { id: 'selector-heading', className: 'rs-title', text: 'Random Selector' }),
+          el('div', { className: 'rs-board-frame' }, [
             el('div', { className: 'rs-board-label' }, [
-              el('span', { text: 'SEDUH SCORE' }),
+              el('span', { text: 'Seduh Score' }),
               (ui.titleCell = el('span', { text: state.boardTitle })),
             ]),
             splitFlapBoard(state.winner, boardLabel()),
@@ -751,36 +878,13 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
                   className: state.spinning ? 'status-live-dot' : 'rs-status-dot',
                   attrs: { 'aria-hidden': 'true' },
                 }),
-                el('span', { text: state.spinning ? 'STATUS: DRAWING' : 'STATUS: READY' }),
+                el('span', { text: boardState }),
               ]),
-              el('span', { text: 'SPACE TO DRAW' }),
+              el('span', { text: 'Space to draw' }),
             ]),
           ]),
-          el('div', { className: 'rs-draw-actions' }, [drawButton]),
         ],
       );
-      if (state.reveal) {
-        picker.append(
-          el('section', { className: 'rs-reveal', attrs: { 'aria-labelledby': 'reveal-title' } }, [
-            el('p', { className: 'rs-kicker', text: 'DRAW COMPLETE' }),
-            el('h2', { id: 'reveal-title', text: state.reveal.entry.name }),
-            el('p', {
-              className: 'rs-reveal-copy',
-              text: state.reveal.removed
-                ? 'Selected and removed automatically from the draw.'
-                : 'Selected and kept in the draw.',
-            }),
-            el('div', { className: 'rs-reveal-actions' }, [
-              button('KEEP RESULT', 'rs-button rs-button-primary btn-bevel', keepResult, {
-                'data-focus-key': 'keep-result',
-              }),
-              button('REDRAW', 'rs-button rs-button-outline', redraw, {
-                'data-focus-key': 'redraw-result',
-              }),
-            ]),
-          ]),
-        );
-      }
       const autoRemove = el('input', {
         attrs: {
           type: 'checkbox',
@@ -795,24 +899,82 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         render();
       });
       picker.append(
-        el('label', { className: 'rs-auto-remove', attrs: { for: 'rs-remove-after' } }, [
-          autoRemove,
-          el('span', { text: 'Remove every selected entry automatically' }),
+        el('div', { className: 'rs-draw-row' }, [
+          el('label', { className: 'rs-auto-remove', attrs: { for: 'rs-remove-after' } }, [
+            autoRemove,
+            el('span', { text: 'Remove winners after each draw' }),
+          ]),
+          el('div', { className: 'rs-draw-bar' }, [
+            el('span', { className: 'rs-draw-hint', text: 'or press Space' }),
+            drawButton,
+          ]),
         ]),
       );
-      app.append(picker);
-      if (!state.presenting) app.append(buildControls());
-      app.append(
-        el('footer', { className: 'rs-footer' }, [
-          el('span', { text: 'SEDUH SCORE / RANDOM SELECTOR' }),
-          el('span', { text: 'SPLIT-FLAP EDITION' }),
-        ]),
-      );
+      // The status line (and its Undo) sits under the draw row, so it is seen whichever tab is open and in Present mode.
+      ui.undoButton = null;
+      if (state.note) {
+        picker.append(
+          el('div', { className: 'rs-note-row' }, [
+            el('p', { className: 'rs-note', text: state.note }),
+            ...(state.undo
+              ? [
+                  (ui.undoButton = button(
+                    'Undo',
+                    'rs-undo-button action action-outline',
+                    undoLast,
+                    {
+                      'data-focus-key': 'undo',
+                      'aria-label': `Undo: ${state.undo.label.toLowerCase()}`,
+                    },
+                  )),
+                ]
+              : []),
+          ]),
+        );
+      }
+      if (state.reveal) {
+        const { entry, removed } = state.reveal;
+        picker.append(
+          el('section', { className: 'rs-reveal', attrs: { 'aria-labelledby': 'reveal-title' } }, [
+            el('div', { className: 'rs-reveal-text' }, [
+              el('p', {
+                className: 'rs-kicker',
+                text: lastDraw ? `Winner · draw ${lastDraw}` : 'Winner',
+              }),
+              el('h2', { id: 'reveal-title', text: entry.name }),
+              el('p', {
+                className: 'rs-reveal-copy',
+                text: removed
+                  ? `Removed from the list, so ${entry.name} cannot be drawn again.`
+                  : `Still in the list, so ${entry.name} can be drawn again.`,
+              }),
+            ]),
+            el('div', { className: 'rs-reveal-actions' }, [
+              button('Keep result', 'rs-button action action-primary', keepResult, {
+                'data-focus-key': 'keep-result',
+              }),
+              button('Discard & redraw', 'rs-button action action-outline', redraw, {
+                'data-focus-key': 'redraw-result',
+              }),
+              ...(removed || state.presenting
+                ? []
+                : [
+                    button('Remove from list', 'rs-button action action-outline', removeWinner, {
+                      'data-focus-key': 'remove-winner',
+                    }),
+                  ]),
+            ]),
+          ]),
+        );
+      }
+      const workspace = el('div', { className: 'rs-workspace' }, [picker]);
+      if (!state.presenting) workspace.append(buildSide());
+      app.append(workspace);
       ui.app = app;
       ui.flaps = [...app.querySelectorAll('.selector-flap')];
       host.replaceChildren(app);
 
-      function buildControls() {
+      function buildSide() {
         if (entriesField.value !== state.draft) entriesField.value = state.draft;
         entriesField.disabled = state.spinning;
         const weights = el('div', { className: 'rs-weights' });
@@ -852,111 +1014,182 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
           );
           render();
         });
-        const importButton = button('IMPORT CSV', 'rs-link-button', () => importInput.click(), {
-          'data-focus-key': 'import',
-          ...(state.spinning ? { disabled: '' } : {}),
-        });
+        const importButton = button(
+          'Import CSV',
+          'rs-small-button action action-outline',
+          () => importInput.click(),
+          { 'data-focus-key': 'import', ...(state.spinning ? { disabled: '' } : {}) },
+        );
         const exportButton = button(
-          'EXPORT LIST',
-          'rs-link-button',
+          'Export CSV',
+          'rs-small-button action action-outline',
           // The byte-order mark makes Excel read the file as UTF-8 (Malay diacritics, CJK names).
           () => downloadCsv('seduh-random-selector.csv', `\uFEFF${entriesToCsv(state.entries)}`),
           { 'data-focus-key': 'export' },
         );
-        const shareButton = button(
-          'COPY SHARE LINK',
-          'rs-link-button',
+        const clearButton = button(
+          'Clear list',
+          'rs-small-button rs-quiet-danger action',
+          clearSession,
+          {
+            'data-focus-key': 'clear',
+            ...(state.spinning ? { disabled: '' } : {}),
+          },
+        );
+        const shareButton = iconButton(
+          'Copy share link',
+          'link',
+          'rs-share-button action action-outline',
           () => {
             void copyShareLink();
           },
           { 'data-focus-key': 'share' },
         );
-        ui.undoButton = null;
-        const controls = el('section', { className: 'rs-controls' }, [
-          el('article', { className: 'rs-entry-panel' }, [
-            el('p', { className: 'rs-kicker', text: 'ENTRY LIST' }),
-            el('div', { className: 'rs-panel-heading' }, [
-              el('h2', { text: 'Names in the draw' }),
-              (ui.countPanel = el('span', { text: `${state.entries.length} loaded` })),
+        const entriesPanel = el(
+          'div',
+          {
+            className: 'rs-panel-body',
+            id: 'rs-panel-entries',
+          },
+          [
+            el('div', { className: 'rs-field-group' }, [
+              el('label', {
+                className: 'rs-field-label',
+                text: 'Names, one per line',
+                attrs: { for: 'rs-entries' },
+              }),
+              entriesField,
+              el('p', { className: 'rs-hint', attrs: { id: 'rs-entries-hint' } }, [
+                document.createTextNode('Give a name more chances: write '),
+                el('span', { className: 'rs-example', text: 'Bella | 2' }),
+                document.createTextNode(' for double odds.'),
+              ]),
+              (ui.warning = el('p', {
+                className: 'rs-warning',
+                attrs: { id: 'rs-entries-warning' },
+              })),
             ]),
-            el('label', {
-              className: 'rs-field-label',
-              text: 'One entry per line · add | 2 for double weight',
-              attrs: { for: 'rs-entries' },
-            }),
-            entriesField,
-            (ui.warning = el('p', {
-              className: 'rs-warning',
-              attrs: { id: 'rs-entries-warning' },
-            })),
-            el('div', { className: 'rs-weight-heading' }, [
-              el('span', { text: 'WEIGHTS & ODDS' }),
-              (ui.totalCell = el('span', { text: `${total} TOTAL WEIGHT` })),
-            ]),
-            weights,
-            buildDrawSettings(),
-            buildEventBranding(),
             el('div', { className: 'rs-entry-actions' }, [
-              button('LOAD EXAMPLE LIST', 'rs-link-button', loadExample, {
-                'data-focus-key': 'load-example',
-                ...(state.spinning ? { disabled: '' } : {}),
-              }),
-              button('CLEAR SESSION', 'rs-link-button', clearSession, {
-                'data-focus-key': 'clear',
-                ...(state.spinning ? { disabled: '' } : {}),
-              }),
-            ]),
-            el('div', { className: 'rs-entry-actions rs-transfer-actions' }, [
               importButton,
               exportButton,
-              shareButton,
+              clearButton,
               importInput,
             ]),
-            ...(state.note
-              ? [
-                  el('div', { className: 'rs-note-row' }, [
-                    el('p', { className: 'rs-note', text: state.note }),
-                    ...(state.undo
-                      ? [
-                          (ui.undoButton = button('UNDO', 'rs-link-button', undoLast, {
-                            'data-focus-key': 'undo',
-                            'aria-label': `Undo: ${state.undo.label.toLowerCase()}`,
-                          })),
-                        ]
-                      : []),
-                  ]),
-                ]
-              : []),
-          ]),
-          el('aside', { className: 'rs-history-panel' }, [
-            el('p', { className: 'rs-kicker', text: 'DRAW HISTORY' }),
-            el('h2', { text: 'A clear record of every draw.' }),
+            el('div', { className: 'rs-sections' }, [
+              section('weights', 'Weights & odds', [
+                (ui.totalCell = el('p', {
+                  className: 'rs-weight-total',
+                  text: `Total weight ${total}`,
+                })),
+                weights,
+              ]),
+              section('draw', 'Draw settings', [buildDrawSettings()]),
+              section('look', 'Board look', [buildEventBranding()]),
+            ]),
+            el('div', { className: 'rs-share' }, [
+              el('p', {
+                className: 'rs-hint',
+                text: 'Share this list and its settings with a link.',
+              }),
+              shareButton,
+            ]),
+          ],
+        );
+
+        const historyPanel = el(
+          'div',
+          {
+            className: 'rs-panel-body rs-history-panel',
+            id: 'rs-panel-history',
+          },
+          [
+            el('h2', { text: 'History' }),
             state.history.length
               ? el(
                   'ol',
                   { className: 'rs-history' },
-                  state.history
-                    .slice(-6)
-                    .reverse()
-                    .map((record, index) =>
-                      el('li', {}, [
-                        el('span', {
-                          text: String(record.n ?? state.history.length - index).padStart(2, '0'),
-                        }),
-                        el('strong', { text: record.name }),
-                        el('em', { text: record.removed ? 'removed' : 'kept' }),
-                      ]),
-                    ),
+                  [...state.history].reverse().map((record, index) =>
+                    el('li', {}, [
+                      el('span', {
+                        className: 'rs-history-n',
+                        text: String(record.n ?? state.history.length - index).padStart(2, '0'),
+                      }),
+                      el('strong', { text: record.name }),
+                      el('em', { text: record.removed ? 'removed' : 'kept' }),
+                    ]),
+                  ),
                 )
               : el('p', {
                   className: 'empty',
-                  text: 'No draws yet. The result controls will keep your record accurate.',
+                  text: 'No draws yet. Winners appear here, newest first.',
                   attrs: { 'data-kind': 'first-use' },
                 }),
-          ]),
-        ]);
+          ],
+        );
+
+        ui.countTab = el('span', { className: 'rs-count', text: String(state.entries.length) });
+        ui.historyTab = el('span', { className: 'rs-count', text: String(state.history.length) });
+        entriesPanel.hidden = state.tab !== 'entries';
+        historyPanel.hidden = state.tab !== 'history';
+        // The shared tablist (core/tablist.js): roving tabindex, arrow keys, one tabpanel. Switching tabs is
+        // done in place, never with a re-render, so the entry list keeps its caret.
+        const panels = el('div', { className: 'rs-panels' }, [entriesPanel, historyPanel]);
+        const { list: tabs } = buildTablist({
+          idBase: 'rs',
+          label: 'Panel',
+          selected: state.tab,
+          panel: panels,
+          tabs: [
+            { id: 'entries', label: 'Entries', attrs: { 'data-focus-key': 'tab-entries' } },
+            { id: 'history', label: 'History', attrs: { 'data-focus-key': 'tab-history' } },
+          ],
+          onSelect: (key) => {
+            state.tab = key;
+            entriesPanel.hidden = key !== 'entries';
+            historyPanel.hidden = key !== 'history';
+          },
+        });
+        tabs.querySelector('#rs-tab-entries').append(document.createTextNode(' '), ui.countTab);
+        tabs.querySelector('#rs-tab-history').append(document.createTextNode(' '), ui.historyTab);
         showEntryProblems({ announce: false });
-        return controls;
+        return el('aside', { className: 'rs-side', attrs: { 'aria-label': 'List and settings' } }, [
+          tabs,
+          panels,
+        ]);
+
+        // A collapsible block: a button that says what it holds and what is set in it, over its body.
+        function section(key, title, children) {
+          const bodyId = `rs-section-${key}`;
+          const summary = el('span', { className: 'rs-section-summary', text: summaryOf(key) });
+          ui.summaries[key] = summary;
+          const body = el('div', { className: 'rs-section-body', id: bodyId }, children);
+          body.hidden = !state.open[key];
+          const head = el(
+            'button',
+            {
+              className: 'rs-section-head',
+              attrs: {
+                type: 'button',
+                'aria-expanded': String(state.open[key]),
+                'aria-controls': bodyId,
+                'data-focus-key': `section-${key}`,
+              },
+            },
+            [
+              el('span', { className: 'rs-section-label' }, [
+                el('span', { className: 'rs-section-title', text: title }),
+                summary,
+              ]),
+              icon(ICONS.chevron),
+            ],
+          );
+          head.addEventListener('click', () => {
+            state.open[key] = !state.open[key];
+            head.setAttribute('aria-expanded', String(state.open[key]));
+            body.hidden = !state.open[key];
+          });
+          return el('div', { className: 'rs-section' }, [head, body]);
+        }
 
         function buildDrawSettings() {
           const presetButtons = Object.entries(DRAW_PRESETS).map(([key, preset]) =>
@@ -975,7 +1208,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             ),
           );
           const volumeText = el('span', {
-            text: `SOUND VOLUME ${Math.round(state.soundLevel * 100)}%`,
+            text: `Sound volume ${Math.round(state.soundLevel * 100)}%`,
           });
           const soundLevel = el('input', {
             className: 'rs-volume-range',
@@ -992,28 +1225,26 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
           });
           soundLevel.addEventListener('input', () => {
             state.soundLevel = validSoundLevel(soundLevel.value);
-            volumeText.textContent = `SOUND VOLUME ${Math.round(state.soundLevel * 100)}%`;
+            volumeText.textContent = `Sound volume ${Math.round(state.soundLevel * 100)}%`;
             persist();
+            refreshSummaries();
           });
-          return el(
-            'section',
-            { className: 'rs-draw-settings', attrs: { 'aria-labelledby': 'draw-settings-title' } },
-            [
-              el('div', { className: 'rs-weight-heading' }, [
-                el('span', { id: 'draw-settings-title', text: 'DRAW SETTINGS' }),
-                el('span', { text: `${DRAW_PRESETS[state.drawPreset].duration / 1000}s SPIN` }),
-              ]),
-              el(
-                'div',
-                {
-                  className: 'rs-preset-list',
-                  attrs: { role: 'group', 'aria-label': 'Draw duration' },
-                },
-                presetButtons,
-              ),
-              el('label', { className: 'rs-volume-control' }, [volumeText, soundLevel]),
-            ],
-          );
+          return el('div', { className: 'rs-draw-settings' }, [
+            el('p', {
+              className: 'rs-group-label',
+              id: 'draw-settings-title',
+              text: 'Draw length',
+            }),
+            el(
+              'div',
+              {
+                className: 'rs-preset-list',
+                attrs: { role: 'group', 'aria-labelledby': 'draw-settings-title' },
+              },
+              presetButtons,
+            ),
+            el('label', { className: 'rs-volume-control' }, [volumeText, soundLevel]),
+          ]);
         }
 
         function buildEventBranding() {
@@ -1032,6 +1263,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             title.value = state.boardTitle;
             if (ui.titleCell) ui.titleCell.textContent = state.boardTitle;
             persist();
+            refreshSummaries();
           });
           const color = el('input', {
             className: 'rs-color-input',
@@ -1049,8 +1281,8 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             persist();
           });
           const reset = button(
-            'USE PETROL ACCENT',
-            'rs-link-button',
+            'Reset colour',
+            'rs-small-button action action-outline',
             () => {
               state.accentColor = null;
               applyAccent();
@@ -1062,36 +1294,25 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
           );
           reset.hidden = !state.accentColor;
           ui.accentReset = reset;
-          return el(
-            'section',
-            {
-              className: 'rs-event-branding',
-              attrs: { 'aria-labelledby': 'event-branding-title' },
-            },
-            [
-              el('div', { className: 'rs-weight-heading' }, [
-                el('span', { id: 'event-branding-title', text: 'EVENT BRANDING' }),
-                el('span', { text: 'SAVED WITH SHARE LINK' }),
-              ]),
-              el(
-                'label',
-                {
-                  className: 'rs-brand-title-field',
-                  text: 'BOARD TITLE',
-                  attrs: { for: 'rs-board-title' },
-                },
-                [title],
-              ),
-              el('label', { className: 'rs-color-field', attrs: { for: 'rs-accent-color' } }, [
-                el('span', { text: 'ACCENT COLOUR' }),
-                color,
-                (ui.colourCode = el('code', {
-                  text: state.accentColor?.toUpperCase() ?? 'PETROL',
-                })),
-              ]),
-              el('div', { className: 'rs-color-reset' }, [reset]),
-            ],
-          );
+          return el('div', { className: 'rs-event-branding' }, [
+            el(
+              'label',
+              {
+                className: 'rs-brand-title-field',
+                text: 'Board title',
+                attrs: { for: 'rs-board-title' },
+              },
+              [title],
+            ),
+            el('label', { className: 'rs-color-field', attrs: { for: 'rs-accent-color' } }, [
+              el('span', { text: 'Accent colour' }),
+              color,
+              (ui.colourCode = el('code', {
+                text: state.accentColor?.toUpperCase() ?? 'PETROL',
+              })),
+            ]),
+            el('div', { className: 'rs-color-reset' }, [reset]),
+          ]);
         }
       }
     });
@@ -1109,7 +1330,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
   function handleKeydown(event) {
     // Escape leaves Present mode, as it does any full-screen view.
     if (event.key === 'Escape' && state.presenting) {
-      state.presenting = false;
+      setPresenting(false);
       render();
       root.querySelector('[data-focus-key="present"]')?.focus();
       return;
@@ -1123,10 +1344,15 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     startDraw();
   }
   window.addEventListener('keydown', handleKeydown);
-  root.replaceChildren(host, live);
+  // The browser's own Esc leaves Fullscreen without telling the page's keydown: redraw the button label.
+  const onFullscreenChange = () => render();
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  page.append(chrome.top, host, chrome.bottom, live);
+  root.replaceChildren(page);
   render();
   return () => {
     window.removeEventListener('keydown', handleKeydown);
+    document.removeEventListener('fullscreenchange', onFullscreenChange);
     clearInterval(tickHandle);
     clearTimeout(finishHandle);
   };
