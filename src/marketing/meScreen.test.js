@@ -87,6 +87,35 @@ const rawRecord = (over = {}) => ({
   ...over,
 });
 
+const KEY_A = 'a'.repeat(32);
+const KEY_B = 'b'.repeat(32);
+const KEY_C = 'c'.repeat(32);
+const recorded = () => [
+  {
+    result_key: KEY_A,
+    event_name: 'Grey Cup',
+    organiser_name: 'Test Org',
+    event_date: '2026-03-01',
+    placing: 2,
+    stage: 'Final',
+    correct: 5,
+    total: 6,
+    time_secs: 95,
+    dispute: null,
+  },
+  {
+    result_key: KEY_B,
+    event_name: 'Pending Cup',
+    event_date: '2026-02-01',
+    dispute: { status: 'pending' },
+  },
+  {
+    result_key: KEY_C,
+    event_name: 'Wrong Cup',
+    event_date: '2026-01-01',
+    dispute: { status: 'link_wrong' },
+  },
+];
 const ok = (data) => ({ ok: true, data });
 function fakeApi(over = {}) {
   const state = { raw: rawRecord(), session: true };
@@ -136,6 +165,8 @@ function fakeApi(over = {}) {
     deleteCourse: vi.fn(async () => ok(null)),
     setCardCourse: vi.fn(async () => ok(null)),
     setSettings: vi.fn(async (s) => ok({ ...state.raw.settings, ...s })),
+    disputeResult: vi.fn(async () => ok({})),
+    withdrawDispute: vi.fn(async () => ok({})),
     ...over,
   };
   return { api, state };
@@ -291,6 +322,7 @@ describe('signed in: the header', () => {
     expect(tabs.map((t) => t.textContent)).toEqual([
       'My record',
       'Courses',
+      'Recorded results',
       'My teams',
       'Photo',
       'Privacy',
@@ -1341,5 +1373,93 @@ describe('courses and certificates', () => {
     await tab(root, 'Courses');
     expect(root.querySelector('img')).toBeNull();
     expect(root.textContent).toContain('<img src=x onerror=1>');
+  });
+});
+
+describe('Recorded results: "This isn’t mine"', () => {
+  async function open(over) {
+    const { api, state } = fakeApi(over);
+    state.raw = rawRecord({ recorded_results: recorded() });
+    const root = document.createElement('div');
+    document.body.append(root);
+    mountMeScreen(root, { api, thisYear: 2026 });
+    await settle();
+    await tab(root, 'Recorded results');
+    return { root, api, state };
+  }
+
+  it('lists each result with the right control or outcome in words', async () => {
+    const { root } = await open();
+    expect(root.querySelector('#me-recorded-title').textContent).toBe(
+      'Results recorded by Seduh Score',
+    );
+    const rows = [...root.querySelectorAll('.me-entry')];
+    expect(rows).toHaveLength(3);
+    expect(rows[0].textContent).toContain('Grey Cup');
+    expect(rows[0].textContent).toContain('2nd place · Final · 5 / 6 correct · 1:35');
+    expect(byText(rows[0], 'button', 'This isn’t mine')).toBeDefined();
+    expect(rows[1].textContent).toContain('Hidden from your public page while we check it');
+    expect(byText(rows[1], 'button', 'Show it again')).toBeDefined();
+    expect(rows[2].textContent).toContain('linked to you by mistake');
+    expect(rows[2].querySelector('button')).toBeNull();
+    // the key never reaches the visible text
+    expect(text(root)).not.toContain(KEY_A);
+  });
+
+  it('asks first, and "Keep it" changes nothing', async () => {
+    const { root, api } = await open();
+    click(root.querySelector('.me-entry button'));
+    expect(text(root)).toContain('Hide “Grey Cup” from your page?');
+    expect(text(root)).toContain('The event’s own results page does not change');
+    expect(api.disputeResult).not.toHaveBeenCalled();
+    click(byText(root, 'button', 'Keep it'));
+    expect(api.disputeResult).not.toHaveBeenCalled();
+    expect(byText(root, 'button', 'This isn’t mine')).toBeDefined();
+  });
+
+  it('confirming sends the key and the reason, then reloads the record', async () => {
+    const { root, api } = await open();
+    click(root.querySelector('.me-entry button'));
+    type(root.querySelector('input[name="reason"]'), '  Wrong phone ');
+    click(byText(root, 'button', 'Yes, hide it'));
+    await settle();
+    expect(api.disputeResult).toHaveBeenCalledWith(KEY_A, 'Wrong phone');
+    expect(api.loadRecord.mock.calls.length).toBeGreaterThan(1);
+    expect(root.querySelector('#me-status').textContent).toContain('Hidden from your page');
+  });
+
+  it('a refusal says so in words and the control stays', async () => {
+    const { root } = await open({
+      disputeResult: vi.fn(async () => ({ ok: false, hint: 'bad_reason' })),
+    });
+    click(root.querySelector('.me-entry button'));
+    click(byText(root, 'button', 'Yes, hide it'));
+    await settle();
+    expect(text(root)).toContain('A reason can be up to 200 characters');
+    expect(root.querySelector('input[name="reason"]').getAttribute('aria-invalid')).toBe('true');
+    expect(byText(root, 'button', 'Yes, hide it').disabled).toBe(false);
+  });
+
+  it('"Show it again" withdraws by key', async () => {
+    const { root, api } = await open();
+    click(byText(root, 'button', 'Show it again'));
+    await settle();
+    expect(api.withdrawDispute).toHaveBeenCalledWith(KEY_B);
+  });
+
+  it('says so when nothing is linked', async () => {
+    const { root } = await mount();
+    await tab(root, 'Recorded results');
+    expect(text(root)).toContain('No recorded results are linked to you yet.');
+  });
+
+  it('an ended session goes back to sign-in', async () => {
+    const { root } = await open({
+      disputeResult: vi.fn(async () => ({ ok: false, hint: 'signed_out' })),
+    });
+    click(root.querySelector('.me-entry button'));
+    click(byText(root, 'button', 'Yes, hide it'));
+    await settle();
+    expect(root.querySelector('input[type="email"]')).not.toBeNull();
   });
 });

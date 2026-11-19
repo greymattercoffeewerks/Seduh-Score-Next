@@ -10,6 +10,7 @@ import {
   TEAM_LINK_LIMIT,
   choiceWord,
   describeMeHint,
+  disputeWords,
   fieldForHint,
   groupEntriesByYear,
   isSignedOutHint,
@@ -436,5 +437,58 @@ describe('courses and certificates', () => {
       on_card: false,
     });
     expect(rec.settings.vis_courses).toBe('public');
+  });
+});
+
+describe('recorded results ("This isn’t mine")', () => {
+  const base = { account: { handle: 'mine' } };
+  const key = 'a'.repeat(32);
+
+  it('rebuilds each result from known keys and words the dispute state', () => {
+    const rec = normaliseMyRecord({
+      ...base,
+      recorded_results: [
+        {
+          result_key: key,
+          event_name: 'Cup',
+          event_date: '2026-03-01',
+          placing: 1,
+          correct: 6,
+          total: 6,
+          time_secs: 61,
+          dispute: null,
+          internal: 'x',
+        },
+        { result_key: key, event_name: 'Cup', dispute: { status: 'pending' } },
+        { result_key: key, event_name: 'Cup', dispute: { status: 'invented' } },
+      ],
+    }).recorded;
+    expect(rec[0]).toEqual({
+      key,
+      title: 'Cup',
+      organiser: null,
+      date: '2026-03-01',
+      detail: '1st place · 6 / 6 correct · 1:01',
+      dispute: null,
+    });
+    expect(rec[1].dispute).toBe('pending');
+    expect(rec[2].dispute).toBeNull();
+  });
+
+  it('drops a row with no valid key or no title, and tolerates no list', () => {
+    const rec = normaliseMyRecord({
+      ...base,
+      recorded_results: [{ result_key: 'nope', event_name: 'Cup' }, { result_key: key }, null],
+    });
+    expect(rec.recorded).toEqual([]);
+    expect(normaliseMyRecord(base).recorded).toEqual([]);
+  });
+
+  it('has words for every dispute state and every new refusal', () => {
+    for (const status of ['pending', 'stands', 'link_wrong'])
+      expect(disputeWords(status)).not.toBe('');
+    expect(disputeWords(null)).toBe('');
+    for (const hint of ['already_disputed', 'not_undoable', 'bad_reason', 'too_many_disputes'])
+      expect(describeMeHint(hint)).not.toMatch(/^Something went wrong\. Check/);
   });
 });

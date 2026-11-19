@@ -173,7 +173,7 @@ select is((select min(t085.as_attempt(6, q)) from t085_doors), '42501/no_account
 -- ============ entries ============
 
 select is(t085.j(1, $$ select public.seduh_my_record() $$) -> 'entries', '[]'::jsonb, 'a new account has no entries');
-select is(t085.j(1, $$ select public.seduh_my_record() $$) -> 'counts', '{"entries": 0, "by_kind": {"judged": 0, "coached": 0, "competed": 0, "organised": 0, "volunteered": 0}, "team_links": 0, "courses": 0}'::jsonb,
+select is(t085.j(1, $$ select public.seduh_my_record() $$) -> 'counts', '{"entries": 0, "by_kind": {"judged": 0, "coached": 0, "competed": 0, "organised": 0, "volunteered": 0}, "team_links": 0, "courses": 0, "disputes": 0, "disputes_pending": 0, "recorded_results": 0}'::jsonb,
   'and zero counts, all five kinds present');
 
 create temp table t085_e1 as select t085.j(1, $$ select public.seduh_add_entry(2024, '  Test Open 2024 ', 'competed', ' Brunei ', 'competitor', '2nd', 2, 'a note') $$) as j;
@@ -451,6 +451,7 @@ drop function if exists app.seduh_team_key(uuid);
 drop function if exists app.seduh_entry_clean(integer, text, text, text, text, text, integer, text);
 drop function if exists app.seduh_clean_text(text, integer, boolean, text);
 drop function if exists app.seduh_course_json(app.seduh_courses); -- 20261126110000
+drop table if exists app.seduh_result_disputes; -- 20261126120000 (its text rules use seduh_text_ok)
 drop table if exists app.seduh_courses; -- 20261126110000 (it holds a check that uses seduh_text_ok)
 drop table if exists app.seduh_team_memberships;
 drop table if exists app.seduh_self_reported_entries;

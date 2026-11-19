@@ -148,6 +148,14 @@ export function createMeApi({ client, minRequestCodeMs = MIN_REQUEST_CODE_MS } =
       return door('seduh_remove_team_link', { p_link_id: id });
     },
 
+    // "This isn't mine" (T-ID2.NM): a recorded result is named only by the key my_record gave for it.
+    async disputeResult(key, reason) {
+      return door('seduh_dispute_result', { p_result_key: key, p_reason: reason || null });
+    },
+    async withdrawDispute(key) {
+      return door('seduh_withdraw_dispute', { p_result_key: key });
+    },
+
     // The photo (T-ID2.C2). `prepared` is photoPipeline.prepareAvatar's answer ({ blob, type, ext }); `handle` is the caller's own (it
     // names their folder); `previousUrl` is the record's current photo_url. Order: upload the new file, remove the old one through the
     // Storage API (frees its bytes; best effort), then the door records the new path (and deletes any row still left in the folder).

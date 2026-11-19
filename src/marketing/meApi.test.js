@@ -137,6 +137,9 @@ describe('the doors', () => {
     await a.addTeamLink('key', 'captain');
     await a.removeTeamLink(9);
     await a.setSettings({ vis_identity: 'hidden' });
+    await a.disputeResult('k'.repeat(32), '');
+    await a.disputeResult('k'.repeat(32), 'Wrong phone');
+    await a.withdrawDispute('k'.repeat(32));
     expect(client.rpc.mock.calls).toEqual([
       ['seduh_add_entry', { p_year: 2024 }],
       ['seduh_update_entry', { p_entry_id: 5, p_year: 2024 }],
@@ -145,6 +148,9 @@ describe('the doors', () => {
       ['seduh_add_team_link', { p_team_key: 'key', p_role: 'captain' }],
       ['seduh_remove_team_link', { p_link_id: 9 }],
       ['seduh_set_my_settings', { p_settings: { vis_identity: 'hidden' } }],
+      ['seduh_dispute_result', { p_result_key: 'k'.repeat(32), p_reason: null }],
+      ['seduh_dispute_result', { p_result_key: 'k'.repeat(32), p_reason: 'Wrong phone' }],
+      ['seduh_withdraw_dispute', { p_result_key: 'k'.repeat(32) }],
     ]);
   });
 

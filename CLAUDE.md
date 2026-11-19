@@ -231,7 +231,8 @@ below are enforced by tests that fail CI, not by memory; the "how to add a tenan
   `events` is closed to anon, and `live_sessions` shows anon only ACTIVE rows (D6, `038`).
 - **A claimed person writes only their own record, through narrow `authenticated` doors** (T-ID2.D-a: `seduh_my_record`, `seduh_add_entry`,
   `seduh_update_entry`, `seduh_delete_entry`, `seduh_team_options`, `seduh_add_team_link`, `seduh_remove_team_link`,
-  `seduh_set_my_settings`). Each opens with `app.seduh_my_account()` (the caller's `auth.uid()` owns an OPEN account, else one
+  `seduh_set_my_settings`; T-ID2.NM adds `seduh_dispute_result` and `seduh_withdraw_dispute`, which name a recorded result only by an opaque key of the caller's OWN
+  results and hide it from their profile pending the owner's review, `CONVENTIONS.md`). Each opens with `app.seduh_my_account()` (the caller's `auth.uid()` owns an OPEN account, else one
   42501 `no_account`), takes no uuid, and writes `where account_id = <the caller's account>`; an organiser can never write a person's
   entries. A team membership is `self_reported` until the OWNER confirms it (owner SQL, audited); nobody is listed on a country page
   unless they opted in themselves. Contract and runbook: `CONVENTIONS.md`, "Seduh ID: a person's own record".
