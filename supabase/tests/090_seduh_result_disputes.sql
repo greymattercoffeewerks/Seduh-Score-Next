@@ -15,7 +15,7 @@
 --   * OWNER: overview, resolve (stands / link_wrong), refusals; every change audited with no secrets; frozen parents; a closed
 --     account's dispute hides nothing; the 50 cap; reason text rules.
 begin;
-select plan(105);
+select plan(112);
 
 create schema t089;
 grant usage on schema t089 to anon, authenticated, service_role;
@@ -200,8 +200,10 @@ select is(t089.as_attempt(0, $$ select public.seduh_dispute_result(repeat('a', 3
 select is(t089.as_attempt(0, $$ select public.seduh_withdraw_dispute(repeat('a', 32)) $$), '42501/', '...or the withdraw door');
 select is((select count(distinct t089.as_attempt(4, q))::int from t089_doors), 1, 'a login with no account: both doors give the SAME answer...');
 select is((select min(t089.as_attempt(4, q)) from t089_doors), '42501/no_account', '...42501 with the hint no_account');
-select is((select min(t089.as_attempt(5, q)) from t089_doors), '42501/no_account', 'an ORGANISER (org member) with no account is refused the same way');
-select is((select max(t089.as_attempt(3, q)) from t089_doors), '42501/no_account', 'a CLOSED account is refused the same way');
+select is((select count(distinct t089.as_attempt(5, q))::int from t089_doors), 1, 'an ORGANISER (org member) with no account: both doors give the SAME answer...');
+select is((select min(t089.as_attempt(5, q)) from t089_doors), '42501/no_account', '...42501 no_account');
+select is((select count(distinct t089.as_attempt(3, q))::int from t089_doors), 1, 'a CLOSED account: both doors give the SAME answer...');
+select is((select min(t089.as_attempt(3, q)) from t089_doors), '42501/no_account', '...42501 no_account');
 
 -- ============ the person sees their own results with keys ============
 
@@ -236,7 +238,7 @@ select is(t089.as_attempt(1, format($$ select public.seduh_dispute_result(%L) $$
 select is(t089.as_attempt(1, format($$ select public.seduh_dispute_result(%L) $$, app.seduh_result_key(t089.u(303), 'T089 Alpha', 'Cafe Three89'))), 'P0001/not_found',
   'a key of her own roster row on an UNPUBLISHED event is refused (it is no recorded result)');
 select is(t089.as_attempt(1, format($$ select public.seduh_dispute_result(%L) $$, app.seduh_result_key(t089.u(301), 'T089 Self Cup', ''))), 'P0001/not_found',
-  'a self-reported entry cannot be disputed');
+  'a key made from a self-reported entry''s title names no recorded result, so it is refused like an unknown key');
 select is(t089.as_attempt(1, format($$ select public.seduh_dispute_result(%L, %L) $$, (select a1 from t089_k), repeat('x', 201))), 'P0001/bad_reason', 'a reason over 200 characters is refused');
 select is(t089.as_attempt(1, format($$ select public.seduh_dispute_result(%L, E'line\nbreak') $$, (select a1 from t089_k))), 'P0001/bad_reason', 'a reason with a control character is refused');
 select is((select count(*)::int from app.seduh_result_disputes), 0, 'none of the refusals wrote anything');
@@ -259,7 +261,7 @@ select is(t089.anon(format($$ select public.seduh_results_profile_links(%L) $$, 
 select is(t089.anon(format($$ select public.seduh_results_profile_links(%L) $$, t089.u(301))) -> 'links' @> '[{"name": "T089 Bravo"}]', true, '...and still links bravo (only alpha is affected)');
 select is(t089.recorded('bravo-t89'), 'T089 Cup One|2, T089 Cup Two|1', 'bravo''s profile is untouched');
 select is((select count(*)::int from public.public_results pr join t089_payload p on p.event_id = pr.event_id where md5(pr.payload::text) = p.h), 2,
-  'the published payloads of both events are byte-identical: the event results pages are unchanged');
+  'the stored payloads of both events are byte-identical after the disputes (no dispute path writes public_results)');
 select is(t089.jt(1, 'select public.seduh_my_record() #>> ''{recorded_results,1,dispute,status}'''), 'pending', 'my_record still lists the disputed result, marked pending');
 select is(jsonb_array_length(t089.j(1, 'select public.seduh_my_record() -> ''recorded_results''')), 2, '...so she can see and undo it');
 select is(t089.j(1, 'select public.seduh_my_record() #> ''{counts}''') @> '{"recorded_results": 2, "disputes": 1, "disputes_pending": 1}', true, 'counts: two results, one dispute, one pending');
@@ -293,6 +295,9 @@ select is(t089.run(format($$ select app.seduh_dispute_resolve((select id from ap
 select is(t089.run(format($$ select app.seduh_dispute_resolve((select id from app.seduh_result_disputes where account_id = %L), 'stands', 'again') $$, t089.u(101))), 'P0001/', 'a resolved dispute cannot be resolved again');
 select is(t089.recorded('alpha-t89'), 'T089 Cup Two|2', 'stands: it stays hidden at her request');
 select is(t089.jt(1, 'select public.seduh_my_record() #>> ''{recorded_results,1,dispute,status}'''), 'stands', 'her My Seduh ID shows the outcome');
+-- the C5 hide rule holds for the 'stands' status too (not only pending)
+select is((select count(*)::int from app.seduh_published_matches(null, t089.u(1))), 1, 'stands: the C5 helper still hides it');
+select is(t089.anon(format($$ select public.seduh_results_profile_links(%L) $$, t089.u(301))) -> 'links' @> '[{"name": "T089 Alpha"}]', false, 'stands: the results page still does not link alpha');
 select is(t089.as_run(1, format($$ select public.seduh_withdraw_dispute(%L) $$, (select a1 from t089_k))), 'ok', 'she may withdraw after the owner said it stands');
 select is(t089.recorded('alpha-t89'), 'T089 Cup One|1, T089 Cup Two|2', 'UNDO: the result is back on her profile');
 select is((select count(*)::int from app.seduh_published_matches(null, t089.u(1))), 2, '...and in the C5 helper');
@@ -303,6 +308,9 @@ select is(t089.as_run(2, format($$ select public.seduh_dispute_result(%L) $$, (s
 select is(t089.run(format($$ select app.seduh_dispute_resolve((select id from app.seduh_result_disputes where account_id = %L), 'link_wrong', 'Wrong phone on the roster') $$, t089.u(102))), 'ok', 'the owner resolves: link_wrong');
 select is(t089.as_attempt(2, format($$ select public.seduh_withdraw_dispute(%L) $$, (select b1 from t089_k))), 'P0001/not_undoable', 'a link_wrong result cannot be shown again by the person');
 select is(t089.recorded('bravo-t89'), 'T089 Cup Two|1', 'it stays hidden');
+-- link_wrong while the link still exists: the C5 helpers hide it as well
+select is((select count(*)::int from app.seduh_published_matches(t089.u(301), t089.u(2))), 0, 'link_wrong (still linked): the C5 helper hides it');
+select is(t089.anon(format($$ select public.seduh_results_profile_links(%L) $$, t089.u(301))) -> 'links' @> '[{"name": "T089 Bravo"}]', false, 'link_wrong (still linked): the results page does not link bravo');
 select set_config('app.seduh_link_write', 'on', true);
 update people set global_person_id = null where id = t089.u(202);
 select set_config('app.seduh_link_write', '', true);
@@ -310,6 +318,7 @@ select is((select count(*)::int from app.seduh_disputes_overview() where handle 
 select is((select still_matches from app.seduh_disputes_overview() where handle = 'bravo-t89'), false, '...and no longer matches (the link is gone)');
 select is((select linked_person_id from app.seduh_disputes_overview() where handle = 'bravo-t89'), null, '...so no roster person is named');
 select is(t089.recorded('bravo-t89'), '', 'unlinked: no recorded result at all (neither event names her any more)');
+select is(t089.anon($$ select public.public_seduh_profile('bravo-t89') $$) ->> 'has_profile', 'true', '...while her page itself still exists (the empty list is not a vanished profile)');
 
 -- ============ audit and constraints ============
 
