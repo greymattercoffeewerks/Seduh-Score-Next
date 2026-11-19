@@ -7,7 +7,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Community tool frame: rolled out to the Timer, Brew Planner and Guess the Bean · unreleased · 2026-11-19
+## Community tool frame: rolled out to the Timer, Brew Planner and Guess the Bean · 4.22.0 · 2026-11-19
 
 **Status: done** (code, tests, docs, reviews). Branch `claude/nervous-blackwell-8ec0d0`, one PR into `dev`, not released. **No version bump**, as instructed: the release PR takes the version (`docs/versioning.md`). No §14 task ID; logged by title. This closes the rollout the 4.21.0 entry left open.
 
