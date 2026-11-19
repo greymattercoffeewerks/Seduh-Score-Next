@@ -185,6 +185,45 @@ test.describe('My Seduh ID (real app, real local Supabase)', () => {
     await pub.close();
   });
 
+  // Owner-reported 2026-11-19: at desktop width the form is two columns, and a hint above one box ("From 1980 to this year.")
+  // pushed that box below its neighbour; the dropdown was also taller than the text boxes. Side-by-side boxes must share a top
+  // edge and a height, with or without a hint, and still after an error message appears under one of them.
+  test('the entry form at desktop width: boxes side by side line up and are the same height', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signIn(page, person.email);
+    await page.getByRole('button', { name: 'Add an entry' }).click();
+    const box = async (label) => page.getByLabel(label, { exact: true }).boundingBox();
+    const pairs = [
+      ['Year', 'What you did'],
+      ['Competition', 'Where (optional)'],
+      ['Your role (optional)', 'Result (optional)'],
+    ];
+    const check = async () => {
+      for (const [left, right] of pairs) {
+        const [a, b] = [await box(left), await box(right)];
+        expect(Math.abs(a.y - b.y), `${left} / ${right} top`).toBeLessThanOrEqual(1);
+        expect(Math.abs(a.height - b.height), `${left} / ${right} height`).toBeLessThanOrEqual(1);
+        expect(b.x, `${right} is in the second column`).toBeGreaterThan(a.x + a.width);
+      }
+      // the dropdown is held to the text boxes' height (it drew 54px against 44px before the fix)
+      expect((await box('What you did')).height).toBeLessThanOrEqual(45);
+    };
+    await check();
+    // a field without a hint keeps its box close under its label (no empty hint row in between)
+    const label = await page.locator('label[for$="-competition_name"]').boundingBox();
+    const input = await box('Competition');
+    expect(input.y - (label.y + label.height)).toBeLessThanOrEqual(12);
+    // an error under one box keeps the row lined up
+    await page.getByLabel('Year', { exact: true }).fill('1900');
+    await page.getByRole('button', { name: 'Add entry' }).click();
+    await expect(page.getByText('Enter a year from 1980 to this year')).toBeVisible();
+    await check();
+    expect(await overflow(page)).toBe(0);
+    await page.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   test('teams: link a team-year as self-reported, see it publicly with both labels, then unlink', async ({
     page,
   }) => {

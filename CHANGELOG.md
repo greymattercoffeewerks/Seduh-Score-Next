@@ -7,6 +7,17 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## My Seduh ID forms: boxes side by side line up · 4.20.1 · 2026-11-19
+
+**Status: NOT FINAL** until the PR is merged and reviewed. Owner-reported 2026-11-19 (screenshot of "Add an entry" at desktop width). **Version 4.20.1 (patch: a fix).**
+
+- **What was wrong.** From 900px the entry and course forms in My Seduh ID are two columns. A field stacks label, hint, box and message, so a field with a hint ("From 1980 to this year.") put its box 20px below a neighbour without one ("What you did"), and the course form's Level box 34px below Note. The "What you did" dropdown was also 54px tall against 44px for the text boxes.
+- **Fix** (`src/marketing/me.css`, inside the 900px query): each field takes four rows of the form grid through `subgrid` (label, hint, box, message), so side-by-side boxes share a top edge whatever hints there are. The form's own row gap would have opened between those rows too (an empty hint row would add a gap), so the spacing is margins instead (the last field's margin is taken back, so the space below the form is unchanged). In a pair where neither field has a hint, label and box keep 8px between them; a field without a hint beside one with a hint has its label level with its neighbour's, so its box sits one hint lower, by design. Boxes align to the start of their row, so a one-line box beside the course Note textarea keeps its height. The dropdown is held to the text boxes' 44px (`.me-form-grid select.claim-input`). Below 900px nothing changes but the dropdown height.
+- **Tests.** Playwright `seduh-my-seduh-id-live` (entry form at 1280px: each pair shares top and height, the dropdown is 44px, still after an error message, label-to-box gap without a hint) and `seduh-courses-live` (course form: title/provider and year/valid-until share top and height, level/note share a top and Level is not stretched to the textarea, still after an error message). Both fail without the fix (20px and 34px) and pass with it.
+- **Reviews.** `module-boundary-checker`: clean. `code-reviewer`: 0 Important; 1 Nit (the last field's margin added 16px below the grid): fixed. `test-auditor`: 0 Important; 2 Nits (course test had no error step; the dropdown's 44px was not asserted): both fixed. `ui-accessibility-reviewer`: 0 Important; 1 Nit (the course Level box stretched to the Note textarea's 81px): fixed with `align-self: start`, now asserted. Checked clean at 360px and 200% text zoom (select text not clipped, tap target holds), focus outlines, reading order, forced colours.
+
+---
+
 ## Seduh ID: "This isn't mine" on a recorded result · 4.20.0 · 2026-11-19
 
 **Status: NOT FINAL** until the PR is merged. Branch `claude/seduh-id-not-mine-116eb4`, PR into `dev`. Owner decision 2026-11-15 (spec 14.6). **Minor: a new usable capability** (a person can hide a wrong result from their page). Migration `20261126120000` is NOT pushed to the cloud; it must be pushed before or with the release (the new tab calls doors that do not exist in the cloud yet), and the Privacy wording ships in the same release.
