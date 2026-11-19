@@ -98,6 +98,11 @@
   display: grid;
   gap: var(--space-4);
 }
+/* a native select draws taller than a text box with the same padding; hold it to the text boxes' height */
+.me-form-grid select.claim-input {
+  block-size: var(--tap-target-min);
+  padding-block: 0;
+}
 .me-form-host:empty {
   display: none;
 }
@@ -238,6 +243,34 @@
   }
   .me-form-grid > :nth-child(n + 8) {
     grid-column: 1 / -1;
+  }
+  /* Two fields side by side must line their boxes up, whether or not one has a hint ("From 1980 to this year."). Each field
+     takes four rows of the form's grid (label, hint, box, message) through subgrid, so a hint in one field moves its
+     neighbour's box down by the same amount. The form's own row gap would also open between those four rows (an empty
+     hint row would add a gap), so the spacing is margins instead, and the gap after a field is the message's. */
+  .me-form-grid {
+    row-gap: 0;
+  }
+  .me-form-grid > .claim-field {
+    grid-row: span 4;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+  .me-form-grid > .claim-field > .claim-label {
+    grid-row: 1;
+    align-self: end;
+    margin-block-end: var(--space-2);
+  }
+  .me-form-grid > .claim-field > .claim-hint {
+    grid-row: 2;
+    margin-block-end: var(--space-2);
+  }
+  .me-form-grid > .claim-field > .claim-input {
+    grid-row: 3;
+  }
+  .me-form-grid > .claim-field > .claim-feedback {
+    grid-row: 4;
+    margin-block: var(--space-2) var(--space-4);
   }
   .me-entry {
     grid-template-columns: minmax(0, 1fr) auto;

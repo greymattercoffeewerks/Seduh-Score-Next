@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## My Seduh ID forms: boxes side by side line up · 4.20.1 · 2026-11-19
+
+**Status: NOT FINAL** until the PR is merged and reviewed. Owner-reported 2026-11-19 (screenshot of "Add an entry" at desktop width). **Version 4.20.1 (patch: a fix).**
+
+- **What was wrong.** From 900px the entry and course forms in My Seduh ID are two columns. A field stacks label, hint, box and message, so a field with a hint ("From 1980 to this year.") put its box 20px below a neighbour without one ("What you did"), and the course form's Level box 34px below Note. The "What you did" dropdown was also 54px tall against 44px for the text boxes.
+- **Fix** (`src/marketing/me.css`, inside the 900px query): each field takes four rows of the form grid through `subgrid` (label, hint, box, message), so side-by-side boxes share a top edge whatever hints there are. The form's own row gap would have opened between those rows too (an empty hint row would add a gap), so the spacing is margins instead; a field without a hint keeps 8px between label and box, and the rows land where they did before. The dropdown is held to the text boxes' 44px (`.me-form-grid select.claim-input`). Below 900px nothing changes but the dropdown height.
+- **Tests.** Playwright `seduh-my-seduh-id-live` (entry form at 1280px: each pair shares top and height, still after an error message, label-to-box gap without a hint) and `seduh-courses-live` (course form: title/provider and year/valid-until share top and height, level/note share a top). Both fail without the fix (20px and 34px) and pass with it; the full My Seduh ID, courses and not-mine specs pass (11), as do `src/marketing` unit tests (666).
+
+---
+
 ## Seduh ID: "This isn't mine" on a recorded result · 4.20.0 · 2026-11-19
 
 **Status: NOT FINAL** until the PR is merged. Branch `claude/seduh-id-not-mine-116eb4`, PR into `dev`. Owner decision 2026-11-15 (spec 14.6). **Minor: a new usable capability** (a person can hide a wrong result from their page). Migration `20261126120000` is NOT pushed to the cloud; it must be pushed before or with the release (the new tab calls doors that do not exist in the cloud yet), and the Privacy wording ships in the same release.

@@ -79,6 +79,29 @@ test.describe('Courses and certificates (real app, real local Supabase)', () => 
     person = await claimedPerson('crs');
   });
 
+  // The course form shares the entry form's two-column layout. "Level" has a hint and "Note" beside it has none, so before the
+  // fix the Level box sat one hint lower than the Note box. (Note is a multi-line box, so only the top edges must match there.)
+  test('the course form at desktop width: boxes side by side line up', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signIn(page, person.email);
+    await page.getByRole('button', { name: 'Courses', exact: true }).click();
+    await page.locator('#me-add-course').click();
+    const form = page.locator('form.me-entry-form');
+    const box = (name) => form.locator(`[name="${name}"]`).boundingBox();
+    for (const [left, right, sameHeight] of [
+      ['title', 'provider', true],
+      ['year', 'valid_until_year', true],
+      ['level', 'note', false],
+    ]) {
+      const [a, b] = [await box(left), await box(right)];
+      expect(Math.abs(a.y - b.y), `${left} / ${right} top`).toBeLessThanOrEqual(1);
+      if (sameHeight)
+        expect(Math.abs(a.height - b.height), `${left} / ${right} height`).toBeLessThanOrEqual(1);
+      expect(b.x, `${right} is in the second column`).toBeGreaterThan(a.x + a.width);
+    }
+    await form.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   test('add a current and an expired course; the public page shows them in the record, self-reported, not as entries', async ({
     page,
   }) => {
