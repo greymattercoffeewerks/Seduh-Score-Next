@@ -481,7 +481,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     lastWarning = found;
   }
 
-  // CLEAR LIST and a CSV import replace the whole list at once, so each keeps
+  // CLEAR LIST, LOAD EXAMPLE LIST and a CSV import replace the whole list at once, so each keeps
   // what it replaced for one UNDO. It is dropped the moment anything else changes the list.
   function rememberForUndo(label) {
     state.undo = {
@@ -550,6 +550,19 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     state.entries = parseEntries(draft);
     state.reveal = null;
     persist();
+    render();
+  }
+
+  function loadExample() {
+    if (state.spinning) return;
+    const example = DEMO_ENTRIES.join('\n');
+    // Loading what is already there changes nothing, so it must not replace an earlier UNDO.
+    const changes = state.draft !== example;
+    if (changes) rememberForUndo('Load example list');
+    updateEntries(example);
+    setNote('Example list loaded.', {
+      undoable: changes || state.undo?.note === 'Example list loaded.',
+    });
     render();
   }
 
@@ -1027,6 +1040,12 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
           () => downloadCsv('seduh-random-selector.csv', `\uFEFF${entriesToCsv(state.entries)}`),
           { 'data-focus-key': 'export' },
         );
+        const exampleButton = button(
+          'Load example list',
+          'rs-small-button action action-outline',
+          loadExample,
+          { 'data-focus-key': 'load-example', ...(state.spinning ? { disabled: '' } : {}) },
+        );
         const clearButton = button(
           'Clear list',
           'rs-small-button rs-quiet-danger action',
@@ -1072,6 +1091,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             el('div', { className: 'rs-entry-actions' }, [
               importButton,
               exportButton,
+              exampleButton,
               clearButton,
               importInput,
             ]),

@@ -138,8 +138,8 @@ self-contained CSS instead.
     - **Copy** is the System artboard's table: "History", "No draws yet. Winners appear here, newest first.", "Winner · draw N",
       "Still in the list, so NAME can be drawn again." / "Removed from the list, so NAME cannot be drawn again.", "Discard &
       redraw", "Draw", "Names, one per line" + hint "Give a name more chances: write `Bella | 2` for double odds.", "Reset colour"
-      (shown only once a colour is picked). **Removed on purpose:** the Load example list button (Clear list + Undo cover the
-      path; `DEMO_ENTRIES` is still the first-visit list) and the "SAVED WITH SHARE LINK" line. **New:** "Remove from list"
+      (shown only once a colour is picked). **Kept, on the owner's say (2026-11-19):** the Load example list button stays, as an outline button between
+      Export CSV and Clear list, with its one-level Undo. **Removed on purpose:** the "SAVED WITH SHARE LINK" line. **New:** "Remove from list"
       (`removeWinner`) takes the winner's line out now, marks its history row removed, and Discard & redraw still puts it back.
       The default board title is "Player draw" (shown upper-case by CSS; an older saved "PLAYER DRAW" still works).
     - **The frame is shared, not local** (`src/community/toolChrome.js` + `toolChrome.css`): the public header

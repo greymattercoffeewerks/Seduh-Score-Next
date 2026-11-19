@@ -534,6 +534,18 @@ describe('random selector result controls', () => {
     );
   });
 
+  it('loads the example list back after the list is cleared', () => {
+    mount();
+    buttonByText('Clear list').click();
+    buttonByText('Load example list').click();
+    expect(textarea().value.split('\n')).toHaveLength(8);
+    expect(root.querySelector('.rs-note').textContent).toBe('Example list loaded.');
+    expect(
+      [...root.querySelectorAll('.rs-entry-actions button')].map((b) => b.textContent),
+    ).toEqual(['Import CSV', 'Export CSV', 'Load example list', 'Clear list']);
+    expect(buttonByText('Load example list').classList.contains('action-outline')).toBe(true);
+  });
+
   it('clears the list and the history, and Undo brings both back', () => {
     drawOnce();
     buttonByText('Clear list').click();
@@ -865,13 +877,21 @@ describe('random selector says what it did not use, and lets a replace be undone
     expect(document.activeElement).toBe(drawButton());
   });
 
+  it('undoes Load example list', () => {
+    mount();
+    buttonByText('Load example list').click();
+    expect(textarea().value.split('\n')).toHaveLength(8);
+    buttonByText('Undo').click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+  });
+
   it('offers no undo once the list has been edited or a draw has started', () => {
     mount();
     buttonByText('Clear list').click();
     type('Solo');
     expect(buttonByText('Undo')).toBeUndefined();
 
-    buttonByText('Clear list').click();
+    buttonByText('Load example list').click();
     expect(buttonByText('Undo')).toBeDefined();
     drawButton().click();
     expect(buttonByText('Undo')).toBeUndefined();
@@ -926,10 +946,15 @@ describe('random selector says what it did not use, and lets a replace be undone
     expect(warning().hidden).toBe(true);
   });
 
-  it('keeps the first UNDO when Clear list is pressed again on an empty list', () => {
+  it('keeps the first UNDO when Clear list or Load example list is pressed again', () => {
     mount();
     buttonByText('Clear list').click();
     buttonByText('Clear list').click();
+    buttonByText('Undo').click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+
+    buttonByText('Load example list').click();
+    buttonByText('Load example list').click();
     buttonByText('Undo').click();
     expect(textarea().value).toBe('Amir\nBella\nChin');
   });
