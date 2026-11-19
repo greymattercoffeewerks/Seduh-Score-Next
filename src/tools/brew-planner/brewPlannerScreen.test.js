@@ -29,6 +29,19 @@ describe('mountBrewPlanner', () => {
     expect(buttonWithText(root, 'Cup Taster 2026 example')).toBeDefined();
   });
 
+  it('sits in the shared community frame, which survives every re-render', () => {
+    mountBrewPlanner(root, { storage: memoryStorage() });
+    expect(root.querySelector('.public-header')).not.toBeNull();
+    expect(root.querySelector('.ct-crumb-current').textContent).toBe('Brew Planner');
+    const titles = [...root.querySelectorAll('.ct-tool-title')].map((n) => n.textContent);
+    expect(titles).toEqual(['Competition Timer', 'Guess the Bean', 'Random Selector']);
+    const header = root.querySelector('.ct-header');
+    buttonWithText(root, 'Cup Taster 2026 example').click();
+    buttonWithText(root, 'Next').click();
+    expect(root.querySelector('.ct-header')).toBe(header);
+    expect(root.querySelectorAll('main.bp')).toHaveLength(1);
+  });
+
   it('loads the example and reaches the cheat sheet with 76 batches', () => {
     mountBrewPlanner(root, { storage: memoryStorage() });
     buttonWithText(root, 'Cup Taster 2026 example').click();

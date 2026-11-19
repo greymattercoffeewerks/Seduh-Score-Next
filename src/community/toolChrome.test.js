@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { COMMUNITY_HUB_HREF, COMMUNITY_TOOLS, otherCommunityTools } from './communityTools.js';
 import { buildCommunityToolChrome } from './toolChrome.js';
+import { communityToolCard } from './toolCard.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -110,11 +113,22 @@ describe('the community tool chrome', () => {
     expect(chrome.bottom.querySelector('.ct-strip').hidden).toBe(true);
     expect(chrome.bottom.querySelector('.ct-footer').hidden).toBe(true);
     // The row and its controls stay, and the brand fills in for the hidden header.
-    expect(chrome.controls.hidden).toBe(false);
+    expect(chrome.controls.closest('.ct-bar').hidden).toBe(false);
     expect(chrome.top.querySelector('.ct-present-brand').hidden).toBe(false);
     chrome.setPresenting(false);
     expect(chrome.top.querySelector('.ct-header').hidden).toBe(false);
     expect(chrome.top.querySelector('.ct-present-brand').hidden).toBe(true);
+  });
+
+  it('drops the whole bar, brand and controls included, when the tool has no controls to keep', () => {
+    const chrome = build();
+    chrome.setPresenting(true, { keepBar: false });
+    expect(chrome.top.querySelector('.ct-bar').hidden).toBe(true);
+    expect(chrome.top.querySelector('.ct-header').hidden).toBe(true);
+    expect(chrome.bottom.querySelector('.ct-strip').hidden).toBe(true);
+    expect(chrome.top.querySelector('.ct-present-brand').hidden).toBe(true);
+    chrome.setPresenting(false, { keepBar: false });
+    expect(chrome.top.querySelector('.ct-bar').hidden).toBe(false);
   });
 
   it('keeps two builds independent, with no shared state', () => {
@@ -122,5 +136,78 @@ describe('the community tool chrome', () => {
     const second = buildCommunityToolChrome({ toolId: 'brew-planner', toolName: 'B' });
     first.setPresenting(true);
     expect(second.top.querySelector('.ct-header').hidden).toBe(false);
+  });
+});
+
+describe('the tool entries that adopt the chrome', () => {
+  // vitest runs from the repo root. A tool that builds the chrome but whose HTML entry forgets one of the two sheets
+  // renders an unstyled header and strip, and no unit test of the DOM would notice.
+  const read = (path) => readFileSync(join(process.cwd(), path), 'utf8');
+  const sheets = (html) =>
+    [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
+  const FRAMED = [
+    [
+      'random-selector',
+      'tools/random-selector/index.html',
+      '/src/tools/random-selector/randomSelector.css',
+    ],
+    ['timer', 'tools/timer/index.html', '/src/tools/timer/timer.css'],
+    ['brew-planner', 'tools/brew-planner/index.html', '/src/tools/brew-planner/brewPlanner.css'],
+    ['guess-the-bean', 'guess-the-bean/index.html', '/src/community/guess-the-bean/shared.css'],
+  ];
+
+  it.each(FRAMED)(
+    '%s links the header sheet, then the chrome sheet, then its own',
+    (_id, entry, own) => {
+      const links = sheets(read(entry));
+      const header = links.indexOf('/src/marketing/publicHeader.css');
+      const chrome = links.indexOf('/src/community/toolChrome.css');
+      expect(header, 'publicHeader.css').toBeGreaterThan(-1);
+      expect(chrome, 'toolChrome.css').toBeGreaterThan(header);
+      expect(links.indexOf(own), 'the tool sheet').toBeGreaterThan(chrome);
+    },
+  );
+
+  it('names every framed tool in the list the strip reads', () => {
+    for (const [id] of FRAMED) {
+      expect(
+        COMMUNITY_TOOLS.some((t) => t.id === id),
+        id,
+      ).toBe(true);
+    }
+  });
+
+  it('leaves the Guess the Bean live display and participant page without the frame', () => {
+    for (const entry of ['guess-the-bean/display/index.html', 'guess-the-bean/play/index.html']) {
+      expect(sheets(read(entry)), entry).not.toContain('/src/community/toolChrome.css');
+    }
+  });
+});
+
+describe('the community tool card', () => {
+  const tool = COMMUNITY_TOOLS.find((t) => t.id === 'brew-planner');
+
+  it('writes the same eyebrow, name, pitch and address in the hub card and the strip card', () => {
+    const hub = communityToolCard(tool, { variant: 'hub' });
+    const strip = communityToolCard(tool, { variant: 'strip' });
+    for (const card of [hub, strip]) {
+      expect(card.getAttribute('href')).toBe(tool.href);
+      expect(card.textContent).toContain(tool.eyebrow);
+      expect(card.textContent).toContain(tool.title);
+      expect(card.textContent).toContain(tool.body);
+    }
+    expect(hub.querySelector('h2').textContent).toBe(tool.title);
+    expect(strip.querySelector('.ct-tool-open').textContent).toBe(`Open ${tool.title} →`);
+  });
+
+  it('marks an external download as noopener and uses its own link text', () => {
+    const widget = COMMUNITY_TOOLS.find((t) => t.external);
+    const card = communityToolCard(widget, { variant: 'hub' });
+    expect(card.getAttribute('rel')).toBe('noopener');
+    expect(card.querySelector('.community-card-arrow').textContent).toBe(widget.arrowText);
+  });
+
+  it('refuses an unknown variant', () => {
+    expect(() => communityToolCard(tool, { variant: 'x' })).toThrow(/unknown variant/);
   });
 });

@@ -9,7 +9,7 @@
 //
 // A tool calls buildCommunityToolChrome() once, puts `top` above its own <main> and `bottom` below it, and
 // fills `controls` with its buttons. Nothing here knows about any one tool: the Random Selector adopts it
-// first; the Timer, Brew Planner and Guess the Bean can adopt it without editing this file.
+// first; the Timer, Brew Planner and Guess the Bean adopt it the same way (2026-11-19).
 //
 // The chrome is built once and never rebuilt, so the header's open menu survives a tool re-rendering.
 // `setPresenting(true)` hides the header, the breadcrumb and the strip for a full-screen view (the footer
@@ -17,15 +17,7 @@
 import { brandLockup, el } from '../core/dom.js';
 import { buildPublicHeader } from '../marketing/publicHeader.js';
 import { COMMUNITY_HUB_HREF, otherCommunityTools } from './communityTools.js';
-
-function toolLink({ title, eyebrow, body, href }) {
-  return el('a', { className: 'ct-tool panel', attrs: { href } }, [
-    el('span', { className: 'ct-tool-eyebrow', text: eyebrow }),
-    el('span', { className: 'ct-tool-title', text: title }),
-    el('span', { className: 'ct-tool-body', text: body }),
-    el('span', { className: 'ct-tool-open', text: `Open ${title} →` }),
-  ]);
-}
+import { communityToolCard } from './toolCard.js';
 
 /**
  * @param {object} options
@@ -33,7 +25,7 @@ function toolLink({ title, eyebrow, body, href }) {
  * @param {string} options.toolName  shown as the current page in the breadcrumb
  * @param {string} [options.edition] right-hand footer text, e.g. "Split-flap edition"
  * @returns {{ top: HTMLElement, controls: HTMLElement, bottom: HTMLElement,
- *             setPresenting: (on: boolean) => void }}
+ *             setPresenting: (on: boolean, options?: { keepBar?: boolean }) => void }}
  */
 export function buildCommunityToolChrome({ toolId, toolName, edition }) {
   // The public header is drawn for the dark "stage" surface; the tool's own page may be paper.
@@ -81,7 +73,11 @@ export function buildCommunityToolChrome({ toolId, toolName, edition }) {
             attrs: { href: COMMUNITY_HUB_HREF },
           }),
         ]),
-        el('div', { className: 'ct-strip-grid' }, otherCommunityTools(toolId).map(toolLink)),
+        el(
+          'div',
+          { className: 'ct-strip-grid' },
+          otherCommunityTools(toolId).map((tool) => communityToolCard(tool, { variant: 'strip' })),
+        ),
       ]),
     ],
   );
@@ -93,10 +89,13 @@ export function buildCommunityToolChrome({ toolId, toolName, edition }) {
   ]);
   const bottom = el('div', { className: 'ct-bottom' }, [strip, footer]);
 
-  function setPresenting(on) {
+  // `keepBar: false` is for a tool whose full-screen view has no controls of its own to keep (the Timer's countdown):
+  // the whole frame, bar included, goes away.
+  function setPresenting(on, { keepBar = true } = {}) {
     header.hidden = on;
     crumbs.hidden = on;
-    presentBrand.hidden = !on;
+    presentBrand.hidden = !on || !keepBar;
+    bar.hidden = on && !keepBar;
     strip.hidden = on;
     footer.hidden = on;
     top.dataset.presenting = String(on);

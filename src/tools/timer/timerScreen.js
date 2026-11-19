@@ -8,6 +8,7 @@
 // used cupping-specific wording throughout and that read as narrower than
 // intended.
 import { el, labeledField, brandMark } from '../../core/dom.js';
+import { buildCommunityToolChrome } from '../../community/toolChrome.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import {
   PRESETS,
@@ -164,6 +165,15 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
   const beeper = createBeeper();
   const wakeLock = createWakeLockController();
   const originalTitle = document.title;
+  // The shared community frame is built once; render() swaps only `host`. While a countdown is on screen (focus mode)
+  // the whole frame is hidden, so the number gets the screen and the corner brand link takes over from the header.
+  const chrome = buildCommunityToolChrome({
+    toolId: 'timer',
+    toolName: 'Competition Timer',
+    edition: 'Countdown edition',
+  });
+  const host = el('div', { className: 'timer-host' });
+  root.replaceChildren(chrome.top, host, chrome.bottom);
 
   let countdownValueEl = null;
   let countdownSrEl = null;
@@ -277,7 +287,7 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
 
   function render() {
     stopTicking();
-    root.innerHTML = '';
+    host.replaceChildren();
 
     const status = getStatus(state);
     const container = el('main', { className: 'timer' });
@@ -289,6 +299,7 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
     // the normal boxed form layout, which needs the narrower width to stay
     // readable.
     container.dataset.mode = status === 'idle' ? 'setup' : 'focus';
+    chrome.setPresenting(status !== 'idle', { keepBar: false });
 
     // Branding — a free tool given away by Seduh Score (user decision,
     // 2026-09-12), linking back to the marketing home page. Icon-only, no
@@ -296,19 +307,22 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
     // corner (see timer.css) so it never competes with the countdown for
     // space. The link carries its own aria-label since brandMark() itself is
     // aria-hidden and there's no visible text left to name it.
-    const brandMarkEl = brandMark();
-    brandMarkEl.classList.add('timer-brand-mark');
-    brandMarkEl.setAttribute('aria-hidden', 'true');
-    container.appendChild(
-      el(
-        'a',
-        {
-          className: 'timer-brand-link',
-          attrs: { href: '/', 'aria-label': 'Seduh Score home' },
-        },
-        [brandMarkEl],
-      ),
-    );
+    // Only in focus mode: in setup mode the shared header carries the brand.
+    if (status !== 'idle') {
+      const brandMarkEl = brandMark();
+      brandMarkEl.classList.add('timer-brand-mark');
+      brandMarkEl.setAttribute('aria-hidden', 'true');
+      container.appendChild(
+        el(
+          'a',
+          {
+            className: 'timer-brand-link',
+            attrs: { href: '/', 'aria-label': 'Seduh Score home' },
+          },
+          [brandMarkEl],
+        ),
+      );
+    }
 
     // Hidden once running/paused/expired (see .timer[data-mode='focus']
     // .timer-heading in timer.css) — user feedback, 2026-09-13: with the
@@ -368,7 +382,7 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
 
     container.appendChild(buildSoundToggle());
 
-    root.appendChild(container);
+    host.appendChild(container);
     updateDisplay();
     if (status !== 'idle') fitCountdownFont();
 
@@ -380,7 +394,7 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
 
     // Rebuild-then-refocus, same convention formats/cup-taster/timingScreen.js
     // already establishes for this codebase — found in review
-    // (ui-accessibility-reviewer): without this, root.innerHTML = '' above
+    // (ui-accessibility-reviewer): without this, host.replaceChildren() above
     // drops focus to <body> on every Start/Pause/Resume/Reset/expiry,
     // forcing a keyboard user to tab from the top of the page each time.
     if (focusAfterRender) {

@@ -262,3 +262,12 @@ focus-assertion coverage across the whole file despite a substantial focus-manag
 block). All fixed and re-verified, including live in a browser twice (once via `?demo=1`
 confirming zero network calls, once against a real session confirming the atomic RPC
 write and the polling close-watch, including focus landing on the new heading).
+
+## The shared community frame (2026-11-19)
+
+The organiser page (`guess-the-bean/index.html`: sign-in, then setup) sits inside `src/community/toolChrome.js`: the public
+header, a "Community Tools / Guess the Bean" breadcrumb, the "More free community tools" strip and the footer. `main.js`
+builds the frame once and mounts each screen into `.gtb-host`, never into `#app`, because every screen tears its root
+down on each render. The participant page (`/play/`) and the live display (`/display/`) are separate entries with no
+frame, on purpose (the display is the projector view); `toolChrome.test.js` pins that they do not link its sheet and
+`mainWiring.test.js` pins the host wiring. The entry links `publicHeader.css`, `toolChrome.css`, then `shared.css`.
