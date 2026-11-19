@@ -7,7 +7,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Random Selector: Tier 1 redesign (split-flap edition) · unreleased · 2026-11-19
+## Random Selector: Tier 1 redesign (split-flap edition) · 4.21.0 · 2026-11-19
 
 **Status: done** (code, tests, docs, reviews), except the Playwright smoke run, which has two red tests unrelated to this change (see Follow-up). Branch `claude/rs-tier1-cleanup-328b30`, one PR into `dev`. Uncommitted at the time of writing; the orchestrating session commits it. No §14 task ID was in the brief; logged by title. **No version bump**, as instructed: the release PR takes the version, and the visible redesign is a minor at release (`docs/versioning.md`; the release owner's call).
 
