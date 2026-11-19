@@ -19,6 +19,8 @@ export const TD_OPERATIONS = Object.freeze({
   undo: 'td_undo_vote',
   confirm: 'td_confirm_match',
   walkover: 'td_record_walkover',
+  saveSheet: 'td_save_score_sheet',
+  confirmScored: 'td_confirm_scored_match',
 });
 
 // A plain select returns at most the API's row limit (1000 here), which a large event's vote rows can pass: a
@@ -39,6 +41,32 @@ async function readAll(client, table, columns, eventId) {
   }
 }
 
+// The scoresheet rows (org members only: nothing here is public) and the database's own winner of each scored match
+// (td_match_results reads the sheets or the organiser's recorded pick, so no screen re-derives it from points).
+async function readScoring(client, eventId) {
+  const [sheets, decisions, results] = await Promise.all([
+    readAll(
+      client,
+      'td_score_sheets',
+      'id, match_id, slot_id, judge_seat, cup, line_key, points',
+      eventId,
+    ),
+    client.from('td_score_decisions').select('match_id, winner_position').eq('event_id', eventId),
+    client
+      .from('td_match_results')
+      .select('match_id, winner_slot_id')
+      .eq('event_id', eventId)
+      .eq('result_kind', 'scores'),
+  ]);
+  if (decisions.error) throw decisions.error;
+  if (results.error) throw results.error;
+  return {
+    sheets,
+    decisions: decisions.data,
+    scoreWinners: new Map(results.data.map((r) => [r.match_id, r.winner_slot_id])),
+  };
+}
+
 // Everything one screen or one live payload needs, read together.
 export async function loadThrowdown(eventId, client = getSupabase()) {
   const [settings, draw, rounds, matches, slots, votes, entries] = await Promise.all([
@@ -57,7 +85,11 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
   ]);
   if (settings.error) throw settings.error;
   if (draw.error) throw draw.error;
-  const rows = { rounds, matches, slots, votes, entries };
+  // The scoresheet module's rows are read only when the event turned it on, so an event without it makes no such read.
+  const scoring = settings.data?.modules?.scoresheet
+    ? await readScoring(client, eventId)
+    : { sheets: [], decisions: [], scoreWinners: new Map() };
+  const rows = { rounds, matches, slots, votes, entries, scoreWinners: scoring.scoreWinners };
   return {
     settings: settings.data ?? {
       judge_count: 3,
@@ -68,6 +100,8 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
     settingsSaved: Boolean(settings.data),
     draw: draw.data,
     ...rows,
+    scoreSheets: scoring.sheets,
+    scoreDecisions: scoring.decisions,
     bracket: deriveBracket(rows),
   };
 }
@@ -131,6 +165,38 @@ export const confirmMatch = ({ orgId, matchId, expectedWinnerSlotId = null }, ha
     handlers,
   );
 
+// One paper sheet (one judge seat x one competitor, every cup): sheet = { "1": { <line key>: points }, ... }. Saving the
+// same seat and competitor again replaces the earlier sheet until the match is confirmed.
+export const saveScoreSheet = ({ orgId, matchId, slotId, seat, sheet }, handlers) =>
+  submit(
+    TD_OPERATIONS.saveSheet,
+    {
+      p_org_id: orgId,
+      p_match_id: matchId,
+      p_slot_id: slotId,
+      p_judge_seat: seat,
+      p_sheet: sheet,
+    },
+    handlers,
+  );
+
+// expectedWinnerPosition: the slot position the sheets decide (null when they are level); organiserPick: the position the
+// organiser chose when they are level (null otherwise).
+export const confirmScoredMatch = (
+  { orgId, matchId, expectedWinnerPosition = null, organiserPick = null },
+  handlers,
+) =>
+  submit(
+    TD_OPERATIONS.confirmScored,
+    {
+      p_org_id: orgId,
+      p_match_id: matchId,
+      p_expected_winner_position: expectedWinnerPosition,
+      p_organiser_pick: organiserPick,
+    },
+    handlers,
+  );
+
 export const recordWalkover = ({ orgId, matchId, winnerSlotId }, handlers) =>
   submit(
     TD_OPERATIONS.walkover,
@@ -146,7 +212,8 @@ export async function pendingSnapshot() {
   const ops = await listAllOperations();
   const matches = new Map();
   const forMatch = (id) => {
-    if (!matches.has(id)) matches.set(id, { deltas: new Map(), queued: 0, decisionQueued: false });
+    if (!matches.has(id))
+      matches.set(id, { deltas: new Map(), queued: 0, decisionQueued: false, sheets: new Map() });
     return matches.get(id);
   };
   let startQueued = false;
@@ -158,7 +225,17 @@ export async function pendingSnapshot() {
       const step = op.type === TD_OPERATIONS.vote ? 1 : -1;
       m.deltas.set(payload.p_slot_id, (m.deltas.get(payload.p_slot_id) ?? 0) + step);
       m.queued += 1;
-    } else if (op.type === TD_OPERATIONS.confirm || op.type === TD_OPERATIONS.walkover) {
+    } else if (op.type === TD_OPERATIONS.saveSheet) {
+      // a queued sheet replaces the saved one for that seat and competitor (the queue is in order, the last one wins)
+      forMatch(payload.p_match_id).sheets.set(
+        `${payload.p_slot_id}:${payload.p_judge_seat}`,
+        payload.p_sheet,
+      );
+    } else if (
+      op.type === TD_OPERATIONS.confirm ||
+      op.type === TD_OPERATIONS.confirmScored ||
+      op.type === TD_OPERATIONS.walkover
+    ) {
       forMatch(payload.p_match_id).decisionQueued = true;
     }
   }
@@ -168,5 +245,12 @@ export async function pendingSnapshot() {
 // One match's share of the snapshot.
 export async function pendingVoteDeltas(matchId) {
   const { matches } = await pendingSnapshot();
-  return matches.get(matchId) ?? { deltas: new Map(), queued: 0, decisionQueued: false };
+  return (
+    matches.get(matchId) ?? {
+      deltas: new Map(),
+      queued: 0,
+      decisionQueued: false,
+      sheets: new Map(),
+    }
+  );
 }

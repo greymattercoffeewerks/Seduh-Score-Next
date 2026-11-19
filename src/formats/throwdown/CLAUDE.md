@@ -17,7 +17,7 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
 - **Votes are rows, results are derived.** `td_votes` has one row per tap and NO judge identity
   (a test pins the column list). Totals, the leader and the winner are computed (`votes.js`,
   `bracket.js`, and in SQL `td_match_results`); the only stored result facts are
-  `td_matches.result_kind` (`votes | walkover | bye`), `confirmed_at` and, for a walkover, the
+  `td_matches.result_kind` (`votes | walkover | bye | scores`), `confirmed_at` and, for a walkover, the
   explicit winner's slot position. A walkover is never a tally.
 - **Confirm is disabled while votes are level**, in the UI (`canConfirm`) and in the database
   (`td_votes_level`). `td_confirm_match` also takes the slot the organiser saw leading
@@ -87,5 +87,19 @@ live surfaces are stage 2. It deliberately **extends two core facts**: `td_match
   `td_score_decisions` (an organiser's pick for a level match). Writers: `td_save_score_sheet`, `td_confirm_scored_match`
   (SECURITY DEFINER, idempotent, advance in the same transaction). Console read view: `td_score_standings`.
 - A scored match takes no taps (`td_match_scored` on `td_votes`). Scores are never in any public door or live payload.
-- Not yet touched (stage 2): `bracket.js` `winnerSlotId` has no `scores` arm (read the winner from `td_match_results`);
-  `eventScreen.js` draws no module control; no outbox handler; no live-surface wording.
+
+### Stage 2 (console, outbox, live surfaces; 2026-11-19)
+
+- **Setup**: a "Scoresheet rounds" toggle in `eventScreen.js` (preset, cups per round role; 0 = tap-voted), saved through
+  `td_save_settings` modules and locked with setup. Off saves no `scoresheet` key (no trace anywhere).
+- **Console only**: `scoredMatch.js` (pure: `scoringContext`, `scoredView`, draft parsing), `scoreEntry.js` (the card: "Sheets in:
+  n of m", a seat x competitor grid, the paper-sheet form with a live cup total, the confirm step and the organiser pick),
+  `scoreAudit.js` (the read-only breakdown on the event screen and on `resultsScreen.js`). No public surface may import them
+  (`scoreBoundary.test.js`). A match is scored when `scoredCups(config, match.roundPhase, match.roundSize)` is not null.
+- **Data/outbox**: `data.js` reads `td_score_sheets`, `td_score_decisions` and the database's winner of each scored match
+  (`td_match_results`, passed to `deriveBracket` as `scoreWinners`) only when the module is on; saves and confirm are outbox
+  operations (`td_save_score_sheet`, `td_confirm_scored_match`) with client-made ids. A queued sheet replaces the saved one for
+  its seat and counts in "Sheets in"; a queued confirm closes the match's sheets. `td_score_standings` is not read: the totals
+  and the rule come from `core/scoresheet.js` and the database re-checks both at confirm.
+- **Live payload**: a scored match in progress carries only `judging: true`; a decided one carries the winner flag and
+  `resultKind: 'scores'`, never a number. Module off: no `judging` key (tested).

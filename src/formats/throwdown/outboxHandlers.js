@@ -15,5 +15,7 @@ export const throwdownOperationLabels = {
   td_undo_vote: 'taking back a vote',
   td_confirm_match: 'confirming a match',
   td_record_walkover: 'recording a walkover',
+  td_save_score_sheet: 'saving a scoresheet',
+  td_confirm_scored_match: 'confirming a scored match',
   publish_throwdown_live_session: 'updating the live display',
 };

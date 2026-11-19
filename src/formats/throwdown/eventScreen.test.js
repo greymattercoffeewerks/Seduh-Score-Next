@@ -127,3 +127,132 @@ describe('the Throwdown organiser screen', () => {
     expect(root.querySelectorAll('article.td-match')).toHaveLength(0);
   });
 });
+
+describe('scoresheet rounds on the organiser screen', () => {
+  const lines = [
+    { key: 'a', label: 'Line A', max: 6 },
+    { key: 'b', label: 'Line B', max: 3 },
+  ];
+  const scoring = (extra = {}) => ({
+    ...started,
+    td_settings: [
+      {
+        judge_count: 3,
+        third_place: true,
+        seeding_mode: 'random',
+        modules: { scoresheet: { preset: 'latte_art_v1', lines, cups: { final: 2 } } },
+      },
+    ],
+    ...extra,
+  });
+  const byText = (root, text) =>
+    [...root.querySelectorAll('button')].find((b) => b.textContent.includes(text));
+
+  it('offers a Scoresheet toggle in setup, with the cups controls only when it is on', async () => {
+    const root = await mount({ event_entries: entries });
+    const toggle = root.querySelector('[data-focus-key="td-sheet-on"]');
+    expect(toggle.checked).toBe(false);
+    expect(root.querySelector('[data-focus-key="td-cups-final"]')).toBeNull();
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(root.querySelector('[data-focus-key="td-cups-final"]').value).toBe('2');
+    expect(root.querySelector('[data-focus-key="td-cups-third_place"]').value).toBe('1');
+    expect(root.querySelector('[data-focus-key="td-cups-semi_final"]').value).toBe('0');
+  });
+
+  it('draws no tap buttons on a scored match, and shows "Sheets in: 0 of 6"', async () => {
+    const root = await mount(scoring());
+    expect(root.querySelectorAll('.td-vote')).toHaveLength(0);
+    expect(root.textContent).toContain('Sheets in: 0 of 6');
+    expect(root.querySelectorAll('.td-grid-btn')).toHaveLength(6);
+    expect(byText(root, 'Confirm result').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('an event without the module draws no scoresheet control or text on a live match', async () => {
+    const root = await mount(started);
+    expect(root.textContent).not.toMatch(/sheet|cup/i);
+    expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
+  });
+
+  it('opens a paper sheet: numeric inputs, a live cup total, and Save only when complete', async () => {
+    const root = await mount(scoring());
+    root.querySelector('.td-grid-btn').click();
+    const inputs = [...root.querySelectorAll('.td-points')];
+    expect(inputs).toHaveLength(4);
+    expect(inputs.every((i) => i.getAttribute('inputmode') === 'numeric')).toBe(true);
+    const save = byText(root, 'Save sheet');
+    // an empty sheet: Save says what is missing instead of doing nothing
+    save.click();
+    expect(root.querySelector('.td-sheet-error').textContent).toContain('4 lines are blank');
+    const type = (i, v) => {
+      i.value = v;
+      i.dispatchEvent(new Event('input'));
+    };
+    [4, 3, 5, 2].forEach((v, i) => type(inputs[i], String(v)));
+    expect(root.textContent).toContain('Cup 1 total: 7 of 9');
+    expect(root.textContent).toContain('Cup 2 total: 7 of 9');
+    expect(root.querySelector('.td-sheet-error').textContent).toBe('');
+    type(inputs[0], '7');
+    expect(inputs[0].getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('refuses to save an out-of-range line, and queues a complete sheet through the outbox', async () => {
+    const { listAllOperations } = await import('../../core/outbox.js');
+    const root = await mount(scoring());
+    root.querySelector('.td-grid-btn').click();
+    const inputs = [...root.querySelectorAll('.td-points')];
+    const type = (i, v) => {
+      i.value = v;
+      i.dispatchEvent(new Event('input'));
+    };
+    [7, 3, 5, 2].forEach((v, i) => type(inputs[i], String(v)));
+    byText(root, 'Save sheet').click();
+    expect(await listAllOperations()).toHaveLength(0);
+    expect(root.querySelector('.td-sheet-error').textContent).toContain(
+      '1 line is blank or out of range',
+    );
+    const again = [...root.querySelectorAll('.td-points')];
+    [6, 3, 5, 2].forEach((v, i) => type(again[i], String(v)));
+    byText(root, 'Save sheet').click();
+    await new Promise((r) => setTimeout(r, 20));
+    const ops = await listAllOperations();
+    expect(ops).toHaveLength(1);
+    expect(ops[0].type).toBe('td_save_score_sheet');
+    expect(ops[0].payload).toMatchObject({
+      p_match_id: 'm1',
+      p_slot_id: 's1',
+      p_judge_seat: 1,
+      p_sheet: { 1: { a: 6, b: 3 }, 2: { a: 5, b: 2 } },
+    });
+    expect(typeof ops[0].payload.p_operation_id).toBe('string');
+  });
+
+  it('shows a decided scored match with its breakdown on the console', async () => {
+    const sheets = [1, 2, 3].flatMap((seat) =>
+      ['s1', 's2'].flatMap((slot) =>
+        [1, 2].flatMap((cup) =>
+          lines.map((l) => ({
+            id: `${slot}${seat}${cup}${l.key}`,
+            match_id: 'm1',
+            slot_id: slot,
+            judge_seat: seat,
+            cup,
+            line_key: l.key,
+            points: slot === 's1' ? 2 : 3,
+          })),
+        ),
+      ),
+    );
+    const root = await mount(
+      scoring({
+        td_matches: [{ ...started.td_matches[0], result_kind: 'scores', confirmed_at: 't' }],
+        td_score_sheets: sheets,
+        td_match_results: [{ match_id: 'm1', winner_slot_id: 's2' }],
+      }),
+    );
+    // the database's winner is shown, not a re-tally: here it is the competitor with the LOWER total
+    expect(root.querySelector('.td-champion-name').textContent).toBe('Bima');
+    expect(root.textContent).toContain('Score breakdown');
+    expect(root.textContent).toContain('Bima won on');
+  });
+});

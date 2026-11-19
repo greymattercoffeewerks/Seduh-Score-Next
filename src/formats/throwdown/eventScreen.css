@@ -159,3 +159,141 @@
     display: none;
   }
 }
+
+/* ---- scoresheet rounds (scoreEntry.js, scoreAudit.js): console only, 360px first ---- */
+.td-sheets-count {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+}
+
+.td-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.td-grid-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+}
+
+.td-grid-seat {
+  font-weight: var(--font-weight-bold);
+}
+
+.td-grid-btn {
+  min-height: 3rem;
+  overflow-wrap: anywhere;
+}
+
+.td-sheet,
+.td-sheet-cup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.td-sheet-cup {
+  border: var(--border-hairline) solid var(--color-border);
+  padding: var(--space-2);
+  min-width: 0;
+}
+
+.td-sheet-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5rem;
+  grid-template-areas:
+    'label input'
+    'max input'
+    'problem problem';
+  column-gap: var(--space-2);
+  align-items: center;
+}
+
+.td-sheet-label {
+  grid-area: label;
+  overflow-wrap: anywhere;
+}
+
+.td-points-max {
+  grid-area: max;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.td-points {
+  grid-area: input;
+  min-height: 3rem;
+  text-align: center;
+  font-size: var(--text-lg);
+}
+
+.td-points-problem {
+  grid-area: problem;
+  font-size: var(--text-sm);
+}
+
+.td-points-problem:empty {
+  display: none;
+}
+
+.td-cup-total {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+}
+
+.td-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.td-audit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-x: auto;
+}
+
+.td-audit-table caption {
+  text-align: left;
+  font-weight: var(--font-weight-bold);
+}
+
+.td-audit-details summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.td-round-match {
+  flex-wrap: wrap;
+}
+
+@media (min-width: 600px) {
+  .td-grid-row {
+    grid-template-columns: 6rem repeat(2, minmax(0, 1fr));
+    align-items: center;
+  }
+
+  .td-sheet-actions {
+    flex-direction: row;
+  }
+}
+.td-audit-details {
+  flex-basis: 100%;
+}
+
+.td-sheet-error {
+  margin: 0;
+  color: var(--color-danger, var(--color-text));
+  font-weight: var(--font-weight-bold);
+}
+
+.td-sheet-error:empty {
+  display: none;
+}

@@ -16,8 +16,26 @@ const REFUSALS = {
   td_module_unknown: 'That module is not available.',
   td_module_dependency: 'That module needs another module switched on first.',
   td_judge_count_invalid: 'The judge count must be between 1 and 15.',
-  td_leader_changed:
-    'The votes changed while you were looking. Check the result and confirm again.',
+  td_leader_changed: 'The result changed while you were looking. Check it and confirm again.',
+  td_match_scored: 'That match is decided by scoresheets, not by votes.',
+  td_match_not_scored: 'That match is decided by votes, not by scoresheets.',
+  td_seat_invalid: 'There is no such judge seat on this event.',
+  td_cup_invalid: 'There is no such cup in this round.',
+  td_line_unknown: 'The scoresheet has no such line.',
+  td_points_invalid: 'Points must be whole numbers within each line’s maximum.',
+  td_sheet_invalid: 'That scoresheet could not be read. Open it again and re-enter the points.',
+  td_sheet_cups: 'The scoresheet does not have the right number of cups.',
+  td_sheet_line_unknown: 'The scoresheet has a line this event does not use.',
+  td_sheet_incomplete: 'Every line of every cup needs a score before the sheet can be saved.',
+  td_sheet_points_invalid: 'Points must be whole numbers within each line’s maximum.',
+  td_sheets_incomplete:
+    'Not every judge’s sheet is in yet. Enter all the sheets before confirming.',
+  td_organiser_pick_required:
+    'The sheets are level. Choose the winner yourself; it is recorded as your decision.',
+  td_organiser_pick_unneeded:
+    'The sheets already decide this match. Check the result and confirm again.',
+  td_scoresheet_invalid:
+    'Choose at least one round for scoresheets, with 1 to 3 cups, and a known scoresheet.',
   td_slot_invalid: 'That competitor is not in this match.',
   td_slot_empty: 'That slot has no competitor.',
   td_seeding_invalid: 'Choose a random or a manual draw.',
@@ -36,12 +54,30 @@ export const RESULT_WORDS = Object.freeze({
   votes: (a, b) => `${a} to ${b}`,
   walkover: 'Walkover',
   bye: 'Bye',
+  scores: 'Scoresheets',
 });
+
+// The rounds a scoresheet can decide, by the role the bracket gives them (roundRole.js).
+export const ROLE_WORDS = Object.freeze({
+  final: 'Final',
+  third_place: '3rd place match',
+  semi_final: 'Semi-finals',
+  quarter_final: 'Quarter-finals',
+});
+
+// The rule that decided a scored match, in words (console only: never on a public surface).
+export function ruleWords(rule) {
+  if (rule === 'total') return 'the higher total points';
+  if (rule === 'judges') return 'more judges scoring them higher (the totals were level)';
+  if (rule === 'organiser') return 'the organiser’s decision (the sheets were level)';
+  return '';
+}
 
 // The line under a decided match, in words: "2 to 1", "Walkover", "Bye".
 export function resultLine(match) {
   if (match.resultKind === 'walkover') return RESULT_WORDS.walkover;
   if (match.resultKind === 'bye') return RESULT_WORDS.bye;
+  if (match.resultKind === 'scores') return RESULT_WORDS.scores;
   if (match.resultKind === 'votes') {
     const [a, b] = match.sides.filter((s) => s.entryId);
     return RESULT_WORDS.votes(a.votes, b.votes);
