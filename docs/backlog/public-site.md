@@ -68,3 +68,10 @@ The free Random Selector was redesigned and adopted the shared community chrome 
 - **The reduced-motion sweep assertion is weak.** It predates this change; `test-auditor` flagged it. It should assert the animation is removed under `prefers-reduced-motion`, not only that the rule exists.
 - **Two card renderers and two breadcrumb primitives.** The Random Selector keeps its own card renderer and breadcrumb; `src/community/toolChrome.js` has its own. Merge them when a second tool adopts the chrome (Timer, Brew Planner or Guess the Bean).
 - **Two function declarations sit after a `return` in `randomSelector.js`.** They are hoisted and work. `code-reviewer` left the style call to the owner.
+
+## Known open items from the share images fix (4.21.1, 2026-11-19)
+
+The four public tool and Community pages gained an `og:image` and a touch icon (CHANGELOG entry of the same date). Two items came out of it.
+
+- **Real WhatsApp preview not checked.** The tags are in the built HTML and the test pins them, but no live share was made. WhatsApp caches previews, so a link shared before the deploy may keep the old thumbnail. Owed: a fresh share, or Facebook's Sharing Debugger, after the deploy. (share images fix)
+- **Pages shared with no share tags.** `results/`, `id/`, `id/country/`, the `/id/<handle>/` shell, `guess-the-bean/play/` and the app's audience links have `og:title` or no tags at all, so a shared link falls back to the upscaled favicon. Pre-existing; `shareImages.test.js` covers only the pages that set `og:title`. Add the tags to each, reusing `share-mark.png`. (share images fix, `code-reviewer`)
