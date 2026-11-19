@@ -2,6 +2,7 @@
 // deliberately links out to self-contained tools rather than importing either
 // tool's logic or styling; future community gifts can be added as another card.
 import { el, svgEl } from '../core/dom.js';
+import { COMMUNITY_TOOLS } from './communityTools.js';
 import { buildPublicFooter } from '../marketing/publicFooter.js';
 import { buildPublicHeader } from '../marketing/publicHeader.js';
 
@@ -78,6 +79,14 @@ function selectorInstrument() {
   );
 }
 
+const INSTRUMENTS = {
+  timer: timerInstrument,
+  'guess-the-bean': beanInstrument,
+  'guess-the-bean-widget': widgetInstrument,
+  'brew-planner': brewerInstrument,
+  'random-selector': selectorInstrument,
+};
+
 function arrow(text) {
   return el('span', { className: 'community-card-arrow', text: text ?? 'Open tool →' });
 }
@@ -146,55 +155,17 @@ function buildShelf() {
           text: 'No clutter, no feature maze. Just a good thing to open when you need it.',
         }),
       ]),
-      el('div', { className: 'community-tool-grid' }, [
-        toolCard({
-          number: '01',
-          title: 'Competition Timer',
-          eyebrow: 'For keeping the room moving',
-          body: 'A clear, full-screen timer for heats, routines, brews and the moments everyone needs to see at once.',
-          href: '/tools/timer/',
-          meta: 'No account needed',
-          instrument: timerInstrument(),
-        }),
-        toolCard({
-          number: '02',
-          title: 'Guess the Bean',
-          eyebrow: 'For a little friendly suspense',
-          body: 'Set the jar, share the link, and let the room guess. A simple booth game with a live display built in.',
-          href: '/guess-the-bean/',
-          meta: 'Set up with email',
-          instrument: beanInstrument(),
-        }),
-        toolCard({
-          number: '03',
-          title: 'Guess the Bean Widget',
-          eyebrow: 'For a glance from the home screen',
-          body: 'A free Android widget that keeps the latest guesses, status and count one tap away — no app to open, no tab to find.',
-          href: 'https://github.com/greymattercoffeewerks/Seduh-Score-Next/releases/latest/download/guess-the-bean-widget.apk',
-          meta: 'Android · free download',
-          instrument: widgetInstrument(),
-          arrowText: 'Download APK →',
-          attrs: { rel: 'noopener' },
-        }),
-        toolCard({
-          number: '04',
-          title: 'Brew Planner',
-          eyebrow: 'For the batch-brew crew backstage',
-          body: 'Answer a few questions about heats, beans and machines, and get a run-sheet, water and Cambro cheat sheet for the day.',
-          href: '/tools/brew-planner/',
-          meta: 'No account needed',
-          instrument: brewerInstrument(),
-        }),
-        toolCard({
-          number: '05',
-          title: 'Random Selector',
-          eyebrow: 'For turns, prizes and lucky draws',
-          body: 'Draw one entry from a list on a split-flap board, with weighted odds, CSV import, share links and a big-screen mode.',
-          href: '/tools/random-selector/',
-          meta: 'No account needed',
-          instrument: selectorInstrument(),
-        }),
-      ]),
+      el(
+        'div',
+        { className: 'community-tool-grid' },
+        COMMUNITY_TOOLS.map((tool) =>
+          toolCard({
+            ...tool,
+            instrument: INSTRUMENTS[tool.id]?.() ?? document.createElement('span'),
+            attrs: tool.external ? { rel: 'noopener' } : undefined,
+          }),
+        ),
+      ),
     ],
   );
 }

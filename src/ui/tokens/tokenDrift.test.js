@@ -910,7 +910,7 @@ const DIRECT_RADIUS = {
     'the public results page and its printable sheet: a public, print-first sheet, not a console part',
   ],
   'src/tools/brew-planner/brewPlanner.css': [1, OWN_LOOK],
-  'src/tools/random-selector/randomSelector.css': [6, OWN_LOOK],
+  'src/tools/random-selector/randomSelector.css': [3, OWN_LOOK],
   'src/tools/timer/timer.css': [3, OWN_LOOK],
 };
 
