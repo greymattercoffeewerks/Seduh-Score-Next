@@ -96,12 +96,12 @@ test('"This isn’t mine" hides the result at once, and "Show it again" restores
   await row.getByRole('button', { name: /This isn’t mine/ }).click();
   await expect(row).toContainText('The event’s own results page does not change');
   expect(await overflow(page)).toBe(0);
-  await row.getByRole('button', { name: 'Keep it' }).click();
+  await row.getByRole('button', { name: /^Keep / }).click();
   await expect(row.getByRole('button', { name: /This isn’t mine/ })).toBeFocused();
 
   await row.getByRole('button', { name: /This isn’t mine/ }).click();
   await row.getByLabel('Why? (optional)').fill('Wrong phone number');
-  await row.getByRole('button', { name: 'Yes, hide it' }).click();
+  await row.getByRole('button', { name: /^Yes, hide / }).click();
   await expect(page.locator('#me-status')).toContainText('Hidden from your page');
   await expect(row).toContainText('Hidden from your public page while we check it');
   expect(await overflow(page)).toBe(0);

@@ -39,7 +39,7 @@ The roster's phone number belongs to someone else (or a typo matched a stranger)
 select app.seduh_dispute_resolve(<dispute_id>, 'link_wrong', 'Roster phone was a typo; unlinked, organiser told');
 ```
 
-The result stays hidden for good and the person is told in My Seduh ID that it was linked by mistake. They cannot show it again.
+The result stays hidden for good. Once the person is unlinked it simply disappears from their Recorded results tab (it no longer matches them); the "linked to you by mistake" wording only shows if `link_wrong` is recorded while the link still exists. Either way they cannot show it again.
 Check the stranger's side too: if the same wrong link put the result on **another** claimed profile, that person may have a
 dispute of their own, and `still_matches` shows it. If the correct person is known, the organiser's corrected roster links them
 the normal way.

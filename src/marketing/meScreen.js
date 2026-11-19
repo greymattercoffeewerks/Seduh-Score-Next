@@ -792,11 +792,13 @@ export function mountMeScreen(
         });
         const reasonStatus = statusLine(`me-nm-reason-status-${result.key}`);
         const confirmButton = button('Yes, hide it', {
+          label: `Yes, hide ${result.title}`,
           primary: true,
           id: `me-nm-yes-${result.key}`,
           className: 'me-danger',
         });
         const keep = button('Keep it', {
+          label: `Keep ${result.title}`,
           onClick: () => {
             const { notMine } = showView();
             notMine?.focus();
