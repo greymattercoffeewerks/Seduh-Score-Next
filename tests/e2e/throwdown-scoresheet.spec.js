@@ -102,8 +102,8 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
     // ---- setup: switch the scoresheet on; the defaults are Final 2 cups and 3rd place 1 cup
     await page.getByLabel(/Scoresheet rounds/).check();
     await expect(page.getByLabel('Final', { exact: true })).toHaveValue('2');
-    await expect(page.getByLabel('3rd place match')).toHaveValue('1');
-    await expect(page.getByLabel('Semi-finals')).toHaveValue('0');
+    await expect(page.getByLabel('3rd place match', { exact: true })).toHaveValue('1');
+    await expect(page.getByLabel('Semi-finals', { exact: true })).toHaveValue('0');
     await page.getByRole('button', { name: 'Draw the bracket' }).click();
     await page.getByRole('button', { name: 'Start Round 1' }).click();
     await expect(page.getByRole('heading', { name: 'Now playing' })).toBeVisible();
