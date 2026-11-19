@@ -250,6 +250,8 @@
      hint row would add a gap), so the spacing is margins instead, and the gap after a field is the message's. */
   .me-form-grid {
     row-gap: 0;
+    /* the last field's message margin is inside the grid; take it back so the form's own gap is the space below */
+    margin-block-end: calc(-1 * var(--space-4));
   }
   .me-form-grid > .claim-field {
     grid-row: span 4;
@@ -265,8 +267,10 @@
     grid-row: 2;
     margin-block-end: var(--space-2);
   }
+  /* start, not stretch: a one-line box beside a taller one (Level beside the Note textarea) keeps its own height */
   .me-form-grid > .claim-field > .claim-input {
     grid-row: 3;
+    align-self: start;
   }
   .me-form-grid > .claim-field > .claim-feedback {
     grid-row: 4;

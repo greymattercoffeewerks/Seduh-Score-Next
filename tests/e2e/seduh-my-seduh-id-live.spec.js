@@ -207,6 +207,8 @@ test.describe('My Seduh ID (real app, real local Supabase)', () => {
         expect(Math.abs(a.height - b.height), `${left} / ${right} height`).toBeLessThanOrEqual(1);
         expect(b.x, `${right} is in the second column`).toBeGreaterThan(a.x + a.width);
       }
+      // the dropdown is held to the text boxes' height (it drew 54px against 44px before the fix)
+      expect((await box('What you did')).height).toBeLessThanOrEqual(45);
     };
     await check();
     // a field without a hint keeps its box close under its label (no empty hint row in between)
