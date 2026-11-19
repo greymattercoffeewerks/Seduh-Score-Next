@@ -394,7 +394,7 @@ drop function if exists app.seduh_entry_json(app.seduh_self_reported_entries);
 drop function if exists app.seduh_course_json(app.seduh_courses); -- 20261126110000
 drop table if exists app.seduh_courses; -- 20261126110000
 drop table if exists app.seduh_account_photos; -- 20261123100000
-drop table if exists app.seduh_result_disputes; -- 20261126100000
+drop table if exists app.seduh_result_disputes; -- 20261126120000
 drop table if exists app.seduh_team_memberships;
 drop table if exists app.seduh_self_reported_entries;
 drop function if exists public.seduh_claim_begin(text);

@@ -373,11 +373,11 @@ export function mountMeScreen(
             ? coursesPanel()
             : tab === 'recorded'
               ? recordedPanel()
-            : tab === 'teams'
-              ? teamsPanel()
-              : tab === 'photo'
-                ? photoPanel()
-                : privacyPanel(),
+              : tab === 'teams'
+                ? teamsPanel()
+                : tab === 'photo'
+                  ? photoPanel()
+                  : privacyPanel(),
       );
     }
 

@@ -437,6 +437,9 @@ describe('courses and certificates', () => {
       on_card: false,
     });
     expect(rec.settings.vis_courses).toBe('public');
+  });
+});
+
 describe('recorded results ("This isn’t mine")', () => {
   const base = { account: { handle: 'mine' } };
   const key = 'a'.repeat(32);

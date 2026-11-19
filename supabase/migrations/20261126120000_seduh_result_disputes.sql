@@ -39,8 +39,9 @@
 -- ROLLBACK (the table holds people's choices and the audit rows are append-only: do not roll back once used):
 -- rollback:
 --   -- restore the previous functions first: re-run `app.seduh_published_matches` from 20261125100000_seduh_discovery.sql (a plain
---   -- `create function` there: run it as `create or replace`), `app.seduh_my_record_json` from the same file (already `create or
---   -- replace`) and `public.public_seduh_profile` from 20261123100000_seduh_photo.sql (already `create or replace`), then:
+--   -- `create function` there: run it as `create or replace`), `app.seduh_my_record_json` and
+--   -- `public.public_seduh_profile` from 20261126110000_seduh_courses.sql (both already `create or replace`; the courses migration
+--   -- is the latest definition of each, and this migration is built on its bodies), then:
 --   drop function if exists app.seduh_dispute_resolve(bigint, text, text);
 --   drop function if exists app.seduh_disputes_overview();
 --   drop function if exists public.seduh_withdraw_dispute(text);
@@ -55,6 +56,9 @@
 --     check (action in ('claim_link.issue', 'claim_link.revoke', 'claim.complete', 'claim.undo',
 --                       'membership.confirm', 'membership.unconfirm', 'membership.remove', 'photo.remove'));
 --   (the last statement fails once a result_dispute.* audit row exists: the history is append-only, keep the constraint wider then.)
+
+-- NUMBERING: this migration is applied AFTER 20261126110000_seduh_courses.sql on purpose. Both redefine public_seduh_profile and
+-- app.seduh_my_record_json; the last one applied wins, so this one carries the courses lines too.
 
 -- ============ the audit gains three actions ============
 
@@ -268,7 +272,7 @@ as $$
      and not app.seduh_result_hidden(c.gid, c.event_id, app.seduh_result_key(c.event_id, c.nm, c.cf))
 $$;
 
--- ============ the profile door: the same, reading the shared query ============
+-- ============ the profile door and My Seduh ID: based on 20261126110000_seduh_courses.sql (courses stay), reading the shared query ============
 
 create or replace function public.public_seduh_profile(p_handle text)
 returns jsonb
@@ -291,9 +295,11 @@ declare
   v_vis_ko    text;
   v_vis_org   text;
   v_vis_self  text;
+  v_vis_crs   text;
   v_photo     text;
   v_orgrec    jsonb := '[]'::jsonb;
   v_self      jsonb := '[]'::jsonb;
+  v_courses   jsonb := '[]'::jsonb;
   v_ident     jsonb;
   v_results   jsonb := '[]'::jsonb;
   v_won       integer := 0;
@@ -310,8 +316,10 @@ begin
            coalesce(s.vis_identity, 'hidden'), coalesce(s.vis_recorded_results, 'hidden'),
            coalesce(s.vis_knockout_record, 'hidden'),
            coalesce(s.vis_organiser_results, 'hidden'), coalesce(s.vis_self_reported_results, 'hidden'),
+           coalesce(s.vis_courses, 'hidden'),
            ph.photo_path
-      into v_acc_id, v_identity, v_name, v_country, v_founding, v_claimed, v_vis_id, v_vis_rec, v_vis_ko, v_vis_org, v_vis_self, v_photo
+      into v_acc_id, v_identity, v_name, v_country, v_founding, v_claimed, v_vis_id, v_vis_rec, v_vis_ko, v_vis_org, v_vis_self,
+           v_vis_crs, v_photo
       from app.seduh_accounts a
       join app.seduh_identities i on i.id = a.identity_id
       left join app.seduh_profile_settings s on s.account_id = a.id
@@ -333,6 +341,7 @@ begin
       'knockout_record', jsonb_build_object('won', 0, 'lost', 0, 'opponents', '[]'::jsonb),
       'organiser_records', '[]'::jsonb,
       'self_reported', '[]'::jsonb,
+      'courses', '[]'::jsonb,
       'judging_roles', '[]'::jsonb,
       'cafe_affiliations', '[]'::jsonb);
   end if;
@@ -355,7 +364,8 @@ begin
     v_results := app.seduh_recorded_results(v_acc_id, v_identity, false);
   end if;
 
-  -- ============ knockout record: SEAM (nothing is read; see 20261116100000). v_vis_ko is kept for the seam. ============
+  -- ============ knockout record: SEAM (see the header). Nothing is read; v_won, v_lost and v_opps stay at their zero values. ============
+  -- v_vis_ko is kept for the seam: when it is filled, a value other than 'public' must keep these zeros.
 
   -- ============ organiser records: the person's TEAM LINKS (20261122100000) ============
   -- The team result is the organiser's ("organiser_archive"); the membership is the person's own claim until the owner confirms
@@ -387,6 +397,22 @@ begin
      where e.account_id = v_acc_id;
   end if;
 
+  -- ============ courses (this migration): only while vis_courses = 'public'; no id; `current` is decided here, in SQL ============
+  if v_vis_crs = 'public' then
+    select coalesce(jsonb_agg(
+             jsonb_build_object(
+               'title', c.title, 'provider', c.provider, 'completed_year', c.completed_year,
+               'valid_until_year', c.valid_until_year, 'level', c.level, 'note', c.note,
+               'current', app.seduh_course_current(c.valid_until_year),
+               -- the card's certificate: only one, only while current (the page draws the "Certified" line from this flag)
+               'on_card', c.on_card and app.seduh_course_current(c.valid_until_year),
+               'status', c.status, 'confirmed_by', c.confirmed_by, 'provenance', 'self_reported')
+             order by c.completed_year desc, c.created_at desc, c.id desc), '[]'::jsonb)
+      into v_courses
+      from app.seduh_courses c
+     where c.account_id = v_acc_id;
+  end if;
+
   return jsonb_build_object(
     'has_profile', true,
     'handle', v_handle,
@@ -395,12 +421,11 @@ begin
     'knockout_record', jsonb_build_object('won', coalesce(v_won, 0), 'lost', coalesce(v_lost, 0), 'opponents', v_opps),
     'organiser_records', v_orgrec,
     'self_reported', v_self,
+    'courses', v_courses,
     'judging_roles', '[]'::jsonb,       -- SEAM: needs a judge-to-identity link (BTC judges have no people row)
     'cafe_affiliations', '[]'::jsonb);  -- SEAM: two-sided acceptance is not modelled yet
 end;
 $$;
-
--- ============ My Seduh ID shows the person their recorded results and disputes ============
 
 create or replace function app.seduh_my_record_json(p_account uuid)
 returns jsonb
@@ -415,6 +440,7 @@ declare
   v_settings jsonb;
   v_entries  jsonb;
   v_links    jsonb;
+  v_courses  jsonb;
   v_by_kind  jsonb;
   v_recorded jsonb;
 begin
@@ -434,8 +460,8 @@ begin
            'vis_identity', s.vis_identity, 'vis_recorded_results', s.vis_recorded_results,
            'vis_organiser_results', s.vis_organiser_results, 'vis_self_reported_results', s.vis_self_reported_results,
            'vis_judging_roles', s.vis_judging_roles, 'vis_cafe_affiliations', s.vis_cafe_affiliations,
-           'vis_knockout_record', s.vis_knockout_record, 'listed_on_country_pages', s.listed_on_country_pages,
-           'listed_in_search', s.listed_in_search)
+           'vis_knockout_record', s.vis_knockout_record, 'vis_courses', s.vis_courses,
+           'listed_on_country_pages', s.listed_on_country_pages, 'listed_in_search', s.listed_in_search)
     into v_settings
     from app.seduh_profile_settings s where s.account_id = p_account;
 
@@ -447,6 +473,10 @@ begin
     into v_links
     from app.seduh_team_memberships m join app.historical_results h on h.id = m.result_id
    where m.account_id = p_account;
+
+  -- the person sees ALL their courses, whatever vis_courses says
+  select coalesce(jsonb_agg(app.seduh_course_json(c) order by c.completed_year desc, c.created_at desc, c.id desc), '[]'::jsonb)
+    into v_courses from app.seduh_courses c where c.account_id = p_account;
 
   -- derived on read, never stored
   select jsonb_object_agg(k.kind, coalesce(c.n, 0))
@@ -463,14 +493,17 @@ begin
     'settings', coalesce(v_settings, '{}'::jsonb),
     'entries', v_entries,
     'team_links', v_links,
+    'courses', v_courses,
     'recorded_results', v_recorded,
+    -- courses have their OWN count: `entries` stays the competitions only
     'counts', jsonb_build_object(
       'entries', jsonb_array_length(v_entries), 'by_kind', v_by_kind, 'team_links', jsonb_array_length(v_links),
+      'courses', jsonb_array_length(v_courses),
       'recorded_results', jsonb_array_length(v_recorded),
       'disputes', (select count(*)::integer from app.seduh_result_disputes d where d.account_id = p_account),
       'disputes_pending', (select count(*)::integer from app.seduh_result_disputes d
                             where d.account_id = p_account and d.status = 'pending')),
-    'limits', jsonb_build_object('entries', 200, 'team_links', 40, 'disputes', 50));
+    'limits', jsonb_build_object('entries', 200, 'team_links', 40, 'courses', 60, 'disputes', 50));
 end;
 $$;
 

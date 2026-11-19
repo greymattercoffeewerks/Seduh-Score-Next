@@ -1373,6 +1373,9 @@ describe('courses and certificates', () => {
     await tab(root, 'Courses');
     expect(root.querySelector('img')).toBeNull();
     expect(root.textContent).toContain('<img src=x onerror=1>');
+  });
+});
+
 describe('Recorded results: "This isn’t mine"', () => {
   async function open(over) {
     const { api, state } = fakeApi(over);

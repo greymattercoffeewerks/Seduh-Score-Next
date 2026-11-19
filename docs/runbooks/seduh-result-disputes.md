@@ -1,6 +1,6 @@
 # Runbook: "This isn't mine" (results a person disputes)
 
-Built as T-ID2.NM (migration `20261126100000_seduh_result_disputes.sql`, owner decision 2026-11-15, spec section 14.6). A result reaches a
+Built as T-ID2.NM (migration `20261126120000_seduh_result_disputes.sql`, owner decision 2026-11-15, spec section 14.6). A result reaches a
 claimed profile as "Recorded by Seduh Score" because an organiser's roster linked a person (by phone) to that identity. A wrong
 phone can put a stranger's result on someone's page. In My Seduh ID, under **Recorded results**, the person presses **This isn't mine**
 on one result. It leaves their public page, the Seduh ID search by cafe and the results-page profile link **at once**, for that person
@@ -77,6 +77,6 @@ select at, action, identity_id, detail from app.seduh_claim_audit where action l
 
 ## Tests
 
-pgTAP `089_seduh_result_disputes.sql` (who may dispute, the hide effect on the profile and the C5 helpers, undo, the owner functions,
+pgTAP `090_seduh_result_disputes.sql` (who may dispute, the hide effect on the profile and the C5 helpers, undo, the owner functions,
 the rollback block). Playwright `seduh-not-mine-live.spec.js` (360px: confirm step, public page, queue, undo). Unit tests in `meFlow`,
 `meApi`, `meScreen`.
