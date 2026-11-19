@@ -140,6 +140,13 @@
       "min_tier": null,
       "window_bound": true,
       "note": "Throwdown latte art pre-round draw module. Free. Slot only: the module is not built (TD.6)."
+    },
+    {
+      "key": "throwdown_scoresheet",
+      "kind": "flag",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "Throwdown scoresheet rounds module: rounds decided by judges' scoresheets typed in by a scorekeeper. Free."
     }
   ]
 }

@@ -32,7 +32,7 @@
 --   * the privileges `anon` holds on tables and columns are exactly the pinned list below.
 -- (org_id immutability on every table that carries the column is pinned separately by 033.)
 begin;
-select plan(203);
+select plan(213);
 
 -- ============ helpers (rolled back with the rest) ============
 
@@ -156,13 +156,22 @@ begin
     insert into events (id, org_id, format, name) values (e1.u(t, 60), e1.u(t, 100), 'throwdown', 'Throwdown ' || t);
     insert into event_entries (id, event_id, display_name) values
       (e1.u(t, 64), e1.u(t, 60), 'Competitor one ' || t), (e1.u(t, 66), e1.u(t, 60), 'Competitor two ' || t);
-    insert into td_settings (event_id) values (e1.u(t, 60));
+    insert into td_settings (event_id, modules) values (e1.u(t, 60), jsonb_build_object('scoresheet', jsonb_build_object(
+      'preset', 'latte_art_v1', 'lines', app.td_scoresheet_preset_lines('latte_art_v1'), 'cups', '{"final": 1}'::jsonb)));
     insert into td_draws (event_id, mode, seed, slot_count) values (e1.u(t, 60), 'random', 'seed ' || t, 2);
     insert into td_rounds (id, event_id, position) values (e1.u(t, 61), e1.u(t, 60), 1);
     insert into td_matches (id, event_id, round_id, position) values (e1.u(t, 62), e1.u(t, 60), e1.u(t, 61), 1);
     insert into td_slots (id, event_id, match_id, position, entry_id) values
       (e1.u(t, 63), e1.u(t, 60), e1.u(t, 62), 1, e1.u(t, 64)), (e1.u(t, 67), e1.u(t, 60), e1.u(t, 62), 2, e1.u(t, 66));
+    -- a vote on a match the setup scores is refused (td_match_scored), so this fixture row goes in with that one check off
+    alter table td_votes disable trigger trg_td_votes_xref;
     insert into td_votes (id, event_id, match_id, slot_id) values (e1.u(t, 65), e1.u(t, 60), e1.u(t, 62), e1.u(t, 63));
+    alter table td_votes enable trigger trg_td_votes_xref;
+    -- the scoresheet module (this match is the only one of its round, so it is the final, and the setup scores it): a sheet row
+    -- and an organiser decision
+    insert into td_score_sheets (id, event_id, match_id, slot_id, judge_seat, cup, line_key, points) values
+      (e1.u(t, 68), e1.u(t, 60), e1.u(t, 62), e1.u(t, 63), 1, 1, 'contrast', 1);
+    insert into td_score_decisions (match_id, event_id, winner_position) values (e1.u(t, 62), e1.u(t, 60), 1);
     -- seeding tiebreaks are only writable while the event has NO bracket slots, so they live on an event of their
     -- own without one (otherwise the table's lock, not its organisation check, would refuse every write)
     insert into events (id, org_id, format, name) values (e1.u(t, 30), e1.u(t, 100), 'cup_taster', 'Seeding event ' || t);
@@ -244,6 +253,8 @@ insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule
   ('td_matches',            'id = e1.u(''@'', 62)',         'position',      true,  false, 'members', 'update public.td_matches set event_id = e1.u(''#'', 60) where id = e1.u(''@'', 62)'),
   ('td_slots',              'id = e1.u(''@'', 63)',         'position',      true,  false, 'members', 'update public.td_slots set match_id = e1.u(''#'', 62) where id = e1.u(''@'', 63)'),
   ('td_votes',              'id = e1.u(''@'', 65)',         'event_id',      true,  false, 'members', 'update public.td_votes set slot_id = e1.u(''#'', 63) where id = e1.u(''@'', 65)'),
+  ('td_score_sheets',       'id = e1.u(''@'', 68)',         'points',        true,  false, 'members', 'update public.td_score_sheets set slot_id = e1.u(''#'', 67) where id = e1.u(''@'', 68)'),
+  ('td_score_decisions',    'match_id = e1.u(''@'', 62)',   'winner_position', true, false, 'members', 'update public.td_score_decisions set match_id = e1.u(''#'', 62) where match_id = e1.u(''@'', 62)'),
   ('live_sessions',         'id = e1.u(''@'', 15)',        'id',            true,  true,  'active_all', 'update public.live_sessions set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 15)'),
   ('public_results',        'id = e1.u(''@'', 16)',         'id',            true,  true,  'anon_all', 'update public.public_results set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 16)'),
   ('processed_operations',  'id = e1.u(''@'', 19)',         'id',            true,  false,  'members', 'update public.processed_operations set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 19)'),
@@ -270,7 +281,7 @@ update e1.spec set insert_cols = 'org_id, person_id, relationship, started_on, e
 -- an update where default privileges grant one; either way only the owning organisation's members may
 update e1.spec set update_env = true where tbl = 'processed_operations';
 
-select is((select count(*)::int from e1.spec), 35, 'the matrix covers 35 tenant tables');
+select is((select count(*)::int from e1.spec), 37, 'the matrix covers 37 tenant tables');
 
 -- one captured row per table and organisation, so a copy of it can be INSERTed by someone it does not belong to
 create table e1.fx (tbl text, org text, doc jsonb);
@@ -419,7 +430,7 @@ select is(
   s.tbl || ': nobody INSERTS into an organisation without belonging to it (every attempt refused with 42501)'
 ) from e1.spec s order by s.tbl;
 
--- the moves: 35 tables, 34 with something to move, both directions
+-- the moves: 37 tables, 36 with something to move, both directions
 select is(
   (select coalesce(string_agg(r.caller || '/' || r.org || '=' || r.code, ' ' order by r.caller, r.org), 'none')
      from e1.results r

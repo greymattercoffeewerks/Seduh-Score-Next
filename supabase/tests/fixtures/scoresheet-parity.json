@@ -1,0 +1,340 @@
+{
+  "note": "Shared by src/core/scoresheet.test.js, src/formats/throwdown/roundRole.test.js and supabase/tests/091_td_scoresheet.sql (embedded there; a unit test fails when the two copies differ). Sheets: slot position -> judge seats 1..3 (array order) -> cups (array order) -> six whole numbers in the latte_art_v1 line order (contrast, surface, harmony, size_position, achieved, appeal).",
+  "preset": "latte_art_v1",
+  "judgeCount": 3,
+  "cups": 2,
+  "cases": [
+    {
+      "name": "highest grand total wins, every judge agrees",
+      "sheets": {
+        "1": [
+          [
+            [6, 3, 3, 3, 6, 6],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [6, 3, 3, 3, 6, 6],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [6, 3, 3, 3, 6, 6],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ],
+        "2": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ]
+      },
+      "expect": { "winner": "1", "rule": "total", "totals": [126, 90], "preferring": [3, 0] }
+    },
+    {
+      "name": "the total beats the judge count: two judges prefer slot 2 but slot 1 has more points",
+      "sheets": {
+        "1": [
+          [
+            [6, 3, 3, 3, 6, 6],
+            [6, 3, 3, 3, 6, 6]
+          ],
+          [
+            [2, 1, 1, 1, 2, 3],
+            [2, 1, 1, 1, 2, 3]
+          ],
+          [
+            [2, 1, 1, 1, 2, 3],
+            [2, 1, 1, 1, 2, 3]
+          ]
+        ],
+        "2": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ]
+      },
+      "expect": { "winner": "1", "rule": "total", "totals": [94, 90], "preferring": [1, 2] }
+    },
+    {
+      "name": "one point decides it",
+      "sheets": {
+        "1": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 4]
+          ]
+        ],
+        "2": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ]
+      },
+      "expect": { "winner": "1", "rule": "total", "totals": [91, 90], "preferring": [1, 0] }
+    },
+    {
+      "name": "level total: slot 1 is higher with two of three judges",
+      "sheets": {
+        "1": [
+          [
+            [4, 2, 2, 2, 4, 4],
+            [4, 2, 2, 2, 4, 4]
+          ],
+          [
+            [4, 2, 2, 2, 4, 4],
+            [4, 2, 2, 2, 4, 4]
+          ],
+          [
+            [2, 1, 1, 1, 2, 2],
+            [2, 1, 1, 1, 2, 2]
+          ]
+        ],
+        "2": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ]
+      },
+      "expect": { "winner": "1", "rule": "judges", "totals": [90, 90], "preferring": [2, 1] }
+    },
+    {
+      "name": "level total: slot 2 is higher with two of three judges",
+      "sheets": {
+        "1": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ],
+        "2": [
+          [
+            [4, 2, 2, 2, 4, 4],
+            [4, 2, 2, 2, 4, 4]
+          ],
+          [
+            [4, 2, 2, 2, 4, 4],
+            [4, 2, 2, 2, 4, 4]
+          ],
+          [
+            [2, 1, 1, 1, 2, 2],
+            [2, 1, 1, 1, 2, 2]
+          ]
+        ]
+      },
+      "expect": { "winner": "2", "rule": "judges", "totals": [90, 90], "preferring": [1, 2] }
+    },
+    {
+      "name": "level total and one judge scored them equal: the organiser picks",
+      "sheets": {
+        "1": [
+          [
+            [4, 2, 2, 2, 4, 4],
+            [4, 2, 2, 2, 4, 4]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 1, 2, 1, 2, 3],
+            [3, 1, 2, 1, 2, 3]
+          ]
+        ],
+        "2": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ]
+      },
+      "expect": {
+        "winner": null,
+        "rule": "organiser_needed",
+        "totals": [90, 90],
+        "preferring": [1, 1]
+      }
+    },
+    {
+      "name": "identical sheets: the organiser picks",
+      "sheets": {
+        "1": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ],
+        "2": [
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ],
+          [
+            [3, 2, 2, 2, 3, 3],
+            [3, 2, 2, 2, 3, 3]
+          ]
+        ]
+      },
+      "expect": {
+        "winner": null,
+        "rule": "organiser_needed",
+        "totals": [90, 90],
+        "preferring": [0, 0]
+      }
+    },
+    {
+      "name": "all zeros on both sides: the organiser picks",
+      "sheets": {
+        "1": [
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ]
+        ],
+        "2": [
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ]
+        ]
+      },
+      "expect": {
+        "winner": null,
+        "rule": "organiser_needed",
+        "totals": [0, 0],
+        "preferring": [0, 0]
+      }
+    },
+    {
+      "name": "full marks against nothing",
+      "sheets": {
+        "1": [
+          [
+            [6, 3, 3, 3, 6, 6],
+            [6, 3, 3, 3, 6, 6]
+          ],
+          [
+            [6, 3, 3, 3, 6, 6],
+            [6, 3, 3, 3, 6, 6]
+          ],
+          [
+            [6, 3, 3, 3, 6, 6],
+            [6, 3, 3, 3, 6, 6]
+          ]
+        ],
+        "2": [
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ],
+          [
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
+          ]
+        ]
+      },
+      "expect": { "winner": "1", "rule": "total", "totals": [162, 0], "preferring": [3, 0] }
+    }
+  ],
+  "roles": [
+    { "phase": "third_place", "matches": 1, "role": "third_place" },
+    { "phase": "main", "matches": 1, "role": "final" },
+    { "phase": "main", "matches": 2, "role": "semi_final" },
+    { "phase": "main", "matches": 4, "role": "quarter_final" },
+    { "phase": "main", "matches": 3, "role": null },
+    { "phase": "main", "matches": 8, "role": null },
+    { "phase": "main", "matches": 16, "role": null },
+    { "phase": "redemption", "matches": 1, "role": null },
+    { "phase": "redemption", "matches": 2, "role": null }
+  ]
+}

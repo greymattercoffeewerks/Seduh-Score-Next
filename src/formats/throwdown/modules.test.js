@@ -7,9 +7,10 @@ const demo = [
 ];
 
 describe('the module toggle mechanism', () => {
-  it('ships with NO module enabled or registered in TD.1', () => {
-    expect(MODULES).toEqual([]);
-    expect(moduleKeys()).toEqual([]);
+  it('registers the scoresheet module, free and with no dependencies (the database holds the same registry)', () => {
+    expect(moduleKeys()).toEqual(['scoresheet']);
+    expect(MODULES[0]).toMatchObject({ requires: [], entitlementKey: 'throwdown_scoresheet' });
+    expect(moduleProblems({ scoresheet: true })).toEqual([]);
   });
 
   it('refuses any module that is not registered, with a reason', () => {
