@@ -24,6 +24,7 @@ const KEY_NAMES = Object.freeze({
   throwdown_revival: 'Throwdown revival draw',
   throwdown_lucky_loser: 'Throwdown lucky loser draw',
   throwdown_latte_art: 'Throwdown latte art draw',
+  throwdown_scoresheet: 'Throwdown scoresheet rounds',
   btc_format: 'Barista Team Championship (BTC) events',
   cup_taster_report: 'Cup Taster report and CSV export',
   cup_taster_analytics: 'Cup Taster analytics',

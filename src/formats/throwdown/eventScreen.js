@@ -31,7 +31,6 @@ import {
   emptyBoard,
   assignSlot,
 } from './seeding.js';
-import { MODULES } from './modules.js';
 import { publishThrowdownLive } from './liveSession.js';
 import { describeThrowdownError, resultLine, matchTitle } from './words.js';
 
@@ -304,9 +303,8 @@ export async function mountThrowdownEventScreen(
         mode('manual', 'Manual draw (draw-a-number events)'),
       ]),
     ];
-    // a module that is not available leaves no trace: nothing is rendered for an empty registry
-    if (MODULES.length > 0)
-      blocks.push(el('p', { className: 'td-note', text: 'Optional modules are chosen here.' }));
+    // No module control is drawn yet: the registry now holds `scoresheet`, whose setup controls are built in stage 2 of
+    // the scoresheet module (until then nothing says modules exist, so an organiser cannot half-enable one).
     return el(
       'section',
       { className: 'card td-card', attrs: { 'aria-labelledby': 'td-setup-h' } },

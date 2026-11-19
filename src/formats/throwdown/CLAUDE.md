@@ -71,3 +71,21 @@ TD.1 (2026-11-03): schema `20261103111000`, functions `20261103120000`, keys and
 `projectorScreens`/`projectorBody`; Playwright `dev-throwdown` (full 8-competitor test event).
 Out of TD.1 by design: redemption, lucky loser, revival draw, latte art, formatted PDF report,
 archive write, any lift of the Random Selector engine.
+
+## Scoresheet module (stage 1, 2026-11-19)
+
+Rounds decided by judges' paper scoresheets that a scorekeeper types in (spec, local only:
+`Handoffs and Specs/THROWDOWN-SCORESHEET-SPEC.md`). Stage 1 is the backend and pure logic; the console, outbox handlers and
+live surfaces are stage 2. It deliberately **extends two core facts**: `td_matches.result_kind` gains `scores`, and
+`td_match_results` gains a `scores` arm (reads `app.td_scored_winner`).
+
+- Pure: `src/core/scoresheet.js` (format-agnostic: presets, `validateSheet`, totals, `decideScored`, `sheetsProgress`) and
+  `roundRole.js` here (a round's role, derived: third_place phase, or a main round of 1/2/4 matches = final/semi/quarter).
+  The same rules are in SQL (`app.td_role_of`, `app.td_scored_decide`); `supabase/tests/fixtures/scoresheet-parity.json` drives
+  both, and pgTAP `091` embeds it (a unit test fails when the copies differ).
+- Data: `td_score_sheets` (points only, one row per match/slot/seat/cup/line; no total is ever stored) and
+  `td_score_decisions` (an organiser's pick for a level match). Writers: `td_save_score_sheet`, `td_confirm_scored_match`
+  (SECURITY DEFINER, idempotent, advance in the same transaction). Console read view: `td_score_standings`.
+- A scored match takes no taps (`td_match_scored` on `td_votes`). Scores are never in any public door or live payload.
+- Not yet touched (stage 2): `bracket.js` `winnerSlotId` has no `scores` arm (read the winner from `td_match_results`);
+  `eventScreen.js` draws no module control; no outbox handler; no live-surface wording.

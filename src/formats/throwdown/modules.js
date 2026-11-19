@@ -4,7 +4,15 @@
 //
 // An entry: { key, label, requires: [keys it needs on], entitlementKey }. The database holds the same registry
 // (app.td_module_registry); the two are changed together.
-export const MODULES = Object.freeze([]);
+export const MODULES = Object.freeze([
+  // Rounds decided by judges' paper scoresheets typed in by a scorekeeper (src/core/scoresheet.js).
+  Object.freeze({
+    key: 'scoresheet',
+    label: 'Scoresheet rounds',
+    requires: Object.freeze([]),
+    entitlementKey: 'throwdown_scoresheet',
+  }),
+]);
 
 export function moduleKeys(registry = MODULES) {
   return registry.map((m) => m.key);
