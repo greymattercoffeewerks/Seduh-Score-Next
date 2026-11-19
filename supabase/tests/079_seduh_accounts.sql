@@ -391,6 +391,8 @@ drop function if exists app.seduh_handle_pattern(text);
 drop function if exists app.seduh_handle_normalise(text);
 -- the person's own record (20261122100000): its tables hold foreign keys to the account, so they come off before it
 drop function if exists app.seduh_entry_json(app.seduh_self_reported_entries);
+drop function if exists app.seduh_course_json(app.seduh_courses); -- 20261126110000
+drop table if exists app.seduh_courses; -- 20261126110000
 drop table if exists app.seduh_account_photos; -- 20261123100000
 drop table if exists app.seduh_team_memberships;
 drop table if exists app.seduh_self_reported_entries;

@@ -225,3 +225,36 @@ describe('a person with nothing yet, and the photo', () => {
     expect(cardPhotoUrl(withPhoto, 'http://proj.supabase.co')).toBeNull();
   });
 });
+
+describe('the Certified line (C6b)', () => {
+  const course = (over = {}) => ({
+    title: 'Q Arabica Grader',
+    provider: 'Q Inst',
+    completed_year: 2024,
+    valid_until_year: 2027,
+    current: true,
+    on_card: true,
+    status: 'self_reported',
+    ...over,
+  });
+  it('is off unless the person chose a certificate', () => {
+    expect(personStorySpec(profile({ courses: [course({ on_card: false })] })).tagline).toBeNull();
+    expect(personStorySpec(profile({})).tagline).toBeNull();
+  });
+  it('puts the one chosen, current certificate under the name and says it is self-reported', () => {
+    const spec = personStorySpec(profile({ courses: [course()] }));
+    expect(spec.tagline).toBe('Certified: Q Arabica Grader');
+    expect(spec.provenance).toContain('Certificate self-reported.');
+  });
+  it('never shows an expired one', () => {
+    expect(personStorySpec(profile({ courses: [course({ current: false })] })).tagline).toBeNull();
+  });
+  it('shows nothing when the door sent no courses (hidden courses arrive as none)', () => {
+    expect(personStorySpec(profile({ courses: [] })).tagline).toBeNull();
+  });
+  it('adds nothing else of the course to the card', () => {
+    expect(JSON.stringify(personStorySpec(profile({ courses: [course()] })))).not.toContain(
+      'Q Inst',
+    );
+  });
+});

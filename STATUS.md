@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-18, app version 4.18.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-18, app version 4.19.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -19,6 +19,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 
+- **Seduh ID courses and certificates** (4.19.0, PR into `dev` from `claude/seduh-id-c6a-courses-b66a4a`, not merged): a Courses tab in My Seduh ID, a sub-section in the person record, `vis_courses`, an optional "Certified:" line on the story card. **Its migration `20261126110000` must be in the cloud before or with the release** (the new `public_seduh_profile` returns `courses`; the page tolerates an old one).
 - **BTC void cup** (4.18.0, PR into `dev` from `claude/btc-void-cup-e36afe`, not merged): a cup where both teams get 0 tokens. **Its migration `20261125110000` must be in the cloud before or with the release** (an old RPC would score a void cup 0-3, silently).
 
 ## In flight: the March 2027 Board and a beta run

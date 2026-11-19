@@ -7,6 +7,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Seduh ID courses and certificates (C6a, C6b) · 4.19.0 · 2026-11-19
+
+**Status: NOT FINAL.** Code, tests and reviews done; PR into `dev` from `claude/seduh-id-c6a-courses-b66a4a`, not merged. **Migration `20261126110000_seduh_courses.sql` is not in the cloud** (nothing was pushed). Owner decisions D1 to D3, 2026-11-18 (`SEDUH-ID-COURSES-AND-WORK-PLAN-DRAFT.md`, local).
+
+- **What a person gets.** A "Courses" tab in My Seduh ID (add, edit, delete, up to 60; title, provider, year completed, optional "valid until", level, note), a "Courses and certificates" sub-section inside the Record on `/id/<handle>/` (newest first, expired shown muted as "Expired <year>", every row labelled "Self-reported, not verified by Seduh", its own count, never counted as entries or podiums), a "Courses and certificates" Public/Hidden setting in Privacy (`vis_courses`, public by default), and an optional "Certified: <title>" line under the name on the story card for ONE current certificate the person chooses (off unless chosen). Privacy page has the matching wording.
+- **Database.** `app.seduh_courses` (owner-only, frozen parent, text rules of entries, cap 60, confirmation columns as a SEAM for providers), `seduh_profile_settings.vis_courses`, doors `seduh_add_course`, `seduh_update_course`, `seduh_delete_course`, `seduh_set_card_course`. Redefines `public_seduh_profile` (adds `courses` only while public), `seduh_set_my_settings` and `app.seduh_my_record_json`, carrying photo and discovery changes. Self-service doors were used instead of the plan's "loader script" because self-service editing already exists since D-a.
+- **Overlap.** The sibling "This isn't mine" work (branch `seduh-id-not-mine`) probably redefines the same three functions: whoever merges second must start from the other's body and renumber the migration. Checked against `origin/dev` at PR time (see PR).
+- **Tests.** pgTAP `089_seduh_courses.sql` (hidden when `vis_courses` hidden; never for unknown or closed; caller-only writes; 60 cap; text rules; no effect on entry counts; card rules; rollback block), pins in `050`, `079`, `085`; Vitest for the profile, story, page and My Seduh ID; Playwright `seduh-courses-live` at 360px.
+- **Reviews.** See the PR description.
+
+---
+
 ## Supabase CLI 2.115 to 3.2 · tooling, no version · 2026-11-18
 
 **Status: NOT FINAL** until the PR is merged. Branch `chore/supabase-cli-v3`. Owner request. No version bump: tooling only, nothing a visitor or organiser sees.

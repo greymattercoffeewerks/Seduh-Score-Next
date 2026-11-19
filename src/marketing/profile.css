@@ -237,6 +237,24 @@ body {
 .profile-year[open] > summary .profile-year-cue {
   transform: rotate(-135deg);
 }
+.profile-courses {
+  margin-top: var(--space-4);
+}
+.profile-courses-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+}
+.profile-course-validity {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+/* an expired certificate stays visible, in muted text (never hidden) */
+.profile-course.is-expired .profile-entry-title {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-regular);
+}
 .profile-entry-list,
 .profile-h2h {
   margin: 0;

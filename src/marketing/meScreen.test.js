@@ -22,6 +22,7 @@ const rawRecord = (over = {}) => ({
     vis_organiser_results: 'public',
     vis_self_reported_results: 'public',
     vis_judging_roles: 'public',
+    vis_courses: 'public',
     vis_cafe_affiliations: 'public',
     vis_knockout_record: 'public',
     listed_on_country_pages: false,
@@ -41,6 +42,32 @@ const rawRecord = (over = {}) => ({
     },
     { id: 2, year: 2024, competition_name: 'Judges Cup', kind: 'judged' },
     { id: 3, year: 2024, competition_name: 'Another', kind: 'organised' },
+  ],
+  courses: [
+    {
+      id: 21,
+      title: 'Barista Skills',
+      provider: 'Test Academy',
+      completed_year: 2025,
+      valid_until_year: 2028,
+      level: 'Intermediate',
+      note: null,
+      current: true,
+      on_card: false,
+      status: 'self_reported',
+    },
+    {
+      id: 22,
+      title: 'Q Grader',
+      provider: 'Q Inst',
+      completed_year: 2019,
+      valid_until_year: 2022,
+      level: null,
+      note: 'lapsed',
+      current: false,
+      on_card: false,
+      status: 'self_reported',
+    },
   ],
   team_links: [
     {
@@ -104,6 +131,10 @@ function fakeApi(over = {}) {
     })),
     addTeamLink: vi.fn(async () => ok({ id: 12 })),
     removeTeamLink: vi.fn(async () => ok(null)),
+    addCourse: vi.fn(async () => ok({ id: 91 })),
+    updateCourse: vi.fn(async () => ok({ id: 21 })),
+    deleteCourse: vi.fn(async () => ok(null)),
+    setCardCourse: vi.fn(async () => ok(null)),
     setSettings: vi.fn(async (s) => ok({ ...state.raw.settings, ...s })),
     ...over,
   };
@@ -254,10 +285,16 @@ describe('signed in: the header', () => {
     expect(ended.root.querySelector('input[type="email"]')).not.toBeNull();
   });
 
-  it('has four sections and marks the current one', async () => {
+  it('has five sections and marks the current one', async () => {
     const { root } = await mount();
     const tabs = [...root.querySelectorAll('.me-tab')];
-    expect(tabs.map((t) => t.textContent)).toEqual(['My record', 'My teams', 'Photo', 'Privacy']);
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      'My record',
+      'Courses',
+      'My teams',
+      'Photo',
+      'Privacy',
+    ]);
     expect(tabs[0].getAttribute('aria-current')).toBe('true');
     await tab(root, 'Privacy');
     expect(root.querySelectorAll('.me-tab[aria-current="true"]')).toHaveLength(1);
@@ -1140,5 +1177,169 @@ describe('photo: review fixes', () => {
     click(byText(root, '.me-tab', 'Privacy'));
     await settle();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:leak');
+  });
+});
+
+async function mountWith(raw, over = {}) {
+  const { api, state } = fakeApi(over);
+  state.raw = raw;
+  const root = document.createElement('div');
+  document.body.append(root);
+  mountMeScreen(root, { api, thisYear: 2026 });
+  await settle();
+  root.api = api;
+  return root;
+}
+
+describe('courses and certificates', () => {
+  it('lists courses with their dates, marks an expired one, and says self-reported and the count against the limit', async () => {
+    const { root } = await mount();
+    await tab(root, 'Courses');
+    expect(text(root)).toContain('2 of 60 courses');
+    expect(text(root)).toContain('Barista Skills');
+    expect(text(root)).toContain('Completed 2025 · valid until 2028');
+    expect(text(root)).toContain('Completed 2019 · expired 2022');
+    expect(root.querySelector('.me-course-expired')).not.toBeNull();
+    expect(text(root)).toContain('Self-reported, not verified by Seduh');
+    expect(text(root)).toContain('does not count towards your entries');
+  });
+  it('an expired course has no card button; a current one has one', async () => {
+    const { root } = await mount();
+    await tab(root, 'Courses');
+    const rows = [...root.querySelectorAll('.me-entry')];
+    expect(rows[0].textContent).toContain('Show on my card');
+    expect(rows[1].textContent).not.toContain('on my card');
+  });
+  it('adding refuses a bad form beside each field and sends nothing', async () => {
+    const { root, api } = await mount();
+    await tab(root, 'Courses');
+    click(root.querySelector('#me-add-course'));
+    submit(root.querySelector('form'));
+    await settle();
+    expect(api.addCourse).not.toHaveBeenCalled();
+    expect(text(root)).toContain('Enter the course');
+    expect(root.querySelector('[aria-invalid="true"]')).not.toBeNull();
+  });
+  it('adding sends every field, reloads and announces it', async () => {
+    const { root, api } = await mount();
+    await tab(root, 'Courses');
+    click(root.querySelector('#me-add-course'));
+    const form = root.querySelector('form');
+    type(form.querySelector('[name="title"]'), ' Roasting 1 ');
+    type(form.querySelector('[name="provider"]'), 'Roast Co');
+    type(form.querySelector('[name="year"]'), '2026');
+    type(form.querySelector('[name="valid_until_year"]'), '2029');
+    submit(form);
+    await settle();
+    expect(api.addCourse).toHaveBeenCalledWith({
+      p_title: 'Roasting 1',
+      p_provider: 'Roast Co',
+      p_completed_year: 2026,
+      p_valid_until_year: 2029,
+      p_level: null,
+      p_note: null,
+    });
+    expect(api.loadRecord).toHaveBeenCalledTimes(2);
+    expect(root.querySelector('#me-status').textContent).toBe('Course added.');
+  });
+  it('a refusal from the database is shown on its field', async () => {
+    const { root } = await mount({
+      addCourse: vi.fn(async () => ({ ok: false, hint: 'bad_title' })),
+    });
+    await tab(root, 'Courses');
+    click(root.querySelector('#me-add-course'));
+    const form = root.querySelector('form');
+    type(form.querySelector('[name="title"]'), 'x');
+    type(form.querySelector('[name="provider"]'), 'y');
+    type(form.querySelector('[name="year"]'), '2026');
+    submit(form);
+    await settle();
+    expect(form.querySelector('[name="title"]').getAttribute('aria-invalid')).toBe('true');
+  });
+  it('the limit: the add button is disabled at 60 courses and says why', async () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      id: 100 + i,
+      title: `C${i}`,
+      provider: 'P',
+      completed_year: 2020,
+    }));
+    const root = await mountWith(rawRecord({ courses: many }));
+    await tab(root, 'Courses');
+    expect(root.querySelector('#me-add-course').disabled).toBe(true);
+    expect(text(root)).toContain('limit of 60 courses');
+  });
+  it('editing is a FULL replace with the course id', async () => {
+    const { root, api } = await mount();
+    await tab(root, 'Courses');
+    click(byText(root, 'button', 'Edit'));
+    const form = root.querySelector('form');
+    expect(form.querySelector('[name="title"]').value).toBe('Barista Skills');
+    expect(form.querySelector('[name="valid_until_year"]').value).toBe('2028');
+    type(form.querySelector('[name="valid_until_year"]'), '');
+    submit(form);
+    await settle();
+    expect(api.updateCourse).toHaveBeenCalledWith(21, {
+      p_title: 'Barista Skills',
+      p_provider: 'Test Academy',
+      p_completed_year: 2025,
+      p_valid_until_year: null,
+      p_level: 'Intermediate',
+      p_note: null,
+    });
+  });
+  it('delete asks inside the page first; Keep it does nothing; Yes deletes that course', async () => {
+    const { root, api } = await mount();
+    await tab(root, 'Courses');
+    click(byText(root, 'button', 'Delete'));
+    expect(text(root)).toContain('This cannot be undone');
+    click(byText(root, 'button', 'Keep it'));
+    expect(api.deleteCourse).not.toHaveBeenCalled();
+    click(byText(root, 'button', 'Delete'));
+    click(root.querySelector('#me-delete-course-21'));
+    await settle();
+    expect(api.deleteCourse).toHaveBeenCalledWith(21);
+  });
+  it('chooses the card certificate; a certificate already on the card offers Remove, which sends null', async () => {
+    const { root, api } = await mount();
+    await tab(root, 'Courses');
+    click(byText(root, 'button', 'Show on my card'));
+    await settle();
+    expect(api.setCardCourse).toHaveBeenCalledWith(21);
+    const onCard = { ...rawRecord().courses[0], on_card: true };
+    const root2 = await mountWith(rawRecord({ courses: [onCard] }));
+    await tab(root2, 'Courses');
+    expect(text(root2)).toContain('Shown on your card');
+    click(byText(root2, 'button', 'Remove from my card'));
+    await settle();
+    expect(root2.api.setCardCourse).toHaveBeenCalledWith(null);
+  });
+  it('a refused card choice (expired) says why', async () => {
+    const { root } = await mount({
+      setCardCourse: vi.fn(async () => ({ ok: false, hint: 'not_current' })),
+    });
+    await tab(root, 'Courses');
+    click(byText(root, 'button', 'Show on my card'));
+    await settle();
+    expect(root.querySelector('#me-status').textContent).toContain('expired');
+  });
+  it('Privacy has a courses setting that is sent at once', async () => {
+    const { root, api } = await mount();
+    await tab(root, 'Privacy');
+    expect(text(root)).toContain('Courses and certificates');
+    const hidden = root.querySelector('input[name="vis_courses"][value="hidden"]');
+    hidden.checked = true;
+    hidden.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(api.setSettings).toHaveBeenCalledWith({ vis_courses: 'hidden' });
+  });
+  it('draws text only: a title with markup is shown as text', async () => {
+    const root = await mountWith(
+      rawRecord({
+        courses: [{ id: 5, title: '<img src=x onerror=1>', provider: 'P', completed_year: 2020 }],
+      }),
+    );
+    await tab(root, 'Courses');
+    expect(root.querySelector('img')).toBeNull();
+    expect(root.textContent).toContain('<img src=x onerror=1>');
   });
 });
