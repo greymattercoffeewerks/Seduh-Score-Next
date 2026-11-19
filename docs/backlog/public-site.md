@@ -60,11 +60,16 @@ The console's Menu button bars were fixed under forced colours (CHANGELOG entry 
 
 - **The brand lockup's SVG mark under forced colours is unverified.** The fix covers the Menu button's CSS bars only. The lockup's mark is an SVG, which Windows high-contrast may or may not repaint, on the public header and the console header alike. Found by `ui-accessibility-reviewer`; not reproducible here (forced colours cannot be emulated in this environment). Check it in Windows high-contrast on the public header and the console header, and fix the mark's fill with `forced-color-adjust` or a system colour if it vanishes.
 
+## Known open items from the community chrome rollout (2026-11-19)
+
+- **Timer countdown mode has no h1 and no visible tool name.** The h1 was already `display: none` there; the frame's breadcrumb, which also named the tool, is now hidden too. Decide whether to keep a visually hidden h1. Found by `ui-accessibility-reviewer` (pre-existing).
+- **The Guess the Bean organiser page has no `<main>` landmark** (it had none before). Wrap the screen host in one. Found by `ui-accessibility-reviewer` (pre-existing).
+- **The Timer's breadcrumb and footer say "Competition Timer", its h1 says "Seduh Timer".** Align one of them if the owner wants them to match (nit).
+- **`toolChrome.css` is outside the `tokenDrift.test.js` public-sheet scan** (`PUBLIC_CSS` covers `src/marketing/` and `communityHub.css`). Pre-existing, found by `test-auditor`.
+
 ## Known open items from the Random Selector Tier 1 redesign (unreleased, 2026-11-19)
 
 The free Random Selector was redesigned and adopted the shared community chrome (CHANGELOG entry of the same date). These came out of its review, and were logged, not fixed.
 
-- **No test asserts that the Random Selector's entries link both sheets.** The adoption note in `src/tools/CLAUDE.md` describes the link; nothing in the suite checks it. Found by `module-boundary-checker`. Add a test in `toolChrome.test.js` or the screen's test.
 - **The reduced-motion sweep assertion is weak.** It predates this change; `test-auditor` flagged it. It should assert the animation is removed under `prefers-reduced-motion`, not only that the rule exists.
-- **Two card renderers and two breadcrumb primitives.** The Random Selector keeps its own card renderer and breadcrumb; `src/community/toolChrome.js` has its own. Merge them when a second tool adopts the chrome (Timer, Brew Planner or Guess the Bean).
 - **Two function declarations sit after a `return` in `randomSelector.js`.** They are hoisted and work. `code-reviewer` left the style call to the owner.

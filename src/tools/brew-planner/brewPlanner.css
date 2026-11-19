@@ -46,21 +46,6 @@ body {
   font-size: var(--text-2xl);
 }
 
-.bp-brand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-width: var(--tap-target-min);
-  min-height: var(--tap-target-min);
-  color: var(--color-text);
-}
-
-.bp-brand-mark {
-  width: 1.75rem;
-  height: 1.5rem;
-  color: var(--color-accent);
-}
-
 .bp-intro {
   margin: 0;
   max-width: 44rem;

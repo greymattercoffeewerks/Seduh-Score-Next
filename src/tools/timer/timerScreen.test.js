@@ -42,6 +42,27 @@ describe('mountTimer', () => {
     expect(root.querySelector('#timer-pause-button')).toBeNull();
   });
 
+  it('sits in the shared community frame and hides all of it while a countdown is on screen', () => {
+    mountTimer(root, { storage, now });
+    expect(root.querySelector('.public-header')).not.toBeNull();
+    expect(root.querySelector('.ct-crumb-current').textContent).toBe('Competition Timer');
+    expect(root.querySelectorAll('.ct-tool-title')).toHaveLength(3);
+    expect(root.querySelector('.timer-brand-link')).toBeNull();
+    const header = root.querySelector('.ct-header');
+    const strip = root.querySelector('.ct-strip');
+    const bar = root.querySelector('.ct-bar');
+    expect([header.hidden, strip.hidden, bar.hidden]).toEqual([false, false, false]);
+
+    startTimer(root, { minutes: '1', seconds: '0' });
+    // The frame is the same nodes, hidden; the countdown keeps the screen and its corner brand link.
+    expect(root.querySelector('.ct-header')).toBe(header);
+    expect([header.hidden, strip.hidden, bar.hidden]).toEqual([true, true, true]);
+    expect(root.querySelector('.timer-brand-link')).not.toBeNull();
+
+    root.querySelector('#timer-reset-button').click();
+    expect([header.hidden, strip.hidden, bar.hidden]).toEqual([false, false, false]);
+  });
+
   it('Start swaps to running controls and moves focus to Pause', () => {
     mountTimer(root, { storage, now });
     startTimer(root, { minutes: '8', seconds: '0' });

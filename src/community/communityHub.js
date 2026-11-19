@@ -3,6 +3,7 @@
 // tool's logic or styling; future community gifts can be added as another card.
 import { el, svgEl } from '../core/dom.js';
 import { COMMUNITY_TOOLS } from './communityTools.js';
+import { communityToolCard } from './toolCard.js';
 import { buildPublicFooter } from '../marketing/publicFooter.js';
 import { buildPublicHeader } from '../marketing/publicHeader.js';
 
@@ -87,31 +88,6 @@ const INSTRUMENTS = {
   'random-selector': selectorInstrument,
 };
 
-function arrow(text) {
-  return el('span', { className: 'community-card-arrow', text: text ?? 'Open tool →' });
-}
-
-function toolCard({ number, title, eyebrow, body, href, meta, instrument, arrowText, attrs }) {
-  return el('a', { className: 'community-tool-card panel', attrs: { href, ...attrs } }, [
-    el('div', { className: 'community-card-top' }, [
-      el('span', { className: 'community-tool-number', text: number }),
-      el('span', { className: 'community-tool-status tag', text: 'Available now' }),
-    ]),
-    el('div', { className: 'community-instrument icon-frame', attrs: { 'aria-hidden': 'true' } }, [
-      instrument,
-    ]),
-    el('div', { className: 'community-card-copy' }, [
-      el('p', { className: 'community-card-eyebrow', text: eyebrow }),
-      el('h2', { text: title }),
-      el('p', { className: 'community-card-body', text: body }),
-    ]),
-    el('div', { className: 'community-card-bottom' }, [
-      el('span', { className: 'community-tool-meta', text: meta }),
-      arrow(arrowText),
-    ]),
-  ]);
-}
-
 function buildHero() {
   return el(
     'section',
@@ -159,11 +135,7 @@ function buildShelf() {
         'div',
         { className: 'community-tool-grid' },
         COMMUNITY_TOOLS.map((tool) =>
-          toolCard({
-            ...tool,
-            instrument: INSTRUMENTS[tool.id]?.() ?? document.createElement('span'),
-            attrs: tool.external ? { rel: 'noopener' } : undefined,
-          }),
+          communityToolCard(tool, { variant: 'hub', instrument: INSTRUMENTS[tool.id]?.() }),
         ),
       ),
     ],
