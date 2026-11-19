@@ -686,6 +686,10 @@ section only records the conventions a new screen or token needs to follow.
   exceptions are the `ALLOWLIST` entries, each pinned to file, selector, literal and a named reason in
   `DESIGN.md`'s "Drift guard" section; an allowlisted rule's count is exact, so adding a second literal to it fails
   too. Changing an allowlist entry is a design decision, not a test fix.
+- **Motion guard (2026-11-19, 4.20.2).** A new keyframe animation (not a transition) wraps its rule in its own
+  `@media (prefers-reduced-motion: no-preference)` block, as `.screen-feedback:not(:empty)` does in `components.css`,
+  and a test pins the wrap. `base.css`'s global reduce rule is the backstop (it cuts animation to 0.01ms), not the
+  guard. Rules that still rely on the backstop alone are logged in `docs/backlog/tenancy.md`.
 - `src/ui/tokens/preview.html` renders every token in both surface modes — open it
   (`npm run dev`, then `/src/ui/tokens/preview.html`) when changing any token value, and
   keep its demo copy format-agnostic (a leaked Cup-Taster-specific term here was

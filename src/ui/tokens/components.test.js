@@ -438,6 +438,53 @@ describe('the empty message region', () => {
   });
 });
 
+describe('the message entry animation', () => {
+  // Removes every brace-balanced `@media (prefers-reduced-motion: no-preference) { ... }` block from the text. Fails
+  // closed, like the readers above: an unclosed block throws, and a brace inside a string is not counted.
+  function withoutMotionBlocks(text) {
+    const opener = /@media\s*\(\s*prefers-reduced-motion\s*:\s*no-preference\s*\)\s*\{/g;
+    let out = '';
+    let from = 0;
+    for (let match = opener.exec(text); match; match = opener.exec(text)) {
+      out += text.slice(from, match.index);
+      let depth = 1;
+      let i = match.index + match[0].length;
+      while (depth > 0 && i < text.length) {
+        const char = text[i];
+        if (char === '"' || char === "'") {
+          // A brace inside a string is not structure (the same rule as the selector reader).
+          i += 1;
+          while (i < text.length && text[i] !== char) i += text[i] === '\\' ? 2 : 1;
+        } else if (char === '{') depth += 1;
+        else if (char === '}') depth -= 1;
+        i += 1;
+      }
+      if (depth !== 0) throw new Error('a CSS block is never closed');
+      from = i;
+      opener.lastIndex = i;
+    }
+    return out + text.slice(from);
+  }
+  const css = stripCssComments(canonicalText);
+  const uses = /animation(-name)?\s*:[^;}]*\bscreen-feedback-in\b/;
+
+  it('plays only for people who have not asked for reduced motion', () => {
+    // It exists, and every use of it sits inside a no-preference block, so reduced motion gets none.
+    expect(css).toMatch(uses);
+    expect(withoutMotionBlocks(css)).not.toMatch(uses);
+  });
+
+  it('its block remover counts no brace inside a string and refuses an unclosed block', () => {
+    const quoted =
+      "@media (prefers-reduced-motion: no-preference) { .a::before { content: '{'; } }\n" +
+      '.b { animation: screen-feedback-in 1s; }';
+    expect(withoutMotionBlocks(quoted)).toMatch(uses);
+    expect(() =>
+      withoutMotionBlocks('@media (prefers-reduced-motion: no-preference) { .a { x: y }'),
+    ).toThrow(/never closed/);
+  });
+});
+
 describe('the link reader', () => {
   const page = join(REPO, 'app', 'index.html');
   it('sees any attribute order and quoting, absolute and relative paths, and ignores non-stylesheets', () => {

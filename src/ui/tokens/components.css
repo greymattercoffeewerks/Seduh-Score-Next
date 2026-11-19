@@ -298,9 +298,13 @@
    rule at the end of this file holds it out of the layout until then). A keyframe animation, not a transition,
    because it starts when the rule starts to apply, i.e. the moment the first text arrives, and again for each
    time the region is emptied and refilled. Opacity and a 4px rise only: no layout property moves, and the text is
-   in the accessibility tree from the first frame, so a screen reader's announcement is not delayed. */
-.screen-feedback:not(:empty) {
-  animation: screen-feedback-in var(--dur-base) var(--ease-out) both;
+   in the accessibility tree from the first frame, so a screen reader's announcement is not delayed. Only for people
+   who have not asked for reduced motion: base.css's global reduce rule already cut it to 0.01ms, and this removes
+   even that flash, which a kept line (e.g. "Event finished.") would otherwise repeat each time a redraw re-inserts it. */
+@media (prefers-reduced-motion: no-preference) {
+  .screen-feedback:not(:empty) {
+    animation: screen-feedback-in var(--dur-base) var(--ease-out) both;
+  }
 }
 
 @keyframes screen-feedback-in {

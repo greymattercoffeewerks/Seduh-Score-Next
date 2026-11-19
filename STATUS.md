@@ -1,26 +1,23 @@
 # Status — read this first
 
-_As of 2026-11-19, app version 4.20.1, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-19, app version 4.20.2, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
-- **Behind the Seduh** is rebuilt as a one-chapter reader (`/bts/`) in a PR into `dev` (`claude/bts-reader-kiarong`), not yet released.
+- **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
-  `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0) built; the archive feed (1b) is in `queue` mode and
+  `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0), discovery (4.17.3, behind its off switch), courses and certificates (4.19.0), "This isn't mine" on a recorded result (4.20.0), all live (the owner still to confirm the dispute policy, CHANGELOG 4.20.0, and the discovery search policy, 4.17.3); the archive feed (1b) is in `queue` mode and
   has published nothing yet.
 - **Organiser home** (`#/events` rebuild, `/events/new`, the `org_event_summaries` door): live as 4.17.0 (#496, release #499); its migration is in the cloud. Owner's real-device check owed.
-- **Country pages** (4.10.2): database (#465) and pages (#466) in `dev`. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
-- **Petrol Kaizen P4** (PR #457) and **P5** (vocabulary, draft PR on P4's branch) built; tablet checks owed. **P6** (token roles, density) in a PR; iPad owed.
-- **Cloud database in sync (checked 2026-11-17):** all 121 migrations on `main` and `dev` are in the cloud project, none extra,
-  and no unmerged branch adds a migration.
+- **Country pages** (4.10.2): live, data in the cloud. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
+- **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
+- **Cloud database in sync (checked 2026-11-19):** all 125 migrations on `main` are in the cloud project, none extra, including
+  `btc_void_cup` (4.18.0), `seduh_courses` (4.19.0) and `seduh_result_disputes` (4.20.0).
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
-
-- **Seduh ID courses and certificates** (4.19.0, PR into `dev` from `claude/seduh-id-c6a-courses-b66a4a`, not merged): a Courses tab in My Seduh ID, a sub-section in the person record, `vis_courses`, an optional "Certified:" line on the story card. **Its migration `20261126110000` must be in the cloud before or with the release** (the new `public_seduh_profile` returns `courses`; the page tolerates an old one).
-- **BTC void cup** (4.18.0, PR into `dev` from `claude/btc-void-cup-e36afe`, not merged): a cup where both teams get 0 tokens. **Its migration `20261125110000` must be in the cloud before or with the release** (an old RPC would score a void cup 0-3, silently).
 
 ## In flight: the March 2027 Board and a beta run
 
@@ -33,7 +30,7 @@ picks the top 8 by points, ties by the sum of each team's two finish times, conf
 longer order the standings). Both round-2 methods (random without repeats, and by round-1 results) are to be built and
 selectable. Registration opens January 2027. Round 2's by-results method is strongest against weakest. Engine spec draft: [`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md`](docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md).
 
-**Organiser UX (five stages, per the approved mockup).** S1, the shared core kit, is a PR into `dev` from `claude/organiser-ux-s1-core-kit-1f2e99`, not merged. S2, the BTC event dashboard as a run sheet, is on `claude/organiser-ux-s2-btc-dashboard-6ca85a` (no PR yet); its Records card now has the two BTC scores CSVs (4.5.0). S3, the BTC matches screen grouped by round (4.3.0), is merged into `dev`. S4, the cut to the top 8 and its sign-off sheet (4.4.0), is a PR into `dev` from `claude/organiser-ux-s4-the-cut-8e554b`, not merged; a real-tablet check and a printed-PDF check are owed. S5 (copy pass, 4.4.1) is committed, not pushed; B5 sign-off wording is unresolved (see CHANGELOG).
+**Organiser UX (five stages, per the approved mockup).** All five are live: S1 the shared core kit, S2 the BTC event dashboard as a run sheet (with the two BTC scores CSVs, 4.5.0), S3 the matches screen grouped by round (4.3.0), S4 the cut to the top 8 and its sign-off sheet (4.4.0) and S5 the copy pass (4.4.1). Still owed: S4's real-tablet and printed-PDF checks, and the owner's wording for B5 (the lock reasons in `cutData.js`; see CHANGELOG).
 
 ## Handover (2026-11-08)
 
