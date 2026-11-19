@@ -179,7 +179,7 @@ begin
     select 1 from jsonb_each(p_cfg -> 'cups') c
      where c.key <> all (app.td_scoresheet_roles())
         or case when jsonb_typeof(c.value) = 'number'
-                then not ((c.value #>> '{}')::numeric in (1, 2, 3))
+                then (c.value #>> '{}') not in ('1', '2', '3')
                 else true end);
 end;
 $$;

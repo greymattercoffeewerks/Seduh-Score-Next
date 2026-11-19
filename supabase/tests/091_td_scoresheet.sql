@@ -10,7 +10,7 @@
 --     tap-voted, and when they are scored; walkover works in a scored round;
 --   * nobody writes the tables directly, a non-member reads zero rows, anon reads nothing and calls nothing, no total is stored.
 begin;
-select plan(199);
+select plan(209);
 
 create schema t091;
 grant usage on schema t091 to anon, authenticated;
@@ -279,10 +279,13 @@ select is((select (modules -> 'scoresheet' ->> 'preset') || '/' || jsonb_array_l
   'latte_art_v1/6', 'preset latte_art_v1 with its six lines');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "nope", "cups": {"final": 2}}}'), '%td_scoresheet_invalid%', 'an unknown preset is refused');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {}}}'), '%td_scoresheet_invalid%', 'no round named is refused (at least one role)');
+select is(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": 3}}}'), 'ok', 'three cups is accepted (the upper bound)');
+select is(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"semi_final": 1, "quarter_final": 3}}}'), 'ok', 'the semi-final and quarter-final roles are accepted');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": 4}}}'), '%td_scoresheet_invalid%', 'four cups is refused');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": 0}}}'), '%td_scoresheet_invalid%', 'zero cups is refused');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": 1.5}}}'), '%td_scoresheet_invalid%', 'half a cup is refused');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"round_of_16": 1}}}'), '%td_scoresheet_invalid%', 'an unknown round role is refused');
+select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": 2.0}}}'), '%td_scoresheet_invalid%', 'a cup count written 2.0 is refused (it would not read back as a whole number)');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": "2"}}}'), '%td_scoresheet_invalid%', 'a cup count that is text is refused');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": true}'), '%td_scoresheet_invalid%', 'switching it on with no preset and no cups is refused');
 select t091.contains(t091.settings(120, 3, '{"scoresheet": {"cups": {"final": 2}}}'), '%td_scoresheet_invalid%', 'a missing preset is refused');
@@ -392,8 +395,7 @@ select is(t091.save_raw(120, 1, 1, 1, 2, t091.sheet(t091.good()), t091.u(9001)),
 select is(t091.save_raw(120, 1, 1, 1, 2, t091.sheet('[[1,1,1,1,1,1],[1,1,1,1,1,1]]'), t091.u(9002)), 'ok', 'replaced with operation B');
 select is(t091.save_raw(120, 1, 1, 1, 2, t091.sheet(t091.good()), t091.u(9001)), 'ok', 'replaying operation A is accepted...');
 select is((select sum(points)::int from td_score_sheets where slot_id = t091.s(120, 1, 1, 1) and judge_seat = 2), 12, '...and changes nothing (the replacement B still stands)');
-select is((select count(*)::int from processed_operations where kind = 'td_save_score_sheet' and org_id = t091.u(100)), (select count(distinct id)::int from processed_operations where kind = 'td_save_score_sheet'),
-  'every saved sheet recorded its own operation once');
+select is((select count(*)::int from processed_operations where id = t091.u(9001) and kind = 'td_save_score_sheet'), 1, 'the operation was recorded once, and the replay did not record it again');
 
 -- ============ the table, written directly (as the owner: the row trigger and the checks are the second line) ============
 select is(t091.try(format('insert into td_score_sheets (event_id, match_id, slot_id, judge_seat, cup, line_key, points) values (%L, %L, %L, 1, 1, ''contrast'', 7)', t091.u(120), t091.m(120, 1, 1), t091.s(120, 1, 1, 2))),
@@ -415,7 +417,7 @@ select is(t091.try(format('insert into td_score_sheets (event_id, match_id, slot
 select is(t091.try(format('update td_score_sheets set event_id = %L where slot_id = %L', t091.u(110), t091.s(120, 1, 1, 1))), '23001|', 'the event of a sheet row is frozen');
 select is(t091.try(format('update td_score_sheets set match_id = %L where slot_id = %L', t091.m(110, 4, 1), t091.s(120, 1, 1, 1))), '23001|', 'the match of a sheet row is frozen');
 select is(t091.try(format('update td_score_sheets set slot_id = %L where slot_id = %L', t091.s(120, 1, 1, 2), t091.s(120, 1, 1, 1))), '23001|', 'the slot of a sheet row is frozen');
-select is(t091.try(format('update td_score_decisions set event_id = %L where match_id = %L', t091.u(120), t091.m(110, 3, 1))), 'ok', 'no decision row exists for a match the scores decided (nothing to update)');
+-- (the organiser decision's frozen parent is tested after event 123 has one, below)
 select is((select count(*)::int from information_schema.columns where table_schema = 'public' and table_name in ('td_score_sheets', 'td_score_decisions')
             and column_name ~* '(total|sum|score|winner_slot|standing)'), 0, 'no total, score or standing column exists on either table (derived only)');
 select is((select count(*)::int from td_score_decisions where match_id in (t091.m(110, 3, 1), t091.m(110, 4, 1))), 0, 'no organiser decision is recorded for a match decided by rule (a) or (b)');
@@ -449,8 +451,9 @@ select is(t091.load_case(121, 1, 1, 0), 'ok', 'event 121: sheets in (fixture cas
 select t091.contains(t091.confirm(121, 1, 1, null, null), '%td_leader_changed%', 'rule total: confirm without the winner the organiser saw is refused');
 select t091.contains(t091.confirm(121, 1, 1, 2, null), '%td_leader_changed%', '...and with the wrong winner');
 select t091.contains(t091.confirm(121, 1, 1, 1, 1), '%td_organiser_pick_unneeded%', '...and an organiser pick is refused when the scores decide');
-select is(t091.load_case(121, 1, 1, 8), 'ok', 'a sheet is replaced before the confirm (fixture case 8: slot 1 wins by more)');
-select t091.contains(t091.confirm(121, 1, 1, 2, null), '%td_leader_changed%', 'rule total: the scores changed since the organiser looked');
+select is(t091.load_case(121, 1, 1, 4), 'ok', 'the sheets change after the organiser looked (fixture case 4: slot 2 now wins on judges)');
+select t091.contains(t091.confirm(121, 1, 1, 1, null), '%td_leader_changed%', 'a confirm naming the winner the organiser saw is refused when the sheets now say the other competitor wins (td_leader_changed)');
+select is(t091.load_case(121, 1, 1, 0), 'ok', 'the sheets are back to fixture case 0 (slot 1 wins on total)');
 select is(t091.confirm(121, 1, 1, 1, null, t091.u(9101)), 'ok', 'confirmed with the winner the organiser saw');
 select is(t091.winner(121, 1, 1), t091.name(121, 1, 1, 1), 'slot 1 won');
 select is(t091.confirm(121, 1, 1, 1, null, t091.u(9101)), 'ok', 'replaying the confirm is accepted...');
@@ -461,6 +464,8 @@ select is(t091.winner(121, 1, 1), t091.name(121, 1, 1, 1), '...and the winner is
 select is(t091.settings(122, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": 2}}}'), 'ok', 'event 122 set up');
 select is(t091.start(122, array[1,2]), 'ok', 'event 122 started');
 select is(t091.load_case(122, 1, 1, 4), 'ok', 'event 122: sheets in (fixture case 4: level, slot 2 higher with two judges)');
+select t091.contains(t091.confirm(122, 1, 1, 1, null), '%td_leader_changed%', 'rule judges: the wrong winner is refused');
+select t091.contains(t091.confirm(122, 1, 1, 2, 1), '%td_organiser_pick_unneeded%', 'rule judges: an organiser pick is refused when the judges decide');
 select is(t091.confirm(122, 1, 1, 2, null), 'ok', 'rule judges: confirmed for slot 2');
 select is(t091.winner(122, 1, 1), t091.name(122, 1, 1, 2), 'slot 2 won with more judges');
 select is((select count(*)::int from td_score_decisions where event_id = t091.u(122)), 0, 'and no organiser decision was recorded');
@@ -478,6 +483,7 @@ select is(t091.confirm(123, 1, 1, null, 2), 'ok', 'the organiser picks slot 2');
 select is((select winner_position::int from td_score_decisions where match_id = t091.m(123, 1, 1)), 2, 'the pick is recorded as an organiser decision');
 select is(t091.winner(123, 1, 1), t091.name(123, 1, 1, 2), 'and the picked competitor is the winner');
 select is((select result_kind from td_matches where id = t091.m(123, 1, 1)), 'scores', 'result_kind is scores');
+select is(t091.try(format('update td_score_decisions set event_id = %L where match_id = %L', t091.u(120), t091.m(123, 1, 1))), '23001|', 'the event of an organiser decision is frozen');
 select is(t091.try(format('insert into td_score_decisions (match_id, event_id, winner_position) values (%L, %L, 1)', t091.m(122, 1, 1), t091.u(122))), '23001|td_match_decided',
   'a decision cannot be added to a match that is already decided');
 
@@ -500,6 +506,10 @@ select t091.contains(t091.tap(140, 3, 1, 1, 1), 'ok', 'the Final is not scored i
 select is(t091.settings(150, 3, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"semi_final": 1}}}'), 'ok', 'event 150: three competitors');
 select is(t091.start(150, array[1,2,3,0]), 'ok', 'event 150 started: semi-final 2 is a bye');
 select t091.contains(t091.save(150, 1, 2, 1, 1, '[[3,2,2,2,3,3]]'), '%td_match_decided%', 'a bye match (decided at once) takes no sheet');
+select is(t091.fill(150, 1, 1, '[[6,3,3,3,6,6]]', '[[3,2,2,2,3,3]]'), 'ok', 'the other semi-final is scored');
+select is(t091.confirm(150, 1, 1, 1, null), 'ok', '...and confirmed');
+select is(t091.rounds(150) || ' ' || t091.name(150, 2, 1, 1) || ' ' || t091.name(150, 2, 1, 2), '1:main:2 2:main:1 P1 P3',
+  'the scored winner and the bye competitor meet in the Final (a bye works in a scored round, and a bye leaves no 3rd place match)');
 
 -- ============ nobody writes directly; reads are the organisation''s own; anon gets nothing ============
 select t091.contains(t091.as_user(t091.u(1), format('insert into td_score_sheets (event_id, match_id, slot_id, judge_seat, cup, line_key, points) values (%L, %L, %L, 1, 1, ''contrast'', 1)',
@@ -515,8 +525,9 @@ select is(t091.count_as(t091.u(2), 'td_score_decisions'), 0, 'a non-member reads
 select cmp_ok(t091.count_as(t091.u(1), 'td_score_standings'), '>', 0, 'a member reads the standings view');
 select is(t091.count_as(t091.u(2), 'td_score_standings'), 0, 'a non-member reads zero standings');
 select is((select count(*)::int from td_score_standings where match_id = t091.m(120, 1, 1)), 2, 'the view has one row per filled slot');
-select is(t091.as_user(t091.u(2), format('select count(*) from td_match_results where match_id = %L', t091.m(110, 4, 1))), 'ok', 'a non-member can query the results view...');
-select is((select count(*)::int from td_match_results where match_id = t091.m(110, 4, 1) and winner_slot_id is not null), 1, '...the owner sees the scored Final''s winner there');
+select is(t091.count_as(t091.u(2), 'td_match_results'), 0, 'a non-member reads zero rows of the results view');
+select cmp_ok(t091.count_as(t091.u(1), 'td_match_results'), '>', 0, 'a member reads the results view');
+select is((select count(*)::int from td_match_results where match_id = t091.m(110, 4, 1) and winner_slot_id is not null), 1, 'the scored Final''s winner is derived through the results view (the "scores" arm)');
 select is(t091.as_user(t091.u(2), format('select 1 from app.td_scored_winner(%L) w where w is not null', t091.m(110, 4, 1))), 'ok', 'calling the derivation as a stranger runs under row-level security...');
 create function t091.stranger_winner() returns text language plpgsql as $$
 declare w smallint;
