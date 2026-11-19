@@ -6,12 +6,17 @@
 // shows the words here and never the server's own text. An unknown hint gets the generic sentence.
 import { normaliseCode, normaliseEmail } from './claimFlow.js';
 import { ENTRY_KINDS, cleanPhotoUrl, teamResultWords } from '../core/seduhProfile.js';
+import { formatDuration } from '../core/duration.js';
+import { ordinalLabel } from '../core/ordinal.js';
 
 export { normaliseCode, normaliseEmail };
 
 export const ENTRY_LIMIT = 200;
 export const TEAM_LINK_LIMIT = 40;
+export const COURSE_LIMIT = 60;
 export const MIN_YEAR = 1980;
+export const DISPUTE_LIMIT = 50;
+export const DISPUTE_REASON_MAX = 200;
 
 // the database's own text limits (app.seduh_clean_text)
 export const LIMITS = {
@@ -21,6 +26,11 @@ export const LIMITS = {
   result_text: 80,
   note: 500,
   maxPlacement: 500,
+  // courses and certificates (app.seduh_course_clean)
+  course_title: 120,
+  course_provider: 80,
+  course_level: 40,
+  course_note: 300,
 };
 
 export const KIND_CHOICES = [
@@ -59,9 +69,22 @@ const TEXT = {
   bad_role: `Your role can be up to ${LIMITS.role} characters of plain text.`,
   bad_result: `The result can be up to ${LIMITS.result_text} characters of plain text, for example “2nd” or “Finalist”.`,
   bad_placement: `A placing is a whole number from 1 to ${LIMITS.maxPlacement}, or leave it empty.`,
-  bad_note: `The note can be up to ${LIMITS.note} characters of plain text, on one line (no line breaks).`,
+  bad_note: `The note can be up to ${LIMITS.note} characters for an entry, or ${LIMITS.course_note} for a course, of plain text on one line (no line breaks).`,
   too_many_entries: `You have reached the limit of ${ENTRY_LIMIT} entries. Delete one to add another.`,
+  // a course or certificate
+  bad_title: `Enter the course's title (up to ${LIMITS.course_title} characters, plain text).`,
+  bad_provider: `Enter who ran it (up to ${LIMITS.course_provider} characters, plain text).`,
+  bad_valid_until: 'The “valid until” year cannot be before the year you completed it.',
+  bad_level: `The level can be up to ${LIMITS.course_level} characters of plain text, for example “Intermediate”.`,
+  too_many_courses: `You have reached the limit of ${COURSE_LIMIT} courses. Delete one to add another.`,
+  not_current: 'That certificate has expired, so it cannot be shown on your card.',
   not_found: 'That item is not there any more. Reload the page to see your current record.',
+  // "This isn't mine" (T-ID2.NM)
+  already_disputed: 'You already said that result is not yours.',
+  not_undoable:
+    'We checked that result and it is not yours, so it cannot be shown on your page again.',
+  bad_reason: `A reason can be up to ${DISPUTE_REASON_MAX} characters of plain text, on one line.`,
+  too_many_disputes: `You have reached the limit of ${DISPUTE_LIMIT} results marked as not yours.`,
   // teams
   team_not_found: 'That team is no longer available to link.',
   already_linked: 'You have already linked that team.',
@@ -164,8 +187,61 @@ export function fieldForHint(hint) {
       bad_result: 'result_text',
       bad_placement: 'placement',
       bad_note: 'note',
+      bad_title: 'title',
+      bad_provider: 'provider',
+      bad_valid_until: 'valid_until_year',
+      bad_level: 'level',
     }[hint] ?? null
   );
+}
+
+/**
+ * Pure. Checks a course form the way the database will: `{ ok: true, params }` (the arguments of seduh_add_course /
+ * seduh_update_course) or `{ ok: false, errors }`. Fields: title, provider, year (completed), valid_until_year, level, note.
+ */
+export function validateCourseForm(form, { thisYear = new Date().getUTCFullYear() } = {}) {
+  const errors = {};
+  const year = clean(form.year);
+  const yearNumber = Number(year);
+  if (!/^\d{4}$/.test(year) || yearNumber < MIN_YEAR || yearNumber > thisYear + 1)
+    errors.year = 'bad_year';
+  const until = clean(form.valid_until_year);
+  let untilNumber = null;
+  if (until !== '') {
+    untilNumber = Number(until);
+    if (
+      !/^\d{4}$/.test(until) ||
+      untilNumber > 2100 ||
+      (!errors.year && untilNumber < yearNumber)
+    ) {
+      errors.valid_until_year = 'bad_valid_until';
+    }
+  }
+  const text = (key, limit, hint, required) => {
+    const value = clean(form[key]);
+    if (value === '') {
+      if (required) errors[key] = hint;
+      return null;
+    }
+    if ([...value].length > limit || BAD_CHARS.test(value)) errors[key] = hint;
+    return value;
+  };
+  const title = text('title', LIMITS.course_title, 'bad_title', true);
+  const provider = text('provider', LIMITS.course_provider, 'bad_provider', true);
+  const level = text('level', LIMITS.course_level, 'bad_level', false);
+  const note = text('note', LIMITS.course_note, 'bad_note', false);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    params: {
+      p_title: title,
+      p_provider: provider,
+      p_completed_year: yearNumber,
+      p_valid_until_year: untilNumber,
+      p_level: level,
+      p_note: note,
+    },
+  };
 }
 
 // ---- the settings, in plain words ----
@@ -215,6 +291,12 @@ export const SETTINGS = [
     choices: VIS3,
   },
   {
+    key: 'vis_courses',
+    label: 'Courses and certificates',
+    help: 'Training you listed yourself, shown in your record labelled “Self-reported, not verified by Seduh”. Hidden also takes the “Certified” line off your story card.',
+    choices: VIS2,
+  },
+  {
     key: 'vis_cafe_affiliations',
     label: 'Cafe links',
     help: 'Cafes you work with, once the cafe has confirmed it too.',
@@ -249,6 +331,7 @@ const VIS_DEFAULTS = {
   vis_organiser_results: 'public',
   vis_self_reported_results: 'public',
   vis_judging_roles: 'public',
+  vis_courses: 'public',
   vis_cafe_affiliations: 'public',
   vis_knockout_record: 'public',
 };
@@ -284,6 +367,28 @@ function normaliseEntry(raw) {
   };
 }
 
+function normaliseCourse(raw) {
+  const id = intOrNull(raw?.id);
+  const title = text(raw?.title, LIMITS.course_title);
+  const provider = text(raw?.provider, LIMITS.course_provider);
+  const year = intOrNull(raw?.completed_year);
+  if (id === null || !title || !provider || year === null) return null;
+  const until = intOrNull(raw.valid_until_year);
+  return {
+    id,
+    title,
+    provider,
+    completed_year: year,
+    valid_until_year: until !== null && until >= year ? until : null,
+    level: text(raw.level, LIMITS.course_level),
+    note: text(raw.note, LIMITS.course_note),
+    // the database says whether it is current; anything but an exact false is treated as current
+    current: raw.current !== false,
+    on_card: raw.on_card === true,
+    confirmed: raw.status === 'confirmed',
+  };
+}
+
 function normaliseTeamLink(raw) {
   const id = intOrNull(raw?.id);
   const key = text(raw?.team_key, 64);
@@ -304,6 +409,53 @@ function normaliseTeamLink(raw) {
     // never claim more than we know: only the exact word 'confirmed' is confirmed
     membership: raw.membership === 'confirmed' ? 'confirmed' : 'self_reported',
   };
+}
+
+const DISPUTE_STATUSES = ['pending', 'stands', 'link_wrong'];
+
+function normaliseRecorded(raw) {
+  const key =
+    typeof raw?.result_key === 'string' && /^[0-9a-f]{32}$/.test(raw.result_key)
+      ? raw.result_key
+      : null;
+  const title = text(raw?.event_name, 120);
+  if (!key || !title) return null;
+  const placing = intOrNull(raw.placing);
+  const correct = intOrNull(raw.correct);
+  const total = intOrNull(raw.total);
+  const secs = intOrNull(raw.time_secs);
+  const status = DISPUTE_STATUSES.includes(raw.dispute?.status) ? raw.dispute.status : null;
+  return {
+    key,
+    title,
+    organiser: text(raw.organiser_name, 80),
+    date:
+      typeof raw.event_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.event_date)
+        ? raw.event_date
+        : null,
+    detail: [
+      placing !== null && placing >= 1 ? `${ordinalLabel(placing)} place` : null,
+      text(raw.stage, 60),
+      correct !== null && total !== null ? `${correct} / ${total} correct` : null,
+      secs !== null && secs >= 0 ? formatDuration(secs) : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    dispute: status,
+  };
+}
+
+/** Pure. A recorded result's dispute in words, for the person (null status: not disputed). */
+export function disputeWords(status) {
+  return (
+    {
+      pending: 'Hidden from your public page while we check it with the organiser.',
+      stands:
+        'We checked: this result is yours. It stays hidden from your page until you show it again.',
+      link_wrong:
+        'We checked: this result was linked to you by mistake, and it stays off your page.',
+    }[status] ?? ''
+  );
 }
 
 /** Pure. Rebuilds the `seduh_my_record` answer from known keys; null when it is not a usable record. */
@@ -333,6 +485,8 @@ export function normaliseMyRecord(raw) {
     settings,
     entries: list(raw.entries).map(normaliseEntry).filter(Boolean),
     teamLinks: list(raw.team_links).map(normaliseTeamLink).filter(Boolean),
+    courses: list(raw.courses).map(normaliseCourse).filter(Boolean),
+    recorded: list(raw.recorded_results).map(normaliseRecorded).filter(Boolean),
   };
 }
 

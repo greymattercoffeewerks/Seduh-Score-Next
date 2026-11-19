@@ -15,7 +15,14 @@
 import { el } from '../core/dom.js';
 import { countryName } from '../core/country.js';
 import { buildCountryChip } from '../core/countryChip.js';
-import { fetchSeduhProfile, handleFromPath, photoSrc } from '../core/seduhProfile.js';
+import {
+  PROVENANCE_LABELS,
+  PROVENANCE_SELF,
+  courseValidityWords,
+  fetchSeduhProfile,
+  handleFromPath,
+  photoSrc,
+} from '../core/seduhProfile.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
@@ -402,7 +409,56 @@ function yearGroup(group, open, options) {
 // The record: a summary, filter buttons (only when there is more than one kind), then the entries by year, the newest
 // year open and the rest closed. Built for dozens of entries. The filter redraws the list only; the buttons stay put so
 // focus does not move, and a polite status line says what is now shown.
-function recordSection(entries, options) {
+// "Courses and certificates" (T-ID2.C6a): a sub-section INSIDE the record. Not entries: own count, newest first, an expired
+// certificate stays visible with its end year in muted text. Every row says it is the person's own claim until a provider
+// confirms it (the door sends `confirmed` only for a confirmed one).
+function courseItem(course) {
+  const validity = courseValidityWords(course);
+  const meta = [course.provider, course.level].filter(Boolean).join(' · ');
+  return el(
+    'li',
+    { className: `profile-entry profile-course${course.current ? '' : ' is-expired'}` },
+    [
+      el('span', {
+        className: 'profile-entry-date tabular-nums',
+        text: String(course.completedYear),
+      }),
+      el(
+        'div',
+        { className: 'profile-entry-main' },
+        [
+          el('span', { className: 'profile-entry-title', text: course.title }),
+          el('span', { className: 'profile-entry-meta', text: meta }),
+          validity ? el('span', { className: 'profile-course-validity', text: validity }) : null,
+          course.note ? el('span', { className: 'profile-entry-detail', text: course.note }) : null,
+          el('span', { className: 'profile-provenances' }, [
+            el('span', {
+              className: 'profile-provenance tag profile-prov-self_reported',
+              text: course.confirmed
+                ? 'Confirmed by the provider'
+                : PROVENANCE_LABELS[PROVENANCE_SELF],
+            }),
+          ]),
+        ].filter(Boolean),
+      ),
+    ],
+  );
+}
+
+function coursesBlock(courses) {
+  if (!courses || courses.length === 0) return null;
+  const n = courses.length;
+  return el('div', { className: 'profile-courses' }, [
+    el('h3', {
+      id: 'profile-courses-title',
+      className: 'profile-courses-title',
+      text: `Courses and certificates · ${n}`,
+    }),
+    el('ul', { className: 'profile-entry-list', attrs: { role: 'list' } }, courses.map(courseItem)),
+  ]);
+}
+
+function recordSection(entries, options, courses = []) {
   const section = el(
     'section',
     { className: 'profile-body', attrs: { 'aria-labelledby': 'profile-record-title' } },
@@ -410,6 +466,7 @@ function recordSection(entries, options) {
   );
   if (entries.length === 0) {
     section.append(el('p', { className: 'profile-quiet', text: 'No results on Seduh Score yet.' }));
+    section.append(...[coursesBlock(courses)].filter(Boolean));
     return section;
   }
   section.append(el('p', { className: 'profile-summary', text: summaryLine(entries) }));
@@ -460,6 +517,8 @@ function recordSection(entries, options) {
     );
   }
   section.append(status, list);
+  const coursesNode = coursesBlock(courses);
+  if (coursesNode) section.append(coursesNode);
   draw();
   return section;
 }
@@ -547,7 +606,7 @@ function fullPage(root, profile, options) {
           ].filter(Boolean),
         )
       : null,
-    recordSection(profile.entries, options),
+    recordSection(profile.entries, options, profile.courses),
     knockoutSection(profile.knockout),
     worksWithSection(profile.affiliations),
     correctionNote(profile),
@@ -558,6 +617,7 @@ function fullPage(root, profile, options) {
 const isAllHidden = (p) =>
   !p.identity &&
   p.entries.length === 0 &&
+  p.courses.length === 0 &&
   knockoutText(p.knockout) === null &&
   p.affiliations.length === 0;
 

@@ -231,7 +231,8 @@ below are enforced by tests that fail CI, not by memory; the "how to add a tenan
   `events` is closed to anon, and `live_sessions` shows anon only ACTIVE rows (D6, `038`).
 - **A claimed person writes only their own record, through narrow `authenticated` doors** (T-ID2.D-a: `seduh_my_record`, `seduh_add_entry`,
   `seduh_update_entry`, `seduh_delete_entry`, `seduh_team_options`, `seduh_add_team_link`, `seduh_remove_team_link`,
-  `seduh_set_my_settings`). Each opens with `app.seduh_my_account()` (the caller's `auth.uid()` owns an OPEN account, else one
+  `seduh_set_my_settings`; T-ID2.NM adds `seduh_dispute_result` and `seduh_withdraw_dispute`, which name a recorded result only by an opaque key of the caller's OWN
+  results and hide it from their profile pending the owner's review, `CONVENTIONS.md`). Each opens with `app.seduh_my_account()` (the caller's `auth.uid()` owns an OPEN account, else one
   42501 `no_account`), takes no uuid, and writes `where account_id = <the caller's account>`; an organiser can never write a person's
   entries. A team membership is `self_reported` until the OWNER confirms it (owner SQL, audited); nobody is listed on a country page
   unless they opted in themselves. Contract and runbook: `CONVENTIONS.md`, "Seduh ID: a person's own record".
@@ -324,8 +325,9 @@ push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
   worktree's migrations only when they change; never a bare `supabase test db`. `npm run db:test -- <file>` runs one file.
 - **Anything that uses the shared `postgres` database goes under the lock:** `npm run db:reset` already does; wrap a
   Playwright run as `npm run db:lock -- run -- npm run test:e2e`. `npm run db:lock -- status` shows who holds it.
-- **Never point `supabase db reset --db-url` (or `db push`) at `127.0.0.1:54422`**: the CLI treats it as local and resets
-  the shared database and restarts the stack, whatever database the URL names.
+- **Never point `supabase db reset` (or `db push`) at a URL on `127.0.0.1:54422`** (`--db-url`, or CLI v3's
+  `--remote=<url>`): the CLI treats it as local and resets the shared database and restarts the stack, whatever database
+  the URL names. In CLI v3 a bare `db push` / `db reset` already targets the local stack; the cloud needs `--remote`.
 
 How it works: `CONVENTIONS.md`, "Migration workflow".
 

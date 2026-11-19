@@ -120,6 +120,20 @@ export function createMeApi({ client, minRequestCodeMs = MIN_REQUEST_CODE_MS } =
       return door('seduh_delete_entry', { p_entry_id: id });
     },
 
+    async addCourse(params) {
+      return door('seduh_add_course', params);
+    },
+    async updateCourse(id, params) {
+      return door('seduh_update_course', { p_course_id: id, ...params });
+    },
+    async deleteCourse(id) {
+      return door('seduh_delete_course', { p_course_id: id });
+    },
+    /** The ONE certificate shown on the story card; null clears it. */
+    async setCardCourse(id) {
+      return door('seduh_set_card_course', { p_course_id: id });
+    },
+
     async teamOptions(country) {
       const answer = await door('seduh_team_options', {
         p_country_code: country || null,
@@ -132,6 +146,14 @@ export function createMeApi({ client, minRequestCodeMs = MIN_REQUEST_CODE_MS } =
     },
     async removeTeamLink(id) {
       return door('seduh_remove_team_link', { p_link_id: id });
+    },
+
+    // "This isn't mine" (T-ID2.NM): a recorded result is named only by the key my_record gave for it.
+    async disputeResult(key, reason) {
+      return door('seduh_dispute_result', { p_result_key: key, p_reason: reason || null });
+    },
+    async withdrawDispute(key) {
+      return door('seduh_withdraw_dispute', { p_result_key: key });
     },
 
     // The photo (T-ID2.C2). `prepared` is photoPipeline.prepareAvatar's answer ({ blob, type, ext }); `handle` is the caller's own (it

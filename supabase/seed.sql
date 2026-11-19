@@ -4,7 +4,7 @@
 -- config.toml's [db.seed] block. A bare `supabase db push` never touches
 -- seed files, and no script or CI job in this repo runs anything that
 -- would — but this is a procedural guarantee, not an automatic one:
--- `supabase db push --include-seed` and `supabase db reset --linked`
+-- `supabase db push --remote --include-seed` and `supabase db reset --remote`
 -- (default: seeds unless passed `--no-seed`) WOULD apply this file to a
 -- linked project, creating this exact login there. No cloud project is
 -- linked yet (see CLAUDE.md); once one is, never run either of those two

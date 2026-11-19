@@ -10,12 +10,14 @@ import {
   TEAM_LINK_LIMIT,
   choiceWord,
   describeMeHint,
+  disputeWords,
   fieldForHint,
   groupEntriesByYear,
   isSignedOutHint,
   normaliseMyRecord,
   normaliseTeamOptions,
   teamResultWords,
+  validateCourseForm,
   validateEntryForm,
 } from './meFlow.js';
 
@@ -179,9 +181,10 @@ describe('hints in words', () => {
 });
 
 describe('settings in words', () => {
-  it('covers exactly the seven visibility settings of the door, plus the country listing', () => {
+  it('covers exactly the eight visibility settings of the door, plus the country listing', () => {
     expect(SETTINGS.map((s) => s.key).sort()).toEqual([
       'vis_cafe_affiliations',
+      'vis_courses',
       'vis_identity',
       'vis_judging_roles',
       'vis_knockout_record',
@@ -318,5 +321,174 @@ describe('Show me in Seduh ID search (T-ID2.C5)', () => {
     expect(rec({ listed_in_search: 'no' }).settings.listed_in_search).toBe(true);
     expect(SEARCH_LISTING.key).toBe('listed_in_search');
     expect(SEARCH_LISTING.label).toBe('Show me in Seduh ID search');
+  });
+});
+
+describe('courses and certificates', () => {
+  const good = {
+    title: ' Barista Skills ',
+    provider: ' Test Academy ',
+    year: '2024',
+    valid_until_year: '2027',
+    level: '',
+    note: '',
+  };
+  it('checks a course form the way the database will and sends trimmed values, empty optionals as null', () => {
+    expect(validateCourseForm(good, { thisYear: 2026 })).toEqual({
+      ok: true,
+      params: {
+        p_title: 'Barista Skills',
+        p_provider: 'Test Academy',
+        p_completed_year: 2024,
+        p_valid_until_year: 2027,
+        p_level: null,
+        p_note: null,
+      },
+    });
+    expect(
+      validateCourseForm({ ...good, valid_until_year: '' }, { thisYear: 2026 }).params
+        .p_valid_until_year,
+    ).toBeNull();
+  });
+  it('names every wrong field with its own hint', () => {
+    const r = validateCourseForm(
+      {
+        title: ' ',
+        provider: 'x'.repeat(81),
+        year: '1979',
+        valid_until_year: '2030',
+        level: 'l'.repeat(41),
+        note: 'n'.repeat(301),
+      },
+      { thisYear: 2026 },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors).toEqual({
+      year: 'bad_year',
+      title: 'bad_title',
+      provider: 'bad_provider',
+      level: 'bad_level',
+      note: 'bad_note',
+    });
+  });
+  it('refuses an end year before the completed year, and control or direction characters', () => {
+    expect(
+      validateCourseForm({ ...good, valid_until_year: '2023' }, { thisYear: 2026 }).errors,
+    ).toEqual({ valid_until_year: 'bad_valid_until' });
+    expect(validateCourseForm({ ...good, title: 'a\u202Eb' }, { thisYear: 2026 }).errors).toEqual({
+      title: 'bad_title',
+    });
+    expect(validateCourseForm({ ...good, year: '2028' }, { thisYear: 2026 }).errors).toEqual({
+      year: 'bad_year',
+    });
+  });
+  it('says every course hint in words, and maps each to its field', () => {
+    for (const hint of [
+      'bad_title',
+      'bad_provider',
+      'bad_valid_until',
+      'bad_level',
+      'too_many_courses',
+      'not_current',
+    ]) {
+      expect(describeMeHint(hint), hint).not.toMatch(/^Something went wrong/);
+    }
+    expect(fieldForHint('bad_title')).toBe('title');
+    expect(fieldForHint('bad_valid_until')).toBe('valid_until_year');
+  });
+  it("rebuilds courses from known keys; only the exact word confirmed is confirmed; current is the database's word", () => {
+    const rec = normaliseMyRecord({
+      account: { handle: 'mine' },
+      settings: {},
+      courses: [
+        {
+          id: 1,
+          title: 'A',
+          provider: 'P',
+          completed_year: 2020,
+          valid_until_year: 2019,
+          status: 'maybe',
+          current: false,
+          on_card: true,
+        },
+        {
+          id: 2,
+          title: 'B',
+          provider: 'P',
+          completed_year: 2021,
+          valid_until_year: 2030,
+          status: 'confirmed',
+        },
+        { id: 3, title: '', provider: 'P', completed_year: 2021 },
+        { title: 'no id', provider: 'P', completed_year: 2021 },
+      ],
+    });
+    expect(rec.courses).toHaveLength(2);
+    expect(rec.courses[0]).toMatchObject({
+      valid_until_year: null,
+      confirmed: false,
+      current: false,
+      on_card: true,
+    });
+    expect(rec.courses[1]).toMatchObject({
+      valid_until_year: 2030,
+      confirmed: true,
+      current: true,
+      on_card: false,
+    });
+    expect(rec.settings.vis_courses).toBe('public');
+  });
+});
+
+describe('recorded results ("This isn’t mine")', () => {
+  const base = { account: { handle: 'mine' } };
+  const key = 'a'.repeat(32);
+
+  it('rebuilds each result from known keys and words the dispute state', () => {
+    const rec = normaliseMyRecord({
+      ...base,
+      recorded_results: [
+        {
+          result_key: key,
+          event_name: 'Cup',
+          event_date: '2026-03-01',
+          placing: 1,
+          correct: 6,
+          total: 6,
+          time_secs: 61,
+          dispute: null,
+          internal: 'x',
+        },
+        { result_key: key, event_name: 'Cup', dispute: { status: 'pending' } },
+        { result_key: key, event_name: 'Cup', dispute: { status: 'invented' } },
+      ],
+    }).recorded;
+    expect(rec[0]).toEqual({
+      key,
+      title: 'Cup',
+      organiser: null,
+      date: '2026-03-01',
+      detail: '1st place · 6 / 6 correct · 1:01',
+      dispute: null,
+    });
+    expect(rec[1].dispute).toBe('pending');
+    expect(rec[2].dispute).toBeNull();
+  });
+
+  it('drops a row with no valid key or no title, and tolerates no list', () => {
+    const rec = normaliseMyRecord({
+      ...base,
+      recorded_results: [{ result_key: 'nope', event_name: 'Cup' }, { result_key: key }, null],
+    });
+    expect(rec.recorded).toEqual([]);
+    expect(normaliseMyRecord(base).recorded).toEqual([]);
+  });
+
+  it('has words for every dispute state and every new refusal', () => {
+    for (const status of ['pending', 'stands', 'link_wrong'])
+      expect(disputeWords(status)).not.toBe('');
+    expect(disputeWords(null)).toBe('');
+    for (const hint of ['already_disputed', 'not_undoable', 'bad_reason', 'too_many_disputes'])
+      expect(describeMeHint(hint)).not.toMatch(/^Something went wrong\. Check/);
   });
 });

@@ -258,6 +258,10 @@ describe('claiming a Seduh ID (T-ID2.B3b wording)', () => {
     expect(privacy).not.toContain('coming soon');
     expect(privacy).toContain('What you add to your Seduh ID yourself');
     // T-ID2.C2: the photo line says what is true (public while the name is, location data removed, removable, reportable)
+    // T-ID2.NM: the "This isn't mine" paragraph says what is true (one result, at once, audited, the owner checks, undoable)
+    expect(privacy).toContain('If a recorded result is not yours');
+    expect(privacy).toContain('the organiser’s own results page does not change');
+    expect(privacy).toContain('the owner of Seduh Score checks it with the organiser');
     expect(privacy).toContain('A profile photo, if you add one');
     expect(privacy).toContain('removes any location and camera data');
     expect(privacy).toContain('Anyone can report a photo');

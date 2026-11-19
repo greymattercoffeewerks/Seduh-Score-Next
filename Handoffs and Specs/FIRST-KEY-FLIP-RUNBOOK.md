@@ -22,7 +22,7 @@ only, nothing written. Re-run them on the day.
 | 5 | The 2026-10-04 event is the one over the Community cap | **Consistent.** Exactly 1 event has more than 8 active entries (Claude did not open it or read names; you told us it has 17) | `select count(*) from (select event_id from public.event_entries where not withdrawn group by event_id having count(*) > 8) x;` |
 | 6 | The preview says nobody loses anything | See section 2 | |
 | 7 | The code that explains a refusal exists | **True.** `src/core/errors.js` `GATING_MESSAGES.cup_taster_participants` (G-C2). Roster, setup, scoring and the other Cup Taster screens route errors through `describeError` | read |
-| 8 | Local rehearsal green | **[CLAUDE]** `supabase/tests/054_entitlement_enforcement_hooks.sql` covers: ninth entry refused (42501, hint `entitlement_cap_reached`, detail `cup_taster_participants`), reinstating a withdrawn entry at the cap refused, withdrawn entries not counted. Run `npm run db:reset` and `supabase test db --local supabase/tests` the day before | CI and local |
+| 8 | Local rehearsal green | **[CLAUDE]** `supabase/tests/054_entitlement_enforcement_hooks.sql` covers: ninth entry refused (42501, hint `entitlement_cap_reached`, detail `cup_taster_participants`), reinstating a withdrawn entry at the cap refused, withdrawn entries not counted. Run `npm run db:reset` and `supabase test db supabase/tests` the day before | CI and local |
 | 9 | You can sign in at `/admin/` with a fresh authenticator code | **[OWNER]** The functions need an aal2 session with TOTP verified in the last 60 minutes | try signing in first |
 | 10 | Not during an event | **[OWNER]** Do not flip on an event day. The roster is the thing the key polices | calendar |
 

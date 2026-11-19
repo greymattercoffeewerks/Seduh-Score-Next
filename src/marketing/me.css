@@ -248,3 +248,11 @@
     column-gap: var(--space-8);
   }
 }
+
+/* courses: an expired certificate's dates in muted text (never hidden); the card badge */
+.me-course-expired {
+  font-style: italic;
+}
+.me-on-card {
+  font-size: var(--text-xs);
+}

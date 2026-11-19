@@ -192,6 +192,42 @@ function judgingEntry(raw) {
   };
 }
 
+// A course or certificate (`courses`, T-ID2.C6a): {title, provider, completed_year, valid_until_year, level, note, current, on_card,
+// status}. NOT an entry: it has its own list and count and never reaches the headline stats. Only a CONFIRMED status is called
+// confirmed; anything else is the person's own claim. `current` is the database's word (never guessed from the clock here).
+/** Pure. Rebuilds one course from the door's shape, or null. */
+export function courseEntry(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = text(raw.title, 120);
+  const provider = text(raw.provider, 80);
+  const completedYear = yearOf(raw.completed_year, null);
+  if (!title || !provider || completedYear === null) return null;
+  const until = yearOf(raw.valid_until_year, null);
+  return {
+    id: Number.isInteger(raw.id) ? raw.id : null, // only the person's own door sends one
+    title,
+    provider,
+    completedYear,
+    validUntilYear: until !== null && until >= completedYear ? until : null,
+    level: text(raw.level, 40),
+    note: text(raw.note, 300),
+    current: raw.current !== false,
+    onCard: raw.on_card === true,
+    confirmed: raw.status === 'confirmed',
+  };
+}
+/** Pure. The words for a course's end year, or null when it has none. */
+export function courseValidityWords(course) {
+  if (!course || course.validUntilYear === null) return null;
+  return course.current
+    ? `Valid until ${course.validUntilYear}`
+    : `Expired ${course.validUntilYear}`;
+}
+/** Pure. The ONE current course the person chose for the story card, or null. */
+export function cardCourse(courses) {
+  return list(courses).find((c) => c.onCard && c.current) ?? null;
+}
+
 function normaliseOpponent(raw) {
   const displayName = text(raw?.display_name, 80);
   if (!displayName) return null;
@@ -244,6 +280,7 @@ export const EMPTY_PROFILE = Object.freeze({
   handle: null,
   identity: null,
   entries: [],
+  courses: [],
   knockout: { won: 0, lost: 0, opponents: [] },
   affiliations: [],
 });
@@ -279,6 +316,7 @@ export function normaliseProfile(raw) {
         }
       : null,
     entries,
+    courses: list(raw.courses).map(courseEntry).filter(Boolean).slice(0, 60),
     knockout: {
       won: count(ko.won),
       lost: count(ko.lost),
