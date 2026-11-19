@@ -477,6 +477,7 @@ function classesShapedByMarkup() {
   const files = [
     ...walk('src/marketing', (name) => name.endsWith('.js') && !name.endsWith('.test.js')),
     'src/community/communityHub.js',
+    'src/community/toolCard.js',
   ];
   for (const file of files) {
     const js = readFileSync(file, 'utf8');

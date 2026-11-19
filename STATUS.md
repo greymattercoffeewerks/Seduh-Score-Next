@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-19, app version 4.21.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-19, app version 4.22.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -16,7 +16,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
 - **Cloud database in sync (checked 2026-11-19):** all 125 migrations on `main` are in the cloud project, none extra, including
   `btc_void_cup` (4.18.0), `seduh_courses` (4.19.0) and `seduh_result_disputes` (4.20.0).
-- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`, first adopter of the shared community chrome): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet; rolling the shared chrome out to the Timer, Brew Planner and Guess the Bean (CHANGELOG 4.21.0).
+- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`, first adopter of the shared community chrome): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout to the Timer, Brew Planner and Guess the Bean organiser page (#521) and the share-preview fix (#520, 4.21.1) are released as **4.22.0** (minor: every tool now links to the others).
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 

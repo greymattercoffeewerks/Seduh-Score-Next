@@ -2,7 +2,8 @@
 // collects the heats, coffees, machines and timing; the last step is a cheat sheet to work
 // from on the day. Lives under src/tools/ for the same reason the Timer does: it is a
 // general-purpose gift to the community, not part of any format. See src/tools/CLAUDE.md.
-import { brandMark, el, withFocusPreservation } from '../../core/dom.js';
+import { el, withFocusPreservation } from '../../core/dom.js';
+import { buildCommunityToolChrome } from '../../community/toolChrome.js';
 import { buildTablist } from '../../core/tablist.js';
 import { buildStat, statusMark } from '../../core/vocabulary.js';
 import {
@@ -159,6 +160,14 @@ export function mountBrewPlanner(root, { storage } = {}) {
   const persist = () => saveState(state, storage);
   let focusProblems = false; // move focus to the problem list after the next render
   let attempted = false; // whether Next was pressed on a step with problems
+  // The shared community frame (header, breadcrumb, More tools strip, footer) is built once; render() swaps only `host`.
+  const chrome = buildCommunityToolChrome({
+    toolId: 'brew-planner',
+    toolName: 'Brew Planner',
+    edition: 'Batch-brew edition',
+  });
+  const host = el('div', { className: 'bp-host' });
+  root.replaceChildren(chrome.top, host, chrome.bottom);
 
   function coffeeName(id) {
     return state.config.coffees.find((c) => c.id === id)?.name ?? 'Coffee';
@@ -1180,18 +1189,11 @@ export function mountBrewPlanner(root, { storage } = {}) {
 
   function render() {
     withFocusPreservation(root, () => {
-      const brandMarkNode = brandMark();
-      brandMarkNode.classList.add('bp-brand-mark');
       const builders = [stepHeats, stepCoffees, stepMachines, stepTiming];
       const body = state.step < 4 ? builders[state.step]() : cheatSheet();
-      root.replaceChildren(
+      host.replaceChildren(
         el('main', { className: 'bp' }, [
           el('header', { className: 'bp-header' }, [
-            el(
-              'a',
-              { className: 'bp-brand', attrs: { href: '/', 'aria-label': 'Seduh Score home' } },
-              [brandMarkNode],
-            ),
             el('h1', { text: APP_TITLE }),
             el('p', {
               className: 'bp-intro',

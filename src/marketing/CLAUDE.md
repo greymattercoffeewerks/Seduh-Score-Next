@@ -510,6 +510,14 @@ add a nav item or copy claiming a capability (an event archive, an org directory
 anything) that isn't real product scope yet; check `ROADMAP.md` before adding a new
 claim to this page.
 
+## Share previews (2026-11-19, 4.21.1)
+
+A public page that sets `og:title` also sets an `og:image` on `https://www.seduhscore.com/`, with `og:image:width`/`height`
+(together or not at all, and matching the file) and `twitter:image`. Without one, WhatsApp and others upscale the 32x32
+favicon into a blotchy thumbnail (the Random Selector report). Use `public/share-mark.png` (1200x1200) unless the page has
+its own image. `src/marketing/shareImages.test.js` enforces this for every such page, so a new public page fails CI until
+it has the tags. The root `apple-touch-icon.png` (180x180) is linked by the tool and Community pages.
+
 ## Assets
 
 `public/marketing/` holds this page's own photos. `hero-tablet.jpg`,

@@ -147,8 +147,9 @@ self-contained CSS instead.
       (`controls` slot), the tool, a "More free community tools" strip and a footer line. The strip and the hub's cards both read
       `src/community/communityTools.js` (pure data; `otherCommunityTools(id)` leaves a tool out of its own strip and never offers
       the widget download), so a name or pitch changes in one place. `setPresenting(true)` hides the header, breadcrumb, strip and
-      footer and keeps the controls row. The Timer, Brew Planner and Guess the Bean can adopt it with no change to those files
-      (later PR; only the Random Selector uses it so far). Link `publicHeader.css`, `toolChrome.css`, then the tool's sheet.
+      footer and keeps the controls row. The Timer, Brew Planner and Guess the Bean's organiser page adopted it on 2026-11-19 with no change to the
+      frame's look (the Timer hides all of it, bar included, in its countdown mode via `setPresenting(true, { keepBar: false })`; Guess the Bean's
+      play and live-display pages have no frame). The hub's cards and the strip's cards are one renderer, `src/community/toolCard.js`. Link `publicHeader.css`, `toolChrome.css`, then the tool's sheet.
       The prerender marker is now `Split-flap edition` (footer, in `prerender-public-pages.mjs` and `smoke.spec.js`).
   - **Petrol (2026-10-14).** The tool follows the design system (`src/ui/tokens/DESIGN.md`):
     every colour in the stylesheet is a `--clr-*` / `--color-*` token (the first version had a
