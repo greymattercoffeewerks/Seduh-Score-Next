@@ -1,5 +1,10 @@
 /* Random Selector: a standalone community tool. It uses the shared token layer
-   but keeps all of its visual treatment local to this free, ungated surface. */
+   but keeps all of its visual treatment local to this free, ungated surface.
+   Fonts follow the site's own rule: Hanken Grotesk (--font-body) for buttons, tabs, labels and text;
+   Chakra Petch (--font-display) for headings and the winner's name; IBM Plex Mono (--font-mono) ONLY for
+   the flap letters and the draw numbers in History. Buttons are the shared family (base.css .action,
+   .action-primary, .action-outline, .btn-bevel); this file adds only what the tool alone needs.
+   The frame around the tool (header, breadcrumb, More tools strip, footer) is src/community/toolChrome.css. */
 
 * {
   box-sizing: border-box;
@@ -15,175 +20,126 @@ input,
 textarea {
   font: inherit;
 }
-button {
-  cursor: pointer;
-}
 button:focus-visible,
 input:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+a:focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 
+.rs-page {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+.rs-host {
+  flex: 1;
+}
 .random-selector {
   --rs-accent: var(--color-accent);
   --rs-accent-contrast: var(--color-accent-contrast);
-  min-height: 100dvh;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--color-border) 55%, transparent) 1px,
-    transparent 1px
-  );
-  background-size: 6rem 100%;
+  width: 100%;
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: var(--space-6) clamp(1rem, 3vw, 2rem) var(--space-8);
 }
-.rs-topbar,
-.rs-footer {
-  max-width: 78rem;
-  margin: auto;
-  padding: var(--space-4) var(--space-5);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+
+/* ---- Controls on the breadcrumb row ---- */
+.rs-tool-button {
+  gap: var(--space-2);
 }
-.rs-topbar {
-  flex-wrap: wrap;
-  border-bottom: var(--border-hairline) solid var(--color-border);
+.rs-tool-button svg {
+  flex: none;
 }
-.rs-brand {
-  display: inline-flex;
-  min-height: var(--tap-target-min);
-  align-items: center;
-  --brand-lockup-size: 1.05rem;
-  color: var(--color-text);
-  text-decoration: none;
-}
-.rs-top-actions,
-.rs-entry-actions,
-.rs-draw-actions,
-.rs-reveal-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-.rs-top-actions {
-  justify-content: flex-end;
-}
-.rs-entry-count,
-.rs-text-button,
-.rs-link-button,
-.rs-kicker,
-.rs-section-line,
-.rs-board-label,
-.rs-board-status,
-.rs-weight-heading,
-.rs-footer {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
-}
-.rs-entry-count {
-  color: var(--color-text-muted);
-}
-.rs-text-button,
-.rs-link-button {
-  display: inline-flex;
-  min-width: var(--tap-target-min);
-  min-height: var(--tap-target-min);
-  align-items: center;
-  justify-content: center;
-  padding: 0 var(--space-2);
-  border: 0;
+.rs-tool-button[data-on='false'] {
   color: var(--color-text-secondary);
-  background: transparent;
-  text-decoration: underline;
-  text-underline-offset: 0.25rem;
 }
-.rs-text-button[data-on='true'] {
-  /* The accent is user-chosen, so it is never used as TEXT colour (a pale one would vanish on the
-     paper surface). The state is bold, and the accent only colours the underline. */
-  color: var(--color-text);
-  font-weight: var(--font-weight-bold);
-  text-decoration-color: var(--rs-accent);
-  text-decoration-thickness: 0.2rem;
+
+/* ---- Layout: the draw column, and a side panel for the list ---- */
+.rs-workspace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-start;
 }
 .rs-picker {
-  padding: clamp(2rem, 6vw, 4.5rem) var(--space-4) clamp(2.5rem, 6vw, 5rem);
-  background: var(--color-surface-sunken);
-  border-bottom: var(--border-hairline) solid var(--color-border);
-}
-.rs-section-line h1 {
-  margin: 0;
-  font: inherit;
-  letter-spacing: inherit;
-}
-.rs-section-line {
-  max-width: 62rem;
-  margin: 0 auto var(--space-3);
   display: flex;
-  justify-content: space-between;
-  color: var(--color-text-muted);
+  flex: 999 1 36rem;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-5);
 }
+.rs-side {
+  flex: 1 1 22rem;
+  min-width: 0;
+  overflow: hidden;
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-radius: var(--radius-box);
+  background: var(--color-surface);
+}
+.rs-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+/* ---- The board ---- */
 .rs-board-frame {
   position: relative;
-  max-width: 62rem;
-  margin: auto;
-  padding: 1.6rem 1.7rem 1.25rem;
-  overflow: hidden;
-  /* Instrument graphite with teal rails: the Petrol ramp, not wood, and flat (no shadows). */
+  padding: 1.1rem 1.4rem 0.9rem;
+  /* Instrument graphite with teal rails: the Petrol ramp, and flat (no shadows). The corners are the
+     site's large-panel radius, not cut. */
   background: linear-gradient(
     90deg,
     var(--clr-teal-700) 0 0.35rem,
     var(--clr-petrol-950) 0.35rem calc(100% - 0.35rem),
     var(--clr-teal-700) calc(100% - 0.35rem)
   );
-  border: 0.45rem solid var(--clr-petrol-800);
-}
-.rs-board-frame::before {
-  position: absolute;
-  inset: 0.8rem 1rem;
-  border: 1px solid var(--clr-petrol-700);
-  content: '';
-  pointer-events: none;
+  border: 0.4rem solid var(--clr-petrol-800);
+  border-radius: var(--radius-lg);
 }
 .rs-board-label,
 .rs-board-status {
-  position: relative;
-  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--space-3);
   justify-content: space-between;
   color: var(--clr-petrol-300);
-}
-.rs-board-label {
-  margin: 0 0.2rem 0.9rem;
+  font-family: var(--font-body);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
+.rs-board-label {
+  margin: 0 0.2rem 0.7rem;
+}
 .rs-board-status {
-  margin: 0.8rem 0.2rem 0;
-  font-size: 0.75rem;
+  margin: 0.7rem 0.2rem 0;
 }
 .selector-board {
-  position: relative;
-  z-index: 1;
   display: grid;
-  gap: 2px;
-  padding: 0.65rem;
+  gap: 3px;
+  padding: 0.6rem;
   background: var(--clr-petrol-900);
   border: 1px solid var(--clr-petrol-700);
+  border-radius: var(--radius-md);
 }
 .selector-flap-row {
   display: grid;
   grid-template-columns: repeat(14, minmax(0, 1fr));
-  gap: 1px;
+  gap: 2px;
 }
 .selector-flap {
   position: relative;
   display: grid;
   min-width: 0;
-  height: clamp(1.85rem, 4.2vw, 2.7rem);
+  height: var(--rs-flap-h, clamp(1.9rem, 3.6vw, 3.1rem));
   place-items: center;
   overflow: hidden;
   color: var(--clr-petrol-50);
@@ -193,8 +149,9 @@ textarea:focus-visible {
     var(--clr-petrol-800) 53%
   );
   border: 1px solid var(--clr-petrol-950);
+  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: clamp(0.85rem, 2.15vw, 1.65rem);
+  font-size: var(--rs-flap-font, clamp(0.9rem, 2vw, 1.75rem));
   font-weight: var(--font-weight-medium);
   line-height: 1;
 }
@@ -216,131 +173,187 @@ textarea:focus-visible {
     }
   }
 }
-.rs-draw-actions {
-  justify-content: center;
-  margin-top: var(--space-5);
+.rs-board-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+/* Status blip beside the board's state: static when idle, the shared live-dot pulse while drawing. */
+.rs-status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-selector);
+  background: var(--clr-teal-300);
+}
+.rs-board-state .status-live-dot {
+  background: var(--clr-teal-300);
+}
+
+/* ---- Draw row, and the winner card ---- */
+.rs-draw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.rs-auto-remove {
+  display: inline-flex;
+  min-height: var(--tap-target-min);
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+.rs-auto-remove input {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  margin: 0;
+  accent-color: var(--rs-accent);
+}
+.rs-draw-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.rs-draw-hint {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+/* The big action: accent fill and the V2 bevel (.btn-bevel). The accent can be the visitor's own colour. */
+.rs-draw-button {
+  min-width: 13rem;
+  min-height: 3.5rem;
+  padding: 0 var(--space-8);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
 }
 .rs-draw-button,
-.rs-button {
-  min-height: var(--tap-target-min);
-  padding: 0 var(--space-5);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.08em;
-}
-/* The primary action is the accent with the soft bevel (base.css .btn-bevel), as on the other Petrol call-to-actions. */
-.rs-draw-button {
+.rs-button.action-primary {
   border-color: var(--rs-accent);
   background: var(--rs-accent);
   color: var(--rs-accent-contrast);
 }
 .rs-draw-button:hover:not([aria-disabled='true']),
-.rs-button-primary:hover {
+.rs-button.action-primary:hover {
   background: color-mix(in srgb, var(--rs-accent) 85%, black);
 }
 .rs-draw-button[aria-disabled='true'] {
-  /* Token colours, not opacity: dimming the whole button took the label (including "DRAWING")
+  /* Token colours, not opacity: dimming the whole button took the label (including "Drawing")
      down to 2.9:1. The label is focusable and says why it cannot draw, so it must stay readable. */
   border-color: var(--color-border-strong);
   background: var(--color-surface-sunken);
   color: var(--color-text-muted);
   cursor: not-allowed;
 }
-.rs-auto-remove {
-  display: flex;
-  width: fit-content;
-  min-height: var(--tap-target-min);
-  margin: var(--space-3) auto 0;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-}
-.rs-auto-remove input {
-  width: 1.5rem;
-  height: 1.5rem;
-  flex: none;
-  accent-color: var(--rs-accent);
-}
 .rs-reveal {
-  max-width: 42rem;
-  margin: var(--space-5) auto 0;
-  padding: var(--space-5);
-  border: var(--border-strong) solid var(--color-border-strong);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-radius: var(--radius-box);
   background: var(--color-surface);
-  text-align: center;
+}
+.rs-reveal-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+.rs-kicker {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
 }
 .rs-reveal h2 {
-  margin: var(--space-2) 0;
+  margin: var(--space-1) 0;
   font-family: var(--font-display);
-  font-size: clamp(var(--text-2xl), 6vw, var(--text-4xl));
+  font-size: clamp(var(--text-2xl), 4vw, var(--text-4xl));
+  font-weight: var(--font-weight-bold);
   line-height: var(--leading-tight);
   overflow-wrap: anywhere;
 }
 .rs-reveal-copy {
   margin: 0;
   color: var(--color-text-secondary);
+  font-size: var(--text-sm);
 }
 .rs-reveal-actions {
-  justify-content: center;
-  margin-top: var(--space-4);
-}
-.rs-button {
-  min-width: 7rem;
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-.rs-button-primary {
-  border-color: var(--rs-accent);
-  background: var(--rs-accent);
-  color: var(--rs-accent-contrast);
-}
-.rs-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(17rem, 0.8fr);
-  max-width: 62rem;
-  margin: clamp(2.5rem, 6vw, 4.5rem) auto;
-  border: var(--border-hairline) solid var(--color-border);
-  background: var(--color-surface);
-}
-.rs-entry-panel,
-.rs-history-panel {
-  padding: clamp(1.25rem, 4vw, 2rem);
-}
-.rs-entry-panel {
-  border-right: var(--border-hairline) solid var(--color-border);
-}
-.rs-kicker {
-  margin: 0 0 var(--space-3);
-  color: var(--color-text-muted);
-}
-.rs-panel-heading {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
 }
-.rs-panel-heading h2,
-.rs-history-panel h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  line-height: var(--leading-tight);
+.rs-button {
+  min-height: 3rem;
+  padding: 0 var(--space-5);
+  font-size: var(--text-base);
 }
-.rs-panel-heading > span {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+.rs-draw-button,
+.rs-button.action-primary {
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+/* ---- Side panel: tabs (the shared .tabs / .tab, core/tablist.js) ---- */
+.rs-side .tabs {
+  inline-size: auto;
+  border-radius: 0;
+  border-bottom: var(--border-hairline) solid var(--color-border-card);
+}
+.rs-side .tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.rs-side .tab {
+  flex: 1 1 7rem;
+  min-width: 0;
+  white-space: normal;
+  min-block-size: 3rem;
+  font-size: var(--text-base);
+}
+.rs-count {
+  min-width: 1.4rem;
+  padding: 0 var(--space-2);
+  border: var(--border-hairline) solid var(--color-text-secondary);
+  border-radius: var(--radius-selector);
+  font-size: var(--text-xs);
+  line-height: 1.4rem;
+  text-align: center;
+}
+.tab[aria-selected='true'] .rs-count {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+.rs-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+}
+.rs-panel-body[hidden] {
+  display: none;
+}
+
+/* ---- Entries ---- */
+.rs-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 .rs-field-label {
-  display: block;
-  margin: var(--space-5) 0 var(--space-2);
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
 }
 .rs-textarea {
   display: block;
@@ -348,21 +361,139 @@ textarea:focus-visible {
   min-height: 12rem;
   padding: var(--space-3);
   resize: vertical;
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: 1.65;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5;
 }
-.rs-weight-heading {
+.rs-hint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+.rs-example {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-selector);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+/* What the typed list is not doing (entries past the limit, weights changed to fit), said in words
+   under the list. The warning colour is the Petrol token; the sentence carries the meaning. */
+.rs-warning {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 0.25rem solid var(--color-warning);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+.rs-warning[hidden] {
+  display: none;
+}
+.rs-entry-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.rs-small-button {
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+}
+/* Clear list is quiet: danger-coloured text, no box. Undo is offered after it. */
+.rs-quiet-danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-danger);
+}
+.rs-quiet-danger:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.25rem;
+}
+.rs-note-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+}
+.rs-note {
+  margin: 0;
+  color: var(--color-success);
+  font-size: var(--text-sm);
+}
+.rs-undo-button {
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* ---- Collapsible sections ---- */
+.rs-sections {
+  border-top: var(--border-hairline) solid var(--color-border-card);
+}
+.rs-section {
+  border-bottom: var(--border-hairline) solid var(--color-border-card);
+}
+.rs-section-head {
+  display: flex;
+  width: 100%;
+  min-height: 3.5rem;
+  align-items: center;
   justify-content: space-between;
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: var(--border-hairline) solid var(--color-border);
-  color: var(--color-text-muted);
+  gap: var(--space-3);
+  padding: var(--space-2) 2px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+.rs-section-label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.rs-section-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-bold);
+}
+.rs-section-summary {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+.rs-section-head svg {
+  flex: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.rs-section-head[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.rs-section-body {
+  padding: 0 0 var(--space-4);
+}
+.rs-section-body[hidden] {
+  display: none;
+}
+.rs-share {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.rs-share-button {
+  min-height: 3rem;
+  gap: var(--space-2);
+  border-color: var(--color-border-strong);
+}
+
+/* ---- Weights and odds ---- */
+.rs-weight-total {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
 }
 .rs-weights {
   /* Whole rows only (the column heads plus five 3.5rem rows), so a row is never cut in half. */
@@ -390,9 +521,10 @@ textarea:focus-visible {
   border-bottom: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface-sunken);
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
 }
 .rs-weights-head span:nth-child(2) {
   text-align: center;
@@ -414,12 +546,12 @@ textarea:focus-visible {
   width: 100%;
   height: var(--tap-target-min);
   padding: 0 var(--space-2);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-mono);
   font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 /* A number field reserves room on its right for the browser's up/down spinner even while it is
@@ -433,6 +565,10 @@ textarea:focus-visible {
 .rs-weight-input::-webkit-outer-spin-button {
   margin: 0;
   -webkit-appearance: none;
+}
+/* The weights list scrolls, so an outset focus ring would be clipped at its edges. */
+.rs-weight-input:focus-visible {
+  outline-offset: -3px;
 }
 /* The entry's share of the draw: a bar (the odds at a glance) and the exact percentage. */
 .rs-odds {
@@ -454,37 +590,49 @@ textarea:focus-visible {
 .rs-odds-value {
   min-width: 3.4rem;
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.rs-draw-settings {
-  margin-top: var(--space-4);
+
+/* ---- Draw settings: speed as a segmented control in the same family as the buttons ---- */
+.rs-group-label {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
 }
 .rs-preset-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
-  gap: var(--space-2);
-  margin-top: var(--space-3);
+  display: flex;
+  overflow: hidden;
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
 }
 .rs-preset-button {
+  flex: 1;
   min-height: var(--tap-target-min);
   padding: 0 var(--space-2);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-canvas);
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.04em;
+  border: 0;
+  border-left: var(--border-hairline) solid var(--field-edge);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
 }
+.rs-preset-button:first-child {
+  border-left: 0;
+}
+.rs-preset-button:hover {
+  background: var(--color-surface-sunken);
+}
+/* The selected speed is ink on paper, not the accent: the visitor's own colour may be pale. */
 .rs-preset-button.is-selected {
-  border-color: var(--color-border-strong);
-  box-shadow: inset 0 0 0 2px var(--color-border-strong);
-  background: var(--rs-accent);
-  color: var(--rs-accent-contrast);
+  background: var(--color-text);
+  color: var(--color-surface);
   font-weight: var(--font-weight-bold);
+}
+.rs-preset-button:focus-visible {
+  outline-offset: -3px;
 }
 .rs-volume-control {
   display: flex;
@@ -493,9 +641,7 @@ textarea:focus-visible {
   gap: var(--space-3);
   margin-top: var(--space-3);
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.05em;
+  font-size: var(--text-sm);
 }
 .rs-volume-range {
   flex: 1 1 7rem;
@@ -508,28 +654,24 @@ textarea:focus-visible {
 .rs-volume-range:disabled {
   opacity: var(--opacity-disabled);
 }
-.rs-event-branding {
-  margin-top: var(--space-4);
-}
+
+/* ---- Board look ---- */
 .rs-brand-title-field {
   display: grid;
   gap: var(--space-2);
-  margin-top: var(--space-3);
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.05em;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
 }
 .rs-brand-title-input {
   width: 100%;
   min-height: var(--tap-target-min);
   padding: 0 var(--space-3);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 .rs-color-field {
   display: grid;
@@ -538,60 +680,61 @@ textarea:focus-visible {
   gap: var(--space-3);
   margin-top: var(--space-3);
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.05em;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
 }
 .rs-color-field code {
   color: var(--color-text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--text-2xs);
 }
 .rs-color-input {
   width: var(--tap-target-min);
   height: var(--tap-target-min);
   padding: 0.1rem;
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--field-edge);
+  border-radius: var(--radius-field);
   background: var(--color-canvas);
 }
-.rs-entry-actions {
-  margin-top: var(--space-3);
+.rs-color-reset {
+  margin-top: var(--space-2);
 }
-.rs-transfer-actions {
-  padding-top: var(--space-3);
-  border-top: var(--border-hairline) solid var(--color-border);
+.rs-color-reset [hidden] {
+  display: none;
 }
-.rs-note {
-  margin: var(--space-3) 0 0;
-  color: var(--color-success);
-  font-size: var(--text-sm);
-}
-.rs-history-panel {
-  background: var(--color-surface-sunken);
-}
+
+/* ---- History ---- */
 .rs-history-panel h2 {
-  max-width: 15rem;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
 }
 .rs-history {
-  margin: var(--space-4) 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   border-top: var(--border-hairline) solid var(--color-border);
 }
 .rs-history li {
   display: grid;
-  min-height: 2.35rem;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  min-height: 2.6rem;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   border-bottom: var(--border-hairline) solid var(--color-border);
 }
-.rs-history li > span,
-.rs-history em {
+/* The draw numbers are figures, so they take the mono face, as scores and timers do elsewhere. */
+.rs-history-n {
   color: var(--color-text-muted);
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.rs-history em {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
   font-style: normal;
 }
 .rs-history strong {
@@ -600,57 +743,122 @@ textarea:focus-visible {
   white-space: nowrap;
   font-size: var(--text-sm);
 }
-.rs-footer {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+
+/* ---- Present mode: fits a 16:9 screen with no scrolling ---- */
+/* Muted text is a shade too dim on the dark Present surface (4.5:1 needed); use the secondary. */
+.rs-page[data-surface='stage'],
+.random-selector[data-surface='stage'] {
+  --color-text-muted: var(--color-text-secondary);
 }
-.random-selector.is-presenting {
-  background: var(--color-canvas);
-  color: var(--color-text);
+.rs-page.is-presenting {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
 }
-.is-presenting .rs-topbar {
+.rs-page.is-presenting .rs-host {
+  min-height: 0;
+}
+.is-presenting.random-selector {
+  /* The flap size follows the SCREEN's height as well as its width, so the board, the winner and the
+     buttons always fit one 16:9 screen. 22rem is everything on screen that is not a flap row. */
+  --rs-cell-h: clamp(
+    2.6rem,
+    min(calc((100dvh - 22rem) / 4), calc((100vw - 11rem) / 14 * 1.05)),
+    6.5rem
+  );
+  --rs-flap-h: var(--rs-cell-h);
+  --rs-flap-font: calc(var(--rs-cell-h) * 0.6);
+  height: 100%;
   max-width: none;
+  padding: var(--space-3) clamp(1rem, 3vw, 3.5rem);
+}
+.is-presenting .rs-workspace {
+  height: 100%;
+  flex-wrap: nowrap;
 }
 .is-presenting .rs-picker {
-  display: flex;
-  min-height: calc(100dvh - 8rem);
-  flex-direction: column;
-  justify-content: center;
-  background: var(--color-canvas);
+  display: grid;
+  height: 100%;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'board board'
+    'reveal draw';
+  align-content: center;
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+}
+.is-presenting .rs-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .is-presenting .rs-board-frame {
-  width: min(100%, 88rem);
-  max-width: 88rem;
+  grid-area: board;
+  justify-self: center;
+  width: 100%;
+  max-width: calc(var(--rs-cell-h) * 14 * 0.98 + 9rem);
 }
 .is-presenting .selector-board {
   gap: 4px;
-  padding: 1rem;
+  padding: 0.75rem;
 }
 .is-presenting .selector-flap-row {
-  gap: 2px;
+  gap: 3px;
 }
-.is-presenting .selector-flap {
-  height: clamp(3rem, 7vw, 6.5rem);
-  font-size: clamp(1.25rem, 4.2vw, 4rem);
+.is-presenting .rs-board-label,
+.is-presenting .rs-board-status {
+  font-size: var(--text-sm);
 }
-.is-presenting .rs-entry-count,
+.is-presenting .rs-draw-row {
+  grid-area: draw;
+  justify-self: end;
+}
 .is-presenting .rs-auto-remove,
-.is-presenting .rs-footer {
+.is-presenting .rs-draw-hint {
   display: none;
 }
+.is-presenting .rs-draw-button {
+  min-height: 4rem;
+  min-width: 15rem;
+}
+.is-presenting .rs-reveal {
+  grid-area: reveal;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.is-presenting .rs-reveal h2 {
+  margin: 0;
+  font-size: clamp(var(--text-xl), 5dvh, var(--text-4xl));
+}
+.is-presenting .rs-reveal-copy {
+  display: none;
+}
+.is-presenting .rs-button {
+  min-height: 3.5rem;
+}
 
+/* ---- Narrow screens ---- */
 @media (max-width: 700px) {
-  .rs-topbar,
-  .rs-footer {
-    padding: var(--space-3) var(--space-4);
+  .random-selector {
+    padding-top: var(--space-4);
   }
-  .rs-entry-count {
-    display: none;
+  /* The breadcrumb row names the tool already: the heading stays for screen readers only. */
+  .rs-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .rs-board-frame {
-    padding: 1.1rem 0.8rem 0.9rem;
-    border-width: 0.3rem;
+    padding: 0.7rem 0.6rem 0.6rem;
+    border-width: 0.25rem;
   }
   .selector-board {
     padding: 0.3rem;
@@ -659,100 +867,85 @@ textarea:focus-visible {
     gap: 1px;
   }
   .rs-board-label {
-    margin-bottom: 0.55rem;
-    font-size: 0.75rem;
+    margin-bottom: 0.45rem;
   }
   .rs-board-status {
-    margin-top: 0.55rem;
-    font-size: 0.75rem;
+    margin-top: 0.45rem;
   }
-  .rs-controls {
-    grid-template-columns: minmax(0, 1fr);
-    margin: var(--space-5) var(--space-3);
+  .rs-reveal {
+    padding: var(--space-4);
   }
-  .rs-entry-panel {
-    border-right: 0;
-    border-bottom: var(--border-hairline) solid var(--color-border);
+  /* Keep result and Discard & redraw side by side; Remove from list has a row of its own. */
+  .rs-reveal-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .rs-top-actions {
-    gap: 0;
+  .rs-reveal-actions .rs-button {
+    min-width: 0;
+    padding: 0 var(--space-2);
+    font-size: var(--text-sm);
   }
-  .rs-top-actions .rs-text-button {
-    font-size: 0.75rem;
+  .rs-reveal-actions .rs-button:nth-child(3) {
+    grid-column: 1 / -1;
   }
-}
-
-/* The weights list scrolls, so an outset focus ring would be clipped at its edges. */
-.rs-weight-input:focus-visible {
-  outline-offset: -3px;
-}
-/* Muted text is a shade too dim on the dark Present surface (4.5:1 needed); use the secondary. */
-.random-selector[data-surface='stage'] {
-  --color-text-muted: var(--color-text-secondary);
-}
-
-/* Status blip beside the board's state: static when idle, the shared live-dot pulse while drawing. */
-.rs-board-state {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.rs-status-dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  background: var(--clr-petrol-400);
-}
-.rs-board-state .status-live-dot {
-  background: var(--clr-teal-300);
-}
-.rs-color-reset {
-  margin-top: var(--space-2);
-}
-
-/* On a phone the bar is dropped: the percentage alone keeps the three columns from crowding. */
-@media (max-width: 700px) {
+  .rs-panel-body {
+    padding: var(--space-4);
+  }
+  /* The controls row keeps to icons (each still has its text name). */
+  .rs-tool-button {
+    padding: 0;
+    min-width: var(--tap-target-min);
+  }
+  .rs-tool-button .rs-btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* Draw is pinned to the bottom of the screen (clear of the home indicator), and the page leaves room for
+     it so nothing hides underneath. */
+  .rs-page {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  /* A control reached by keyboard is scrolled clear of the pinned bar, never left under it. */
+  html {
+    scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+  }
+  .rs-draw-bar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 25;
+    padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    border-top: var(--border-strong) solid var(--color-border-strong);
+    background: var(--color-canvas);
+  }
+  .rs-draw-hint {
+    display: none;
+  }
+  .rs-draw-bar .rs-draw-button {
+    flex: 1;
+    min-width: 0;
+    min-height: 3.5rem;
+  }
   .rs-weights-head,
   .rs-weight-row {
     grid-template-columns: minmax(0, 1fr) 4.5rem 3.6rem;
     column-gap: var(--space-3);
     padding: 0 var(--space-3);
   }
+  /* On a phone the bar is dropped: the percentage alone keeps the three columns from crowding. */
   .rs-odds-bar {
     display: none;
   }
   .rs-odds {
     justify-content: flex-end;
   }
-}
-
-/* What the typed list is not doing (entries past the limit, weights changed to fit), said in words
-   under the list. The warning colour is the Petrol token; the sentence carries the meaning. */
-.rs-warning {
-  margin: var(--space-2) 0 0;
-  padding: var(--space-2) var(--space-3);
-  border-left: 0.25rem solid var(--color-warning);
-  background: var(--color-surface-sunken);
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-}
-.rs-warning[hidden] {
-  display: none;
-}
-/* The status line and its UNDO sit together. */
-.rs-note-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: var(--space-3);
-}
-.rs-note-row .rs-note {
-  margin: var(--space-3) 0 0;
-}
-
-/* Petrol V2 (P3): the hover colour change eases. */
-.rs-draw-button,
-.rs-button-primary {
-  transition: background var(--dur-fast) var(--ease-out);
+  .is-presenting.random-selector {
+    --rs-cell-h: clamp(1.6rem, calc((100vw - 4rem) / 14 * 1.2), 3rem);
+  }
 }

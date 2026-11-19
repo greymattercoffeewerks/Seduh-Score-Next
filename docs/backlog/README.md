@@ -71,6 +71,7 @@ Every section moved out of `ROADMAP.md`'s open-items run, by heading, with the f
 - Known open items from the Behind the Seduh reader rebuild (v4.0.0, 2026-11-09) → [`public-site.md`](public-site.md)
 - Known open items from the public header links fix (2026-11-14) → [`public-site.md`](public-site.md)
 - Known open items from the Menu bars forced-colors fix (4.17.2, 2026-11-17) → [`public-site.md`](public-site.md)
+- Known open items from the Random Selector Tier 1 redesign (unreleased, 2026-11-19) → [`public-site.md`](public-site.md)
 - Known open items from the Events finished message (UI bug #5, 2026-11-17) → [`tenancy.md`](tenancy.md)
 
 ## Triage, 2026-11-07

@@ -5,7 +5,7 @@ export { contrastRatio };
 
 export const STORAGE_KEY = 'seduh-random-selector-v1';
 export const DEMO_ENTRIES = ['Amir', 'Bella', 'Chin', 'Dina', 'Evan', 'Fatin', 'Gareth', 'Hana'];
-export const DEFAULT_BOARD_TITLE = 'PLAYER DRAW';
+export const DEFAULT_BOARD_TITLE = 'Player draw';
 // No custom accent means the Petrol accent token, so the tool follows the design system on both
 // surfaces (a darker teal on paper, a lighter one in Present). The colour picker needs a hex to
 // show, so this is the paper value of that token (--clr-teal-700); it is never stored as a choice.

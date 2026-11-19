@@ -48,7 +48,7 @@ const ROUTES = [
     output: 'tools/random-selector/index.html',
     url: 'https://www.seduhscore.com/tools/random-selector/',
     rootMarker: '<main class="random-selector"',
-    marker: 'SPLIT-FLAP EDITION',
+    marker: 'Split-flap edition',
   },
   // The trust pages share one entry module and pick their page from #app's data-page.
   ...[

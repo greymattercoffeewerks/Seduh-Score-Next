@@ -16,6 +16,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
 - **Cloud database in sync (checked 2026-11-19):** all 125 migrations on `main` are in the cloud project, none extra, including
   `btc_void_cup` (4.18.0), `seduh_courses` (4.19.0) and `seduh_result_disputes` (4.20.0).
+- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`, first adopter of the shared community chrome): built on `claude/rs-tier1-cleanup-328b30`, one PR into `dev`, unreleased, no version bump (CHANGELOG 2026-11-19).
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 
