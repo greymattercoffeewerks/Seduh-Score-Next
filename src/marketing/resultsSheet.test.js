@@ -218,6 +218,45 @@ describe('buildResultsSheet', () => {
     expect(rowText(sheet)[0]).toEqual(['1', 'Alone', '—', '—', '—', '—']);
   });
 
+  it('prints a Throwdown knockout without score or time columns, and explains its placings in knockout words', () => {
+    const sheet = buildResultsSheet(
+      payload({
+        format: 'throwdown',
+        standings: [
+          { place: 1, name: 'Ana', cafe: 'Kopi', round: 'Final' },
+          { place: 3, name: 'Citra', cafe: null, round: 'Semi-finals' },
+        ],
+      }),
+    );
+    expect([...sheet.querySelectorAll('th')].map((th) => th.textContent)).toEqual([
+      'Place',
+      'Competitor',
+      'Café',
+      'Reached',
+    ]);
+    expect(rowText(sheet)).toEqual([
+      ['1', 'Ana', 'Kopi', 'Final'],
+      ['3', 'Citra', '—', 'Semi-finals'],
+    ]);
+    expect(sheet.textContent).not.toContain('correct answers');
+    expect(sheet.textContent).toContain('round each competitor reached');
+  });
+
+  it('prints a Throwdown podium as place, competitor and café only', () => {
+    const sheet = buildResultsSheet(
+      payload({
+        format: 'throwdown',
+        podium: [{ rank: 1, name: 'Ana', cafe: 'Kopi' }],
+      }),
+    );
+    expect([...sheet.querySelectorAll('th')].map((th) => th.textContent)).toEqual([
+      'Place',
+      'Competitor',
+      'Café',
+    ]);
+    expect(rowText(sheet)).toEqual([['1', 'Ana', 'Kopi']]);
+  });
+
   it('prints only the fixed public fields from the full standings — contact details and set marks on a row never reach the page', () => {
     const sheet = buildResultsSheet(
       payload({

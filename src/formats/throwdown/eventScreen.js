@@ -6,9 +6,11 @@
 // Every write goes through formats/throwdown/data.js (the shared outbox), so a tap made on a bad connection is kept
 // and replayed; the counts shown are the server's plus the taps still waiting (pendingVoteDeltas).
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
+import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { findEvent } from '../../core/events.js';
-import { createEntry, setEntryWithdrawn } from '../../core/registry.js';
+import { setEntryWithdrawn } from '../../core/registry.js';
+import { REGISTRATION_LIMITS, registerAndLink } from '../../core/registration.js';
+import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
 import { droppedErrorFor } from '../../core/outbox.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { newSeed } from '../../core/seededShuffle.js';
@@ -38,6 +40,12 @@ import { ROUND_ROLES } from './roundRole.js';
 import { scoringContext, scoredView, cupsForMatch, auditRule } from './scoredMatch.js';
 import { buildAudit } from './scoreAudit.js';
 import { createScoreEntry } from './scoreEntry.js';
+import {
+  blankCompetitorDraft,
+  validateCompetitorDraft,
+  buildCompetitor,
+  addedWords,
+} from './competitorForm.js';
 
 const PRESET_WORDS = { latte_art_v1: 'Latte art (6 lines, 27 points a cup)' };
 
@@ -62,6 +70,8 @@ export async function mountThrowdownEventScreen(
     picks: new Map(), // matchId -> slot position the organiser picked for a level scored match
     feedback: null,
     busy: false,
+    addDraft: blankCompetitorDraft(), // the Add a competitor form's typed values
+    addError: null, // { field, message } from validating that form
   };
 
   // The setup's scoresheet choice: on/off, the preset, and the cups per round role (0 = tap-voted).
@@ -204,43 +214,116 @@ export async function mountThrowdownEventScreen(
 
   function competitorsCard() {
     const locked = state.data.bracket.started;
-    const nameInput = el('input', {
-      className: 'field-input',
-      attrs: {
-        type: 'text',
-        'aria-label': 'Competitor name',
+    const draft = state.addDraft;
+    const disabled = state.busy;
+    // Each box keeps its text in state.addDraft, so a refusal (a bad phone, a dropped connection) re-renders with
+    // what was typed still there.
+    function input(field, { label, type = 'text', maxlength }) {
+      const attrs = {
+        type,
+        'aria-label': label,
         autocomplete: 'off',
-        'data-focus-key': 'td-new-name',
+        'data-focus-key': `td-new-${field}`,
+        'data-field': field,
+      };
+      if (maxlength) attrs.maxlength = String(maxlength);
+      if (field === 'phone') attrs['aria-describedby'] = 'td-new-phone-hint';
+      if (state.addError?.field === field) {
+        attrs['aria-invalid'] = 'true';
+        attrs['aria-describedby'] = 'td-add-error';
+      }
+      const node = el('input', { className: 'field-input', id: `td-new-${field}`, attrs });
+      node.value = draft[field];
+      // Busy: read-only and aria-disabled, never native `disabled`, which drops a focused box's focus to <body>
+      // (core/dom.js setBusyDisabled).
+      node.readOnly = disabled;
+      setBusyDisabled(node, disabled);
+      node.addEventListener('input', () => {
+        draft[field] = node.value;
+      });
+      return node;
+    }
+    // The refusal sits under the box it is about, and that box points to it (aria-describedby above).
+    const errorFor = (field) =>
+      state.addError?.field === field
+        ? [
+            el('p', {
+              className: 'form-field-error',
+              id: 'td-add-error',
+              text: state.addError.message,
+            }),
+          ]
+        : [];
+    const nameInput = input('displayName', {
+      label: 'Competitor name',
+      maxlength: REGISTRATION_LIMITS.displayName,
+    });
+    const phoneInput = input('phone', { label: 'Phone', type: 'tel' });
+    const countrySelect = phoneCountrySelect({
+      label: 'Phone country',
+      value: draft.phoneCountry,
+      busy: disabled,
+      id: 'td-new-phoneCountry',
+      focusKey: 'td-new-phoneCountry',
+      onChange: (value) => {
+        // While saving, the choice is not taken: re-render so the box shows the held country again.
+        if (state.busy) {
+          render();
+          return;
+        }
+        draft.phoneCountry = value;
       },
     });
-    const cafeInput = el('input', {
-      className: 'field-input',
-      attrs: {
-        type: 'text',
-        'aria-label': 'Café or team (optional)',
-        autocomplete: 'off',
-        'data-focus-key': 'td-new-cafe',
-      },
+    const cafeInput = input('cafe', {
+      label: 'Café or team (optional)',
+      maxlength: REGISTRATION_LIMITS.cafe,
     });
+    const submit = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: 'Add competitor',
+      attrs: { type: 'submit', 'data-focus-key': 'td-add-submit' },
+    });
+    if (disabled) setBusyDisabled(submit, true);
     const form = el('form', { className: 'td-add', attrs: { 'aria-label': 'Add a competitor' } }, [
-      nameInput,
-      cafeInput,
-      el('button', {
-        className: 'btn btn-primary tap-target',
-        text: 'Add competitor',
-        attrs: { type: 'submit', 'data-focus-key': 'td-add-submit' },
-      }),
+      labeledField('Name', nameInput, errorFor('displayName')),
+      labeledField('Phone', phoneRow(countrySelect, phoneInput), [
+        // An error replaces the hint (components.css's own sibling rule cannot reach a box inside .phone-row).
+        ...(state.addError?.field === 'phone'
+          ? errorFor('phone')
+          : [
+              el('p', {
+                className: 'form-field-hint',
+                id: 'td-new-phone-hint',
+                text: 'Links their results to their Seduh ID. Never shown to the audience.',
+              }),
+            ]),
+      ]),
+      labeledField('Café or team (optional)', cafeInput, errorFor('cafe')),
+      submit,
     ]);
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      const displayName = nameInput.value.trim();
-      if (!displayName) {
-        state.feedback = { tone: 'error', text: 'Enter the competitor’s name.' };
+      if (state.busy) return;
+      const problem = validateCompetitorDraft(draft);
+      if (problem) {
+        state.addError = problem;
+        state.feedback = null;
+        state.focusTarget = `td-new-${problem.field}`;
         render();
         return;
       }
+      state.addError = null;
       act(async () => {
-        await createEntry(eventId, { displayName, cafe: cafeInput.value.trim() || null }, client);
+        const known = new Set(state.data.entries.map((entry) => entry.id));
+        const entry = await registerAndLink(
+          state.event.org_id,
+          eventId,
+          buildCompetitor(draft),
+          client,
+        );
+        state.addDraft = blankCompetitorDraft();
+        state.focusTarget = 'td-new-displayName';
+        state.feedback = { tone: 'success', text: addedWords(entry, known.has(entry.id)) };
       });
     });
     const rows = state.data.entries.map((entry) =>

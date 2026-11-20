@@ -81,6 +81,10 @@ function formatShortDate(isoDate) {
 // "7/8" reads unambiguously, but this project treats that discipline as
 // something every new surface inherits, not something re-litigated per page.
 export function scoreCell(correct, total) {
+  // A knockout format (Throwdown) publishes no score: a dash, never "undefined/undefined".
+  if (!Number.isFinite(correct) || !Number.isFinite(total)) {
+    return el('span', { className: 'results-score tabular-nums', text: '—' });
+  }
   return el('span', { className: 'results-score tabular-nums' }, [
     document.createTextNode(`${correct}/${total}`),
     el('span', { className: 'sr-only', text: `${correct} correct out of ${total}` }),

@@ -11,25 +11,7 @@
   margin-bottom: var(--space-3);
 }
 
-/* The phone box with its country select. Stacked from 360px (the select above, the phone box on its own
-   full-width line: beside it the phone box was about 116px wide and clipped what was typed), side by side
-   once there is room. The code comes first in each option ("+673 Brunei"), so a long country name is
-   what the closed select clips, never the code. */
-.roster-phone-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
-}
-
-@media (min-width: 480px) {
-  .roster-phone-row {
-    grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
-  }
-}
-
-.roster-phone-country {
-  text-overflow: ellipsis;
-}
+/* The phone box with its country select is core/phoneField.css. */
 
 .roster-form-fields {
   display: flex;
@@ -87,7 +69,7 @@
   /* The phone field holds a 12rem country select beside the number box. At the generic 140px basis it was
      squeezed until the number box had no width and the Email field painted over it (1024 to 1440px). Its own
      basis (select + gap + a usable number box) makes it wrap to a line of its own before it can be squeezed. */
-  .roster-form-fields .form-field:has(.roster-phone-row) {
+  .roster-form-fields .form-field:has(.phone-row) {
     flex: 2 1 22rem;
   }
 

@@ -352,6 +352,30 @@ describe('mountResultsScreen', () => {
     expect(podiumRow.textContent).toContain('No Cafe');
   });
 
+  it('draws a Throwdown payload (no scores) with dashes, never "undefined/undefined"', async () => {
+    const throwdown = {
+      event_id: 'ev1',
+      payload: samplePayload({
+        format: 'throwdown',
+        podium: [{ rank: 1, name: 'Ana', cafe: 'Kopi' }],
+      }),
+      published_at: '2026-09-16T00:00:00Z',
+    };
+    // the newest row is the page's featured result; the Throwdown one is then drawn as an archive row too
+    const newest = {
+      event_id: 'ev2',
+      payload: samplePayload({ eventName: 'Newer' }),
+      published_at: '2026-09-17T00:00:00Z',
+    };
+    const rows = [newest, throwdown];
+    await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+    expect(root.textContent).toContain('Ana');
+    expect(root.textContent).not.toContain('undefined');
+    const archiveRows = [...root.querySelectorAll('.results-archive-row')];
+    const td = archiveRows.find((r) => r.textContent.includes('Ana'));
+    expect(td.querySelector('.results-archive-result').textContent).toBe('—');
+  });
+
   describe('a genuinely hung load', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());

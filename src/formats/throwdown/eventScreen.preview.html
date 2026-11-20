@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Throwdown competitors — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/components.css" />
+    <link rel="stylesheet" href="/src/core/appShell.css" />
+    <link rel="stylesheet" href="/src/core/eventsScreen.css" />
+    <link rel="stylesheet" href="/src/core/loginScreen.css" />
+    <link rel="stylesheet" href="/src/core/noOrgScreen.css" />
+    <link rel="stylesheet" href="/src/core/eventWindowScreen.css" />
+    <link rel="stylesheet" href="/src/core/oneTimePasswordCard.css" />
+    <link rel="stylesheet" href="/src/core/teamScreen.css" />
+    <link rel="stylesheet" href="/src/core/peopleScreen.css" />
+    <link rel="stylesheet" href="/src/core/phoneField.css" />
+    <link rel="stylesheet" href="/src/core/splashScreen.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/core/stageDisplay.css" />
+    <link rel="stylesheet" href="/src/core/stageSurface.css" />
+    <link rel="stylesheet" href="/src/core/stageMoments.css" />
+    <link rel="stylesheet" href="/src/core/stageVocabulary.css" />
+    <link rel="stylesheet" href="/src/core/rankMotion.css" />
+    <link rel="stylesheet" href="/src/core/countdownDisplay.css" />
+    <link rel="stylesheet" href="/src/core/brandSlot.css" />
+    <link rel="stylesheet" href="/src/core/countryChip.css" />
+    <link rel="stylesheet" href="/src/core/qrBlock.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/eventDashboardScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/setupScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/rosterScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/timingScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/timingManualScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/scoringScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/reportScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/projectorScreens.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/projectorMoments.css" />
+    <link rel="stylesheet" href="/src/formats/btc/shared.css" />
+    <link rel="stylesheet" href="/src/formats/btc/eventDashboardScreen.css" />
+    <link rel="stylesheet" href="/src/formats/btc/setupScreen.css" />
+    <link rel="stylesheet" href="/src/formats/btc/matchesScreen.css" />
+    <link rel="stylesheet" href="/src/formats/btc/scoringScreen.css" />
+    <link rel="stylesheet" href="/src/formats/btc/standingsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/btc/projectorScreens.css" />
+    <link rel="stylesheet" href="/src/formats/btc/viewerBody.css" />
+    <link rel="stylesheet" href="/src/formats/btc/bracketScreen.css" />
+    <link rel="stylesheet" href="/src/formats/throwdown/eventScreen.css" />
+    <link rel="stylesheet" href="/src/formats/throwdown/audience.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the Throwdown organiser screen before the draw, not part of the shipped module graph (same
+      role as cup-taster/rosterScreen.preview.html). No live Supabase: an in-memory fake client stands in. Seeded with
+      two competitors. Try: Add competitor with no phone (refused, the name stays), a bad phone, a good one (a person
+      is made and the Seduh ID link is asked for, see the console), then the same phone again ("already a competitor").
+    -->
+    <main id="app" class="screen-container"></main>
+    <script type="module">
+      import { mountThrowdownEventScreen } from './eventScreen.js';
+
+      const EVENT = { id: 'ev', org_id: 'org', format: 'throwdown', name: 'Test', is_test: true };
+      const tables = {
+        events: [EVENT],
+        people: [{ id: 'p1', org_id: 'org', phone: '+6737000001', display_name: 'mfosa' }],
+        event_entries: [
+          { id: 'e1', event_id: 'ev', person_id: 'p1', display_name: 'mfosa', withdrawn: false },
+          { id: 'e2', event_id: 'ev', person_id: null, display_name: 'Firdaus', withdrawn: false },
+        ],
+      };
+      let next = 1;
+      const client = {
+        from(name) {
+          const filters = {};
+          let inserted = null;
+          const rows = () =>
+            (tables[name] ?? []).filter((row) =>
+              Object.entries(filters).every(([k, v]) => row[k] === v),
+            );
+          const q = {
+            select: () => q,
+            eq: (k, v) => {
+              if (name === 'people' || (name === 'event_entries' && k === 'person_id'))
+                filters[k] = v;
+              return q;
+            },
+            ilike: () => q,
+            order: () => q,
+            range: () => q,
+            insert: (row) => {
+              inserted = { id: `${name}-${next++}`, withdrawn: false, ...row };
+              (tables[name] ??= []).push(inserted);
+              return q;
+            },
+            update: () => q,
+            single: async () => ({
+              data: inserted ?? (name === 'events' ? EVENT : rows()[0]),
+              error: null,
+            }),
+            maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
+            then: (resolve) => resolve({ data: rows(), error: null }),
+          };
+          return q;
+        },
+        rpc: async (fn, args) => {
+          console.log('rpc', fn, JSON.stringify(args));
+          return { error: null, status: 200 };
+        },
+      };
+      mountThrowdownEventScreen(document.getElementById('app'), {
+        eventId: 'ev',
+        client,
+        handlers: {},
+      });
+    </script>
+  </body>
+</html>

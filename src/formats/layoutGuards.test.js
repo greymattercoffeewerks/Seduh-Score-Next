@@ -30,7 +30,7 @@ describe('BTC roster add form (desktop)', () => {
 describe('Cup Taster registration form (desktop)', () => {
   const css = read('src', 'formats', 'cup-taster', 'rosterScreen.css');
   it('gives the phone field a basis wide enough for the country select plus a number box', () => {
-    const r = rule(css, '.roster-form-fields .form-field:has(.roster-phone-row)');
+    const r = rule(css, '.roster-form-fields .form-field:has(.phone-row)');
     const basis = r.match(/flex:\s*\d+\s+\d+\s+([\d.]+)rem/);
     expect(basis).toBeTruthy();
     expect(Number(basis[1])).toBeGreaterThanOrEqual(19); // 12rem select + gap + a usable number box

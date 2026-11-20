@@ -54,6 +54,13 @@ Taster-only copy in a shared preview/demo) fails it the same way a `core/` file 
 
 ---
 
+**Registering a person into an event from any format's form** (2026-11-20): use `core/phoneField.js` for the
+phone box and its country select (styled by `core/phoneField.css`), and `core/registration.js` for the rest:
+`REGISTRATION_LIMITS` (the RPC's caps), `phoneProblem(phone, country)` and `registerAndLink(orgId, eventId, person,
+client)` (find or create the person by canonical phone, enter them, then the best-effort Seduh ID link). The format keeps
+only its own fields and words. Cup Taster's roster and Throwdown's competitors both do this; a name-only entry
+(`createEntry` with no person) can never link to a Seduh ID.
+
 ## Local patches are an anti-pattern — fixes go to source
 
 A fix applied to one consuming file instead of the shared module/token it should have
@@ -772,7 +779,7 @@ migration (two places) is where `and e.is_shadow is not true` goes the day it do
     // zeros and [] when hidden or none: a hidden part looks like an empty one
     "won": 2,
     "lost": 2,
-    "opponents": [{ "handle": "…", "display_name": "…", "matches": 2, "won": 1, "lost": 1 }], // seam: filled later, top 10, named only if that
+    "opponents": [{ "display_name": "…", "matches": 2, "won": 1, "lost": 1 }], // Throwdown only (T-ID2.TD), top 50, named only if that
   }, // opponent is claimed, open, active and public for BOTH vis_identity and vis_knockout_record
   "organiser_records": [], // the person's listed team links (T-ID2.D-a, see "a person's own record")
   "self_reported": [], // the person's own entries (T-ID2.D-a)
@@ -784,13 +791,16 @@ migration (two places) is where `and e.is_shadow is not true` goes the day it do
 - **Visibility.** `public` shows a part; `organisers` is hidden for an anonymous caller (an organiser-scoped view is later); `hidden`
   is hidden. A hidden part keeps its keys, with zeros, `[]` or nulls. `has_profile` stays true for a claimed, open, attested,
   `active` account whose every part is hidden, so a printed QR code never breaks.
-- **Formats.** Cup Taster returns results (from the payload). Throwdown returns **nothing**, and `knockout_record` is always
-  `{won: 0, lost: 0, opponents: []}`: Throwdown has no results payload and its match outcomes are not on `/results/`, so
-  (owner decision 2026-11-16) the door does not read `td_matches`. It gets filled from a Throwdown results payload only, once one is
-  published; the migration header lists what that reader must enforce (payload only; decided two-competitor matches; an opponent
-  named only if claimed, open, active and public for both identity and knockout record). BTC returns nothing: teams and judges
-  have no person link. Never added to the door: phone, email, any uuid, `org_id`, the token hash, a hidden part's setting, or an
-  unpublished, test or shadow result (`080` scans the JSON text for all of these).
+- **Formats.** Cup Taster and Throwdown return results (from the payload; Throwdown's `standings` row is the place and the round
+  reached, with no score or time, and a shared place such as joint 3rd is shown as that place). BTC returns nothing: teams and
+  judges have no person link. **Throwdown's `knockout_record` (T-ID2.TD, 20261127120000)** is read from the `matches` list of the
+  published payload ONLY (never `td_matches`), by `app.seduh_knockout_record`: only decided, played, two-competitor matches count
+  (the publisher omits byes and walkovers, owner 2026-11-20; a 3rd place match counts), and an opponent is named
+  (`{display_name, matches, won, lost}`, no handle or id) only if claimed, open, active, 18-attested and public for BOTH
+  `vis_identity` and `vis_knockout_record` and not disputing their own result for that event; otherwise the match counts and no
+  name is given. A hidden `vis_knockout_record` gives zeros. "This isn't mine" on a Throwdown result hides that event's matches
+  too (owner to confirm). Never added to the door: phone, email, any uuid, `org_id`, the token hash, a hidden part's setting, or an
+  unpublished, test or shadow result (`080` scans the JSON text for all of these; `092` pins the Throwdown side).
 - **To change the contract**, add a migration (`create or replace`), keep the keys (C1 reads them), and extend `080`.
 
 ### Seduh ID #0001: assign the owner's founding number (T-ID2.A2, 20261115120000)

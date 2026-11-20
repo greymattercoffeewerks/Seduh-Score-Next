@@ -1,8 +1,8 @@
 // Throwdown's results page (organiser console, printable): the podium, then the full match log round by round, every
 // result in words (a vote result with its count, a walkover as "Walkover", a bye as "Bye"). Derived from the same rows
 // and the same bracket module as every other surface, so it can never disagree with the console or the projector.
-// "Print" uses the browser's own print dialog (Save as PDF is the browser's); a formatted report and the public
-// archive are TD.2, not here.
+// "Print" uses the browser's own print dialog (Save as PDF is the browser's); a formatted report is TD.2. The Public
+// results card (publishCard.js) publishes the event to the public archive, which is also what feeds Seduh ID.
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { findEvent } from '../../core/events.js';
@@ -11,6 +11,7 @@ import { loadThrowdown } from './data.js';
 import { describeThrowdownError, resultLine, matchTitle } from './words.js';
 import { scoringContext, scoredView, auditRule } from './scoredMatch.js';
 import { buildAudit } from './scoreAudit.js';
+import { buildPublishCard } from './publishCard.js';
 
 // The printable score breakdown of every decided scored match (console only; empty when the event has no scored rounds).
 function auditSections(bracket, ctx) {
@@ -126,7 +127,10 @@ export async function mountThrowdownResultsScreen(
         attrs: { type: 'button' },
       });
       print.addEventListener('click', () => window.print());
+      // The public archive: publish, update or unpublish (never offered for a test event; the card says why).
+      const { card } = buildPublishCard({ event, bracket: data.bracket, client, signal });
       view.append(
+        card,
         print,
         el('a', {
           className: 'btn btn-outline tap-target td-no-print',
