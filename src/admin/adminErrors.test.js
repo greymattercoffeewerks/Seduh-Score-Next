@@ -129,6 +129,7 @@ const NOT_FOR_THE_CONSOLE = {
   td_slot_invalid: 'Throwdown format',
   td_match_not_ready: 'Throwdown format',
   td_votes_level: 'Throwdown format',
+  td_votes_full: 'Throwdown format',
   td_scoresheet_invalid: 'Throwdown scoresheet',
   td_match_scored: 'Throwdown scoresheet',
   td_match_not_scored: 'Throwdown scoresheet',

@@ -5,6 +5,8 @@ import { describeError } from '../../core/errors.js';
 const REFUSALS = {
   td_votes_level: 'The votes are level. Take another vote before confirming.',
   td_match_decided: 'That match has already been decided.',
+  td_votes_full:
+    'Every judge has voted in this match, and any tie-break vote is in. Undo a vote to change it.',
   td_match_not_ready: 'That match does not have two competitors yet.',
   td_setup_locked: 'Setup is locked because Round 1 has started.',
   td_already_started: 'This event has already started.',

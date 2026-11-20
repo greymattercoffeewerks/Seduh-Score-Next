@@ -58,8 +58,9 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
 
 Timer display-only (nothing recorded, no `clampElapsed`); the random draw stores its shuffle
 seed (`core/seededShuffle.js`; the browser shuffles, the database stores the seed and checks the
-shape only, it cannot replay a browser PRNG); any judge count is accepted and not capped
-(`judge_count` is shown to the organiser, an extra tap resolves an even panel); the 3rd place match
+shape only, it cannot replay a browser PRNG); any judge count (1 to 15) is accepted, and a match takes
+no more vote taps than `judge_count`, plus one tie-break vote only when every judge has voted and it is level (owner,
+2026-11-20; `td_cast_vote` refuses with `td_votes_full`, the screen disables Vote); the 3rd place match
 is skipped when a semi-final was a bye or a loser has withdrawn (a walkover does not skip it).
 
 ## Module history

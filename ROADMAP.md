@@ -514,15 +514,15 @@ the format. Bracket layout is Throwdown-only until a second knockout format exis
 - T-TD.1.8 Results page, e2e of a full 8-player test event, reviewers, kb-sync, PR.
 
 **Assumed defaults (owner may overrule):** the timer is display-only (no elapsed time stored, no `clampElapsed`); the
-random draw stores its shuffle seed; any judge count is accepted and Confirm is disabled while votes are level (an extra
-tap resolves an even panel); competitor status is `event_entries.withdrawn` (so Q8b can be settled later without a
+random draw stores its shuffle seed; any judge count is accepted and Confirm is disabled while votes are level (vote taps are capped at the judge
+count, plus one tie-break vote when an even panel is level: decided 2026-11-20, below); competitor status is `event_entries.withdrawn` (so Q8b can be settled later without a
 schema change); no call site branches on a tier (D14); the 3rd place match is played whenever both semi-final losers exist and are active (decided 2026-11-03, T-TD.1.9).
 
 **TD.1 status (2026-11-03): built, in review.** Follow-ups and owner questions raised by the reviewers (none block TD.1):
 
 - **Decided (owner, 2026-11-03): repeat byes stay as built.** If the random bracket happens to give a competitor two or more byes, so be it. No rule change. (Spec section 5.)
 - **3rd place after a walkover or bye: DECIDED 2026-11-03, built as T-TD.1.9.** The 3rd place match is made whenever both semi-final losers exist and are active (`event_entries.withdrawn` is false). A walkover no longer blocks it; a bye (no loser) or a withdrawn loser does. Migration `20261103140000` (new; not yet in the cloud until the main session applies it).
-- **Decided (owner, 2026-11-03): judge count stays advisory.** The 1 to 15 range stays; no server refusal of taps beyond the panel size, so an extra tap can still resolve an even panel (Q5).
+- **Decided (owner, 2026-11-03): judge count stays advisory.** The 1 to 15 range stays; no server refusal of taps beyond the panel size, so an extra tap can still resolve an even panel (Q5). **Superseded 2026-11-20 (owner):** a match takes no more taps than the judge count, plus ONE tie-break vote only when every judge has voted and the votes are level (a tie-break judge comes in). Enforced by `td_cast_vote` (migration `20261128100000`, hint `td_votes_full`) and the organiser screen. Known limit, accepted: `td_undo_vote` takes back the newest vote for a slot whoever cast it, so an offline device whose queued tap is refused at the cap and whose queued Undo then lands removes another device's vote.
 - **Decided (owner, 2026-11-03): Q8b.** Only active (non-withdrawn) competitors count toward the 8-player Community cap. This is what is built (the cap trigger counts `not withdrawn`); no change.
 - **Corrections after a confirm** (an organiser tapped the wrong winner): not in TD.1. A reopen must also undo the next round if nothing in it has started; design with the owner.
 - **Draw is recorded, not verified.** The database stores the seed but cannot replay the browser shuffle, so "explain the draw" relies on `randomPairs(entries, seed)` re-run by a person. A recompute check at start is possible client-side only.
