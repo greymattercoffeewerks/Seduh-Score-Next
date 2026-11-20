@@ -49,14 +49,34 @@ import {
   updateRosterEntry,
   phoneWillChange,
 } from '../../core/registry.js';
-import {
-  parsePhone,
-  phoneErrorMessage,
-  isPhoneErrorCode,
-  DEFAULT_COUNTRY,
-} from '../../core/phone.js';
+import { DEFAULT_COUNTRY } from '../../core/phone.js';
 import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
-import { REGISTRATION_LIMITS, phoneProblem, registerAndLink } from '../../core/registration.js';
+import {
+  REGISTRATION_LIMITS,
+  phoneProblem,
+  registerAndLink,
+  tooLongProblem,
+  validateEdit,
+  buildEditFields,
+  describeRegistrationEditError,
+  initialEditDraft,
+  savedEditSentence,
+  isEntryInPublishedResults,
+  matchFieldsChanged,
+  PUBLISHED_EDIT_ADVISORY,
+  PUBLISHED_EDIT_WARNING,
+} from '../../core/registration.js';
+
+// The edit rules live in core/registration.js (shared with Throwdown's competitor editor); re-exported here so this
+// format's own callers and tests keep their import path.
+export {
+  buildEditFields,
+  initialEditDraft,
+  isEntryInPublishedResults,
+  matchFieldsChanged,
+  PUBLISHED_EDIT_ADVISORY,
+  PUBLISHED_EDIT_WARNING,
+};
 
 function blankDraft() {
   return {
@@ -76,15 +96,7 @@ const FIELD_LIMITS = REGISTRATION_LIMITS;
 const FIELD_LABELS = { displayName: 'Name', email: 'Email', cafe: 'Cafe', bib: 'Bib' };
 
 function findTooLong(draft) {
-  for (const [key, max] of Object.entries(FIELD_LIMITS)) {
-    if (draft[key].trim().length > max) {
-      return {
-        field: key,
-        message: `${FIELD_LABELS[key]} is too long (${max} characters at most).`,
-      };
-    }
-  }
-  return null;
+  return tooLongProblem(draft, FIELD_LABELS);
 }
 
 // Pure. Trims every field; blank optional fields collapse to null rather
@@ -115,126 +127,33 @@ export function validateDraft(draft) {
   return phoneProblem(draft.phone, draft.phoneCountry)?.message ?? null;
 }
 
-// Seduh ID matches a published result to a person by the entry's trimmed name and café (the public
-// payload carries no ids), so editing either of them on an entry that is NAMED in the published results
-// drops that result from the person's profile until the results are published again (T-ID2.B2, fix 3).
-// Pure. `payload` is a public_results payload (or null); true when its podium or full standings name this
-// entry exactly. A stub, an unpublished event and an entry the published results do not name are all false.
-export function isEntryInPublishedResults(payload, entry) {
-  if (!payload || !entry) return false;
-  const name = (entry.display_name ?? '').trim();
-  const cafe = (entry.cafe ?? '').trim();
-  return ['podium', 'standings'].some(
-    (key) =>
-      Array.isArray(payload[key]) &&
-      payload[key].some(
-        (row) =>
-          row &&
-          typeof row.name === 'string' &&
-          row.name.trim() === name &&
-          (typeof row.cafe === 'string' ? row.cafe.trim() : '') === cafe,
-      ),
-  );
-}
-
-// True when the draft's name or café differs from the entry's saved one (compared trimmed, as the match is).
-export function matchFieldsChanged(draft, entry) {
-  return (
-    (draft.displayName ?? '').trim() !== (entry.display_name ?? '').trim() ||
-    (draft.cafe ?? '').trim() !== (entry.cafe ?? '').trim()
-  );
-}
-
-export const PUBLISHED_EDIT_ADVISORY =
-  'This person is in the published results. Their Seduh ID record is matched by name and café, so if you change either, republish the results afterwards.';
-export const PUBLISHED_EDIT_WARNING =
-  'Changing the name or café drops this person’s result from their Seduh ID profile until you republish the results.';
-
-// The edit form's starting values: this event's entry for name/cafe/bib, the person's profile for
-// phone/email (an entry with no profile — a walk-up — has none).
-export function initialEditDraft(entry, person) {
-  return {
-    displayName: entry.display_name ?? '',
-    phone: person?.phone ?? '',
-    phoneCountry: DEFAULT_COUNTRY,
-    email: person?.email ?? '',
-    cafe: entry.cafe ?? '',
-    bib: entry.bib ?? '',
-  };
-}
-
 // Pure. `linked` is whether the entry has a profile to carry a phone/email. Returns
 // { field, message } for the first problem, or null. `storedPhone` is the value on file: left
 // unchanged it is checked for shape only, so an old number never blocks saving another field.
 export function validateEditDraft(draft, { linked, storedPhone = null }) {
-  if (!draft.displayName.trim()) return { field: 'displayName', message: 'Name is required.' };
-  if (linked) {
-    if (!draft.phone.trim()) return { field: 'phone', message: 'Phone is required.' };
-    const phone = parsePhone(draft.phone, {
-      country: draft.phoneCountry ?? DEFAULT_COUNTRY,
-      storedPhone,
-    });
-    if (!phone.ok) return { field: 'phone', message: phoneErrorMessage(phone.code) };
-  }
-  return findTooLong(draft);
-}
-
-// Pure. What core/registry.updateRosterEntry takes: trimmed, blanks as null; the phone as typed
-// with its country and the value on file (registry interprets it, applying the edit rule).
-export function buildEditFields(draft, { linked, storedPhone = null }) {
-  return {
-    displayName: draft.displayName.trim(),
-    phone: linked ? draft.phone.trim() : null,
-    phoneCountry: linked ? (draft.phoneCountry ?? DEFAULT_COUNTRY) : null,
-    storedPhone: linked ? storedPhone : null,
-    email: linked ? draft.email.trim() || null : null,
-    cafe: draft.cafe.trim() || null,
-    bib: draft.bib.trim() || null,
-  };
+  return validateEdit(draft, {
+    linked,
+    storedPhone,
+    labels: FIELD_LABELS,
+    messages: { name: 'Name is required.', phone: 'Phone is required.' },
+  });
 }
 
 // Pure. A phone/email clash arrives as a P0002 whose details name the field and the person who
-// already has it; anything else is described generically. `field` says which input to point at.
+// already has it; anything else is described generically (core/registration.js).
 export function describeRosterEditError(err) {
-  // A phone refusal carries a stable code in `hint`: core/registry's PhoneError (a core/phone.js
-  // code) or the database's own 'phone_invalid' for a value that is not canonical E.164. Read the
-  // hint, not the text; the words come from the one map in core/phone.js.
-  if (isPhoneErrorCode(err?.hint)) {
-    return { field: 'phone', message: phoneErrorMessage(err.hint) };
-  }
-  if (err?.code === 'P0002') {
-    let detail = null;
-    try {
-      detail = JSON.parse(err.details ?? err.detail ?? 'null');
-    } catch {
-      // Malformed/missing details — fall through to the generic conflict message.
-    }
-    const who = detail?.existing_display_name ?? 'another person';
-    if (detail?.field === 'phone') {
-      return {
-        field: 'phone',
-        message: `That phone number already belongs to ${who}. Check the number.`,
-      };
-    }
-    if (detail?.field === 'email') {
-      return {
-        field: 'email',
-        message: `That email already belongs to ${who}. Check the address.`,
-      };
-    }
-    return {
-      field: null,
-      message:
-        'That phone number or email already belongs to another person. Check them and try again.',
-    };
-  }
-  return { field: null, message: describeError(err) };
+  return describeRegistrationEditError(err);
 }
 
 export function renderRegistrationForm(draft, { disabled }) {
   const nameInput = el('input', {
     className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'Name', 'data-field': 'displayName', maxlength: '200' },
+    attrs: {
+      type: 'text',
+      'aria-label': 'Name',
+      'data-field': 'displayName',
+      maxlength: String(REGISTRATION_LIMITS.displayName),
+    },
   });
   nameInput.value = draft.displayName;
   nameInput.disabled = disabled;
@@ -266,7 +185,7 @@ export function renderRegistrationForm(draft, { disabled }) {
       type: 'email',
       'aria-label': 'Email (optional)',
       'data-field': 'email',
-      maxlength: '254',
+      maxlength: String(REGISTRATION_LIMITS.email),
     },
   });
   emailInput.value = draft.email;
@@ -281,7 +200,7 @@ export function renderRegistrationForm(draft, { disabled }) {
       type: 'text',
       'aria-label': 'Cafe (optional)',
       'data-field': 'cafe',
-      maxlength: '200',
+      maxlength: String(REGISTRATION_LIMITS.cafe),
     },
   });
   cafeInput.value = draft.cafe;
@@ -292,7 +211,12 @@ export function renderRegistrationForm(draft, { disabled }) {
 
   const bibInput = el('input', {
     className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'Bib (optional)', 'data-field': 'bib', maxlength: '50' },
+    attrs: {
+      type: 'text',
+      'aria-label': 'Bib (optional)',
+      'data-field': 'bib',
+      maxlength: String(REGISTRATION_LIMITS.bib),
+    },
   });
   bibInput.value = draft.bib;
   bibInput.disabled = disabled;
@@ -966,11 +890,9 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       linked: editing.linked,
       storedPhone: editing.storedPhone,
     });
-    const detailsChanged =
-      fields.displayName !== entry.display_name || fields.cafe !== (entry.cafe ?? null);
+    const detailsChanged = matchFieldsChanged(editing.draft, entry);
     // The result stays on their Seduh ID profile only while the published name and café still match the roster's.
-    const dropsPublishedResult =
-      editing.inPublishedResults && matchFieldsChanged(editing.draft, entry);
+    const dropsPublishedResult = editing.inPublishedResults && detailsChanged;
 
     try {
       await updateRosterEntry(event.org_id, entry.id, fields, client);
@@ -990,13 +912,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       if (refreshed) {
         savedNote = {
           entryId: entry.id,
-          message: `${fields.displayName} updated.${
-            dropsPublishedResult
-              ? ' Their published result still shows the old name or café, so it is not on their Seduh ID profile until you republish.'
-              : detailsChanged
-                ? ' The audience view and any published results show the new details the next time they are published.'
-                : ''
-          }`,
+          message: savedEditSentence(fields.displayName, { detailsChanged, dropsPublishedResult }),
           republishHref: dropsPublishedResult ? `#/events/${event.id}/report` : null,
         };
         focusAfterRender = `#roster-saved-${entry.id}`;
