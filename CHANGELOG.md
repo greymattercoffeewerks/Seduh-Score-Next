@@ -7,7 +7,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Throwdown on the Seduh ID profile (step 2) · unreleased, no version bump · 2026-11-20
+## Throwdown on the Seduh ID profile (step 2) · 4.24.0 · 2026-11-20
 
 **Status:** PR open against `dev`; migration `20261127120000_seduh_throwdown_profile.sql` is NOT pushed to the cloud (the main session does that after merge).
 
@@ -18,7 +18,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Tests.** pgTAP `092` (41: ACL, results, record counting, malformed `matches`, every opponent-naming condition, disputes, test/unpublished events, no ids, Cup Taster unchanged); the `062` allow-list gains the new reader; unit tests for `matches` and the door shape. Rollback block run in a transaction against the built database: previous bodies restored, new function dropped, profile still answers. Full `db:test`: all files pass (089 prints a plan-count note that predates this change and passes).
 - **Reviews.** `schema-guardian`: clean. `security-reviewer`: 🔴 `matches` named a withdrawn non-podium competitor the standings deliberately omit (reproduced with a failing test before the fix; fixed in `playedMatches`; the independent-checker agent was not run, the failing-test reproduction stands in). `code-reviewer`: clean. `module-boundary-checker`: two nits (a redundant literal: fixed; a comment on redemption: fixed). `test-auditor`: two Important (the both-sides-are-me guard and the test-event filter of `seduh_published_matches` untested: fixed, the first with a mutation run that turns 4 assertions red) and three nits (result-key check on all rows: fixed; the cap cases and the payload-hash wording: left). `ui-accessibility-reviewer`: not run, no UI changed (the page already drew place, format and the knockout section).
 
-## Throwdown: publish results (Seduh ID feed, step 1) · unreleased, no version bump · 2026-11-20
+## Throwdown: publish results (Seduh ID feed, step 1) · 4.24.0 · 2026-11-20
 
 **Status: NOT FINAL.** Built on the Throwdown worktree branch (`claude/throwdown-publish-results-8a8ad7`, uncommitted at the time of writing). Definition-of-Done items outstanding: the Playwright `throwdown-event` spec (its test-event refusal assertion) was **not run locally** (no `.env` in the worktree), so it must pass in CI or with the owner's env; the owner's check of a real publish before 27 Nov; and the independent-checker step for the 🔴 findings (see Reviews). **No version bump** (the release takes it), **no migration, no RLS/RPC change, no cloud push.** `publish_event_results` already exists in the cloud (it is how Cup Taster publishes). Owner request 2026-11-20, so the Seduh ID archive feed can create identities from Throwdown competitors. No §14 task ID; logged by title.
 
@@ -39,7 +39,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
   - **Not run:** the independent-checker step required by CLAUDE.md's review protocol for 🔴 findings (the reviewers had no agent tool to spawn one). Each 🔴 was confirmed by reading the code and, for the abort guard, by test-auditor's mutation evidence. This is owed before merge, not waived. `scoring-auditor` not run (no scoring derivation changed; only bracket winners read). `security-reviewer` not run (no RLS, RPC or Storage change).
 - **Open follow-up.** Owner: confirm the joint-3rd rule (above); the first real publish goes to the Seduh ID feed **queue** and needs the owner's weekly review before anyone sees it; Playwright `throwdown-event` green in CI; the owner's check of a publish before 27 Nov. Deferred code items are in `docs/backlog/cup-taster.md` ("Throwdown publish results", 2026-11-20). Also owed: the unidentified flaky test (a `src/formats/throwdown` or `src/marketing` test failed once, then passed three runs).
 
-## Throwdown: competitors register with a phone (Seduh ID link) · unreleased, no version bump · 2026-11-20
+## Throwdown: competitors register with a phone (Seduh ID link) · 4.24.0 · 2026-11-20
 
 **Status: NOT FINAL.** Built and reviewed on branch `feat/throwdown-competitor-phone` (off `origin/dev`, one PR into `dev`, not committed at the time of writing). Two Definition-of-Done items are outstanding: the two Playwright specs (`throwdown-event`, `throwdown-scoresheet`) were **not run here** (the worktree has no `.env`, and copying one is blocked by the owner's deny rule), so they must pass in CI or with the owner's env; and the owner's check of the registration flow before the 27 Nov event. **No version bump** (the release takes it), **no migration, no RLS/RPC change, no cloud push.** Owner request 2026-11-20, so the owner can exercise the Seduh ID pipeline with real Throwdown competitors. No §14 task ID; logged by title.
 
