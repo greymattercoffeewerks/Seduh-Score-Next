@@ -7,6 +7,20 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown: vote cap (a match takes no more taps than judges) · 4.25.1 · 2026-11-20
+
+**Status: NOT FINAL.** Code merged to `dev` as #531 (commits `93c043a`, `68fa9e3`, `e29b89a`). The migration is applied to the cloud project. Definition-of-Done items outstanding, listed under Reviews. No release yet: the frontend reaches production at the next `dev` to `main` release.
+
+- **What changed.** `td_cast_vote` now refuses a tap once a match has as many votes as the event has judges (`td_settings.judge_count`), with hint `td_votes_full`. The one exception is a tie-break: when every judge has voted and the votes are level, ONE more vote is allowed. The organiser's vote screen disables Vote at the cap, including taps still queued on the device.
+- **Why.** A double tap or a second device could show "5 of 3 votes in". The 2026-11-03 decision ("judge count stays advisory", so an extra tap could break an even panel) let the count run past the panel. A reviewer flagged that the cap reverses that recorded decision. **Owner decision 2026-11-20, superseding 2026-11-03:** a match takes no more taps than judges, plus one tie-break vote, and only when the panel has fully voted and is level. The tie-break judge is the only way past the panel size, so the cap keeps the count honest and still lets an even panel be settled.
+- **Migration.** `20261128100000_td_vote_cap.sql` replaces `td_cast_vote` (same signature, `security definer`, `search_path ''`, execute to `authenticated` only). Rollback block run in a transaction. Applied to the cloud with `apply_migration` on 2026-11-20 and verified: the function body has the cap, the grants are as above.
+- **Known limit, accepted (ROADMAP).** `td_undo_vote` takes back the newest vote for a slot whoever cast it. An offline device whose queued tap is refused at the cap, and whose queued Undo then lands, removes another device's vote. Logged, not fixed.
+- **Tests.** pgTAP `072` gains 11 assertions (the cap, the tie-break, the queued-tap path, the hint). Full `npm run db:test`: 6288 of 6288 pass. Unit: 7729 of 7729 pass. CI first failed on `src/admin/adminErrors.test.js` (the new hint was not classified as a Throwdown hint, so the console would have shown it wrongly); fixed in `e29b89a`.
+- **Files.** `supabase/migrations/20261128100000_td_vote_cap.sql`, `supabase/tests/072_throwdown.sql`, `src/formats/throwdown/eventScreen.js` and `eventScreen.test.js`, `src/formats/throwdown/words.js`, `src/admin/adminErrors.test.js`, `src/formats/throwdown/CLAUDE.md`, `ROADMAP.md`.
+- **Reviews.** `schema-guardian`: clean (rollback run in a transaction). `security-reviewer`: clean on both commits. `code-reviewer`: 1 Important, resolved by the owner's decision above (the cap reversed a recorded decision; docs updated to the tie-break rule). 3 nits: a test for the queued-tap path added; "every judge has voted" added to the status wording; the offline refused-tap-then-Undo case recorded as an accepted limit in ROADMAP.
+- **Outstanding for DoD (§11), so NOT FINAL.** `eventScreen.js` changed (a UI change): `ui-accessibility-reviewer` sign-off at 360px is owed. `src/` changed: `module-boundary-checker` not run. Test files changed: `test-auditor` not run. The vote cap decides match resolution: `scoring-auditor` sign-off is owed or the owner must rule it out of scope. Outbox-adjacent (queued taps and Undo): `offline-sync-auditor` not run.
+- **Version.** 4.25.1 (patch: a fix to a shipped format, no new capability). `package.json` bumped here on `dev`, where 4.25.0 already sat.
+
 ## Throwdown: edit a competitor · 4.25.0 · 2026-11-20
 
 **Status:** PR open against `dev`. No migration, nothing to push to the cloud, no version bump (the release PR takes it). Owed: the Playwright `throwdown-event` step (a café edit) was **not run locally** (no `dist` build and no `.env` in the worktree), so CI is its first run.
