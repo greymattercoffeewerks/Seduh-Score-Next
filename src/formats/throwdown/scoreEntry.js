@@ -38,7 +38,10 @@ export function createScoreEntry({
       if (complete && validateSheet(sheet, view).ok) formError.textContent = '';
     };
     // Save stays pressable: a sheet that is not complete says exactly what is missing, next to the button
-    const formError = el('p', { className: 'td-sheet-error', attrs: { role: 'alert' } });
+    const formError = el('p', {
+      className: 'form-field-error td-sheet-error',
+      attrs: { role: 'alert' },
+    });
     const sections = Array.from({ length: cups }, (_, i) => {
       const cup = i + 1;
       const total = el('p', {
@@ -61,8 +64,18 @@ export function createScoreEntry({
             'data-focus-key': id,
           },
         });
-        const hint = el('span', { className: 'td-points-max', text: `0 to ${line.max}` });
-        const problem = el('span', { className: 'td-points-problem', attrs: { role: 'status' } });
+        // The range sits inside the box as "/ 6", like the paper sheet, and stays visible while typing (never a
+        // placeholder: Petrol rules placeholder-only hints out). Screen readers get "0 to 6" from the aria-label.
+        const suffix = el('span', {
+          className: 'td-points-suffix',
+          attrs: { 'aria-hidden': 'true' },
+          text: `/ ${line.max}`,
+        });
+        // Petrol's field error line (its own "!" mark, so colour is not the only cue), under the box
+        const problem = el('p', {
+          className: 'form-field-error td-points-problem',
+          attrs: { role: 'status' },
+        });
         input.addEventListener('input', () => {
           o.draft[cup][line.key] = input.value;
           const text = input.value.trim();
@@ -71,11 +84,10 @@ export function createScoreEntry({
           problem.textContent = bad ? `Enter a whole number from 0 to ${line.max}.` : '';
           refreshTotals();
         });
-        inputs.push({ input, line });
+        inputs.push({ input, line, problem });
         return el('div', { className: 'td-sheet-line' }, [
           el('label', { className: 'td-sheet-label', attrs: { for: id }, text: line.label }),
-          hint,
-          input,
+          el('span', { className: 'td-points-box' }, [input, suffix]),
           problem,
         ]);
       });
@@ -96,7 +108,11 @@ export function createScoreEntry({
             const text = input.value.trim();
             return !/^\d{1,2}$/.test(text) || Number(text) > line.max;
           });
-          for (const { input } of bad) input.setAttribute('aria-invalid', 'true');
+          // each rejected line gets its own field error too (blank ones as well), not only the red edge
+          for (const { input, line, problem } of bad) {
+            input.setAttribute('aria-invalid', 'true');
+            problem.textContent = `Enter a whole number from 0 to ${line.max}.`;
+          }
           formError.textContent = `${bad.length} ${bad.length === 1 ? 'line is' : 'lines are'} blank or out of range. Every line needs a whole number inside its range before the sheet can be saved.`;
           bad[0]?.input.focus();
           return;
