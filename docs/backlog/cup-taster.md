@@ -899,3 +899,13 @@ _Result-recorded and rank-impact screens shipped; these were flagged and documen
   focus to `<body>`; Throwdown's uses read-only + `setBusyDisabled`.
 - **Throwdown: a refusal stays shown while the organiser corrects the box**, until the next Add.
 - **Throwdown: no test proves a second Add while saving is ignored** (the `state.busy` guard).
+
+## Known open items from the Throwdown publish results task (2026-11-20; Seduh ID feed step 1)
+
+- **The Public results card duplicates Cup Taster's `reportScreen` card and its scope vocabulary** (`publishCard.js`; module-boundary 🔴, deliberately not fixed in that change). Move the card and scope words into `core/` and have both formats read them, when Cup Taster's report screen is next touched.
+- **Joint 3rd for two semi-final losers is an assumption** (`resultsPublishing.js`, no 3rd place match played). Owner to confirm; if the answer is "3rd and 4th by a rule", the tiers in the builder change and the payload is re-published.
+- **Placing numbers are hand-computed** in `resultsPublishing.js`; use core ranking's `positionsInOrder` (module-boundary 🟡).
+- **The marketing sheet branches on `event.format === 'throwdown'`** (`resultsSheet.js`) to drop Score and Time columns; a payload flag would keep the sheet format-agnostic (module-boundary 🟡).
+- **The payload key whitelist is hand-copied** in `resultsPublishing.js` and not tied to the SQL whitelist the archive reads (test-auditor 🟡). A test that reads the migration's key list would catch drift.
+- **The disabled Publish button is not `aria-describedby` its reason** (`publishCard.js`; ui-accessibility 🟡). The reason is shown above it; link the two.
+- **Unidentified flaky test**: one run of a `src/formats/throwdown` or `src/marketing` test failed once with no reproduction (three later runs passed). Identify it from CI logs if it recurs.

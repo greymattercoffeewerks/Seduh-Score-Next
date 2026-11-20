@@ -109,6 +109,25 @@ live surfaces are stage 2. It deliberately **extends two core facts**: `td_match
 The Add competitor form takes a phone (required, D16, as Cup Taster) and links the competitor to Seduh ID. Shared code is in
 `core/`: `phoneField.js`/`phoneField.css` and `registration.js` (`registerAndLink`: `registerEntry` by canonical phone, then a
 best-effort `link_person_identity`). Throwdown-only: `competitorForm.js` (pure draft/validate/build/words). A phone links only to
-an existing identity (the link never creates one), and Throwdown has no results payload yet, so results do not reach a profile
-until one exists (owner decision 2026-11-16). Tests: `competitorForm.test.js`, `core/registration.test.js`, the `eventScreen`
-block; Playwright `throwdown-event` and `throwdown-scoresheet` type a phone per competitor.
+an existing identity (the link never creates one). Throwdown publishes a results payload too (see "Publish results", below), so a
+linked competitor's result reaches their profile once the organiser publishes and the archive feed runs. Tests: `competitorForm.test.js`,
+`core/registration.test.js`, the `eventScreen` block; Playwright `throwdown-event` and `throwdown-scoresheet` type a phone per competitor.
+
+## Publish results (2026-11-20)
+
+The results screen's "Public results" card publishes a finished event through core's `publish_event_results` (the same door Cup
+Taster uses; no migration, no RPC change). Seduh ID's archive feed reads only `podium` and `standings` (each element's trimmed
+`name` and `cafe`), so the payload carries those two arrays and nothing else that is per-person. Full keys and the reasons for
+them: `resultsPublishing.js`'s header.
+
+- **Pure builder.** `resultsPublishing.js` takes the bracket and returns the payload; no reads, no clock. Places are derived at publish
+  time and never stored in Throwdown's tables; the published payload is a snapshot the organiser chose to make.
+- **Places.** By the round lost in, shared within a round (competition ranking). With no 3rd place match, the two semi-final losers
+  share 3rd. **This is an assumption for the owner to confirm**, not a settled rule.
+- **Withdrawals.** A withdrawn podium finisher stays listed; any other withdrawn competitor is counted in `notListed`, not listed.
+- **Blockers.** Only a finished event publishes (a champion, and the 3rd place match decided if the event has one).
+- **Test events** never publish (D9): the card says so and offers no button.
+- **Scope.** Full standings is the default; "podium only" is the alternative. The card's wording states what becomes public.
+- **Publish re-reads the event fresh** before it writes, so a stale screen cannot publish stale names.
+- **Feed queue.** The first real publish lands in the archive feed's `queue` mode and waits for the owner's weekly review before
+  anyone sees it (`CONVENTIONS.md`, "Seduh ID feed: the owner's runbook").
