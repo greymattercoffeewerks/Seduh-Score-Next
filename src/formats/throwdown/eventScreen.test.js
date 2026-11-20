@@ -185,6 +185,13 @@ describe('scoresheet rounds on the organiser screen', () => {
     // an empty sheet: Save says what is missing instead of doing nothing
     save.click();
     expect(root.querySelector('.td-sheet-error').textContent).toContain('4 lines are blank');
+    // each blank line is marked AND explained under its own box, not only by the sheet-level error
+    for (const i of inputs) {
+      expect(i.getAttribute('aria-invalid')).toBe('true');
+      expect(i.closest('.td-sheet-line').querySelector('.td-points-problem').textContent).toMatch(
+        /^Enter a whole number from 0 to \d+\.$/,
+      );
+    }
     const type = (i, v) => {
       i.value = v;
       i.dispatchEvent(new Event('input'));
@@ -195,6 +202,27 @@ describe('scoresheet rounds on the organiser screen', () => {
     expect(root.querySelector('.td-sheet-error').textContent).toBe('');
     type(inputs[0], '7');
     expect(inputs[0].getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('shows each line\'s range inside its box as "/ max", never as a placeholder, and errors in Petrol\'s style', async () => {
+    const root = await mount(scoring());
+    root.querySelector('.td-grid-btn').click();
+    const input = root.querySelector('.td-points');
+    const suffix = input.parentElement.querySelector('.td-points-suffix');
+    const max = Number(suffix.textContent.replace('/ ', ''));
+    expect(suffix.textContent).toMatch(/^\/ \d+$/);
+    expect(suffix.getAttribute('aria-hidden')).toBe('true');
+    // the range still reaches a screen reader, through the input's own name
+    expect(input.getAttribute('aria-label')).toContain(`0 to ${max}`);
+    expect(input.hasAttribute('placeholder')).toBe(false);
+    expect(root.querySelector('.td-points-max')).toBeNull();
+    // an out-of-range value: the line under the box is Petrol's field error (its own "!" mark), not plain text
+    input.value = String(max + 1);
+    input.dispatchEvent(new Event('input'));
+    const problem = input.closest('.td-sheet-line').querySelector('.td-points-problem');
+    expect(problem.classList.contains('form-field-error')).toBe(true);
+    expect(problem.textContent).toBe(`Enter a whole number from 0 to ${max}.`);
+    expect(root.querySelector('.td-sheet-error').classList.contains('form-field-error')).toBe(true);
   });
 
   it('refuses to save an out-of-range line, and queues a complete sheet through the outbox', async () => {
