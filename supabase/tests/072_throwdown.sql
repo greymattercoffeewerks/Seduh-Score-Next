@@ -16,7 +16,7 @@
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(150);
+select plan(156);
 
 create schema t072;
 grant usage on schema t072 to anon, authenticated;
@@ -87,11 +87,13 @@ insert into events (id, org_id, format, name) values
   (t072.u(202), t072.u(100), 'throwdown', 'Throwdown withdrawn winner'),
   (t072.u(203), t072.u(100), 'throwdown', 'Throwdown withdrawn no-show'),
   (t072.u(204), t072.u(100), 'throwdown', 'Throwdown two walkovers'),
-  (t072.u(206), t072.u(100), 'throwdown', 'Throwdown even panel');
+  (t072.u(206), t072.u(100), 'throwdown', 'Throwdown even panel'),
+  (t072.u(207), t072.u(100), 'throwdown', 'Throwdown even panel not level'),
+  (t072.u(208), t072.u(100), 'throwdown', 'Throwdown over the cap');
 -- competitors: event 110 -> entries 1..8 (ids 1101..1108), 120 -> 5, 130 -> 6, 140 -> 4, 210 -> 2
 insert into event_entries (id, event_id, display_name)
 select t072.u(e.ev * 10 + n), t072.u(e.ev), 'P' || n
-  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (202, 4), (203, 4), (204, 4), (206, 2), (210, 2)) e(ev, cnt), generate_series(1, 8) n
+  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (202, 4), (203, 4), (204, 4), (206, 2), (207, 2), (208, 2), (210, 2)) e(ev, cnt), generate_series(1, 8) n
  where n <= e.cnt;
 
 -- reads the winner's display name of a match by position (null while undecided)
@@ -444,6 +446,24 @@ select is(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_
   '...re-opens the one tie-break vote');
 select is((select count(*)::int from td_votes where match_id = t072.m(206, 1, 1)), 3, 'so the match holds the two judges plus one tie-break vote');
 select is(t072.confirm(206, 1, 1), 'ok', 'and the tie-break decides it (2-1)');
+
+-- ============ an even panel that is NOT level takes no tie-break; older data past the cap takes nothing ============
+select is(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 2, true, ''random'', ''{}'')', t072.u(100), t072.u(207))), 'ok',
+  'another two-judge panel');
+select is(t072.start(207, 'random', 'seed-207', array[1,2]), 'ok', 'and its event starts');
+select t072.tap(207, 1, 1, 1, 2);
+select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(207, 1, 1), t072.s(207, 1, 1, 2))),
+  'P0001|td_votes_full|%', 'both judges in at 2-0: not level, so no tie-break vote');
+select is(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 2, true, ''random'', ''{}'')', t072.u(100), t072.u(208))), 'ok',
+  'a third two-judge panel');
+select is(t072.start(208, 'random', 'seed-208', array[1,2]), 'ok', 'and its event starts');
+-- four votes written past every check, as rows from before the cap would be (2-2 on a two-judge panel)
+set local session_replication_role = replica;
+insert into td_votes (event_id, match_id, slot_id)
+select t072.u(208), t072.m(208, 1, 1), t072.s(208, 1, 1, p) from (values (1), (1), (2), (2)) x(p);
+set local session_replication_role = origin;
+select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(208, 1, 1), t072.s(208, 1, 1, 1))),
+  'P0001|td_votes_full|%', 'a match already past the cap takes no tap, even while it is level');
 
 select * from finish();
 rollback;
