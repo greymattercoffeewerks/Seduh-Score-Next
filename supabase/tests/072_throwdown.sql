@@ -16,7 +16,7 @@
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(139);
+select plan(142);
 
 create schema t072;
 grant usage on schema t072 to anon, authenticated;
@@ -229,6 +229,12 @@ select is(t072.as_user(t072.u(1), format('select public.td_cast_vote(%L, %L, %L,
     t072.u(9001), t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 1), t072.u(9001), t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 1))), 'ok',
   'the same operation replayed...');
 select is((select count(*)::int from td_votes where slot_id = t072.s(110, 1, 2, 1)), 2, '...counts once (an outbox replay cannot double a tap)');
+-- the judge cap: three judges, three taps in (2-1), so a match takes no fourth vote
+select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 2))),
+  'P0001|td_votes_full|%', 'a tap past the judge count is refused (td_votes_full)');
+select is(t072.as_user(t072.u(1), format('select public.td_cast_vote(%L, %L, %L, %L)', t072.u(9001), t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 1))), 'ok',
+  'a replay of a tap already counted is still a quiet no-op at the cap (the outbox can drain)');
+select is((select count(*)::int from td_votes where match_id = t072.m(110, 1, 2)), 3, 'and the match holds exactly as many votes as judges');
 select is(t072.confirm(110, 1, 2), 'ok', 'P1 wins 2-1');
 select is(t072.winner(110, 1, 2), 'P1', '...derived from the rows');
 select is(t072.decide(110, 1, 3, 2), 'ok', 'match 3 is won by the second slot');

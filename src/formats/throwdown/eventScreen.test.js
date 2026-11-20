@@ -111,6 +111,25 @@ describe('the Throwdown organiser screen', () => {
     expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
   });
 
+  it('stops the Vote buttons once every judge has voted, and leaves Undo working', async () => {
+    const vote = (id, slot) => ({ id, match_id: 'm1', slot_id: slot, created_at: id });
+    const twoJudges = {
+      ...started,
+      td_settings: [{ event_id: 'ev', judge_count: 2, third_place: true, modules: {} }],
+    };
+    const votes = (off) => (b) => (b.getAttribute('aria-disabled') === 'true') === off;
+    let root = await mount({ ...twoJudges, td_votes: [vote('v1', 's1')] });
+    expect([...root.querySelectorAll('.td-vote')].every(votes(false))).toBe(true);
+    expect(root.textContent).toContain('1 of 2 votes in.');
+
+    document.body.innerHTML = '';
+    root = await mount({ ...twoJudges, td_votes: [vote('v1', 's1'), vote('v2', 's2')] });
+    expect([...root.querySelectorAll('.td-vote')].every(votes(true))).toBe(true);
+    expect(root.textContent).toContain('every judge has voted. Undo a vote');
+    const undos = [...root.querySelectorAll('button')].filter((b) => b.textContent === 'Undo');
+    expect(undos.every((b) => b.getAttribute('aria-disabled') !== 'true')).toBe(true);
+  });
+
   it('shows the champion banner once the Final is decided', async () => {
     const root = await mount({
       ...started,

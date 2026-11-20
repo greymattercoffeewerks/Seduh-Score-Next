@@ -737,6 +737,9 @@ export async function mountThrowdownEventScreen(
     const { tallies, queued, decisionQueued } = displayedTallies(match);
     const lead = leadOf(tallies);
     const judges = state.data.settings.judge_count;
+    // One tap is one judge's vote: once every judge has voted (taps still waiting to sync included), the Vote buttons
+    // stop. The database refuses a tap past the cap too (td_cast_vote, hint td_votes_full); Undo frees a vote.
+    const full = lead.total >= judges;
     const sides = match.sides.map((side, i) => {
       const count = tallies.find((t) => t.slotId === side.slotId)?.votes ?? 0;
       return el('div', { className: 'td-side' }, [
@@ -755,7 +758,7 @@ export async function mountThrowdownEventScreen(
             className: 'btn btn-primary tap-target td-vote',
             key: `td-vote-${match.id}-${i}`,
             ignoreBusy: true,
-            disabled: decisionQueued || state.deciding,
+            disabled: full || decisionQueued || state.deciding,
           },
         ),
         el('p', {
@@ -786,7 +789,9 @@ export async function mountThrowdownEventScreen(
       : lead.total === 0
         ? `Waiting for votes (${judges} ${judges === 1 ? 'judge' : 'judges'}).`
         : lead.level
-          ? 'The votes are level. Take another vote before confirming.'
+          ? full
+            ? 'The votes are level and every judge has voted. Undo a vote and vote again before confirming.'
+            : 'The votes are level. Take another vote before confirming.'
           : `${lead.total} of ${judges} votes in.`;
     const winnerName = lead.leaderSlotId
       ? match.sides.find((s) => s.slotId === lead.leaderSlotId)?.name
