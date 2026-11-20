@@ -7,7 +7,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Throwdown: edit a competitor · 2026-11-20
+## Throwdown: edit a competitor · 4.25.0 · 2026-11-20
 
 **Status:** PR open against `dev`. No migration, nothing to push to the cloud, no version bump (the release PR takes it). Owed: the Playwright `throwdown-event` step (a café edit) was **not run locally** (no `dist` build and no `.env` in the worktree), so CI is its first run.
 
