@@ -103,3 +103,12 @@ live surfaces are stage 2. It deliberately **extends two core facts**: `td_match
   and the rule come from `core/scoresheet.js` and the database re-checks both at confirm.
 - **Live payload**: a scored match in progress carries only `judging: true`; a decided one carries the winner flag and
   `resultKind: 'scores'`, never a number. Module off: no `judging` key (tested).
+
+## Competitor phone (2026-11-20)
+
+The Add competitor form takes a phone (required, D16, as Cup Taster) and links the competitor to Seduh ID. Shared code is in
+`core/`: `phoneField.js`/`phoneField.css` and `registration.js` (`registerAndLink`: `registerEntry` by canonical phone, then a
+best-effort `link_person_identity`). Throwdown-only: `competitorForm.js` (pure draft/validate/build/words). A phone links only to
+an existing identity (the link never creates one), and Throwdown has no results payload yet, so results do not reach a profile
+until one exists (owner decision 2026-11-16). Tests: `competitorForm.test.js`, `core/registration.test.js`, the `eventScreen`
+block; Playwright `throwdown-event` and `throwdown-scoresheet` type a phone per competitor.

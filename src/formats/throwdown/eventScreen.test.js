@@ -4,6 +4,7 @@ import 'fake-indexeddb/auto';
 import { _clearAllForTests } from '../../core/db.js';
 import { _resetOutboxOwnerForTests } from '../../core/outbox.js';
 import { mountThrowdownEventScreen } from './eventScreen.js';
+import { parsePhone, phoneErrorMessage } from '../../core/phone.js';
 
 const EVENT = { id: 'ev', org_id: 'org', format: 'throwdown', name: 'Rehearsal', is_test: true };
 
@@ -254,5 +255,204 @@ describe('scoresheet rounds on the organiser screen', () => {
     expect(root.querySelector('.td-champion-name').textContent).toBe('Bima');
     expect(root.textContent).toContain('Score breakdown');
     expect(root.textContent).toContain('Bima won on');
+  });
+});
+
+// A client that records writes: people and event_entries filter by their eq() calls, inserts are kept and answered,
+// and rpc calls are logged. Enough for core/registry.registerEntry's find-or-create path.
+function recordingClient(tables) {
+  const log = { inserts: [], rpcs: [] };
+  const client = {
+    from(name) {
+      const filters = {};
+      let inserted = null;
+      const rows = () =>
+        (tables[name] ?? []).filter((row) =>
+          Object.entries(filters).every(([k, v]) => row[k] === v),
+        );
+      const q = {
+        select: () => q,
+        eq: (k, v) => {
+          if (name === 'people' || name === 'event_entries') filters[k] = v;
+          return q;
+        },
+        ilike: () => q,
+        order: () => q,
+        range: () => q,
+        insert: (row) => {
+          // a save that never answers, to look at the form while it is busy
+          if (tables.hangInsert) return { select: () => ({ single: () => new Promise(() => {}) }) };
+          inserted = { id: `new-${name}`, ...row };
+          log.inserts.push({ table: name, row });
+          (tables[name] ??= []).push(inserted);
+          return q;
+        },
+        single: async () => ({
+          data: inserted ?? (name === 'events' ? EVENT : rows()[0]),
+          error: null,
+        }),
+        maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
+        then: (resolve) => resolve({ data: rows(), error: null }),
+      };
+      return q;
+    },
+    rpc: async (fn, args) => {
+      log.rpcs.push({ fn, args });
+      return { error: null, status: 200 };
+    },
+  };
+  return { client, log };
+}
+
+async function mountRecording(tables) {
+  const root = document.createElement('div');
+  document.body.append(root);
+  const { client, log } = recordingClient({ events: [EVENT], ...tables });
+  await mountThrowdownEventScreen(root, { eventId: 'ev', client, handlers: {} });
+  return { root, log };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+function type(root, id, value) {
+  const node = root.querySelector(`#${id}`);
+  node.value = value;
+  node.dispatchEvent(new Event('input'));
+}
+function submitAdd(root) {
+  root.querySelector('form.td-add').dispatchEvent(new Event('submit', { cancelable: true }));
+}
+
+describe('adding a Throwdown competitor', () => {
+  it('shows a visible label over every box: name, phone with its country, café or team', async () => {
+    const { root } = await mountRecording({ event_entries: [] });
+    const labels = [...root.querySelectorAll('form.td-add .form-field-label')].map(
+      (l) => l.textContent,
+    );
+    expect(labels).toEqual(['Name', 'Phone', 'Café or team (optional)']);
+    expect(root.querySelector('#td-new-phone').type).toBe('tel');
+    expect(root.querySelector('#td-new-phoneCountry').value).toBe('BN');
+    expect(root.querySelector('form.td-add').textContent).toContain('Seduh ID');
+  });
+
+  it('refuses a competitor with no phone, writes nothing, and keeps the name typed', async () => {
+    const { root, log } = await mountRecording({ event_entries: [] });
+    type(root, 'td-new-displayName', 'Ana');
+    submitAdd(root);
+    await settle();
+    expect(log.inserts).toEqual([]);
+    expect(root.querySelector('#td-add-error').textContent).toBe(
+      'Enter the competitor’s phone number.',
+    );
+    const phone = root.querySelector('#td-new-phone');
+    expect(phone.getAttribute('aria-invalid')).toBe('true');
+    expect(phone.getAttribute('aria-describedby')).toContain('td-add-error');
+    // the refusal sits in the phone's own field, not at the foot of the form
+    expect(root.querySelector('#td-add-error').closest('.form-field').contains(phone)).toBe(true);
+    expect(document.activeElement).toBe(phone);
+    expect(root.querySelector('#td-new-displayName').value).toBe('Ana');
+    expect(log.rpcs).toEqual([]);
+  });
+
+  it('refuses a phone it cannot read: nothing written, the error replaces the hint, all kept', async () => {
+    const { root, log } = await mountRecording({ event_entries: [] });
+    type(root, 'td-new-displayName', 'Ana');
+    type(root, 'td-new-phone', '12');
+    type(root, 'td-new-cafe', 'BrewLab');
+    submitAdd(root);
+    await settle();
+    expect(log.inserts).toEqual([]);
+    expect(log.rpcs).toEqual([]);
+    expect(root.querySelector('#td-add-error').textContent).toBe(
+      phoneErrorMessage(parsePhone('12', { country: 'BN' }).code),
+    );
+    expect(root.querySelector('#td-new-phone').getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#td-new-phone-hint')).toBeNull();
+    expect(root.querySelector('#td-new-phone').value).toBe('12');
+    expect(root.querySelector('#td-new-cafe').value).toBe('BrewLab');
+  });
+
+  it('a refusal clears the previous success words', async () => {
+    const { root } = await mountRecording({ event_entries: [], people: [] });
+    type(root, 'td-new-displayName', 'Ana');
+    type(root, 'td-new-phone', '7123456');
+    submitAdd(root);
+    for (let i = 0; i < 10; i += 1) await settle();
+    expect(root.querySelector('.screen-feedback').textContent).toBe('Ana added.');
+    type(root, 'td-new-displayName', 'Bima');
+    submitAdd(root);
+    await settle();
+    expect(root.querySelector('.screen-feedback').textContent).toBe('');
+  });
+
+  it('while saving, the boxes stay focusable (read-only, aria-disabled), so focus is kept', async () => {
+    const { root } = await mountRecording({ event_entries: [], people: [], hangInsert: true });
+    type(root, 'td-new-displayName', 'Ana');
+    type(root, 'td-new-phone', '7123456');
+    root.querySelector('#td-new-phone').focus();
+    submitAdd(root);
+    for (let i = 0; i < 5; i += 1) await settle();
+    const phone = root.querySelector('#td-new-phone');
+    expect(phone.disabled).toBe(false);
+    expect(phone.readOnly).toBe(true);
+    expect(phone.getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelector('#td-new-phoneCountry').disabled).toBe(false);
+    expect(document.activeElement).toBe(phone);
+  });
+
+  it('registers a person by canonical phone, enters them, and asks for the Seduh ID link', async () => {
+    const { root, log } = await mountRecording({ event_entries: [], people: [] });
+    type(root, 'td-new-displayName', 'Ana');
+    type(root, 'td-new-phone', '712 3456');
+    type(root, 'td-new-cafe', 'BrewLab');
+    submitAdd(root);
+    for (let i = 0; i < 10; i += 1) await settle();
+    const person = log.inserts.find((i) => i.table === 'people');
+    expect(person.row).toMatchObject({ org_id: 'org', display_name: 'Ana', phone: '+6737123456' });
+    const entry = log.inserts.find((i) => i.table === 'event_entries');
+    expect(entry.row).toMatchObject({ event_id: 'ev', person_id: 'new-people' });
+    expect(log.rpcs).toContainEqual({
+      fn: 'link_person_identity',
+      args: { p_org_id: 'org', p_person_id: 'new-people' },
+    });
+    expect(root.querySelector('.screen-feedback').textContent).toBe('Ana added.');
+    expect(root.querySelector('#td-new-displayName').value).toBe('');
+    expect(root.querySelector('#td-new-phone').value).toBe('');
+  });
+
+  it('a phone already on this event’s roster adds nobody new and says who it is', async () => {
+    const people = [{ id: 'p1', org_id: 'org', phone: '+6737123456', display_name: 'Ana Rahman' }];
+    const existing = [
+      { id: 'eA', event_id: 'ev', person_id: 'p1', display_name: 'Ana Rahman', withdrawn: false },
+    ];
+    const { root, log } = await mountRecording({ event_entries: existing, people });
+    type(root, 'td-new-displayName', 'Ana R');
+    type(root, 'td-new-phone', '7123456');
+    submitAdd(root);
+    for (let i = 0; i < 10; i += 1) await settle();
+    expect(log.inserts).toEqual([]);
+    expect(root.querySelector('.screen-feedback').textContent).toBe(
+      'Ana Rahman is already a competitor.',
+    );
+  });
+
+  it('a person entered in ANOTHER event is added to this one, as the same person', async () => {
+    const people = [{ id: 'p1', org_id: 'org', phone: '+6737123456', display_name: 'Ana Rahman' }];
+    const elsewhere = [
+      {
+        id: 'eX',
+        event_id: 'other',
+        person_id: 'p1',
+        display_name: 'Ana Rahman',
+        withdrawn: false,
+      },
+    ];
+    const { root, log } = await mountRecording({ event_entries: elsewhere, people });
+    type(root, 'td-new-displayName', 'Ana');
+    type(root, 'td-new-phone', '7123456');
+    submitAdd(root);
+    for (let i = 0; i < 10; i += 1) await settle();
+    expect(log.inserts.map((i) => i.table)).toEqual(['event_entries']);
+    expect(log.inserts[0].row).toMatchObject({ event_id: 'ev', person_id: 'p1' });
+    expect(root.querySelector('.screen-feedback').textContent).toBe('Ana Rahman added.');
   });
 });

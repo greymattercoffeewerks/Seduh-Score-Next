@@ -81,8 +81,10 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     ).newPage();
 
     // ---- eight competitors
-    for (const name of NAMES) {
+    // A phone is required (it is what a Seduh ID links to); one fixed Brunei number per name.
+    for (const [i, name] of NAMES.entries()) {
       await page.getByLabel('Competitor name').fill(name);
+      await page.getByLabel('Phone', { exact: true }).fill(`712345${i}`);
       await page.getByRole('button', { name: 'Add competitor' }).click();
       await expect(page.locator('.td-roster-name', { hasText: name })).toBeVisible();
     }
