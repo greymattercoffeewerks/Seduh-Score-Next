@@ -205,10 +205,9 @@
 
 .td-sheet-line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 5rem;
+  grid-template-columns: minmax(0, 1fr) 6rem;
   grid-template-areas:
     'label input'
-    'max input'
     'problem problem';
   column-gap: var(--space-2);
   align-items: center;
@@ -219,26 +218,43 @@
   overflow-wrap: anywhere;
 }
 
-.td-points-max {
-  grid-area: max;
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
+/* The box carries its own range, "/ 6", after the number (like the paper sheet). The suffix is drawn over the input's
+   right padding and lets taps through to the input. */
+.td-points-box {
+  grid-area: input;
+  position: relative;
 }
 
-.td-points {
-  grid-area: input;
+.field-input.td-points {
   min-height: 3rem;
+  padding-inline-end: 2.5rem;
   text-align: center;
   font-size: var(--text-lg);
 }
 
-.td-points-problem {
-  grid-area: problem;
-  font-size: var(--text-sm);
+/* Petrol's error edge is 1px thicker and the shared rule gives the 1px back on every side; keep the suffix room. */
+.field-input.td-points[aria-invalid='true'] {
+  padding-inline-end: calc(2.5rem - 1px);
 }
 
-.td-points-problem:empty {
-  display: none;
+.td-points-suffix {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: var(--space-3);
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  pointer-events: none;
+}
+
+.td-points-problem {
+  grid-area: problem;
+}
+
+/* space above the error only when there is one (an empty one is clipped out of the flow) */
+.td-points-problem:not(:empty) {
+  margin-top: var(--space-1);
 }
 
 .td-cup-total {
@@ -288,14 +304,9 @@
   flex-basis: 100%;
 }
 
+/* The sheet's own error is Petrol's .form-field-error (colour, "!" mark, clipped while empty); bold, as it blocks Save. */
 .td-sheet-error {
-  margin: 0;
-  color: var(--color-danger, var(--color-text));
   font-weight: var(--font-weight-bold);
-}
-
-.td-sheet-error:empty {
-  display: none;
 }
 
 /* ---- Public results card (publishCard.js): console only, 360px first ---- */
@@ -328,4 +339,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.td-roster-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.td-edit {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }

@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-20, app version 4.24.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-20, app version 4.25.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -23,6 +23,8 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
   decisions 2026-11-20: two semi-final losers share 3rd with no 3rd place match, walkovers do not count, the 3rd place match does).
   Owed: the owner to confirm that "This isn't mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish
   after the final and approve the feed queue.
+- **Throwdown competitor Edit** (released as **4.25.0**, minor, #532): name, phone and café or team, before and after the
+  draw, on edit rules now shared in `core/registration.js` with Cup Taster. No migration. Owed: the owner's tablet check.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 

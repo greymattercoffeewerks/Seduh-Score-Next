@@ -90,6 +90,13 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     }
     await expect(page.getByRole('heading', { name: 'Competitors (8)' })).toBeVisible();
 
+    // ---- correct a competitor's café or team (the same Edit Cup Taster's roster has), the name untouched
+    await page.getByRole('button', { name: `Edit ${NAMES[0]}` }).click();
+    await page.getByLabel(`Café or team (optional) for ${NAMES[0]}`).fill('Edited Cafe');
+    await page.getByRole('button', { name: `Save changes to ${NAMES[0]}` }).click();
+    await expect(page.locator('.screen-feedback')).toContainText(`${NAMES[0]} updated.`);
+    await expect(page.getByRole('button', { name: `Edit ${NAMES[0]}` })).toBeFocused();
+
     // ---- random draw, then start
     await page.getByRole('button', { name: 'Draw the bracket' }).click();
     await expect(page.locator('.td-preview li')).toHaveCount(4);

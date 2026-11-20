@@ -111,6 +111,58 @@ describe('the Throwdown organiser screen', () => {
     expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
   });
 
+  describe('the judge cap on vote taps', () => {
+    const vote = (id, slot) => ({ id, match_id: 'm1', slot_id: slot, created_at: id });
+    const panel = (judges, slots) => ({
+      ...started,
+      td_settings: [{ event_id: 'ev', judge_count: judges, third_place: true, modules: {} }],
+      td_votes: slots.map((slot, i) => vote(`v${i}`, slot)),
+    });
+    const voteOff = (root) =>
+      [...root.querySelectorAll('.td-vote')].map((b) => b.getAttribute('aria-disabled') === 'true');
+    const undoOn = (root) =>
+      [...root.querySelectorAll('button')]
+        .filter((b) => b.textContent === 'Undo')
+        .map((b) => b.getAttribute('aria-disabled') !== 'true');
+
+    it('keeps Vote open while judges are still voting', async () => {
+      const root = await mount(panel(3, ['s1', 's2']));
+      expect(voteOff(root)).toEqual([false, false]);
+      expect(root.textContent).toContain('The votes are level. Take another vote');
+    });
+
+    it('stops Vote once every judge of an odd panel has voted, and says so; Undo stays on', async () => {
+      const root = await mount(panel(3, ['s1', 's1', 's2']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('3 of 3 votes in. Every judge has voted.');
+      expect(undoOn(root)).toEqual([true, true]);
+    });
+
+    it('opens exactly one tie-break vote when an even panel is level', async () => {
+      let root = await mount(panel(2, ['s1', 's2']));
+      expect(voteOff(root)).toEqual([false, false]);
+      expect(root.textContent).toContain('The tie-break judge casts one more vote.');
+
+      document.body.innerHTML = '';
+      root = await mount(panel(2, ['s1', 's2', 's1']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('2 of 2 votes in, plus the tie-break vote.');
+    });
+
+    it('counts taps still waiting to sync toward the cap', async () => {
+      const { enqueueOperation } = await import('../../core/outbox.js');
+      await enqueueOperation('td_cast_vote', {
+        p_operation_id: 'q1',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+        p_slot_id: 's1',
+      });
+      const root = await mount(panel(2, ['s1']));
+      expect(root.textContent).toContain('1 waiting to sync');
+      expect(voteOff(root)).toEqual([true, true]);
+    });
+  });
+
   it('shows the champion banner once the Final is decided', async () => {
     const root = await mount({
       ...started,
@@ -185,6 +237,13 @@ describe('scoresheet rounds on the organiser screen', () => {
     // an empty sheet: Save says what is missing instead of doing nothing
     save.click();
     expect(root.querySelector('.td-sheet-error').textContent).toContain('4 lines are blank');
+    // each blank line is marked AND explained under its own box, not only by the sheet-level error
+    for (const i of inputs) {
+      expect(i.getAttribute('aria-invalid')).toBe('true');
+      expect(i.closest('.td-sheet-line').querySelector('.td-points-problem').textContent).toMatch(
+        /^Enter a whole number from 0 to \d+\.$/,
+      );
+    }
     const type = (i, v) => {
       i.value = v;
       i.dispatchEvent(new Event('input'));
@@ -195,6 +254,27 @@ describe('scoresheet rounds on the organiser screen', () => {
     expect(root.querySelector('.td-sheet-error').textContent).toBe('');
     type(inputs[0], '7');
     expect(inputs[0].getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('shows each line\'s range inside its box as "/ max", never as a placeholder, and errors in Petrol\'s style', async () => {
+    const root = await mount(scoring());
+    root.querySelector('.td-grid-btn').click();
+    const input = root.querySelector('.td-points');
+    const suffix = input.parentElement.querySelector('.td-points-suffix');
+    const max = Number(suffix.textContent.replace('/ ', ''));
+    expect(suffix.textContent).toMatch(/^\/ \d+$/);
+    expect(suffix.getAttribute('aria-hidden')).toBe('true');
+    // the range still reaches a screen reader, through the input's own name
+    expect(input.getAttribute('aria-label')).toContain(`0 to ${max}`);
+    expect(input.hasAttribute('placeholder')).toBe(false);
+    expect(root.querySelector('.td-points-max')).toBeNull();
+    // an out-of-range value: the line under the box is Petrol's field error (its own "!" mark), not plain text
+    input.value = String(max + 1);
+    input.dispatchEvent(new Event('input'));
+    const problem = input.closest('.td-sheet-line').querySelector('.td-points-problem');
+    expect(problem.classList.contains('form-field-error')).toBe(true);
+    expect(problem.textContent).toBe(`Enter a whole number from 0 to ${max}.`);
+    expect(root.querySelector('.td-sheet-error').classList.contains('form-field-error')).toBe(true);
   });
 
   it('refuses to save an out-of-range line, and queues a complete sheet through the outbox', async () => {
@@ -265,15 +345,22 @@ function recordingClient(tables) {
   const client = {
     from(name) {
       const filters = {};
+      const inFilters = {};
       let inserted = null;
       const rows = () =>
-        (tables[name] ?? []).filter((row) =>
-          Object.entries(filters).every(([k, v]) => row[k] === v),
+        (tables[name] ?? []).filter(
+          (row) =>
+            Object.entries(filters).every(([k, v]) => row[k] === v) &&
+            Object.entries(inFilters).every(([k, v]) => v.includes(row[k])),
         );
       const q = {
         select: () => q,
         eq: (k, v) => {
           if (name === 'people' || name === 'event_entries') filters[k] = v;
+          return q;
+        },
+        in: (k, values) => {
+          inFilters[k] = values;
           return q;
         },
         ilike: () => q,
@@ -298,6 +385,9 @@ function recordingClient(tables) {
     },
     rpc: async (fn, args) => {
       log.rpcs.push({ fn, args });
+      // a save that never answers, or is refused, to look at the edit form while busy or refused
+      if (tables.hangRpc?.includes(fn)) return new Promise(() => {});
+      if (tables.rpcErrors?.[fn]) return { error: tables.rpcErrors[fn], status: 400 };
       return { error: null, status: 200 };
     },
   };
@@ -454,5 +544,332 @@ describe('adding a Throwdown competitor', () => {
     expect(log.inserts.map((i) => i.table)).toEqual(['event_entries']);
     expect(log.inserts[0].row).toMatchObject({ event_id: 'ev', person_id: 'p1' });
     expect(root.querySelector('.screen-feedback').textContent).toBe('Ana Rahman added.');
+  });
+});
+
+// ---------- editing a competitor ----------
+const ANA_PERSON = {
+  id: 'p1',
+  org_id: 'org',
+  phone: '+6737123456',
+  email: 'ana@example.com',
+  display_name: 'Ana Rahman',
+};
+const BIMA_PERSON = { id: 'p2', org_id: 'org', phone: '+6738123456', display_name: 'Bima' };
+const roster = () => [
+  {
+    id: 'eA',
+    event_id: 'ev',
+    person_id: 'p1',
+    display_name: 'Ana Rahman',
+    cafe: 'BrewLab',
+    bib: '7',
+    withdrawn: false,
+  },
+  {
+    id: 'eB',
+    event_id: 'ev',
+    person_id: 'p2',
+    display_name: 'Bima',
+    cafe: null,
+    bib: null,
+    withdrawn: false,
+  },
+];
+const people = () => [{ ...ANA_PERSON }, { ...BIMA_PERSON }];
+const settleAll = async () => {
+  for (let i = 0; i < 12; i += 1) await settle();
+};
+async function openEdit(root, id) {
+  root.querySelector(`#td-edit-btn-${id}`).click();
+  await settleAll();
+}
+const submitEdit = (root) =>
+  root.querySelector('form.td-edit').dispatchEvent(new Event('submit', { cancelable: true }));
+const updateCalls = (log) => log.rpcs.filter((r) => r.fn === 'update_roster_entry');
+
+describe('editing a Throwdown competitor', () => {
+  it('opens a labelled form with the name, phone (with its country) and café or team', async () => {
+    const { root } = await mountRecording({ event_entries: roster(), people: people() });
+    await openEdit(root, 'eA');
+    const labels = [...root.querySelectorAll('form.td-edit .form-field-label')].map(
+      (l) => l.textContent,
+    );
+    expect(labels).toEqual(['Name', 'Phone', 'Café or team (optional)']);
+    // each box's accessible name starts with its visible label (WCAG 2.5.3, voice control)
+    expect(root.querySelector('#td-edit-eA-cafe').getAttribute('aria-label')).toBe(
+      'Café or team (optional) for Ana Rahman',
+    );
+    expect(root.querySelector('#td-edit-eA-displayName').value).toBe('Ana Rahman');
+    expect(root.querySelector('#td-edit-eA-phone').value).toBe('+6737123456');
+    expect(root.querySelector('#td-edit-eA-cafe').value).toBe('BrewLab');
+    expect(document.activeElement).toBe(root.querySelector('#td-edit-eA-displayName'));
+    // its own Edit button is hidden while its form is open
+    expect(root.querySelector('#td-edit-btn-eA')).toBeNull();
+  });
+
+  it('saves a corrected name and café through update_roster_entry, keeping email and bib', async () => {
+    const { root, log } = await mountRecording({ event_entries: roster(), people: people() });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-displayName', '  Ana R.  ');
+    type(root, 'td-edit-eA-cafe', 'Brew Lab');
+    submitEdit(root);
+    await settleAll();
+    expect(updateCalls(log)).toEqual([
+      {
+        fn: 'update_roster_entry',
+        args: {
+          p_org_id: 'org',
+          p_entry_id: 'eA',
+          p_display_name: 'Ana R.',
+          p_phone: '+6737123456',
+          // the RPC replaces these with what it is sent: the form shows neither, so the stored values ride along
+          p_email: 'ana@example.com',
+          p_cafe: 'Brew Lab',
+          p_bib: '7',
+        },
+      },
+    ]);
+    // an unchanged phone does not ask for a new Seduh ID link
+    expect(log.rpcs.some((r) => r.fn === 'link_person_identity')).toBe(false);
+    const words = root.querySelector('.screen-feedback').textContent;
+    expect(words).toContain('Ana R. updated.');
+    expect(words).toContain('next time they are published');
+    expect(root.querySelector('form.td-edit')).toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('#td-edit-btn-eA'));
+  });
+
+  it('saves a changed phone, read in its country, and asks for the Seduh ID link again', async () => {
+    const { root, log } = await mountRecording({ event_entries: roster(), people: people() });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-phone', '812 9999');
+    submitEdit(root);
+    await settleAll();
+    expect(updateCalls(log)[0].args.p_phone).toBe('+6738129999');
+    expect(log.rpcs).toContainEqual({
+      fn: 'link_person_identity',
+      args: { p_org_id: 'org', p_person_id: 'p1' },
+    });
+  });
+
+  it('names the other person when the phone already belongs to them, under the phone box', async () => {
+    const detail = JSON.stringify({ field: 'phone', existing_display_name: 'Bima' });
+    const { root } = await mountRecording({
+      event_entries: roster(),
+      people: people(),
+      rpcErrors: { update_roster_entry: { code: 'P0002', message: 'CONFLICT', details: detail } },
+    });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-displayName', 'Ana R.');
+    type(root, 'td-edit-eA-phone', '8123456');
+    submitEdit(root);
+    await settleAll();
+    const error = root.querySelector('#td-edit-error-eA');
+    expect(error.textContent).toBe('That phone number already belongs to Bima. Check the number.');
+    const phone = root.querySelector('#td-edit-eA-phone');
+    expect(phone.getAttribute('aria-invalid')).toBe('true');
+    expect(phone.getAttribute('aria-describedby')).toBe('td-edit-error-eA');
+    expect(error.closest('.form-field').contains(phone)).toBe(true);
+    // typed values kept, the form still open, focus on the box to fix, no success words
+    expect(root.querySelector('#td-edit-eA-displayName').value).toBe('Ana R.');
+    expect(phone.value).toBe('8123456');
+    expect(document.activeElement).toBe(phone);
+    expect(root.querySelector('.screen-feedback').textContent).toBe('');
+  });
+
+  it('checks an unchanged stored phone for shape only, so an old number never blocks a name fix', async () => {
+    // Shaped like E.164 but not a number the phone library accepts today (no Brunei number starts with 9).
+    const old = { ...ANA_PERSON, phone: '+6739999999' };
+    const { root, log } = await mountRecording({
+      event_entries: roster(),
+      people: [old, BIMA_PERSON],
+    });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-displayName', 'Ana R.');
+    submitEdit(root);
+    await settleAll();
+    expect(updateCalls(log)[0].args).toMatchObject({
+      p_display_name: 'Ana R.',
+      p_phone: '+6739999999',
+    });
+    // ...but typing a DIFFERENT such number is refused with the ordinary phone words
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-phone', '+6739999998');
+    submitEdit(root);
+    await settleAll();
+    expect(updateCalls(log)).toHaveLength(1);
+    expect(root.querySelector('#td-edit-error-eA').textContent).toBe(
+      phoneErrorMessage(parsePhone('+6739999998', { country: 'BN' }).code),
+    );
+  });
+
+  it('refuses a blank name and a blank phone in the same words as the add form, writing nothing', async () => {
+    const { root, log } = await mountRecording({ event_entries: roster(), people: people() });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-displayName', '   ');
+    submitEdit(root);
+    await settleAll();
+    expect(root.querySelector('#td-edit-error-eA').textContent).toBe(
+      'Enter the competitor’s name.',
+    );
+    expect(document.activeElement).toBe(root.querySelector('#td-edit-eA-displayName'));
+    type(root, 'td-edit-eA-displayName', 'Ana');
+    type(root, 'td-edit-eA-phone', '');
+    submitEdit(root);
+    await settleAll();
+    expect(root.querySelector('#td-edit-error-eA').textContent).toBe(
+      'Enter the competitor’s phone number.',
+    );
+    expect(updateCalls(log)).toEqual([]);
+  });
+
+  it('refuses a café or team over the database cap', async () => {
+    const { root, log } = await mountRecording({ event_entries: roster(), people: people() });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-cafe', 'x'.repeat(201));
+    submitEdit(root);
+    await settleAll();
+    expect(root.querySelector('#td-edit-error-eA').textContent).toBe(
+      'Café or team is too long (200 characters at most).',
+    );
+    expect(updateCalls(log)).toEqual([]);
+  });
+
+  it('warns when the entry is named in the published results, and says to publish again after saving', async () => {
+    const published = [
+      { payload: { podium: [{ name: 'Ana Rahman', cafe: 'BrewLab' }], standings: [] } },
+    ];
+    const { root } = await mountRecording({
+      event_entries: roster(),
+      people: people(),
+      public_results: published,
+    });
+    await openEdit(root, 'eA');
+    const note = root.querySelector('form.td-edit [role="status"]');
+    expect(note.textContent).toContain('is in the published results');
+    // the note is read where the person types: both boxes the published results match on point to it
+    for (const field of ['displayName', 'cafe']) {
+      expect(root.querySelector(`#td-edit-eA-${field}`).getAttribute('aria-describedby')).toBe(
+        'td-edit-note-eA',
+      );
+    }
+    expect(root.querySelector('#td-edit-eA-phone').hasAttribute('aria-describedby')).toBe(false);
+    type(root, 'td-edit-eA-displayName', 'Ana R.');
+    expect(note.textContent).toContain('drops this person’s result');
+    submitEdit(root);
+    await settleAll();
+    expect(root.querySelector('.screen-feedback').textContent).toContain(
+      'not on their Seduh ID profile until you republish',
+    );
+  });
+
+  it('says nothing about published results for an entry they do not name', async () => {
+    const published = [{ payload: { podium: [{ name: 'Someone Else', cafe: null }] } }];
+    const { root } = await mountRecording({
+      event_entries: roster(),
+      people: people(),
+      public_results: published,
+    });
+    await openEdit(root, 'eA');
+    expect(root.querySelector('form.td-edit [role="status"]')).toBeNull();
+  });
+
+  it('Cancel closes the form without writing and returns focus to that row’s Edit button', async () => {
+    const { root, log } = await mountRecording({ event_entries: roster(), people: people() });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-displayName', 'Changed');
+    [...root.querySelectorAll('form.td-edit button')]
+      .find((b) => b.textContent === 'Cancel')
+      .click();
+    expect(root.querySelector('form.td-edit')).toBeNull();
+    expect(updateCalls(log)).toEqual([]);
+    expect(document.activeElement).toBe(root.querySelector('#td-edit-btn-eA'));
+    expect(root.textContent).toContain('Ana Rahman');
+  });
+
+  it('one row is in edit at a time: another row’s Edit is parked and does nothing', async () => {
+    const { root } = await mountRecording({ event_entries: roster(), people: people() });
+    await openEdit(root, 'eA');
+    type(root, 'td-edit-eA-displayName', 'Half typed');
+    const other = root.querySelector('#td-edit-btn-eB');
+    expect(other.getAttribute('aria-disabled')).toBe('true');
+    other.click();
+    await settleAll();
+    expect(root.querySelectorAll('form.td-edit')).toHaveLength(1);
+    expect(root.querySelector('#td-edit-eA-displayName').value).toBe('Half typed');
+  });
+
+  it('while saving, the boxes stay focusable (read-only, aria-disabled) and keep focus', async () => {
+    const { root, log } = await mountRecording({
+      event_entries: roster(),
+      people: people(),
+      hangRpc: ['update_roster_entry'],
+    });
+    await openEdit(root, 'eA');
+    root.querySelector('#td-edit-eA-displayName').focus();
+    submitEdit(root);
+    await settleAll();
+    const busyName = root.querySelector('#td-edit-eA-displayName');
+    expect(busyName.disabled).toBe(false);
+    expect(busyName.readOnly).toBe(true);
+    expect(busyName.getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelector('#td-edit-eA-phoneCountry').disabled).toBe(false);
+    expect(document.activeElement).toBe(busyName);
+    // a second Save while one is in flight sends nothing more
+    submitEdit(root);
+    await settleAll();
+    expect(updateCalls(log)).toHaveLength(1);
+  });
+
+  it('can edit after the draw too, so a typo is fixable mid-event', async () => {
+    const { root, log } = await mountRecording({
+      ...started,
+      event_entries: roster(),
+      td_slots: [
+        { id: 's1', match_id: 'm1', position: 1, entry_id: 'eA' },
+        { id: 's2', match_id: 'm1', position: 2, entry_id: 'eB' },
+      ],
+      people: people(),
+    });
+    expect(root.textContent).toContain('The draw has started');
+    await openEdit(root, 'eB');
+    type(root, 'td-edit-eB-displayName', 'Bima S');
+    submitEdit(root);
+    await settleAll();
+    expect(updateCalls(log)[0].args).toMatchObject({ p_entry_id: 'eB', p_display_name: 'Bima S' });
+  });
+
+  it('an entry with no person edits name and café only, and sends no phone', async () => {
+    const walkUp = [
+      {
+        id: 'eW',
+        event_id: 'ev',
+        person_id: null,
+        display_name: 'Walk Up',
+        cafe: null,
+        withdrawn: false,
+      },
+    ];
+    const { root, log } = await mountRecording({ event_entries: walkUp, people: [] });
+    await openEdit(root, 'eW');
+    expect(root.querySelector('#td-edit-eW-phone')).toBeNull();
+    expect(root.querySelector('form.td-edit').textContent).toContain('no phone on file');
+    type(root, 'td-edit-eW-displayName', 'Walk Up Two');
+    submitEdit(root);
+    await settleAll();
+    expect(updateCalls(log)[0].args).toMatchObject({
+      p_display_name: 'Walk Up Two',
+      p_phone: null,
+      p_email: null,
+    });
+  });
+
+  it('will not open the editor for a person whose phone could not be read, and says why', async () => {
+    const { root } = await mountRecording({ event_entries: roster(), people: [] });
+    await openEdit(root, 'eA');
+    expect(root.querySelector('form.td-edit')).toBeNull();
+    expect(root.querySelector('.screen-feedback').textContent).toContain(
+      'cannot be edited right now',
+    );
   });
 });

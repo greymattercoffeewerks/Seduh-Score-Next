@@ -8,8 +8,22 @@
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { findEvent } from '../../core/events.js';
-import { setEntryWithdrawn } from '../../core/registry.js';
-import { REGISTRATION_LIMITS, registerAndLink } from '../../core/registration.js';
+import {
+  setEntryWithdrawn,
+  listPeopleByIds,
+  updateRosterEntry,
+  phoneWillChange,
+} from '../../core/registry.js';
+import { requestPersonLink } from '../../core/identity.js';
+import { findPublishedResultForEvent } from '../../core/publicResults.js';
+import {
+  REGISTRATION_LIMITS,
+  registerAndLink,
+  isEntryInPublishedResults,
+  matchFieldsChanged,
+  PUBLISHED_EDIT_ADVISORY,
+  PUBLISHED_EDIT_WARNING,
+} from '../../core/registration.js';
 import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
 import { droppedErrorFor } from '../../core/outbox.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
@@ -45,6 +59,11 @@ import {
   validateCompetitorDraft,
   buildCompetitor,
   addedWords,
+  initialEditDraft,
+  validateCompetitorEdit,
+  buildCompetitorEdit,
+  describeCompetitorEditError,
+  editedWords,
 } from './competitorForm.js';
 
 const PRESET_WORDS = { latte_art_v1: 'Latte art (6 lines, 27 points a cup)' };
@@ -72,6 +91,7 @@ export async function mountThrowdownEventScreen(
     busy: false,
     addDraft: blankCompetitorDraft(), // the Add a competitor form's typed values
     addError: null, // { field, message } from validating that form
+    edit: null, // the one open competitor edit: { entryId, linked, storedPhone, inPublishedResults, draft, error }
   };
 
   // The setup's scoresheet choice: on/off, the preset, and the cups per round role (0 = tap-voted).
@@ -212,6 +232,270 @@ export async function mountThrowdownEventScreen(
     return b;
   }
 
+  // ---------- editing a competitor ----------
+  // The same capability as Cup Taster's roster Edit (core/registration.js holds the shared rules). Available before and
+  // after the draw: a typo in a name must be fixable mid-event. The phone and email live on the person, so opening the
+  // form reads the person (and the published results, best effort, only to warn).
+  const editId = (entry, field) => `td-edit-${entry.id}-${field}`;
+  const NO_PHONE_LOAD =
+    'This competitor’s phone could not be loaded, so it cannot be edited right now.';
+
+  async function openEdit(entry) {
+    if (state.busy || signal?.aborted || (state.edit && state.edit.entryId !== entry.id)) return;
+    state.busy = true;
+    state.feedback = null;
+    render();
+    let person = null;
+    let published = null;
+    let failed = null;
+    try {
+      if (entry.person_id) {
+        [person] = await raceTimeout(
+          listPeopleByIds([entry.person_id], client),
+          DEFAULT_LOAD_TIMEOUT_MS,
+        );
+        // A linked entry whose profile did not load is not treated as a walk-up: that would hide the phone box and
+        // fail the save with a confusing message.
+        if (!person) failed = `${NO_PHONE_LOAD} Reload and try again.`;
+      }
+    } catch {
+      failed = `${NO_PHONE_LOAD} Check your connection and try again.`;
+    }
+    if (!failed) {
+      try {
+        const result = await raceTimeout(
+          findPublishedResultForEvent(eventId, client),
+          DEFAULT_LOAD_TIMEOUT_MS,
+        );
+        published = result?.payload ?? null;
+      } catch {
+        // no warning rather than no editor
+      }
+    }
+    if (signal?.aborted) return;
+    state.busy = false;
+    if (failed) {
+      state.feedback = { tone: 'error', text: failed };
+      state.focusTarget = `td-edit-btn-${entry.id}`;
+    } else {
+      state.edit = {
+        entryId: entry.id,
+        linked: Boolean(entry.person_id),
+        storedPhone: person?.phone ?? null,
+        inPublishedResults: isEntryInPublishedResults(published, entry),
+        draft: initialEditDraft(entry, person),
+        error: null,
+      };
+      state.focusTarget = editId(entry, 'displayName');
+    }
+    render();
+  }
+
+  function cancelEdit() {
+    if (state.busy || !state.edit) return;
+    state.focusTarget = `td-edit-btn-${state.edit.entryId}`;
+    state.edit = null;
+    state.feedback = null;
+    render();
+  }
+
+  async function saveEdit(entry) {
+    const edit = state.edit;
+    if (state.busy || !edit || signal?.aborted) return;
+    const where = { linked: edit.linked, storedPhone: edit.storedPhone };
+    const problem = validateCompetitorEdit(edit.draft, where);
+    if (problem) {
+      edit.error = problem;
+      state.feedback = null;
+      state.focusTarget = editId(entry, problem.field);
+      render();
+      return;
+    }
+    edit.error = null;
+    state.busy = true;
+    state.feedback = null;
+    render();
+    const fields = buildCompetitorEdit(edit.draft, where);
+    const detailsChanged = matchFieldsChanged(edit.draft, entry);
+    const dropsPublishedResult = edit.inPublishedResults && detailsChanged;
+    try {
+      await updateRosterEntry(state.event.org_id, entry.id, fields, client);
+      // A phone change clears the database link and nothing re-links on its own, so ask again (best effort, as at
+      // registration). Compared canonically: an unchanged number is not a change.
+      if (edit.linked && entry.person_id && phoneWillChange(fields)) {
+        requestPersonLink(state.event.org_id, entry.person_id, client);
+      }
+      state.edit = null;
+      state.feedback = {
+        tone: 'success',
+        text: editedWords(fields.displayName, { detailsChanged, dropsPublishedResult }),
+      };
+      state.focusTarget = `td-edit-btn-${entry.id}`;
+    } catch (err) {
+      // Shown inside the form beside the box it is about, so what was typed is not lost.
+      const { message, field } = describeCompetitorEditError(err);
+      edit.error = { field, message };
+      state.focusTarget = field ? editId(entry, field) : `td-edit-error-${entry.id}`;
+    }
+    state.busy = false;
+    await refreshSoon();
+  }
+
+  function editForm(entry) {
+    const edit = state.edit;
+    const busy = state.busy;
+    const errId = `td-edit-error-${entry.id}`;
+    const noteId = `td-edit-note-${entry.id}`;
+    const inputs = {};
+    // What a box is described by: its refusal (when it is the box refused) and, for the two boxes the published results
+    // match on, the published-results note, so it is read where the person is typing.
+    const describedBy = (field) =>
+      [
+        edit.error?.field === field ? errId : null,
+        edit.inPublishedResults && (field === 'displayName' || field === 'cafe') ? noteId : null,
+      ]
+        .filter(Boolean)
+        .join(' ');
+    function input(field, label, { type = 'text', maxlength } = {}) {
+      const attrs = {
+        type,
+        'aria-label': label,
+        autocomplete: 'off',
+        'data-focus-key': editId(entry, field),
+        'data-field': field,
+      };
+      if (maxlength) attrs.maxlength = String(maxlength);
+      if (edit.error?.field === field) attrs['aria-invalid'] = 'true';
+      if (describedBy(field)) attrs['aria-describedby'] = describedBy(field);
+      const node = el('input', { className: 'field-input', id: editId(entry, field), attrs });
+      node.value = edit.draft[field];
+      // Busy: read-only and aria-disabled, never native `disabled` (core/dom.js setBusyDisabled).
+      node.readOnly = busy;
+      setBusyDisabled(node, busy);
+      inputs[field] = node;
+      return node;
+    }
+    const nameInput = input('displayName', `Name for ${entry.display_name}`, {
+      maxlength: REGISTRATION_LIMITS.displayName,
+    });
+    const phoneInput = edit.linked
+      ? input('phone', `Phone for ${entry.display_name}`, { type: 'tel' })
+      : null;
+    const countrySelect = edit.linked
+      ? phoneCountrySelect({
+          label: `Phone country for ${entry.display_name}`,
+          value: edit.draft.phoneCountry,
+          busy,
+          id: editId(entry, 'phoneCountry'),
+          focusKey: editId(entry, 'phoneCountry'),
+          onChange: (value) => {
+            // While saving, the choice is not taken: re-render so the box shows the held country again.
+            if (state.busy) {
+              render();
+              return;
+            }
+            edit.draft.phoneCountry = value;
+            clearEditError();
+          },
+        })
+      : null;
+    const cafeInput = input('cafe', `Café or team (optional) for ${entry.display_name}`, {
+      maxlength: REGISTRATION_LIMITS.cafe,
+    });
+    const errorFor = (field) =>
+      edit.error?.field === field
+        ? [el('p', { className: 'form-field-error', id: errId, text: edit.error.message })]
+        : [];
+    // Only for an entry the published results name. Always shown; it becomes the stronger warning the moment the name or
+    // café changes, and is rewritten only when the sentence changes so a screen reader does not repeat it per keystroke.
+    const noteWords = () =>
+      matchFieldsChanged(edit.draft, entry) ? PUBLISHED_EDIT_WARNING : PUBLISHED_EDIT_ADVISORY;
+    const note = edit.inPublishedResults
+      ? el('p', { className: 'td-note', id: noteId, attrs: { role: 'status' }, text: noteWords() })
+      : null;
+    function clearEditError() {
+      if (!edit.error) return;
+      edit.error = null;
+      for (const [field, box] of Object.entries(inputs)) {
+        box.removeAttribute('aria-invalid');
+        if (describedBy(field)) box.setAttribute('aria-describedby', describedBy(field));
+        else box.removeAttribute('aria-describedby');
+      }
+      form.querySelectorAll('.form-field-error').forEach((p) => p.remove());
+    }
+    for (const [field, box] of Object.entries(inputs)) {
+      box.addEventListener('input', () => {
+        edit.draft[field] = box.value;
+        if (note && note.textContent !== noteWords()) note.textContent = noteWords();
+        clearEditError();
+      });
+    }
+    const save = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: busy ? 'Saving…' : 'Save',
+      attrs: {
+        type: 'submit',
+        'data-focus-key': `td-edit-save-${entry.id}`,
+        'aria-label': `${busy ? 'Saving' : 'Save'} changes to ${entry.display_name}`,
+      },
+    });
+    if (busy) setBusyDisabled(save, true);
+    const cancel = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Cancel',
+      attrs: {
+        type: 'button',
+        'data-focus-key': `td-edit-cancel-${entry.id}`,
+        'aria-label': `Cancel editing ${entry.display_name}`,
+      },
+    });
+    if (busy) setBusyDisabled(cancel, true);
+    cancel.addEventListener('click', () => {
+      if (!state.busy) cancelEdit();
+    });
+    // A refusal with no box to point at (a dropped connection, say) is its own alert line and takes focus.
+    const generalError =
+      edit.error && !edit.error.field
+        ? el('p', {
+            className: 'form-field-error',
+            id: errId,
+            text: edit.error.message,
+            attrs: { role: 'alert', tabindex: '-1' },
+          })
+        : null;
+    const form = el(
+      'form',
+      {
+        className: 'td-edit',
+        attrs: { 'aria-label': `Edit ${entry.display_name}`, 'data-entry-id': entry.id },
+      },
+      [
+        note,
+        generalError,
+        labeledField('Name', nameInput, errorFor('displayName')),
+        phoneInput
+          ? labeledField('Phone', phoneRow(countrySelect, phoneInput), errorFor('phone'))
+          : null,
+        labeledField('Café or team (optional)', cafeInput, errorFor('cafe')),
+        edit.linked
+          ? null
+          : el('p', {
+              className: 'td-note',
+              text: 'This entry has no phone on file, so only the name and café or team can be changed.',
+            }),
+        el('div', { className: 'td-roster-actions' }, [save, cancel]),
+      ].filter(Boolean),
+    );
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveEdit(entry);
+    });
+    form.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !state.busy) cancelEdit();
+    });
+    return form;
+  }
+
   function competitorsCard() {
     const locked = state.data.bracket.started;
     const draft = state.addDraft;
@@ -326,21 +610,41 @@ export async function mountThrowdownEventScreen(
         state.feedback = { tone: 'success', text: addedWords(entry, known.has(entry.id)) };
       });
     });
-    const rows = state.data.entries.map((entry) =>
-      el('li', { className: 'td-roster-row' }, [
-        el('span', {
-          className: 'td-roster-name',
-          text: entry.display_name + (entry.withdrawn ? ' (withdrawn)' : ''),
-        }),
-        button(
-          entry.withdrawn ? 'Restore' : 'Withdraw',
-          () => act(() => setEntryWithdrawn(entry.id, !entry.withdrawn, client)),
-          {
-            key: `td-withdraw-${entry.id}`,
-          },
-        ),
-      ]),
-    );
+    const rows = state.data.entries.map((entry) => {
+      const editingThis = state.edit?.entryId === entry.id;
+      // Hidden while its own form is open (the form's Cancel returns focus here). While ANOTHER row's form is open it is
+      // parked, not removed: one edit at a time, and a stray tap must not discard what is typed in the open one.
+      let editButton = null;
+      if (!editingThis) {
+        editButton = button('Edit', () => openEdit(entry), { key: `td-edit-btn-${entry.id}` });
+        editButton.id = `td-edit-btn-${entry.id}`;
+        editButton.setAttribute('aria-label', `Edit ${entry.display_name}`);
+        if (state.edit) editButton.setAttribute('aria-disabled', 'true');
+      }
+      return el(
+        'li',
+        { className: 'td-roster-row' },
+        [
+          el('span', {
+            className: 'td-roster-name',
+            text: entry.display_name + (entry.withdrawn ? ' (withdrawn)' : ''),
+          }),
+          el(
+            'div',
+            { className: 'td-roster-actions' },
+            [
+              editButton,
+              button(
+                entry.withdrawn ? 'Restore' : 'Withdraw',
+                () => act(() => setEntryWithdrawn(entry.id, !entry.withdrawn, client)),
+                { key: `td-withdraw-${entry.id}` },
+              ),
+            ].filter(Boolean),
+          ),
+          editingThis ? editForm(entry) : null,
+        ].filter(Boolean),
+      );
+    });
     return el(
       'section',
       { className: 'card td-card', attrs: { 'aria-labelledby': 'td-competitors-h' } },
@@ -352,7 +656,7 @@ export async function mountThrowdownEventScreen(
         locked
           ? el('p', {
               className: 'td-note',
-              text: 'The draw has started. Withdrawing a competitor does not change the bracket: record a walkover on their match.',
+              text: 'The draw has started. Edit corrects a name, phone or café or team, and the bracket uses the new name. Withdrawing a competitor does not change the bracket: record a walkover on their match.',
             })
           : form,
       ],
@@ -737,6 +1041,11 @@ export async function mountThrowdownEventScreen(
     const { tallies, queued, decisionQueued } = displayedTallies(match);
     const lead = leadOf(tallies);
     const judges = state.data.settings.judge_count;
+    // One tap is one judge's vote: once every judge has voted (taps still waiting to sync included), the Vote buttons
+    // stop, except for ONE tie-break vote when the panel is even and comes out level. The database holds the same rule
+    // (td_cast_vote, hint td_votes_full); Undo frees a vote.
+    const tieBreak = lead.total === judges && lead.level;
+    const full = lead.total >= judges && !tieBreak;
     const sides = match.sides.map((side, i) => {
       const count = tallies.find((t) => t.slotId === side.slotId)?.votes ?? 0;
       return el('div', { className: 'td-side' }, [
@@ -755,7 +1064,7 @@ export async function mountThrowdownEventScreen(
             className: 'btn btn-primary tap-target td-vote',
             key: `td-vote-${match.id}-${i}`,
             ignoreBusy: true,
-            disabled: decisionQueued || state.deciding,
+            disabled: full || decisionQueued || state.deciding,
           },
         ),
         el('p', {
@@ -785,9 +1094,15 @@ export async function mountThrowdownEventScreen(
       ? 'The result is waiting to sync. Voting is closed for this match.'
       : lead.total === 0
         ? `Waiting for votes (${judges} ${judges === 1 ? 'judge' : 'judges'}).`
-        : lead.level
-          ? 'The votes are level. Take another vote before confirming.'
-          : `${lead.total} of ${judges} votes in.`;
+        : tieBreak
+          ? 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
+          : lead.level
+            ? 'The votes are level. Take another vote before confirming.'
+            : lead.total === judges + 1
+              ? `${judges} of ${judges} votes in, plus the tie-break vote. Every judge has voted.`
+              : full
+                ? `${lead.total} of ${judges} votes in. Every judge has voted.`
+                : `${lead.total} of ${judges} votes in.`;
     const winnerName = lead.leaderSlotId
       ? match.sides.find((s) => s.slotId === lead.leaderSlotId)?.name
       : null;
