@@ -6,7 +6,9 @@
 // each element only its trimmed `name` and `cafe`, matched against this event's event_entries. A Throwdown payload with
 // the same two arrays is therefore enough for the feed to create identities exactly as it does for Cup Taster. The
 // top-level keys are the ones the feed and the archive whitelist already know (format, eventName, city, venue,
-// eventDate, competitors, rounds, podium, standings, notListed); nothing else is added. There is no score or time:
+// eventDate, competitors, rounds, podium, standings, notListed), plus `matches` (full scope only): the matches that were
+// actually played, as names, cafés and a winner flag, which the Seduh ID profile reads for the knockout record
+// (T-ID2.TD). The feed and the archive whitelist ignore `matches`; the public sheet draws nothing for it. There is no score or time:
 // a knockout has neither, so those keys are left out rather than sent as null (the public sheet draws no column for
 // them).
 //
@@ -73,6 +75,38 @@ function tiersOf(bracket) {
     tiers.push(ids(main[i].matches.flatMap(losersOf)));
   }
   return tiers.filter((t) => t.length > 0);
+}
+
+// The matches that were actually PLAYED, for the Seduh ID knockout record (owner decision 2026-11-20: a walkover is not
+// counted, a 3rd place match is). A match counts when it is decided by votes or scores and has exactly two competitors in
+// it, one the winner. No byes, walkovers, undecided matches, pools (more than two slots), redemption rounds (not built yet; decide
+// their rule when they ship) or scores; names and cafés only, as
+// everywhere else in this payload. Same name and café the standings use, so a reader can match them to the roster.
+function playedMatches(bracket, entryById, listedIds) {
+  const out = [];
+  for (const round of bracket.rounds) {
+    if (round.phase !== 'main' && round.phase !== 'third_place') continue;
+    for (const m of round.matches) {
+      if (!m.decided || (m.resultKind !== 'votes' && m.resultKind !== 'scores')) continue;
+      const seated = m.sides.filter((s) => s.entryId);
+      if (m.sides.length !== 2 || seated.length !== 2) continue;
+      // a competitor the standings leave out (withdrawn, not on the podium) is named nowhere in the payload
+      if (seated.some((x) => !listedIds.has(x.entryId))) continue;
+      if (seated.filter((s) => s.winner === true).length !== 1) continue;
+      out.push({
+        round: round.label,
+        sides: seated.map((s) => {
+          const entry = entryById.get(s.entryId);
+          return {
+            name: entry?.display_name ?? s.name ?? null,
+            cafe: entry?.cafe ?? null,
+            winner: s.winner === true,
+          };
+        }),
+      });
+    }
+  }
+  return out;
 }
 
 // `entries`: the event_entries rows (id, display_name, cafe, withdrawn). scope: 'podium' (what any unrecognised value
@@ -144,6 +178,8 @@ export function buildThrowdownPayload({ event, bracket, entries, scope = 'podium
     }));
     const notListed = entries.length - listed.length;
     if (notListed > 0) payload.notListed = notListed;
+    // The knockout record on a Seduh ID profile is read from this list and nowhere else (T-ID2.TD).
+    payload.matches = playedMatches(bracket, entryById, new Set(listed.map((p) => p.id)));
   }
   return payload;
 }
