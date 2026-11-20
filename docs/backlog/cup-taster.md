@@ -888,10 +888,11 @@ _Result-recorded and rank-impact screens shipped; these were flagged and documen
 
 ## Known open items from the Throwdown competitor phone task (2026-11-20; registration shared by Cup Taster and Throwdown)
 
-- **Cup Taster's registration and edit inputs still type their caps as literals** (`maxlength` 200/254/200 in
-  `rosterScreen.js`) instead of reading `core/registration.js` `REGISTRATION_LIMITS`; Throwdown reads the constant.
-- **The edit path has its own phone check** (`validateEditDraft`, with `storedPhone`); `core/registration.phoneProblem`
-  takes no `storedPhone` yet, so a future Throwdown edit form would copy it. Add the option and call it from both.
+- ~~**Cup Taster's registration and edit inputs type their caps as literals**~~ CLOSED 2026-11-20: every `maxlength` in
+  `rosterScreen.js` reads `REGISTRATION_LIMITS`.
+- ~~**The edit path has its own phone check**~~ CLOSED 2026-11-20: `core/registration.js` `phoneProblem` takes `storedPhone`,
+  and `validateEdit`, `buildEditFields`, `describeRegistrationEditError`, `isEntryInPublishedResults` moved there; Cup Taster
+  and Throwdown both call them.
 - **"Added" can be wrong when another device registered the same phone first** (pre-existing in Cup Taster, copied):
   the "already in" check uses the screen's last read of the roster. Have `registerEntry` report whether it inserted.
 - **The registration write has no timeout** (pre-existing): a stalled save leaves the form busy with no way out.

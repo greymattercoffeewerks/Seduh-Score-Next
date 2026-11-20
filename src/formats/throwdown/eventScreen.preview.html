@@ -54,7 +54,8 @@
     <!--
       Demo-only harness for the Throwdown organiser screen before the draw, not part of the shipped module graph (same
       role as cup-taster/rosterScreen.preview.html). No live Supabase: an in-memory fake client stands in. Seeded with
-      two competitors. Try: Add competitor with no phone (refused, the name stays), a bad phone, a good one (a person
+      two competitors. Try Edit on each row (mfosa has a phone, Firdaus is a walk-up with none; a clash with 7000001 is
+      refused naming mfosa), then: Add competitor with no phone (refused, the name stays), a bad phone, a good one (a person
       is made and the Seduh ID link is asked for, see the console), then the same phone again ("already a competitor").
     -->
     <main id="app" class="screen-container"></main>
@@ -75,15 +76,22 @@
         from(name) {
           const filters = {};
           let inserted = null;
+          const inFilters = {};
           const rows = () =>
-            (tables[name] ?? []).filter((row) =>
-              Object.entries(filters).every(([k, v]) => row[k] === v),
+            (tables[name] ?? []).filter(
+              (row) =>
+                Object.entries(filters).every(([k, v]) => row[k] === v) &&
+                Object.entries(inFilters).every(([k, v]) => v.includes(row[k])),
             );
           const q = {
             select: () => q,
             eq: (k, v) => {
               if (name === 'people' || (name === 'event_entries' && k === 'person_id'))
                 filters[k] = v;
+              return q;
+            },
+            in: (k, values) => {
+              inFilters[k] = values;
               return q;
             },
             ilike: () => q,
@@ -106,6 +114,32 @@
         },
         rpc: async (fn, args) => {
           console.log('rpc', fn, JSON.stringify(args));
+          if (fn === 'update_roster_entry') {
+            const entry = tables.event_entries.find((e) => e.id === args.p_entry_id);
+            const clash = tables.people.find(
+              (p) => p.phone === args.p_phone && p.id !== entry.person_id,
+            );
+            if (clash) {
+              return {
+                error: {
+                  code: 'P0002',
+                  message: 'CONFLICT',
+                  details: JSON.stringify({
+                    field: 'phone',
+                    existing_display_name: clash.display_name,
+                  }),
+                },
+                status: 409,
+              };
+            }
+            Object.assign(entry, {
+              display_name: args.p_display_name,
+              cafe: args.p_cafe,
+              bib: args.p_bib,
+            });
+            const person = tables.people.find((p) => p.id === entry.person_id);
+            if (person) Object.assign(person, { phone: args.p_phone, email: args.p_email });
+          }
           return { error: null, status: 200 };
         },
       };

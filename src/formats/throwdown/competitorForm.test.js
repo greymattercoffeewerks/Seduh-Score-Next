@@ -5,6 +5,9 @@ import {
   validateCompetitorDraft,
   buildCompetitor,
   addedWords,
+  initialEditDraft,
+  validateCompetitorEdit,
+  editedWords,
 } from './competitorForm.js';
 
 const draft = (over) => ({ ...blankCompetitorDraft(), ...over });
@@ -84,6 +87,59 @@ describe('Throwdown competitor form', () => {
     // a withdrawn competitor is out of the draw until restored, so is not "already a competitor"
     expect(addedWords({ display_name: 'Ana Rahman', withdrawn: true }, true)).toBe(
       'Ana Rahman is already on the list, withdrawn. Use Restore to bring them back.',
+    );
+  });
+});
+
+describe('Throwdown competitor edit (pure)', () => {
+  const entry = { id: 'eA', display_name: 'Ana', cafe: 'BrewLab', bib: '7', person_id: 'p1' };
+  const person = { id: 'p1', phone: '+6737123456', email: 'a@b.co' };
+
+  it('starts from the entry for name and café and from the person for phone and email', () => {
+    expect(initialEditDraft(entry, person)).toEqual({
+      displayName: 'Ana',
+      phone: '+6737123456',
+      phoneCountry: 'BN',
+      cafe: 'BrewLab',
+      email: 'a@b.co',
+      bib: '7',
+    });
+  });
+
+  it('starts blank on the person fields for an entry with no person', () => {
+    expect(initialEditDraft({ display_name: 'W', cafe: null, bib: null }, null)).toMatchObject({
+      phone: '',
+      email: '',
+      cafe: '',
+      bib: '',
+    });
+  });
+
+  it('uses the add form’s words for a missing name or phone', () => {
+    const d = initialEditDraft(entry, person);
+    expect(validateCompetitorEdit({ ...d, displayName: '' }, { linked: true }).message).toBe(
+      'Enter the competitor’s name.',
+    );
+    expect(validateCompetitorEdit({ ...d, phone: '' }, { linked: true }).message).toBe(
+      'Enter the competitor’s phone number.',
+    );
+    expect(validateCompetitorEdit(d, { linked: true, storedPhone: '+6737123456' })).toBeNull();
+  });
+
+  it('does not check the email or bib it merely carries (the form has no box for them)', () => {
+    const d = { ...initialEditDraft(entry, person), email: 'e'.repeat(300), bib: 'b'.repeat(99) };
+    expect(validateCompetitorEdit(d, { linked: true, storedPhone: '+6737123456' })).toBeNull();
+  });
+
+  it('says in words that a published result needs publishing again, only when it applies', () => {
+    expect(editedWords('Ana', { detailsChanged: false, dropsPublishedResult: false })).toBe(
+      'Ana updated.',
+    );
+    expect(editedWords('Ana', { detailsChanged: true, dropsPublishedResult: false })).toContain(
+      'new details the next time they are published',
+    );
+    expect(editedWords('Ana', { detailsChanged: true, dropsPublishedResult: true })).toContain(
+      'until you republish',
     );
   });
 });
