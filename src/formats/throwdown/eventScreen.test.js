@@ -111,23 +111,56 @@ describe('the Throwdown organiser screen', () => {
     expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
   });
 
-  it('stops the Vote buttons once every judge has voted, and leaves Undo working', async () => {
+  describe('the judge cap on vote taps', () => {
     const vote = (id, slot) => ({ id, match_id: 'm1', slot_id: slot, created_at: id });
-    const twoJudges = {
+    const panel = (judges, slots) => ({
       ...started,
-      td_settings: [{ event_id: 'ev', judge_count: 2, third_place: true, modules: {} }],
-    };
-    const votes = (off) => (b) => (b.getAttribute('aria-disabled') === 'true') === off;
-    let root = await mount({ ...twoJudges, td_votes: [vote('v1', 's1')] });
-    expect([...root.querySelectorAll('.td-vote')].every(votes(false))).toBe(true);
-    expect(root.textContent).toContain('1 of 2 votes in.');
+      td_settings: [{ event_id: 'ev', judge_count: judges, third_place: true, modules: {} }],
+      td_votes: slots.map((slot, i) => vote(`v${i}`, slot)),
+    });
+    const voteOff = (root) =>
+      [...root.querySelectorAll('.td-vote')].map((b) => b.getAttribute('aria-disabled') === 'true');
+    const undoOn = (root) =>
+      [...root.querySelectorAll('button')]
+        .filter((b) => b.textContent === 'Undo')
+        .map((b) => b.getAttribute('aria-disabled') !== 'true');
 
-    document.body.innerHTML = '';
-    root = await mount({ ...twoJudges, td_votes: [vote('v1', 's1'), vote('v2', 's2')] });
-    expect([...root.querySelectorAll('.td-vote')].every(votes(true))).toBe(true);
-    expect(root.textContent).toContain('every judge has voted. Undo a vote');
-    const undos = [...root.querySelectorAll('button')].filter((b) => b.textContent === 'Undo');
-    expect(undos.every((b) => b.getAttribute('aria-disabled') !== 'true')).toBe(true);
+    it('keeps Vote open while judges are still voting', async () => {
+      const root = await mount(panel(3, ['s1', 's2']));
+      expect(voteOff(root)).toEqual([false, false]);
+      expect(root.textContent).toContain('The votes are level. Take another vote');
+    });
+
+    it('stops Vote once every judge of an odd panel has voted, and says so; Undo stays on', async () => {
+      const root = await mount(panel(3, ['s1', 's1', 's2']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('3 of 3 votes in. Every judge has voted.');
+      expect(undoOn(root)).toEqual([true, true]);
+    });
+
+    it('opens exactly one tie-break vote when an even panel is level', async () => {
+      let root = await mount(panel(2, ['s1', 's2']));
+      expect(voteOff(root)).toEqual([false, false]);
+      expect(root.textContent).toContain('The tie-break judge casts one more vote.');
+
+      document.body.innerHTML = '';
+      root = await mount(panel(2, ['s1', 's2', 's1']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('2 of 2 votes in, plus the tie-break vote.');
+    });
+
+    it('counts taps still waiting to sync toward the cap', async () => {
+      const { enqueueOperation } = await import('../../core/outbox.js');
+      await enqueueOperation('td_cast_vote', {
+        p_operation_id: 'q1',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+        p_slot_id: 's1',
+      });
+      const root = await mount(panel(2, ['s1']));
+      expect(root.textContent).toContain('1 waiting to sync');
+      expect(voteOff(root)).toEqual([true, true]);
+    });
   });
 
   it('shows the champion banner once the Final is decided', async () => {

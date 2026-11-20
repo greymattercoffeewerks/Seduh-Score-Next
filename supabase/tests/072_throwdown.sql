@@ -16,7 +16,7 @@
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(142);
+select plan(150);
 
 create schema t072;
 grant usage on schema t072 to anon, authenticated;
@@ -86,11 +86,12 @@ insert into events (id, org_id, format, name) values
   (t072.u(201), t072.u(100), 'throwdown', 'Throwdown withdrawn loser'),
   (t072.u(202), t072.u(100), 'throwdown', 'Throwdown withdrawn winner'),
   (t072.u(203), t072.u(100), 'throwdown', 'Throwdown withdrawn no-show'),
-  (t072.u(204), t072.u(100), 'throwdown', 'Throwdown two walkovers');
+  (t072.u(204), t072.u(100), 'throwdown', 'Throwdown two walkovers'),
+  (t072.u(206), t072.u(100), 'throwdown', 'Throwdown even panel');
 -- competitors: event 110 -> entries 1..8 (ids 1101..1108), 120 -> 5, 130 -> 6, 140 -> 4, 210 -> 2
 insert into event_entries (id, event_id, display_name)
 select t072.u(e.ev * 10 + n), t072.u(e.ev), 'P' || n
-  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (202, 4), (203, 4), (204, 4), (210, 2)) e(ev, cnt), generate_series(1, 8) n
+  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (202, 4), (203, 4), (204, 4), (206, 2), (210, 2)) e(ev, cnt), generate_series(1, 8) n
  where n <= e.cnt;
 
 -- reads the winner's display name of a match by position (null while undecided)
@@ -229,7 +230,7 @@ select is(t072.as_user(t072.u(1), format('select public.td_cast_vote(%L, %L, %L,
     t072.u(9001), t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 1), t072.u(9001), t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 1))), 'ok',
   'the same operation replayed...');
 select is((select count(*)::int from td_votes where slot_id = t072.s(110, 1, 2, 1)), 2, '...counts once (an outbox replay cannot double a tap)');
--- the judge cap: three judges, three taps in (2-1), so a match takes no fourth vote
+-- the judge cap: three judges, three taps in (2-1), so a match takes no fourth vote (an odd panel is never level when full)
 select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 2))),
   'P0001|td_votes_full|%', 'a tap past the judge count is refused (td_votes_full)');
 select is(t072.as_user(t072.u(1), format('select public.td_cast_vote(%L, %L, %L, %L)', t072.u(9001), t072.u(100), t072.m(110, 1, 2), t072.s(110, 1, 2, 1))), 'ok',
@@ -426,6 +427,23 @@ select throws_ok(format('insert into td_slots (event_id, match_id, position) val
 select is(t072.start(170, 'random', 'seed-170', array[1,2]), 'ok', 'a throwaway Throwdown starts');
 select is(t072.as_user(t072.u(1), format('select public.delete_test_event(%L, %L)', t072.u(100), t072.u(170))), 'ok', 'and is deleted whole');
 select is((select count(*)::int from td_rounds where event_id = t072.u(170)) + (select count(*)::int from td_slots where event_id = t072.u(170)), 0, 'with its rounds and slots');
+
+-- ============ an even panel that comes out level takes ONE tie-break vote ============
+select is(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 2, true, ''random'', ''{}'')', t072.u(100), t072.u(206))), 'ok',
+  'a two-judge panel');
+select is(t072.start(206, 'random', 'seed-206', array[1,2]), 'ok', 'and its event starts');
+select t072.tap(206, 1, 1, 1, 1);
+select t072.tap(206, 1, 1, 2, 1);
+select is(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(206, 1, 1), t072.s(206, 1, 1, 1))), 'ok',
+  'both judges in and level (1-1): the tie-break vote is taken');
+select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(206, 1, 1), t072.s(206, 1, 1, 2))),
+  'P0001|td_votes_full|%', 'but only one: a second tie-break tap is refused');
+select is(t072.as_user(t072.u(1), format('select public.td_undo_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(206, 1, 1), t072.s(206, 1, 1, 1))), 'ok',
+  'taking the tie-break vote back...');
+select is(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(206, 1, 1), t072.s(206, 1, 1, 2))), 'ok',
+  '...re-opens the one tie-break vote');
+select is((select count(*)::int from td_votes where match_id = t072.m(206, 1, 1)), 3, 'so the match holds the two judges plus one tie-break vote');
+select is(t072.confirm(206, 1, 1), 'ok', 'and the tie-break decides it (2-1)');
 
 select * from finish();
 rollback;

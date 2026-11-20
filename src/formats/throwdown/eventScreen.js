@@ -738,8 +738,10 @@ export async function mountThrowdownEventScreen(
     const lead = leadOf(tallies);
     const judges = state.data.settings.judge_count;
     // One tap is one judge's vote: once every judge has voted (taps still waiting to sync included), the Vote buttons
-    // stop. The database refuses a tap past the cap too (td_cast_vote, hint td_votes_full); Undo frees a vote.
-    const full = lead.total >= judges;
+    // stop, except for ONE tie-break vote when the panel is even and comes out level. The database holds the same rule
+    // (td_cast_vote, hint td_votes_full); Undo frees a vote.
+    const tieBreak = lead.total === judges && lead.level;
+    const full = lead.total >= judges && !tieBreak;
     const sides = match.sides.map((side, i) => {
       const count = tallies.find((t) => t.slotId === side.slotId)?.votes ?? 0;
       return el('div', { className: 'td-side' }, [
@@ -788,11 +790,15 @@ export async function mountThrowdownEventScreen(
       ? 'The result is waiting to sync. Voting is closed for this match.'
       : lead.total === 0
         ? `Waiting for votes (${judges} ${judges === 1 ? 'judge' : 'judges'}).`
-        : lead.level
-          ? full
-            ? 'The votes are level and every judge has voted. Undo a vote and vote again before confirming.'
-            : 'The votes are level. Take another vote before confirming.'
-          : `${lead.total} of ${judges} votes in.`;
+        : tieBreak
+          ? 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
+          : lead.level
+            ? 'The votes are level. Take another vote before confirming.'
+            : lead.total === judges + 1
+              ? `${judges} of ${judges} votes in, plus the tie-break vote. Every judge has voted.`
+              : full
+                ? `${lead.total} of ${judges} votes in. Every judge has voted.`
+                : `${lead.total} of ${judges} votes in.`;
     const winnerName = lead.leaderSlotId
       ? match.sides.find((s) => s.slotId === lead.leaderSlotId)?.name
       : null;
