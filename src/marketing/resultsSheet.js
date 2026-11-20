@@ -103,11 +103,20 @@ function timeOrDash(row) {
 
 // Score and time come before the round reached: on a phone the table scrolls sideways, and those two
 // are what the sheet is for.
-function buildTable({ kind, rows }, title) {
+function buildTable({ kind, rows }, title, { scored = true } = {}) {
   const standings = kind === 'standings';
-  const columns = standings
-    ? ['Place', 'Competitor', 'Café', 'Score', 'Time', 'Reached']
-    : ['Place', 'Competitor', 'Café', 'Score'];
+  // A knockout format (Throwdown) publishes no score or time, so it prints no such columns; every other format keeps
+  // them (a row without a value shows a dash, as it always has).
+  const hasScore = scored;
+  const hasTime = standings && scored;
+  const columns = [
+    'Place',
+    'Competitor',
+    'Café',
+    ...(hasScore ? ['Score'] : []),
+    ...(hasTime ? ['Time'] : []),
+    ...(standings ? ['Reached'] : []),
+  ];
   return el('table', { className: 'results-sheet-table' }, [
     el('caption', {
       className: 'sr-only',
@@ -132,8 +141,9 @@ function buildTable({ kind, rows }, title) {
             attrs: { 'data-profile-name': row.name, 'data-profile-cafe': row.cafe ?? '' },
           }),
           textCell(row.cafe),
-          scoreOrDash(row),
-          ...(standings ? [timeOrDash(row), textCell(row.round)] : []),
+          ...(hasScore ? [scoreOrDash(row)] : []),
+          ...(hasTime ? [timeOrDash(row)] : []),
+          ...(standings ? [textCell(row.round)] : []),
         ]),
       ),
     ),
@@ -221,7 +231,7 @@ export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PU
                 }, scrollable table`,
               },
             },
-            [buildTable(content, title)],
+            [buildTable(content, title, { scored: event.format !== 'throwdown' })],
           )
         : el('p', {
             className: 'results-sheet-note',
@@ -253,9 +263,13 @@ export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PU
         : el('p', {
             className: 'results-sheet-note',
             text:
-              'Placings follow how far each competitor advanced and their result in the last round they ' +
-              'reached. Score is correct answers out of the sets scored in that round' +
-              (content.kind === 'standings' ? '; time is their total time in it.' : '.'),
+              event.format === 'throwdown'
+                ? 'Placings follow the round each competitor reached in the knockout. Competitors knocked ' +
+                  'out in the same round share a place; two semi-final losers share 3rd when there was no ' +
+                  '3rd place match.'
+                : 'Placings follow how far each competitor advanced and their result in the last round they ' +
+                  'reached. Score is correct answers out of the sets scored in that round' +
+                  (content.kind === 'standings' ? '; time is their total time in it.' : '.'),
           }),
       el('p', {
         className: 'results-sheet-note results-sheet-published',

@@ -164,5 +164,13 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
       '3rd place',
       'Final',
     ]);
+
+    // ---- publishing: the results screen offers the public archive, but a TEST event is never published. The card
+    // says so in words and offers no button (the happy path, with a real event, is covered by the unit tests).
+    await page.getByRole('link', { name: 'Results and match log' }).click();
+    const publish = page.getByRole('region', { name: 'Public results' });
+    await expect(publish).toContainText('test event');
+    await expect(publish).toContainText('cannot be published');
+    await expect(publish.getByRole('button')).toHaveCount(0);
   });
 });

@@ -297,3 +297,35 @@
 .td-sheet-error:empty {
   display: none;
 }
+
+/* ---- Public results card (publishCard.js): console only, 360px first ---- */
+.td-publish-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: var(--border-hairline) solid var(--color-border);
+  padding: var(--space-2);
+}
+
+.td-publish-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min, 44px);
+}
+
+.td-publish-option input {
+  margin-top: var(--space-1);
+}
+
+.td-publish-option label {
+  display: block;
+  min-height: var(--tap-target-min, 44px);
+  font-weight: var(--font-weight-bold);
+}
+
+.td-publish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
