@@ -18,6 +18,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
   `btc_void_cup` (4.18.0), `seduh_courses` (4.19.0) and `seduh_result_disputes` (4.20.0).
 - **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`, first adopter of the shared community chrome): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout to the Timer, Brew Planner and Guess the Bean organiser page (#521) and the share-preview fix (#520, 4.21.1) are released as **4.22.0** (minor: every tool now links to the others).
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
+- **Throwdown competitor phone** (2026-11-20, branch `feat/throwdown-competitor-phone`, not merged, no version bump): competitors register with a phone and link to Seduh ID through `core/registration.js`. Not final: the two Playwright specs were not run locally (CI or the owner's env), and the owner's check is owed before 27 Nov.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 

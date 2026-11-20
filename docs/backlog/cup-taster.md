@@ -885,3 +885,17 @@ _Result-recorded and rank-impact screens shipped; these were flagged and documen
 ## Known open items from Petrol Kaizen P4 (feedback ladder, 2026-11-13)
 
 - **Older inline confirms are not on the ladder.** Cup Taster's finish confirm (`#confirm-finish-*`) and Throwdown's use the old in-line pattern. Move them to `confirmInPlace` (undoable) or `confirmDialog` (permanent delete) from `src/core/feedback.js`. Not done in P4, which was limited to the seven `window.confirm` calls.
+
+## Known open items from the Throwdown competitor phone task (2026-11-20; registration shared by Cup Taster and Throwdown)
+
+- **Cup Taster's registration and edit inputs still type their caps as literals** (`maxlength` 200/254/200 in
+  `rosterScreen.js`) instead of reading `core/registration.js` `REGISTRATION_LIMITS`; Throwdown reads the constant.
+- **The edit path has its own phone check** (`validateEditDraft`, with `storedPhone`); `core/registration.phoneProblem`
+  takes no `storedPhone` yet, so a future Throwdown edit form would copy it. Add the option and call it from both.
+- **"Added" can be wrong when another device registered the same phone first** (pre-existing in Cup Taster, copied):
+  the "already in" check uses the screen's last read of the roster. Have `registerEntry` report whether it inserted.
+- **The registration write has no timeout** (pre-existing): a stalled save leaves the form busy with no way out.
+- **Cup Taster's registration form uses native `disabled` while saving** (pre-existing), which drops a focused box's
+  focus to `<body>`; Throwdown's uses read-only + `setBusyDisabled`.
+- **Throwdown: a refusal stays shown while the organiser corrects the box**, until the next Add.
+- **Throwdown: no test proves a second Add while saving is ignored** (the `state.busy` guard).

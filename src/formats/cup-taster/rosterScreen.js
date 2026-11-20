@@ -45,7 +45,6 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import {
   listEntries,
   listPeopleByIds,
-  registerEntry,
   setEntryWithdrawn,
   updateRosterEntry,
   phoneWillChange,
@@ -54,9 +53,10 @@ import {
   parsePhone,
   phoneErrorMessage,
   isPhoneErrorCode,
-  phoneCountryOptions,
   DEFAULT_COUNTRY,
 } from '../../core/phone.js';
+import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
+import { REGISTRATION_LIMITS, phoneProblem, registerAndLink } from '../../core/registration.js';
 
 function blankDraft() {
   return {
@@ -72,7 +72,7 @@ function blankDraft() {
 // The RPC's caps (migration 20261007100000), enforced in the registration form as well so a value
 // registration accepted can always be saved again by Edit. JS counts UTF-16 units, the RPC code
 // points, so this is never more lenient than the database.
-const FIELD_LIMITS = { displayName: 200, email: 254, cafe: 200, bib: 50 };
+const FIELD_LIMITS = REGISTRATION_LIMITS;
 const FIELD_LABELS = { displayName: 'Name', email: 'Email', cafe: 'Cafe', bib: 'Bib' };
 
 function findTooLong(draft) {
@@ -112,8 +112,7 @@ export function validateDraft(draft) {
   if (!draft.phone.trim()) return 'Phone is required.';
   const tooLong = findTooLong(draft);
   if (tooLong) return tooLong.message;
-  const phone = parsePhone(draft.phone, { country: draft.phoneCountry ?? DEFAULT_COUNTRY });
-  return phone.ok ? null : phoneErrorMessage(phone.code);
+  return phoneProblem(draft.phone, draft.phoneCountry)?.message ?? null;
 }
 
 // Seduh ID matches a published result to a person by the entry's trimmed name and café (the public
@@ -230,40 +229,6 @@ export function describeRosterEditError(err) {
     };
   }
   return { field: null, message: describeError(err) };
-}
-
-// The country a phone number typed without + is read in. Brunei first, then every country by name
-// (core/phone.js phoneCountryOptions). One native select: no custom widget to make accessible, and
-// the phone's own aria-label stays "Phone". Built once, copied per use.
-let countryOptionNodes = null;
-function countryChoices() {
-  if (!countryOptionNodes) {
-    countryOptionNodes = phoneCountryOptions().map((c) =>
-      el('option', { text: `+${c.callingCode} ${c.name}`, attrs: { value: c.iso } }),
-    );
-  }
-  return countryOptionNodes.map((node) => node.cloneNode(true));
-}
-
-export function phoneCountrySelect({ label, value, disabled, id, onChange }) {
-  const select = el('select', {
-    className: 'field-input roster-phone-country',
-    id,
-    attrs: { 'aria-label': label, 'data-field': 'phoneCountry' },
-  });
-  select.append(...countryChoices());
-  select.value = value ?? DEFAULT_COUNTRY;
-  select.disabled = disabled;
-  // `input` and `change` both fire for a select in current browsers; either one records the choice.
-  for (const type of ['input', 'change']) {
-    select.addEventListener(type, () => onChange(select.value));
-  }
-  return select;
-}
-
-// The phone box with its country beside it, as ONE labelled field.
-function phoneRow(countrySelect, phoneInput) {
-  return el('div', { className: 'roster-phone-row' }, [countrySelect, phoneInput]);
 }
 
 export function renderRegistrationForm(draft, { disabled }) {
@@ -879,9 +844,8 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
 
     try {
       const cupper = buildCupperFromDraft(draft);
-      const result = await registerEntry(event.org_id, eventId, cupper, client);
-      // Best-effort Seduh ID link: online only, never awaited, silent on failure, not in the outbox.
-      if (result.person_id) requestPersonLink(event.org_id, result.person_id, client);
+      // Registers, then asks for the Seduh ID link (best-effort, core/registration.js).
+      const result = await registerAndLink(event.org_id, eventId, cupper, client);
       try {
         applyPersisted(await loadPersisted());
         // result.display_name in both branches — the canonical stored name,

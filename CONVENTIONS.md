@@ -54,6 +54,13 @@ Taster-only copy in a shared preview/demo) fails it the same way a `core/` file 
 
 ---
 
+**Registering a person into an event from any format's form** (2026-11-20): use `core/phoneField.js` for the
+phone box and its country select (styled by `core/phoneField.css`), and `core/registration.js` for the rest:
+`REGISTRATION_LIMITS` (the RPC's caps), `phoneProblem(phone, country)` and `registerAndLink(orgId, eventId, person,
+client)` (find or create the person by canonical phone, enter them, then the best-effort Seduh ID link). The format keeps
+only its own fields and words. Cup Taster's roster and Throwdown's competitors both do this; a name-only entry
+(`createEntry` with no person) can never link to a Seduh ID.
+
 ## Local patches are an anti-pattern — fixes go to source
 
 A fix applied to one consuming file instead of the shared module/token it should have
