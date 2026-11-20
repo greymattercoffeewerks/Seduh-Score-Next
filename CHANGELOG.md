@@ -7,6 +7,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Country Share-to-story tests: wait on the outcome, not on ticks · test-only · 2026-11-20
+
+**Status: done** (test change, reviews, full-suite runs). No version bump: test-only, no shippable change. Not committed.
+
+- **Symptom.** Three flakes on 2026-11-20: two local full-suite runs and one CI run on the release PR (#534). The failing tests were in `src/marketing/countryScreen.test.js`, the Share to story cases.
+- **Cause.** `loadFlagUrl` (`src/core/countryFlag.js`) dynamic-imports the flag SVG, so how long the picture draw takes varies with machine load. The tests flushed a fixed two `setTimeout(0)` ticks, which was enough on an idle machine and not under load.
+- **Fix.** The tests now wait on the outcome: `vi.waitFor` on the `.country-share-note` text (a `settled(words)` helper), and on `.country-champ` in the retry test. The Share case also asserts `aria-busy` is cleared once the note appears. The screen is unchanged: there is no real race in the code, only in the test's timing.
+- **Left alone.** `profileShare.test.js` also uses fixed ticks, but it has no flag loader and only awaits microtasks, so it has no load-dependent step to race.
+- **Files.** `src/marketing/countryScreen.test.js` only.
+- **Proof.** The file ran 30 times with 6 in parallel, zero failures. The full suite ran twice: 300 files, 7765 tests, green. Mutating the "Picture saved" wording makes the test fail, so the assertion is live.
+- **Reviews.** `test-auditor`: no 🔴. Two nits: one declined (the `waitFor` budget is capped by the 5 s test timeout, so a longer budget would not help), one applied. `code-reviewer`: no findings.
+- **Open follow-up.** None.
+
 ## Throwdown scoresheet: range inside the box, Petrol field errors · 4.25.0 · 2026-11-20
 
 **Status: done** (code, tests, reviews). Owner feedback on the sheet form: the red edge on a wrong value was easy to miss, and the "0 to 6" line under each label took space.
