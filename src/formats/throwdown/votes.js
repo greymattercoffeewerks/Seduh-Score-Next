@@ -1,7 +1,7 @@
 // Throwdown's vote arithmetic. A vote is one row (one judge's tap for one slot, no judge identity); totals, the
 // leader and "is it level?" are ALWAYS derived here from those rows and never stored. The database holds the same
 // rule (td_match_results, td_confirm_match); the two are checked against the same cases (votes.test.js and pgTAP
-// 071) so a screen can never enable Confirm for a result the database would refuse.
+// 072) so a screen can never enable Confirm for a result the database would refuse.
 
 // Votes per slot, in slot order. `slots` are the match's slot rows ({ id, position, entryId }); `votes` any list of
 // vote rows ({ slotId }) (rows for other matches are simply not counted). A slot with no competitor takes no votes.
@@ -31,4 +31,25 @@ export function leadOf(tallies) {
 
 export function canConfirm(tallies) {
   return tallies.length >= 2 && leadOf(tallies).leaderSlotId !== null;
+}
+
+// Whether a match can take another tap. One tap is one judge's vote, so a match takes taps while fewer than `judgeCount`
+// are in, plus exactly ONE tie-break vote when every judge has voted and the votes are level (an even panel). The
+// database holds the same rule (td_cast_vote, hint td_votes_full); votes.test.js and pgTAP 072 check the same cases.
+//   open:          another tap is accepted
+//   tieBreakOpen:  every judge is in and it is level, so the one tie-break vote is open
+//   tieBreakUsed:  the count is the judges plus the tie-break vote (an even panel that was level, then one more)
+//   over:          more taps than the rule allows (taps still waiting to sync that will be refused, or older data)
+export function voteState(tallies, judgeCount) {
+  const lead = leadOf(tallies);
+  const tieBreakOpen = lead.total === judgeCount && lead.level;
+  const tieBreakUsed =
+    judgeCount % 2 === 0 && lead.total === judgeCount + 1 && lead.top === judgeCount / 2 + 1;
+  return {
+    total: lead.total,
+    open: lead.total < judgeCount || tieBreakOpen,
+    tieBreakOpen,
+    tieBreakUsed,
+    over: lead.total > judgeCount && !tieBreakUsed,
+  };
 }

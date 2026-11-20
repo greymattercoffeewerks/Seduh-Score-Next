@@ -149,6 +149,43 @@ describe('the Throwdown organiser screen', () => {
       expect(root.textContent).toContain('2 of 2 votes in, plus the tie-break vote.');
     });
 
+    it('closes an even panel that is not level (2-0 takes no tie-break vote)', async () => {
+      const root = await mount(panel(2, ['s1', 's1']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('2 of 2 votes in. Every judge has voted.');
+    });
+
+    it('names more votes than judges as such, never as a tie-break or a call for another vote', async () => {
+      let root = await mount(panel(2, ['s1', 's2', 's1', 's2']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('More votes than judges (4 for 2)');
+      expect(root.textContent).not.toContain('Take another vote');
+
+      document.body.innerHTML = '';
+      root = await mount(panel(3, ['s1', 's1', 's1', 's2']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('More votes than judges (4 for 3)');
+      expect(root.textContent).not.toMatch(/tie-break/);
+    });
+
+    it('points each Vote button at the note that says why it is off', async () => {
+      const root = await mount(panel(3, ['s1', 's1', 's2']));
+      const note = root.querySelector('.td-match .td-note');
+      expect(note.id).toBeTruthy();
+      for (const b of root.querySelectorAll('.td-vote')) {
+        expect(b.getAttribute('aria-describedby')).toBe(note.id);
+      }
+      expect(note.textContent).toContain('Every judge has voted.');
+    });
+
+    it('says, with the tap that fills the panel, that every judge has voted', async () => {
+      const root = await mount(panel(3, ['s1', 's2']));
+      root.querySelector('.td-vote').click();
+      await new Promise((r) => setTimeout(r, 50));
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('Ana: 2 votes. Every judge has voted.');
+    });
+
     it('counts taps still waiting to sync toward the cap', async () => {
       const { enqueueOperation } = await import('../../core/outbox.js');
       await enqueueOperation('td_cast_vote', {
@@ -157,9 +194,23 @@ describe('the Throwdown organiser screen', () => {
         p_match_id: 'm1',
         p_slot_id: 's1',
       });
-      const root = await mount(panel(2, ['s1']));
+      let root = await mount(panel(2, ['s1']));
       expect(root.textContent).toContain('1 waiting to sync');
       expect(voteOff(root)).toEqual([true, true]);
+
+      // a queued tap past the cap (a quick double tap on a 3-judge panel at 2-0) is shown as a tap that will be
+      // refused, never as the tie-break vote an odd panel cannot have
+      await enqueueOperation('td_cast_vote', {
+        p_operation_id: 'q2',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+        p_slot_id: 's2',
+      });
+      document.body.innerHTML = '';
+      root = await mount(panel(3, ['s1', 's1']));
+      expect(root.textContent).toContain('More taps than judges (4 for 3)');
+      expect(root.textContent).toContain('will be refused when they sync');
+      expect(root.textContent).not.toMatch(/tie-break/);
     });
   });
 

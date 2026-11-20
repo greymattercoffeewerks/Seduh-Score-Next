@@ -38,7 +38,7 @@ import {
   recordWalkover,
   pendingSnapshot,
 } from './data.js';
-import { tallyVotes, leadOf, canConfirm } from './votes.js';
+import { tallyVotes, leadOf, canConfirm, voteState } from './votes.js';
 import {
   randomPairs,
   normalisePairs,
@@ -1041,32 +1041,44 @@ export async function mountThrowdownEventScreen(
     const { tallies, queued, decisionQueued } = displayedTallies(match);
     const lead = leadOf(tallies);
     const judges = state.data.settings.judge_count;
-    // One tap is one judge's vote: once every judge has voted (taps still waiting to sync included), the Vote buttons
-    // stop, except for ONE tie-break vote when the panel is even and comes out level. The database holds the same rule
-    // (td_cast_vote, hint td_votes_full); Undo frees a vote.
-    const tieBreak = lead.total === judges && lead.level;
-    const full = lead.total >= judges && !tieBreak;
+    // One tap is one judge's vote (votes.js voteState, the same rule as td_cast_vote): the Vote buttons stop once every
+    // judge has voted, taps still waiting to sync included, except for ONE tie-break vote when an even panel is level.
+    // Undo frees a vote. The note below says why Vote is off; each Vote button points at it (aria-describedby).
+    const cap = voteState(tallies, judges);
+    const noteId = `td-vote-note-${match.id}`;
     const sides = match.sides.map((side, i) => {
       const count = tallies.find((t) => t.slotId === side.slotId)?.votes ?? 0;
+      // what this tap does to the cap, spoken with the new count so a screen reader hears why Vote then stops
+      const after = voteState(
+        tallies.map((t) => (t.slotId === side.slotId ? { ...t, votes: t.votes + 1 } : t)),
+        judges,
+      );
+      const afterWords = after.tieBreakOpen
+        ? ' Level with every judge in: the tie-break judge casts one more vote.'
+        : after.open
+          ? ''
+          : ' Every judge has voted.';
+      const vote = button(
+        `Vote ${side.name}`,
+        () =>
+          tapAct(
+            () =>
+              castVote(
+                { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
+                handlers,
+              ),
+            `${side.name}: ${count + 1} ${count + 1 === 1 ? 'vote' : 'votes'}.${afterWords}`,
+          ),
+        {
+          className: 'btn btn-primary tap-target td-vote',
+          key: `td-vote-${match.id}-${i}`,
+          ignoreBusy: true,
+          disabled: !cap.open || decisionQueued || state.deciding,
+        },
+      );
+      vote.setAttribute('aria-describedby', noteId);
       return el('div', { className: 'td-side' }, [
-        button(
-          `Vote ${side.name}`,
-          () =>
-            tapAct(
-              () =>
-                castVote(
-                  { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
-                  handlers,
-                ),
-              `${side.name}: ${count + 1} ${count + 1 === 1 ? 'vote' : 'votes'}`,
-            ),
-          {
-            className: 'btn btn-primary tap-target td-vote',
-            key: `td-vote-${match.id}-${i}`,
-            ignoreBusy: true,
-            disabled: full || decisionQueued || state.deciding,
-          },
-        ),
+        vote,
         el('p', {
           className: 'td-count',
           text: `${count} ${count === 1 ? 'vote' : 'votes'}`,
@@ -1092,17 +1104,21 @@ export async function mountThrowdownEventScreen(
     });
     const status = decisionQueued
       ? 'The result is waiting to sync. Voting is closed for this match.'
-      : lead.total === 0
+      : cap.total === 0
         ? `Waiting for votes (${judges} ${judges === 1 ? 'judge' : 'judges'}).`
-        : tieBreak
-          ? 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
-          : lead.level
-            ? 'The votes are level. Take another vote before confirming.'
-            : lead.total === judges + 1
-              ? `${judges} of ${judges} votes in, plus the tie-break vote. Every judge has voted.`
-              : full
-                ? `${lead.total} of ${judges} votes in. Every judge has voted.`
-                : `${lead.total} of ${judges} votes in.`;
+        : cap.over
+          ? queued
+            ? `More taps than judges (${cap.total} for ${judges}). Taps past the limit will be refused when they sync; check the count then, before using Undo.`
+            : `More votes than judges (${cap.total} for ${judges}). Use Undo to take back the extra votes.`
+          : cap.tieBreakOpen
+            ? 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
+            : lead.level
+              ? 'The votes are level. Take another vote before confirming.'
+              : cap.tieBreakUsed
+                ? `${judges} of ${judges} votes in, plus the tie-break vote. Every judge has voted.`
+                : cap.open
+                  ? `${cap.total} of ${judges} votes in.`
+                  : `${cap.total} of ${judges} votes in. Every judge has voted.`;
     const winnerName = lead.leaderSlotId
       ? match.sides.find((s) => s.slotId === lead.leaderSlotId)?.name
       : null;
@@ -1114,6 +1130,7 @@ export async function mountThrowdownEventScreen(
         el('div', { className: 'td-sides' }, sides),
         el('p', {
           className: 'td-note',
+          id: noteId,
           text: status + (queued ? ` ${queued} waiting to sync.` : ''),
         }),
         button(
