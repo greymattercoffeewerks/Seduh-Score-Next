@@ -46,7 +46,13 @@ function matchBox(match) {
       ].filter(Boolean),
     ),
   );
-  const note = match.decided ? (match.resultKind !== 'votes' ? sideText(match) : '') : '';
+  const note = match.decided
+    ? match.resultKind !== 'votes'
+      ? sideText(match)
+      : ''
+    : match.judging
+      ? 'Judges scoring'
+      : '';
   return el(
     'li',
     { className: 'td-stage-match' },

@@ -9,8 +9,33 @@ import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { loadThrowdown } from './data.js';
 import { describeThrowdownError, resultLine, matchTitle } from './words.js';
+import { scoringContext, scoredView, auditRule } from './scoredMatch.js';
+import { buildAudit } from './scoreAudit.js';
 
-export function buildResultsView(event, bracket) {
+// The printable score breakdown of every decided scored match (console only; empty when the event has no scored rounds).
+function auditSections(bracket, ctx) {
+  if (!ctx) return [];
+  return bracket.rounds.flatMap((round) =>
+    round.matches
+      .filter((m) => m.resultKind === 'scores')
+      .map((m) => {
+        const view = scoredView(ctx, m);
+        if (!view || !auditRule(view)) return null;
+        return el(
+          'section',
+          { className: 'card td-card', attrs: { 'aria-label': `Scores: ${matchTitle(m)}` } },
+          [
+            el('h2', { text: `${round.label} scores: ${matchTitle(m)}` }),
+            buildAudit(view, m.sides.find((s) => s.winner)?.name),
+          ],
+        );
+      })
+      .filter(Boolean),
+  );
+}
+
+// scoring: scoringContext(data) of the event, or null when the scoresheet module is off.
+export function buildResultsView(event, bracket, scoring = null) {
   return el(
     'section',
     { className: 'screen-container td-results' },
@@ -68,7 +93,9 @@ export function buildResultsView(event, bracket) {
           ]),
         ]),
       ),
-    ].filter(Boolean),
+    ]
+      .filter(Boolean)
+      .concat(auditSections(bracket, scoring)),
   );
 }
 
@@ -92,7 +119,7 @@ export async function mountThrowdownResultsScreen(
       );
       if (signal?.aborted) return;
       root.innerHTML = '';
-      const view = buildResultsView(event, data.bracket);
+      const view = buildResultsView(event, data.bracket, scoringContext(data));
       const print = el('button', {
         className: 'btn btn-outline tap-target td-no-print',
         text: 'Print or save as PDF',

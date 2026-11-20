@@ -31,9 +31,15 @@ import {
   emptyBoard,
   assignSlot,
 } from './seeding.js';
-import { MODULES } from './modules.js';
 import { publishThrowdownLive } from './liveSession.js';
-import { describeThrowdownError, resultLine, matchTitle } from './words.js';
+import { describeThrowdownError, resultLine, matchTitle, ROLE_WORDS } from './words.js';
+import { presetKeys } from '../../core/scoresheet.js';
+import { ROUND_ROLES } from './roundRole.js';
+import { scoringContext, scoredView, cupsForMatch, auditRule } from './scoredMatch.js';
+import { buildAudit } from './scoreAudit.js';
+import { createScoreEntry } from './scoreEntry.js';
+
+const PRESET_WORDS = { latte_art_v1: 'Latte art (6 lines, 27 points a cup)' };
 
 export async function mountThrowdownEventScreen(
   root,
@@ -52,9 +58,20 @@ export async function mountThrowdownEventScreen(
     walkoverOpen: null, // matchId whose Walkover disclosure is open
     focusTarget: null, // id to focus after the next render (a phase change replaces the focused control)
     walkover: null, // { matchId, slotId } waiting for the second tap
+    sheetOpen: null, // { matchId, slotId, seat, draft } the paper sheet being typed in
+    picks: new Map(), // matchId -> slot position the organiser picked for a level scored match
     feedback: null,
     busy: false,
   };
+
+  // The setup's scoresheet choice: on/off, the preset, and the cups per round role (0 = tap-voted).
+  function scoresheetForm(saved) {
+    const cups = Object.fromEntries(
+      ROUND_ROLES.map((r) => [r, saved ? (saved.cups?.[r] ?? 0) : 0]),
+    );
+    if (!saved) Object.assign(cups, { final: 2, third_place: 1 });
+    return { on: Boolean(saved), preset: saved?.preset ?? presetKeys()[0], cups };
+  }
 
   const activeEntries = () => state.data.entries.filter((e) => !e.withdrawn);
   const nameOf = (id) => state.data.entries.find((e) => e.id === id)?.display_name ?? '';
@@ -84,6 +101,7 @@ export async function mountThrowdownEventScreen(
         judgeCount: data.settings.judge_count,
         thirdPlace: data.settings.third_place,
         seedingMode: data.settings.seeding_mode,
+        scoresheet: scoresheetForm(data.settings.modules?.scoresheet),
       };
       state.pending = pending.matches;
       state.startQueued = pending.startQueued;
@@ -292,6 +310,71 @@ export async function mountThrowdownEventScreen(
       });
       return el('label', { className: 'td-choice' }, [input, document.createTextNode(` ${label}`)]);
     };
+    const sheet = f.scoresheet;
+    const sheetToggle = el('input', {
+      attrs: { type: 'checkbox', 'data-focus-key': 'td-sheet-on' },
+    });
+    sheetToggle.checked = sheet.on;
+    sheetToggle.addEventListener('change', () => {
+      sheet.on = sheetToggle.checked;
+      render();
+    });
+    const sheetBlock = [
+      el('label', { className: 'td-choice' }, [
+        sheetToggle,
+        document.createTextNode(' Scoresheet rounds (judges’ paper sheets decide some rounds)'),
+      ]),
+    ];
+    if (sheet.on) {
+      const preset = el(
+        'select',
+        {
+          className: 'field-input',
+          attrs: { 'aria-label': 'Scoresheet', 'data-focus-key': 'td-sheet-preset' },
+        },
+        presetKeys().map((k) => el('option', { text: PRESET_WORDS[k] ?? k, attrs: { value: k } })),
+      );
+      preset.value = sheet.preset;
+      preset.addEventListener('change', () => {
+        sheet.preset = preset.value;
+      });
+      sheetBlock.push(
+        el('label', { className: 'td-choice' }, [document.createTextNode('Sheet '), preset]),
+        el('fieldset', { className: 'td-choice-group' }, [
+          el('legend', { text: 'Cups per competitor' }),
+          ...ROUND_ROLES.map((role) => {
+            const select = el(
+              'select',
+              {
+                className: 'field-input',
+                attrs: { 'aria-label': ROLE_WORDS[role], 'data-focus-key': `td-cups-${role}` },
+              },
+              [
+                el('option', { text: 'Votes (taps)', attrs: { value: '0' } }),
+                ...[1, 2, 3].map((n) =>
+                  el('option', {
+                    text: `${n} ${n === 1 ? 'cup' : 'cups'}`,
+                    attrs: { value: String(n) },
+                  }),
+                ),
+              ],
+            );
+            select.value = String(sheet.cups[role]);
+            select.addEventListener('change', () => {
+              sheet.cups[role] = Number(select.value);
+            });
+            return el('label', { className: 'td-choice' }, [
+              document.createTextNode(`${ROLE_WORDS[role]} `),
+              select,
+            ]);
+          }),
+          el('p', {
+            className: 'td-note',
+            text: 'Scores are typed in on this screen from the judges’ paper sheets. The audience sees only who won.',
+          }),
+        ]),
+      );
+    }
     const blocks = [
       el('label', { className: 'td-choice' }, [document.createTextNode('Judges '), judges]),
       el('label', { className: 'td-choice' }, [
@@ -303,10 +386,8 @@ export async function mountThrowdownEventScreen(
         mode('random', 'Random draw'),
         mode('manual', 'Manual draw (draw-a-number events)'),
       ]),
+      ...sheetBlock,
     ];
-    // a module that is not available leaves no trace: nothing is rendered for an empty registry
-    if (MODULES.length > 0)
-      blocks.push(el('p', { className: 'td-note', text: 'Optional modules are chosen here.' }));
     return el(
       'section',
       { className: 'card td-card', attrs: { 'aria-labelledby': 'td-setup-h' } },
@@ -330,13 +411,29 @@ export async function mountThrowdownEventScreen(
     );
   }
 
+  // The chosen modules as saved: nothing at all when the scoresheet toggle is off. The database copies the preset's lines.
+  function modulesFromForm() {
+    const sheet = state.form.scoresheet;
+    if (!sheet.on) return {};
+    const cups = Object.fromEntries(Object.entries(sheet.cups).filter(([, n]) => n > 0));
+    return { scoresheet: { preset: sheet.preset, cups } };
+  }
+
   function startDraw(mode, pairs, seed) {
     const settings = {
       judgeCount: state.form.judgeCount,
       thirdPlace: state.form.thirdPlace,
       seedingMode: mode,
-      modules: {},
+      modules: modulesFromForm(),
     };
+    if (state.form.scoresheet.on && Object.keys(modulesFromForm().scoresheet.cups).length === 0) {
+      state.feedback = {
+        tone: 'error',
+        text: describeThrowdownError({ hint: 'td_scoresheet_invalid' }),
+      };
+      render();
+      return Promise.resolve();
+    }
     return act(
       async () => {
         await saveSettings(state.event.org_id, eventId, settings, client);
@@ -611,41 +708,6 @@ export async function mountThrowdownEventScreen(
     const winnerName = lead.leaderSlotId
       ? match.sides.find((s) => s.slotId === lead.leaderSlotId)?.name
       : null;
-    const walkoverRow =
-      state.walkover?.matchId === match.id
-        ? el('div', { className: 'td-walkover' }, [
-            el('p', {
-              text: `${match.sides.find((s) => s.slotId === state.walkover.slotId)?.name} advances by walkover?`,
-            }),
-            button(
-              'Confirm walkover',
-              () => {
-                const winnerSlotId = state.walkover.slotId;
-                state.walkover = null;
-                return act(
-                  () =>
-                    recordWalkover(
-                      { orgId: state.event.org_id, matchId: match.id, winnerSlotId },
-                      handlers,
-                    ),
-                  { publish: true },
-                );
-              },
-              {
-                className: 'btn btn-primary tap-target',
-                key: `td-walkover-ok-${match.id}`,
-              },
-            ),
-            button(
-              'Cancel',
-              () => {
-                state.walkover = null;
-                render();
-              },
-              { key: `td-walkover-cancel-${match.id}` },
-            ),
-          ])
-        : walkoverDetails(match, decisionQueued);
     return el(
       'article',
       { className: 'card td-match', attrs: { 'aria-label': matchTitle(match) } },
@@ -677,9 +739,58 @@ export async function mountThrowdownEventScreen(
             disabled: decisionQueued || !canConfirm(tallies),
           },
         ),
-        walkoverRow,
+        walkoverRow(match, decisionQueued),
       ],
     );
+  }
+
+  // The walkover control (either side advances), shared by the tap card and the scored card.
+  function walkoverRow(match, decisionQueued) {
+    return state.walkover?.matchId === match.id
+      ? el('div', { className: 'td-walkover' }, [
+          el('p', {
+            text: `${match.sides.find((s) => s.slotId === state.walkover.slotId)?.name} advances by walkover?`,
+          }),
+          button(
+            'Confirm walkover',
+            () => {
+              const winnerSlotId = state.walkover.slotId;
+              state.walkover = null;
+              return act(
+                () =>
+                  recordWalkover(
+                    { orgId: state.event.org_id, matchId: match.id, winnerSlotId },
+                    handlers,
+                  ),
+                { publish: true },
+              );
+            },
+            {
+              className: 'btn btn-primary tap-target',
+              key: `td-walkover-ok-${match.id}`,
+            },
+          ),
+          button(
+            'Cancel',
+            () => {
+              state.walkover = null;
+              render();
+            },
+            { key: `td-walkover-cancel-${match.id}` },
+          ),
+        ])
+      : walkoverDetails(match, decisionQueued);
+  }
+
+  // The read-only score breakdown of a decided scored match (console only).
+  function auditDetails(match) {
+    if (match.resultKind !== 'scores') return null;
+    const view = scoredView(scoringContext(state.data), match);
+    if (!view || !auditRule(view)) return null;
+    return el('details', { className: 'td-audit-details' }, [
+      el('summary', { className: 'tap-target', text: 'Score breakdown' }),
+      buildAudit(view, match.sides.find((s) => s.winner)?.name),
+    ]);
   }
 
   function bracketCard() {
@@ -691,18 +802,23 @@ export async function mountThrowdownEventScreen(
           { className: 'td-round-list' },
           round.matches.map((m) => {
             const result = resultLine(m);
-            return el('li', { className: 'td-round-match' }, [
-              el('span', { text: matchTitle(m) }),
-              m.decided
-                ? el('span', {
-                    className: 'td-result',
-                    text: `${m.sides.find((s) => s.winner)?.name ?? ''} — ${result}`,
-                  })
-                : el('span', {
-                    className: 'td-result',
-                    text: m.playable ? 'Being decided' : 'Waiting',
-                  }),
-            ]);
+            return el(
+              'li',
+              { className: 'td-round-match' },
+              [
+                el('span', { text: matchTitle(m) }),
+                m.decided
+                  ? el('span', {
+                      className: 'td-result',
+                      text: `${m.sides.find((s) => s.winner)?.name ?? ''} — ${result}`,
+                    })
+                  : el('span', {
+                      className: 'td-result',
+                      text: m.playable ? 'Being decided' : 'Waiting',
+                    }),
+                auditDetails(m),
+              ].filter(Boolean),
+            );
           }),
         ),
       ]),
@@ -713,6 +829,17 @@ export async function mountThrowdownEventScreen(
       [el('h2', { id: 'td-bracket-h', text: 'Bracket' }), ...rounds],
     );
   }
+
+  const { scoredCard } = createScoreEntry({
+    state,
+    button,
+    act,
+    tapAct,
+    handlers,
+    render: () => render(),
+    scoringContext: () => scoringContext(state.data),
+    walkoverRow,
+  });
 
   // ---------- render ----------
 
@@ -784,7 +911,9 @@ export async function mountThrowdownEventScreen(
                   ? 'Finished'
                   : 'Waiting for results',
             }),
-            ...playable.map(voteCard),
+            ...playable.map((m) =>
+              cupsForMatch(scoringContext(state.data), m) !== null ? scoredCard(m) : voteCard(m),
+            ),
           ]),
         );
         container.append(

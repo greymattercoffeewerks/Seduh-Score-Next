@@ -15,16 +15,22 @@ import { findEvent } from '../../core/events.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
 import { publishIntentHandler, submitPublishIntent } from '../../core/publishIntent.js';
 import { loadThrowdown } from './data.js';
+import { scoredCups } from './roundRole.js';
 
 export const THROWDOWN_LIVE_OPERATION = 'publish_throwdown_live_session';
 const RECENT_LIMIT = 3;
 
-function publicMatch(match) {
+// A match decided by scoresheets is public as its winner only: while it is being judged it says so (`judging`), and once
+// decided it carries the winner flag and nothing else. No points, totals, judge counts or rule ever enter this payload.
+function publicMatch(match, scoresheet) {
   const counts = match.resultKind === 'votes';
+  const judging =
+    !match.decided && scoredCups(scoresheet, match.roundPhase, match.roundSize) !== null;
   return {
     id: match.id,
     decided: match.decided,
     resultKind: match.resultKind,
+    ...(judging ? { judging: true } : {}),
     sides: match.sides
       .filter((s) => s.entryId || !match.isBye)
       .map((s) => ({
@@ -35,18 +41,18 @@ function publicMatch(match) {
   };
 }
 
-export function assembleThrowdownPayload({ event, bracket, activeCount }) {
+export function assembleThrowdownPayload({ event, bracket, activeCount, scoresheet = null }) {
   const rounds = bracket.rounds.map((round) => ({
     label: round.label,
     phase: round.phase,
-    matches: round.matches.map(publicMatch),
+    matches: round.matches.map((m) => publicMatch(m, scoresheet)),
   }));
   const allMatches = bracket.rounds.flatMap((r) => r.matches);
   const recent = allMatches
     .filter((m) => m.decided && m.resultKind !== 'bye')
     .sort((a, b) => Date.parse(b.confirmedAt) - Date.parse(a.confirmedAt) || (a.id < b.id ? 1 : -1))
     .slice(0, RECENT_LIMIT)
-    .map(publicMatch);
+    .map((m) => publicMatch(m, scoresheet));
   let phase = 'setup';
   if (bracket.started) phase = bracket.complete ? 'complete' : 'live';
   return {
@@ -54,7 +60,7 @@ export function assembleThrowdownPayload({ event, bracket, activeCount }) {
     phase,
     competitors: activeCount,
     rounds,
-    nowPlaying: bracket.playableMatches.map(publicMatch),
+    nowPlaying: bracket.playableMatches.map((m) => publicMatch(m, scoresheet)),
     recent,
     champion: bracket.champion
       ? { name: bracket.champion, runnerUp: bracket.runnerUp, thirdPlace: bracket.thirdPlace }
@@ -71,6 +77,7 @@ async function buildThrowdownLivePayload(eventId, client = getSupabase()) {
     event,
     bracket: state.bracket,
     activeCount: state.entries.filter((e) => !e.withdrawn).length,
+    scoresheet: state.settings.modules?.scoresheet ?? null,
   });
 }
 

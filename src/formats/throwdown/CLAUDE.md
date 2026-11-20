@@ -17,7 +17,7 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
 - **Votes are rows, results are derived.** `td_votes` has one row per tap and NO judge identity
   (a test pins the column list). Totals, the leader and the winner are computed (`votes.js`,
   `bracket.js`, and in SQL `td_match_results`); the only stored result facts are
-  `td_matches.result_kind` (`votes | walkover | bye`), `confirmed_at` and, for a walkover, the
+  `td_matches.result_kind` (`votes | walkover | bye | scores`), `confirmed_at` and, for a walkover, the
   explicit winner's slot position. A walkover is never a tally.
 - **Confirm is disabled while votes are level**, in the UI (`canConfirm`) and in the database
   (`td_votes_level`). `td_confirm_match` also takes the slot the organiser saw leading
@@ -71,3 +71,35 @@ TD.1 (2026-11-03): schema `20261103111000`, functions `20261103120000`, keys and
 `projectorScreens`/`projectorBody`; Playwright `dev-throwdown` (full 8-competitor test event).
 Out of TD.1 by design: redemption, lucky loser, revival draw, latte art, formatted PDF report,
 archive write, any lift of the Random Selector engine.
+
+## Scoresheet module (stage 1, 2026-11-19)
+
+Rounds decided by judges' paper scoresheets that a scorekeeper types in (spec, local only:
+`Handoffs and Specs/THROWDOWN-SCORESHEET-SPEC.md`). Stage 1 is the backend and pure logic; the console, outbox handlers and
+live surfaces are stage 2. It deliberately **extends two core facts**: `td_matches.result_kind` gains `scores`, and
+`td_match_results` gains a `scores` arm (reads `app.td_scored_winner`).
+
+- Pure: `src/core/scoresheet.js` (format-agnostic: presets, `validateSheet`, totals, `decideScored`, `sheetsProgress`) and
+  `roundRole.js` here (a round's role, derived: third_place phase, or a main round of 1/2/4 matches = final/semi/quarter).
+  The same rules are in SQL (`app.td_role_of`, `app.td_scored_decide`); `supabase/tests/fixtures/scoresheet-parity.json` drives
+  both, and pgTAP `091` embeds it (a unit test fails when the copies differ).
+- Data: `td_score_sheets` (points only, one row per match/slot/seat/cup/line; no total is ever stored) and
+  `td_score_decisions` (an organiser's pick for a level match). Writers: `td_save_score_sheet`, `td_confirm_scored_match`
+  (SECURITY DEFINER, idempotent, advance in the same transaction). Console read view: `td_score_standings`.
+- A scored match takes no taps (`td_match_scored` on `td_votes`). Scores are never in any public door or live payload.
+
+### Stage 2 (console, outbox, live surfaces; 2026-11-19)
+
+- **Setup**: a "Scoresheet rounds" toggle in `eventScreen.js` (preset, cups per round role; 0 = tap-voted), saved through
+  `td_save_settings` modules and locked with setup. Off saves no `scoresheet` key (no trace anywhere).
+- **Console only**: `scoredMatch.js` (pure: `scoringContext`, `scoredView`, draft parsing), `scoreEntry.js` (the card: "Sheets in:
+  n of m", a seat x competitor grid, the paper-sheet form with a live cup total, the confirm step and the organiser pick),
+  `scoreAudit.js` (the read-only breakdown on the event screen and on `resultsScreen.js`). No public surface may import them
+  (`scoreBoundary.test.js`). A match is scored when `scoredCups(config, match.roundPhase, match.roundSize)` is not null.
+- **Data/outbox**: `data.js` reads `td_score_sheets`, `td_score_decisions` and the database's winner of each scored match
+  (`td_match_results`, passed to `deriveBracket` as `scoreWinners`) only when the module is on; saves and confirm are outbox
+  operations (`td_save_score_sheet`, `td_confirm_scored_match`) with client-made ids. A queued sheet replaces the saved one for
+  its seat and counts in "Sheets in"; a queued confirm closes the match's sheets. `td_score_standings` is not read: the totals
+  and the rule come from `core/scoresheet.js` and the database re-checks both at confirm.
+- **Live payload**: a scored match in progress carries only `judging: true`; a decided one carries the winner flag and
+  `resultKind: 'scores'`, never a number. Module off: no `judging` key (tested).

@@ -144,3 +144,66 @@ describe('is_test on the live publish', () => {
     ).rejects.toThrow(/handler map/);
   });
 });
+
+describe('a match decided by scoresheets on the live payload', () => {
+  const scoresheet = { preset: 'latte_art_v1', cups: { final: 2 } };
+  const two = {
+    ...base,
+    matches: [{ ...base.matches[0], result_kind: 'scores', confirmed_at: '2026-11-27T10:00:00Z' }],
+    slots: base.slots.slice(0, 2),
+    votes: [],
+    scoreWinners: new Map([['m1', 's2']]),
+  };
+  const pendingOne = {
+    ...base,
+    matches: [{ ...base.matches[0], result_kind: null, confirmed_at: null }],
+    slots: base.slots.slice(0, 2),
+    votes: [],
+  };
+  // every number, and every string with a digit in it (ids aside), anywhere under a node
+  const leaks = (node, key = '') => {
+    if (typeof node === 'number') return [`${key}=${node}`];
+    if (typeof node === 'string') return key !== 'id' && /\d/.test(node) ? [`${key}=${node}`] : [];
+    if (node && typeof node === 'object')
+      return Object.entries(node).flatMap(([k, v]) => leaks(v, k));
+    return [];
+  };
+  const FORBIDDEN = /score|total|point|cup|judge_|preference|rule|sheet/i;
+  const build = (rows, sheet) =>
+    assembleThrowdownPayload({
+      event: { name: 'Night' },
+      bracket: deriveBracket(rows),
+      activeCount: 2,
+      scoresheet: sheet,
+    });
+
+  it('shows a decided one as its winner only: no score, total, judge count or rule anywhere', () => {
+    const payload = build(two, scoresheet);
+    const m = payload.rounds[0].matches[0];
+    expect(m.sides.map((s) => s.winner)).toEqual([false, true]);
+    expect(m.sides.every((s) => s.votes === null)).toBe(true);
+    const keys = new Set();
+    JSON.stringify(payload, (k, v) => {
+      keys.add(k);
+      return v;
+    });
+    expect([...keys].filter((k) => FORBIDDEN.test(k))).toEqual([]);
+    expect(leaks(payload.rounds)).toEqual([]);
+  });
+
+  it('says only that judges are scoring while it is being decided, with no numbers', () => {
+    const payload = build(pendingOne, scoresheet);
+    expect(payload.nowPlaying[0].judging).toBe(true);
+    expect(leaks(payload.nowPlaying)).toEqual([]);
+  });
+
+  it('leaves no trace when the module is off', () => {
+    const payload = build(pendingOne, undefined);
+    expect(JSON.stringify(payload)).not.toContain('judging');
+  });
+
+  it('does not mark a round the setup leaves to taps', () => {
+    const payload = build(pendingOne, { preset: 'latte_art_v1', cups: { third_place: 1 } });
+    expect(payload.nowPlaying[0]).not.toHaveProperty('judging');
+  });
+});

@@ -16,11 +16,14 @@ export function roundLabel(round, matchCount, mainIndex) {
   return `Round ${mainIndex}`;
 }
 
-function winnerSlotOf(match, tallies) {
+function winnerSlotOf(match, tallies, scoreWinners) {
   if (match.result_kind === 'bye') return match.slots.find((s) => s.entryId)?.id ?? null;
   if (match.result_kind === 'walkover') {
     return match.slots.find((s) => s.position === match.walkover_winner_position)?.id ?? null;
   }
+  // A scored match's winner is the database's (td_match_results reads the sheets, or the organiser's recorded pick), passed
+  // in; this module never re-derives it from points.
+  if (match.result_kind === 'scores') return scoreWinners.get(match.id) ?? null;
   if (match.result_kind === 'votes') {
     const top = Math.max(...tallies.map((t) => t.votes));
     const leaders = tallies.filter((t) => t.votes === top);
@@ -29,7 +32,14 @@ function winnerSlotOf(match, tallies) {
   return null;
 }
 
-export function deriveBracket({ rounds, matches, slots, votes, entries }) {
+export function deriveBracket({
+  rounds,
+  matches,
+  slots,
+  votes,
+  entries,
+  scoreWinners = new Map(),
+}) {
   const entryById = new Map(entries.map((e) => [e.id, e]));
   const slotsByMatch = new Map();
   for (const s of slots) {
@@ -56,7 +66,9 @@ export function deriveBracket({ rounds, matches, slots, votes, entries }) {
       const tallies = tallyVotes(matchSlots, votesByMatch.get(m.id) ?? []);
       const talliesBySlot = new Map(tallies.map((t) => [t.slotId, t.votes]));
       const decided = m.result_kind !== null && m.result_kind !== undefined;
-      const winnerSlotId = decided ? winnerSlotOf({ ...m, slots: matchSlots }, tallies) : null;
+      const winnerSlotId = decided
+        ? winnerSlotOf({ ...m, slots: matchSlots }, tallies, scoreWinners)
+        : null;
       const sides = matchSlots.map((s) => {
         const entry = s.entryId ? entryById.get(s.entryId) : null;
         return {
@@ -65,13 +77,16 @@ export function deriveBracket({ rounds, matches, slots, votes, entries }) {
           entryId: s.entryId,
           name: entry?.display_name ?? null,
           cafe: entry?.cafe ?? null,
-          votes: s.entryId ? (talliesBySlot.get(s.id) ?? 0) : null,
+          votes: s.entryId && m.result_kind !== 'scores' ? (talliesBySlot.get(s.id) ?? 0) : null,
           winner: decided ? s.id === winnerSlotId : null,
         };
       });
       return {
         id: m.id,
         roundId: round.id,
+        // what the round is, so a module can tell whether this match is one of its own (roundRole.js)
+        roundPhase: round.phase,
+        roundSize: own.length,
         position: m.position,
         resultKind: m.result_kind ?? null,
         decided,
