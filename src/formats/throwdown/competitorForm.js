@@ -3,9 +3,16 @@
 // makes a person row, deduplicated by phone within the organisation, and that person is what a Seduh ID links to;
 // a name-only entry has nothing to link (2026-11-20, owner request, ahead of the 27 Nov event).
 import { DEFAULT_COUNTRY } from '../../core/phone.js';
-import { REGISTRATION_LIMITS, phoneProblem } from '../../core/registration.js';
+import {
+  phoneProblem,
+  tooLongProblem,
+  validateEdit,
+  buildEditFields,
+  describeRegistrationEditError,
+  initialEditDraft,
+  savedEditSentence,
+} from '../../core/registration.js';
 
-const CHECKED = ['displayName', 'cafe'];
 const LABELS = { displayName: 'Name', cafe: 'Café or team' };
 
 export function blankCompetitorDraft() {
@@ -19,13 +26,7 @@ export function validateCompetitorDraft(draft) {
     return { field: 'displayName', message: 'Enter the competitor’s name.' };
   if (!draft.phone.trim())
     return { field: 'phone', message: 'Enter the competitor’s phone number.' };
-  for (const key of CHECKED) {
-    const max = REGISTRATION_LIMITS[key];
-    if (draft[key].trim().length > max) {
-      return { field: key, message: `${LABELS[key]} is too long (${max} characters at most).` };
-    }
-  }
-  return phoneProblem(draft.phone, draft.phoneCountry);
+  return tooLongProblem(draft, LABELS) ?? phoneProblem(draft.phone, draft.phoneCountry);
 }
 
 // What core/registry.registerEntry takes. The phone goes on as typed with its country: core/registry interprets it
@@ -48,3 +49,24 @@ export function addedWords(entry, alreadyIn) {
     ? `${entry.display_name} is already on the list, withdrawn. Use Restore to bring them back.`
     : `${entry.display_name} is already a competitor.`;
 }
+
+// ---------- Edit (2026-11-20) ----------
+// The same capability Cup Taster's roster has had since v3.0.19, on core/registration.js's shared edit rules. Name,
+// phone (with its country) and café or team can be corrected; the phone and email live on the person, not the entry.
+// The RPC REPLACES email and bib with what it is sent, and this form shows neither, so they ride in the draft untouched
+// (a person who is also in a Cup Taster event in the same organisation keeps their email).
+const EDIT_MESSAGES = {
+  name: 'Enter the competitor’s name.',
+  phone: 'Enter the competitor’s phone number.',
+};
+
+export function validateCompetitorEdit(draft, { linked, storedPhone = null }) {
+  return validateEdit(draft, { linked, storedPhone, messages: EDIT_MESSAGES, labels: LABELS });
+}
+
+export {
+  initialEditDraft,
+  buildEditFields as buildCompetitorEdit,
+  describeRegistrationEditError as describeCompetitorEditError,
+  savedEditSentence as editedWords,
+};

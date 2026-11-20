@@ -81,7 +81,12 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
     ),
     readAll(client, 'td_slots', 'id, match_id, position, entry_id', eventId),
     readAll(client, 'td_votes', 'id, match_id, slot_id, created_at', eventId),
-    readAll(client, 'event_entries', 'id, display_name, cafe, withdrawn, created_at', eventId),
+    readAll(
+      client,
+      'event_entries',
+      'id, display_name, cafe, bib, person_id, withdrawn, created_at',
+      eventId,
+    ),
   ]);
   if (settings.error) throw settings.error;
   if (draw.error) throw draw.error;
