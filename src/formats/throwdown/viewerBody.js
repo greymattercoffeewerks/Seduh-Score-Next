@@ -36,7 +36,9 @@ function matchItem(match) {
   );
   const detail = match.decided
     ? `${winner ? `${winner.name} wins` : 'Decided'}${sideLine(match) ? ` · ${sideLine(match)}` : ''}`
-    : 'Being decided';
+    : match.judging
+      ? 'Judges scoring'
+      : 'Being decided';
   return el('li', { className: 'td-phone-match' }, [
     line,
     el('p', { className: 'td-phone-detail', text: detail }),

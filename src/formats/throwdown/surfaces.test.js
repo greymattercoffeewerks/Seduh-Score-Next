@@ -145,3 +145,50 @@ describe('registration', () => {
     expect(PHONE_BODIES.throwdown().hasContent(live)).toBe(true);
   });
 });
+
+describe('a match decided by scoresheets, on the phone and the projector', () => {
+  const judging = {
+    id: 'j1',
+    decided: false,
+    resultKind: null,
+    judging: true,
+    sides: [side('Ana', null, null), side('Bima', null, null)],
+  };
+  const done = {
+    id: 'j1',
+    decided: true,
+    resultKind: 'scores',
+    sides: [side('Ana', null, false), side('Bima', null, true)],
+  };
+  const payload = (match) => ({
+    ...live,
+    rounds: [{ label: 'Final', phase: 'main', matches: [match] }],
+    nowPlaying: match.decided ? [] : [match],
+    recent: match.decided ? [match] : [],
+  });
+  const render = (p) => {
+    const phone = document.createElement('div');
+    createThrowdownViewerBody().renderBody(phone, p);
+    const stage = document.createElement('div');
+    selectThrowdownScreen(p).mount(stage, p);
+    return { phone: phone.textContent, stage: stage.textContent };
+  };
+
+  it('says "Judges scoring" while it runs, and names no number', () => {
+    const { phone, stage } = render(payload(judging));
+    expect(phone).toContain('Judges scoring');
+    expect(stage).toContain('Judges scoring');
+    expect(phone + stage).not.toMatch(/\d/);
+  });
+  it('names the winner only once decided: no score, count or rule', () => {
+    const { phone, stage } = render(payload(done));
+    expect(phone).toContain('Bima wins');
+    expect(stage).toContain('Wins');
+    expect(phone + stage).not.toMatch(/\d|judges|total|point/i);
+  });
+  it('never says "Judges scoring" for a match that is not judged (module off)', () => {
+    const plain = { ...judging, judging: undefined };
+    const { phone, stage } = render(payload(plain));
+    expect(phone + stage).not.toContain('Judges scoring');
+  });
+});
