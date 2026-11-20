@@ -240,6 +240,44 @@ describe('normaliseProfile', () => {
     expect(e.kind).toBe('competed');
   });
 
+  it('reads a Throwdown result (a place and a round, no score) and its knockout record as the door sends them', () => {
+    const p = normaliseProfile(
+      door({
+        recorded_results: [
+          {
+            event_name: 'Night One',
+            format: 'throwdown',
+            organiser_name: 'Grey Matter',
+            event_date: '2026-11-27',
+            placing: 3,
+            stage: 'Semi-finals',
+            correct: null,
+            total: null,
+            time_secs: null,
+            provenance: 'seduh_score',
+          },
+        ],
+        knockout_record: {
+          won: 5,
+          lost: 1,
+          opponents: [{ display_name: 'Bravo', matches: 1, won: 1, lost: 0 }],
+        },
+      }),
+    );
+    expect(p.entries[0]).toMatchObject({
+      format: 'throwdown',
+      placing: 3,
+      detail: 'Semi-finals',
+      correct: null,
+      total: null,
+    });
+    expect(p.knockout).toEqual({
+      won: 5,
+      lost: 1,
+      opponents: [{ displayName: 'Bravo', matches: 1, won: 1, lost: 0 }],
+    });
+  });
+
   it('keeps the knockout record and at most ten named opponents', () => {
     const opponents = Array.from({ length: 12 }, (_, i) => ({
       display_name: `Opp ${i}`,

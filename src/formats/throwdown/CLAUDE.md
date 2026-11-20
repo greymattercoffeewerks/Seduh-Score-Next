@@ -131,3 +131,12 @@ them: `resultsPublishing.js`'s header.
 - **Publish re-reads the event fresh** before it writes, so a stale screen cannot publish stale names.
 - **Feed queue.** The first real publish lands in the archive feed's `queue` mode and waits for the owner's weekly review before
   anyone sees it (`CONVENTIONS.md`, "Seduh ID feed: the owner's runbook").
+
+## Seduh ID profile (2026-11-20, T-ID2.TD)
+
+A claimed person's profile shows their published Throwdown place and their knockout record. Database only (migration
+`20261127120000`, pgTAP `092`) plus one payload key: a full-scope publish adds `matches` (`resultsPublishing.js`
+`playedMatches`): each played match as `{round, sides: [{name, cafe, winner}]}`, a walkover, bye or undecided match left out, the
+3rd place match in. The profile door reads that list and nothing in `td_*` (`app.seduh_knockout_record`). Joint 3rd for the two
+semi-final losers and "walkovers do not count" are owner-confirmed (2026-11-20). "This isn't mine" on a Throwdown result also hides
+that event's matches (owner to confirm at review). Details: `CONVENTIONS.md`, "Seduh ID profile door".

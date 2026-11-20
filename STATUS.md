@@ -20,6 +20,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
 - **Throwdown competitor phone** (2026-11-20, branch `feat/throwdown-competitor-phone`, not merged, no version bump): competitors register with a phone and link to Seduh ID through `core/registration.js`. Not final: the two Playwright specs were not run locally (CI or the owner's env), and the owner's check is owed before 27 Nov.
 - **Throwdown publish results** (2026-11-20, branch `claude/throwdown-publish-results-8a8ad7`, no version bump): organisers publish a finished event's results so the Seduh ID feed can create identities; joint 3rd for two semi-final losers is an owner-confirm assumption; first publish waits in the feed queue. Not final: Playwright in CI, owner's check, independent checker owed.
+- **Throwdown on the Seduh ID profile** (step 2, 2026-11-20, PR open against `dev`, no version bump): the profile shows Throwdown places and the knockout record; migration `20261127120000` to push after merge; owner to confirm that a dispute also hides that event's matches.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 

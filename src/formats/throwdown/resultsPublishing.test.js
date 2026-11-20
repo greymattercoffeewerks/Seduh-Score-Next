@@ -204,6 +204,7 @@ describe('buildThrowdownPayload: keys and scope', () => {
       'podium',
       'standings',
       'notListed',
+      'matches',
     ];
     expect(Object.keys(p).every((k) => allowed.includes(k))).toBe(true);
     expect(p).toMatchObject({
@@ -245,6 +246,62 @@ describe('buildThrowdownPayload: keys and scope', () => {
     expect(full.notListed).toBe(1);
     expect(full.competitors).toBe(8);
     expect(buildThrowdownPayload({ event, bracket, entries: extra }).notListed).toBeUndefined();
+  });
+});
+
+describe('buildThrowdownPayload: matches (the knockout record)', () => {
+  it('lists every played match, the 3rd place match included, as names and cafes with a winner flag and nothing else', () => {
+    const { bracket, entries } = eight();
+    const p = buildThrowdownPayload({ event, bracket, entries, scope: 'full' });
+    expect(p.matches).toHaveLength(8);
+    expect(p.matches.at(-1)).toEqual({
+      round: '3rd place',
+      sides: [
+        { name: 'D', cafe: 'D Cafe', winner: false },
+        { name: 'C', cafe: 'C Cafe', winner: true },
+      ],
+    });
+    for (const m of p.matches) {
+      expect(m.sides.filter((s) => s.winner)).toHaveLength(1);
+      expect(Object.keys(m).sort()).toEqual(['round', 'sides']);
+      for (const s of m.sides) expect(Object.keys(s).sort()).toEqual(['cafe', 'name', 'winner']);
+    }
+  });
+
+  it('leaves out a walkover and a bye, which were not played', () => {
+    const { bracket, entries } = build(
+      [
+        ['r1', 1],
+        ['r2', 2],
+      ],
+      [
+        ['m1', 'r1', 1, ['B', 'C'], 'wo1'],
+        ['m2', 'r1', 2, ['A', null], 'bye'],
+        ['f', 'r2', 1, ['A', 'C'], 0],
+      ],
+      ['A', 'B', 'C'],
+    );
+    const p = buildThrowdownPayload({ event, bracket, entries, scope: 'full' });
+    expect(p.matches).toHaveLength(1);
+    expect(p.matches[0].round).toBe('Final');
+  });
+
+  it('never names a withdrawn competitor the standings leave out, in any match', () => {
+    const { bracket, entries } = eight();
+    // H lost a round-one match and withdrew: not a podium finisher, so listed nowhere (counted in notListed)
+    const other = entries.map((e) => (e.id === 'H' ? { ...e, withdrawn: true } : e));
+    const q = buildThrowdownPayload({ event, bracket, entries: other, scope: 'full' });
+    expect(q.standings.map((s) => s.name)).not.toContain('H');
+    // the matches H played are gone, nobody else's are
+    expect(q.matches.every((m) => m.sides.every((s) => s.name !== 'H'))).toBe(true);
+    expect(q.matches.length).toBe(7);
+  });
+
+  it('is only in the full scope: a podium-only publish carries no matches', () => {
+    const { bracket, entries } = eight();
+    expect(
+      buildThrowdownPayload({ event, bracket, entries, scope: 'podium' }).matches,
+    ).toBeUndefined();
   });
 });
 
