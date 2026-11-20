@@ -7,7 +7,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Throwdown scoresheet rounds, stage 2: console, outbox and live surfaces · 2026-11-20
+## Throwdown scoresheet rounds, stage 2: console, outbox and live surfaces · 4.23.0 · 2026-11-20
 
 **Status: done** except the owner's real-tablet check below. Branch `claude/td-scoresheet-s2-da45fa`, one PR into `dev` (stacks on #524, stage 1, already merged). **No version bump, no cloud push** (stage 1's migrations are still to be pushed after the release). No new migration. Spec: `THROWDOWN-SCORESHEET-SPEC.md` section 5 (local only).
 
@@ -17,6 +17,14 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Reviews.** `ui-accessibility-reviewer`: two 🔴 fixed (Save was inert while incomplete so its error never showed; focus ids used `side.position`, which does not exist), nits fixed except the Start-button error placement (logged as is). `offline-sync-auditor`: no 🔴; one nit fixed (grid and Save blocked while a confirm is in flight). `module-boundary-checker`: clean; one unused helper removed. `test-auditor`: four Important test gaps; fixed all but a payload-level boundary test (the regex boundary test stays). `code-reviewer`: no 🔴; nits fixed.
 - **Checks.** Lint, Prettier, `vitest` (296 files, 7675 tests), pgTAP (93 files) green. Playwright: `dev-throwdown` (both specs) passes; the full suite passed through `dev-tenancy`; the admin MFA setup failed once locally with a GoTrue 500 (passed on a rerun); two archive e2e checks failed locally on shared-database counts and a 1280px panel check, untouched code, left to CI. `countryScreen.test.js` flakes under parallel load and passes alone (not touched).
 - **Owed.** The owner's check on a real tablet: typing a sheet with the numeric keypad at 360px, caret behaviour after Save while the screen reloads, and the Final and 3rd place flow on the projector and phone.
+
+## Throwdown scoresheet rounds, stage 1: backend and pure scoring · 4.23.0 · 2026-11-19
+
+**Status: done.** PR #524 into `dev` (merged), released with stage 2 as **4.23.0** (minor: a Throwdown event can now decide chosen rounds by judges' scoresheets). Spec: `THROWDOWN-SCORESHEET-SPEC.md` (local only). Logged at release; the stage 1 session wrote its record in the PR body.
+
+- **What changed.** `src/core/scoresheet.js` (format-agnostic: `latte_art_v1` preset, sheet validation, totals, the winner rule: highest total, then more judges, then an organiser pick). `src/formats/throwdown/roundRole.js` and the `scoresheet` module entry. Migrations `20261127100000_td_scoresheet_registry.sql` (key `throwdown_scoresheet`, unenforced; registry; settings check) and `20261127110000_td_score_sheets.sql` (`td_score_sheets`, `td_score_decisions`, result kind `scores`, the `scores` arm of `td_match_results`, taps refused on a scored match, `td_score_standings`, writers `td_save_score_sheet` and `td_confirm_scored_match`). pgTAP `091` plus `040`/`041`/`052`/`056`/`069`; JS and SQL parity on `supabase/tests/fixtures/scoresheet-parity.json`.
+- **Reviews.** schema-guardian, security-reviewer, scoring-auditor clean (two scoring nits left). code-reviewer: one nit fixed, one left (`td_match_not_scored` errcode differs between writers and triggers, hint identical). module-boundary-checker's 🔴 "preset lives in core" judged intentional (the spec puts presets in core as data). test-auditor's five gaps fixed. CI's first run failed on Prettier formatting of the parity fixture only; fixed.
+- **Cloud.** Both migrations to be pushed with the 4.23.0 release.
 
 ## Community tool frame: rolled out to the Timer, Brew Planner and Guess the Bean · 4.22.0 · 2026-11-19
 
