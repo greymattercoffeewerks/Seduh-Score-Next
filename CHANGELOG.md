@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown scoresheet: range inside the box, Petrol field errors · 4.25.0 · 2026-11-20
+
+**Status: done** (code, tests, reviews). Owner feedback on the sheet form: the red edge on a wrong value was easy to miss, and the "0 to 6" line under each label took space.
+
+- **What changed.** Each score box shows its range inside, after the number ("5 / 6", like the paper sheet; `aria-hidden`, the input's name still says "0 to 6"; never a placeholder, which Petrol rules out). The "0 to 6" line is gone. The line under a wrong box and the sheet's own error now use Petrol's `.form-field-error` (red, with its "!" mark) instead of plain text, beside the existing 2px danger edge. A blank line rejected on Save now gets its own error line too, not only the red edge. Filling the box red or thickening the edge was considered and left out: both depart from Petrol's one field-error pattern.
+- **Files.** `src/formats/throwdown/scoreEntry.js`, `eventScreen.css`, `eventScreen.test.js`.
+- **Checks.** Lint, Prettier, Throwdown unit tests (154) green. Measured at 360px on a static render with the real token and Throwdown CSS: no horizontal scroll, the suffix sits inside the box's right edge, the invalid box shows the 2px danger edge and the "!" error line (screenshots timed out in the browser pane, so measured by script).
+- **Reviews.** `ui-accessibility-reviewer`: no 🔴; contrast of the suffix 13.3:1 light / 6.7:1 dark; two nits fixed (blank lines on Save get their own error line; no spare 4px under a valid line); one 🟣 pre-existing: screen readers may read Petrol's "!" mark aloud before the message (shared `feedback.css`, not changed here). `code-reviewer` (also test and boundary): no 🔴; one nit fixed (two redundant declarations removed).
+- **Owed.** The owner's look on a real tablet.
+
 ## Throwdown: edit a competitor · 4.25.0 · 2026-11-20
 
 **Status:** PR open against `dev`. No migration, nothing to push to the cloud, no version bump (the release PR takes it). Owed: the Playwright `throwdown-event` step (a café edit) was **not run locally** (no `dist` build and no `.env` in the worktree), so CI is its first run.
