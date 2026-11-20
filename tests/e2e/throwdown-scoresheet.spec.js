@@ -33,7 +33,10 @@ async function enterSheet(card, seat, side, value) {
     .click();
   const inputs = card.locator('.td-points');
   const count = await inputs.count();
-  expect(count).toBe(12); // 6 lines x 2 cups
+  // 6 lines per cup; the card says how many cups this round has (3rd place 1, Final 2)
+  const note = await card.locator('.td-note').first().textContent();
+  const cups = Number(note.match(/(\d) cups?/)[1]);
+  expect(count).toBe(6 * cups);
   for (let i = 0; i < count; i += 1) await inputs.nth(i).fill(String(value));
   await card.getByRole('button', { name: 'Save sheet' }).click();
 }
@@ -144,7 +147,7 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
       expect(judging).not.toMatch(LEAK);
     }
 
-    // ---- first match: the totals are level (72 each) but two judges scored Competitor 1 higher => "more judges"
+    // ---- first match: the totals are level but two judges scored Competitor 1 higher => "more judges"
     const first = page.locator('article.td-scored').first();
     const firstNames = (await first.locator('h3').textContent()).split(' vs ');
     await enterAll(first, [
@@ -155,13 +158,13 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
     await first.locator('.td-grid-btn').first().click();
     await expect(first.locator('.td-points').first()).toHaveValue('3');
     await first.getByRole('button', { name: 'Close without saving' }).click();
-    // replace judge 1's sheet for competitor 1 (3 -> 2 on every line, 72 -> 60) and put it back: the replace must land
+    // replace judge 1's sheet for competitor 1 (3 -> 2 on every line, so the other competitor now wins on total) and put it back: the replace must land
     await first.locator('.td-grid-btn').first().click();
-    for (let i = 0; i < 12; i += 1) await first.locator('.td-points').nth(i).fill('2');
+    for (const input of await first.locator('.td-points').all()) await input.fill('2');
     await first.getByRole('button', { name: 'Save sheet' }).click();
     await expect(first).toContainText(`${firstNames[1]} wins`);
     await first.locator('.td-grid-btn').first().click();
-    for (let i = 0; i < 12; i += 1) await first.locator('.td-points').nth(i).fill('3');
+    for (const input of await first.locator('.td-points').all()) await input.fill('3');
     await first.getByRole('button', { name: 'Save sheet' }).click();
     await expect(first).toContainText('more judges scoring them higher');
     await expect(first).toContainText(`${firstNames[0]} wins`);
