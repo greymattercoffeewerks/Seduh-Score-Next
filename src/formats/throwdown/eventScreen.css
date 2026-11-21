@@ -373,3 +373,8 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* a long unbroken name never pushes the Corrections card wider than a 360px screen */
+.td-corrections li {
+  overflow-wrap: anywhere;
+}

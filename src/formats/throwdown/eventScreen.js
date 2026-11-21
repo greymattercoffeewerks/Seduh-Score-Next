@@ -25,7 +25,7 @@ import {
   PUBLISHED_EDIT_WARNING,
 } from '../../core/registration.js';
 import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
-import { droppedErrorFor } from '../../core/outbox.js';
+import { droppedErrorFor, isTransientErrorCode } from '../../core/outbox.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { newSeed } from '../../core/seededShuffle.js';
 import {
@@ -39,7 +39,7 @@ import {
   reopenMatch,
   pendingSnapshot,
 } from './data.js';
-import { reopenState, reopenWords } from './reopen.js';
+import { reopenState, reopenWords, matchesAwaitingUndo } from './reopen.js';
 import { tallyVotes, leadOf, canConfirm, voteState } from './votes.js';
 import {
   randomPairs,
@@ -150,7 +150,13 @@ export async function mountThrowdownEventScreen(
         } catch {
           // keep the last snapshot
         }
-        if (!state.feedback?.tone) state.feedback = staleFeedback;
+        // Only a dropped connection says "No connection"; any other failure (an expired sign-in, a server refusal) is
+        // said in its own words, with the screen still kept.
+        if (isConnectionFailure(err)) {
+          if (!state.feedback?.tone) state.feedback = staleFeedback;
+        } else {
+          state.feedback = { tone: 'error', text: describeThrowdownError(err) };
+        }
       } else {
         state.loadError = err.timedOut
           ? 'This is taking longer than expected — check your connection and try Retry.'
@@ -160,6 +166,13 @@ export async function mountThrowdownEventScreen(
     state.loading = false;
     render();
   }
+
+  // A read that never reached the database: our own timeout, a fetch failure (supabase-js answers it with no SQLSTATE), or
+  // a transient database code. Sign-in problems (PGRST3xx) are not the connection, whatever the outbox does with them.
+  const isConnectionFailure = (err) =>
+    Boolean(err?.timedOut) ||
+    !err?.code ||
+    (isTransientErrorCode(err.code) && !String(err.code).startsWith('PGRST'));
 
   // Shown (as the same object, so a later successful refresh can recognise and clear it) when a refresh fails but the
   // last loaded screen is kept.
@@ -1236,13 +1249,14 @@ export async function mountThrowdownEventScreen(
   // Offered on a decided match while nothing after it has started (reopen.js; the database checks again). Two taps: Undo
   // result, then Yes, undo. The match then reappears under Now playing with its votes or sheets kept.
   function undoControl(m, roundLabel) {
-    if (state.pending.get(m.id)?.reopenQueued) {
-      return el('p', { className: 'td-note', text: 'Undo waiting to sync.' });
-    }
+    if (matchesAwaitingUndo(state.data.bracket, state.pending).has(m.id)) return null;
     const st = reopenState(state.data.bracket, m.id, {
       sheets: state.data.scoreSheets,
       pending: state.pending,
     });
+    if (st.reason === 'queued') {
+      return el('p', { className: 'td-note', text: 'Undo waiting to sync.' });
+    }
     if (!st.allowed) return null;
     if (state.reopen !== m.id) {
       const undo = button(
@@ -1256,6 +1270,7 @@ export async function mountThrowdownEventScreen(
       );
       // several matches can offer Undo at once: the name says which (it starts with the visible words, WCAG 2.5.3)
       undo.setAttribute('aria-label', `Undo result: ${roundLabel}, ${matchTitle(m)}`);
+      undo.id = `td-reopen-btn-${m.id}`;
       return undo;
     }
     const words = reopenWords(m, st.later, {
@@ -1266,6 +1281,8 @@ export async function mountThrowdownEventScreen(
       'Yes, undo',
       () => {
         state.reopen = null;
+        // a refusal re-renders this match with Undo result again: focus goes back there (success moves it to Now playing)
+        state.focusTarget = `td-reopen-btn-${m.id}`;
         return act(
           () =>
             reopenMatch(
@@ -1292,7 +1309,7 @@ export async function mountThrowdownEventScreen(
           'Keep result',
           () => {
             state.reopen = null;
-            state.focusTarget = null;
+            state.focusTarget = `td-reopen-btn-${m.id}`;
             render();
           },
           { key: `td-reopen-cancel-${m.id}` },
@@ -1302,6 +1319,7 @@ export async function mountThrowdownEventScreen(
   }
 
   function bracketCard() {
+    const awaitingUndo = matchesAwaitingUndo(state.data.bracket, state.pending);
     const rounds = state.data.bracket.rounds.map((round) =>
       el('section', { className: 'td-round', attrs: { 'aria-label': round.label } }, [
         el('h3', { text: round.label }),
@@ -1322,7 +1340,11 @@ export async function mountThrowdownEventScreen(
                     })
                   : el('span', {
                       className: 'td-result',
-                      text: m.playable ? 'Being decided' : 'Waiting',
+                      text: awaitingUndo.has(m.id)
+                        ? 'Removed when the undo syncs'
+                        : m.playable
+                          ? 'Being decided'
+                          : 'Waiting',
                     }),
                 auditDetails(m),
                 undoControl(m, round.label),
@@ -1408,7 +1430,8 @@ export async function mountThrowdownEventScreen(
       if (!state.data.bracket.started) {
         container.append(competitorsCard(), setupCard(), drawCard());
       } else {
-        const playable = state.data.bracket.playableMatches;
+        const awaitingUndo = matchesAwaitingUndo(state.data.bracket, state.pending);
+        const playable = state.data.bracket.playableMatches.filter((m) => !awaitingUndo.has(m.id));
         container.appendChild(
           el('section', { className: 'td-now', attrs: { 'aria-labelledby': 'td-now-h' } }, [
             el('h2', {

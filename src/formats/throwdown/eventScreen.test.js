@@ -154,6 +154,78 @@ describe('the Throwdown organiser screen', () => {
       expect(calls.some((c) => c.name === 'td_reopen_match')).toBe(false);
     });
 
+    it('Keep result puts focus back on that match’s Undo result button', async () => {
+      const root = await mount(decided);
+      byText(root, 'Undo result').click();
+      byText(root, 'Keep result').click();
+      expect(document.activeElement).toBe(byText(root, 'Undo result'));
+    });
+
+    it('while a semi-final’s undo waits to sync, the Final it will remove cannot be played', async () => {
+      // two semi-finals decided, the Final made and open; then the organiser's undo of semi-final 1 is queued (offline)
+      const semis = {
+        td_rounds: [
+          { id: 'r1', position: 1, kind: 'pair', phase: 'main' },
+          { id: 'r2', position: 2, kind: 'pair', phase: 'main' },
+        ],
+        td_matches: [
+          {
+            id: 'm1',
+            round_id: 'r1',
+            position: 1,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm2',
+            round_id: 'r1',
+            position: 2,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm3',
+            round_id: 'r2',
+            position: 1,
+            result_kind: null,
+            confirmed_at: null,
+            walkover_winner_position: null,
+          },
+        ],
+        td_slots: [
+          { id: 'a', match_id: 'm1', position: 1, entry_id: 'eAna' },
+          { id: 'b', match_id: 'm1', position: 2, entry_id: 'eBima' },
+          { id: 'c', match_id: 'm2', position: 1, entry_id: 'eCitra' },
+          { id: 'd', match_id: 'm2', position: 2, entry_id: 'eDani' },
+          { id: 'e', match_id: 'm3', position: 1, entry_id: 'eAna' },
+          { id: 'f', match_id: 'm3', position: 2, entry_id: 'eCitra' },
+        ],
+        td_settings: [{ event_id: 'ev', judge_count: 3, third_place: false, modules: {} }],
+        event_entries: ['Ana', 'Bima', 'Citra', 'Dani'].map((n) => ({
+          id: `e${n}`,
+          display_name: n,
+          withdrawn: false,
+        })),
+      };
+      let root = await mount(semis);
+      expect(root.querySelectorAll('article.td-match')).toHaveLength(1);
+
+      const { enqueueOperation } = await import('../../core/outbox.js');
+      await enqueueOperation('td_reopen_match', {
+        p_operation_id: 'r',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+      });
+      document.body.innerHTML = '';
+      root = await mount(semis);
+      expect(root.querySelectorAll('article.td-match')).toHaveLength(0);
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(0);
+      expect(root.textContent).toContain('Removed when the undo syncs');
+      expect(root.textContent).toContain('Undo waiting to sync.');
+    });
+
     it('offers no undo on an open match', async () => {
       const root = await mount(started);
       expect(byText(root, 'Undo result')).toBeUndefined();
@@ -221,6 +293,42 @@ describe('the Throwdown organiser screen', () => {
       await new Promise((r) => setTimeout(r, 50));
       const after = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
       expect(after).not.toContain('No connection');
+    });
+
+    it('says a failure that is not the connection in its own words, keeping the screen', async () => {
+      const base = clientWith({ events: [EVENT], ...started });
+      let expired = false;
+      const client = {
+        from(name) {
+          if (!expired) return base.from(name);
+          const fail = () =>
+            Promise.resolve({
+              data: null,
+              error: { code: 'PGRST303', message: 'JWT expired', hint: null },
+            });
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: () => q,
+            single: fail,
+            maybeSingle: fail,
+            then: (r) => fail().then(r),
+          };
+          return q;
+        },
+        rpc: base.rpc,
+      };
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, { eventId: 'ev', client, handlers: {} });
+      expired = true;
+      window.dispatchEvent(new Event('online'));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).not.toContain('No connection');
+      expect(live.trim()).not.toBe('');
     });
 
     it('still shows the load error with Retry when the very first load fails', async () => {

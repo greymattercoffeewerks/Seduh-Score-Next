@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reopenState, reopenWords } from './reopen.js';
+import { reopenState, reopenWords, matchesAwaitingUndo } from './reopen.js';
 
 // A small hand-built bracket in deriveBracket's shape: just the fields reopen.js reads.
 const side = (slotId, name, { winner = null, votes = 0 } = {}) => ({ slotId, name, winner, votes });
@@ -131,5 +131,42 @@ describe('reopenWords', () => {
     expect(reopenWords({ ...won, resultKind: 'scores' }, [], { scored: true }).detail).toContain(
       'scoresheets kept',
     );
+  });
+});
+
+describe('matchesAwaitingUndo: what a queued undo will remove', () => {
+  it('is every match after the main round whose undo is queued, and nothing before it', () => {
+    const bracket = {
+      rounds: [
+        round(1, 'main', [match('q1', { decided: true }), match('q2', { decided: true })]),
+        round(2, 'main', [match('s1', { decided: true }), match('s2', { decided: true })]),
+        round(3, 'third_place', [match('t')]),
+        round(4, 'main', [match('f')]),
+      ],
+    };
+    expect([...matchesAwaitingUndo(bracket, new Map([['s1', { reopenQueued: true }]]))]).toEqual([
+      't',
+      'f',
+    ]);
+    // the earliest queued undo wins: undoing a quarter-final removes the semi-finals too
+    expect([
+      ...matchesAwaitingUndo(
+        bracket,
+        new Map([
+          ['s1', { reopenQueued: true }],
+          ['q2', { reopenQueued: true }],
+        ]),
+      ),
+    ]).toEqual(['s1', 's2', 't', 'f']);
+  });
+
+  it('is empty with no queued undo, or when only the 3rd place match or the Final is being undone', () => {
+    const bracket = semisDone({
+      third: match('t', { decided: true }),
+      final: match('f', { decided: true }),
+    });
+    expect(matchesAwaitingUndo(bracket, new Map()).size).toBe(0);
+    expect(matchesAwaitingUndo(bracket, new Map([['t', { reopenQueued: true }]])).size).toBe(0);
+    expect(matchesAwaitingUndo(bracket, new Map([['f', { reopenQueued: true }]])).size).toBe(0);
   });
 });

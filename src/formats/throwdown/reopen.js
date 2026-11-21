@@ -54,3 +54,18 @@ export function reopenWords(match, later, { scored = false } = {}) {
     detail: `${kept}${removed} If you published the results, publish them again afterwards.`,
   };
 }
+
+// Matches an undo still waiting on this device will remove: every match of a round after a main-round match whose undo
+// is queued (the database deletes those rounds when the undo sends). The screen must not let anyone play them meanwhile,
+// or their taps would be refused ("event not found") once the rounds are gone.
+export function matchesAwaitingUndo(bracket, pending = new Map()) {
+  const rounds = bracket?.rounds ?? [];
+  const firstUndone = rounds
+    .filter((r) => r.phase === 'main' && r.matches.some((m) => pending.get(m.id)?.reopenQueued))
+    .map((r) => r.position)
+    .sort((a, b) => a - b)[0];
+  if (firstUndone === undefined) return new Set();
+  return new Set(
+    rounds.filter((r) => r.position > firstUndone).flatMap((r) => r.matches.map((m) => m.id)),
+  );
+}
