@@ -135,14 +135,35 @@ export async function mountThrowdownEventScreen(
       };
       state.pending = pending.matches;
       state.startQueued = pending.startQueued;
+      if (state.feedback === staleFeedback) state.feedback = null;
     } catch (err) {
-      state.loadError = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
-        : describeThrowdownError(err);
+      if (state.data) {
+        // A failed REFRESH keeps the screen: the organiser must still see the match and the taps waiting on this
+        // device (the queue is local, so it reads offline). Only a first load with nothing to show becomes the error.
+        try {
+          const pending = await pendingSnapshot();
+          state.pending = pending.matches;
+          state.startQueued = pending.startQueued;
+        } catch {
+          // keep the last snapshot
+        }
+        if (!state.feedback?.tone) state.feedback = staleFeedback;
+      } else {
+        state.loadError = err.timedOut
+          ? 'This is taking longer than expected — check your connection and try Retry.'
+          : describeThrowdownError(err);
+      }
     }
     state.loading = false;
     render();
   }
+
+  // Shown (as the same object, so a later successful refresh can recognise and clear it) when a refresh fails but the
+  // last loaded screen is kept.
+  const staleFeedback = {
+    tone: 'error',
+    text: 'No connection. Showing the last loaded screen. Taps made on this device are saved and send when the connection is back.',
+  };
 
   // A judge's tap must never be dropped because another write is in flight: taps queue (the outbox keeps their order)
   // and the screen reloads once the burst settles.
@@ -1354,12 +1375,19 @@ export async function mountThrowdownEventScreen(
     });
   }
 
+  // When the connection comes back, reload: the outbox drains on its own, and the screen should catch up with it.
+  const onOnline = () => {
+    if (!signal?.aborted) refreshSoon();
+  };
+  globalThis.addEventListener?.('online', onOnline);
+  signal?.addEventListener('abort', () => globalThis.removeEventListener?.('online', onOnline));
+
   render();
   await refresh();
 
   return {
     unmount() {
-      // No timers or listeners outside the nodes the router removes.
+      globalThis.removeEventListener?.('online', onOnline);
     },
   };
 }

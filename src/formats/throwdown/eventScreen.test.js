@@ -92,6 +92,70 @@ describe('the Throwdown organiser screen', () => {
     ).toBe(true);
   });
 
+  describe('losing the connection mid-event', () => {
+    // The same read-only client, but every read and write fails while `net.down` is true (a venue's wifi dropping).
+    function flakyClient(net) {
+      const base = clientWith({ events: [EVENT], ...started });
+      const offline = () => Promise.reject(new TypeError('Failed to fetch'));
+      return {
+        from(name) {
+          if (!net.down) return base.from(name);
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: () => q,
+            single: offline,
+            maybeSingle: offline,
+            then: (resolve, reject) => offline().then(resolve, reject),
+          };
+          return q;
+        },
+        rpc: (...args) => (net.down ? offline() : base.rpc(...args)),
+      };
+    }
+
+    it('keeps the match on screen after a tap, counts the tap as waiting, and catches up when back online', async () => {
+      const net = { down: false };
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client: flakyClient(net),
+        handlers: {},
+      });
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
+
+      net.down = true;
+      root.querySelector('.td-vote').click();
+      await new Promise((r) => setTimeout(r, 50));
+
+      // not the full-screen load error with only Retry: the match, its Vote buttons and the waiting tap are all there
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
+      expect(root.textContent).toContain('1 waiting to sync');
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('No connection. Showing the last loaded screen.');
+
+      net.down = false;
+      window.dispatchEvent(new Event('online'));
+      await new Promise((r) => setTimeout(r, 50));
+      const after = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(after).not.toContain('No connection');
+    });
+
+    it('still shows the load error with Retry when the very first load fails', async () => {
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client: flakyClient({ down: true }),
+        handlers: {},
+      });
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(0);
+      expect([...root.querySelectorAll('button')].map((b) => b.textContent)).toContain('Retry');
+    });
+  });
+
   it('before the draw offers competitors, setup and the draw, and no module controls', async () => {
     const root = await mount({ event_entries: entries });
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
