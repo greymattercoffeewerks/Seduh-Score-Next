@@ -1283,7 +1283,7 @@ export async function mountThrowdownEventScreen(
       'Yes, undo',
       () => {
         state.reopen = null;
-        // a refusal re-renders this match with Undo result again: focus goes back there (success moves it to Now playing)
+        // a refusal re-renders this match with Undo result again (focus goes back there; success moves it to Now playing)
         state.focusTarget = `td-reopen-btn-${m.id}`;
         return act(
           () =>
@@ -1292,7 +1292,13 @@ export async function mountThrowdownEventScreen(
               handlers,
             ),
           { publish: true },
-        );
+        ).then(() => {
+          // ...unless the refusal is that the match can no longer be undone (another device started the next round),
+          // so the button is gone: focus the Bracket heading, beside the refusal, never the page body
+          if (state.feedback?.tone === 'error' && !root.querySelector(`#td-reopen-btn-${m.id}`)) {
+            root.querySelector('#td-bracket-h')?.focus();
+          }
+        });
       },
       { className: 'btn btn-primary tap-target', key: `td-reopen-ok-${m.id}` },
     );
@@ -1359,7 +1365,7 @@ export async function mountThrowdownEventScreen(
     return el(
       'section',
       { className: 'card td-card', attrs: { 'aria-labelledby': 'td-bracket-h' } },
-      [el('h2', { id: 'td-bracket-h', text: 'Bracket' }), ...rounds],
+      [el('h2', { id: 'td-bracket-h', text: 'Bracket', attrs: { tabindex: '-1' } }), ...rounds],
     );
   }
 

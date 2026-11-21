@@ -161,6 +161,81 @@ describe('the Throwdown organiser screen', () => {
       expect(document.activeElement).toBe(byText(root, 'Undo result'));
     });
 
+    it('a refused undo whose button is gone (another device started the Final) leaves focus on the Bracket heading', async () => {
+      const tables = {
+        td_rounds: [
+          { id: 'r1', position: 1, kind: 'pair', phase: 'main' },
+          { id: 'r2', position: 2, kind: 'pair', phase: 'main' },
+        ],
+        td_matches: [
+          {
+            id: 'm1',
+            round_id: 'r1',
+            position: 1,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm2',
+            round_id: 'r1',
+            position: 2,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm3',
+            round_id: 'r2',
+            position: 1,
+            result_kind: null,
+            confirmed_at: null,
+            walkover_winner_position: null,
+          },
+        ],
+        td_slots: [
+          { id: 'a', match_id: 'm1', position: 1, entry_id: 'eAna' },
+          { id: 'b', match_id: 'm1', position: 2, entry_id: 'eBima' },
+          { id: 'c', match_id: 'm2', position: 1, entry_id: 'eCitra' },
+          { id: 'd', match_id: 'm2', position: 2, entry_id: 'eDani' },
+          { id: 'e', match_id: 'm3', position: 1, entry_id: 'eAna' },
+          { id: 'f', match_id: 'm3', position: 2, entry_id: 'eCitra' },
+        ],
+        td_votes: [],
+        td_settings: [{ event_id: 'ev', judge_count: 3, third_place: false, modules: {} }],
+        event_entries: ['Ana', 'Bima', 'Citra', 'Dani'].map((n) => ({
+          id: `e${n}`,
+          display_name: n,
+          withdrawn: false,
+        })),
+      };
+      const client = clientWith({ events: [EVENT], ...tables });
+      client.rpc = async (name) => {
+        if (name !== 'td_reopen_match') return { error: null, status: 200 };
+        // meanwhile a judge on another device tapped in the Final: the database refuses, and the refresh shows that tap
+        tables.td_votes.push({ id: 'v', match_id: 'm3', slot_id: 'e', created_at: '1' });
+        return {
+          error: { code: 'P0001', message: 'started', hint: 'td_next_round_started' },
+          status: 400,
+        };
+      };
+      const { dataHandlers } = await import('./data.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client,
+        handlers: dataHandlers(client),
+      });
+      root.querySelector('[aria-label^="Undo result: Semi-finals, Ana"]').click();
+      byText(root, 'Yes, undo').click();
+      await new Promise((r) => setTimeout(r, 100));
+      expect(root.querySelector('#td-reopen-btn-m1')).toBeNull();
+      expect(document.activeElement).toBe(root.querySelector('#td-bracket-h'));
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('The next round has already started');
+    });
+
     it('while a semi-final’s undo waits to sync, the Final it will remove cannot be played', async () => {
       // two semi-finals decided, the Final made and open; then the organiser's undo of semi-final 1 is queued (offline)
       const semis = {

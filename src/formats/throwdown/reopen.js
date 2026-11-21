@@ -62,8 +62,8 @@ export function reopenWords(match, later, { scored = false } = {}) {
         : 'The match goes back to open with its votes kept. Undo the wrong vote, then confirm again.';
   const removed = later.length
     ? later.some((r) => r.phase === 'third_place')
-      ? ' The 3rd place match and the Final are removed and made again when you confirm.'
-      : ' The next round is removed and made again when you confirm.'
+      ? ' The 3rd place match and the Final are removed, and made again from the corrected result when you confirm.'
+      : ' The next round is removed, and made again from the corrected result when you confirm.'
     : '';
   return {
     question: `Undo ${winner}’s win?`,
