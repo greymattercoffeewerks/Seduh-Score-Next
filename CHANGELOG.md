@@ -7,6 +7,37 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown projector on the shared projector kit · 4.26.0 (minor, planned; package.json not bumped here, the release PR takes it) · 2026-11-21
+
+**Status: PR open against `dev`, not merged, not released.** Not final: the owner's TV check (24 to 25 Nov) and CI's first Playwright run of `dev-throwdown` are outstanding. No migration.
+
+- **Why.** BTC already had a stage projector (page loop, result moments, champion screen). Throwdown needed the same behaviour. Copying BTC's code a second time would repeat the v4.x defect the module boundary exists to stop (CLAUDE.md, handoff §6), so the parts that are not BTC-specific moved into `src/core/`, and Throwdown's own pages stay in its format folder.
+- **Shared kit (`src/core/`).**
+  - `stageMatchCard.js` (`renderSide`, `renderVs`, and their CSS) moved out of BTC. Classes renamed `btc-stage-side/vs/points/chip(s)` to `stage-*`. BTC's markup and look are unchanged.
+  - `stageLoopScreen.js` (`createLoopScreen`): the page loop with its ring.
+  - `stageNewResults.js` (`detectNewResults`).
+  - `stageChampionScreen.js` (`createChampionScreen`), 60 s.
+  - `stageProjector.testkit.js` (`describeProjectorContract`), a shared test contract. Renamed from `stageProjectorTestKit.js` (review nit, see Reviews).
+  - Recipe "Adding a projector to a format" in `src/core/CLAUDE.md`.
+  - **Not moved (deliberate).** BTC's and Cup Taster's idle loops, and BTC's own champion and new-result code, still live in their formats. Owner: a tidy-up after 27 Nov.
+- **Throwdown projector.**
+  - Page loop of 10 s pages with a ring: Meet the competitors, How it works; Up next, the round page, Still in, Path to the final, Latest results.
+  - 8 s moments: Result recorded, Round is set.
+  - Champion screen with a podium and the footer "Congratulations to all N competitors".
+- **Payload (`liveSession.js`).** Added `upNext` and `thenNext` (in bracket order), match number, `roundLabel`, `roundPhase`, `roundSize`, `role`, `confirmedAt`, a per-side route, `stillIn`, `competitorNames` and `judgedRounds`.
+  - **Owner note:** `competitorNames` puts the active competitors' names in the public live payload before Round 1, because the Meet the competitors page needs them.
+  - **D8 holds.** A scoresheet match still carries no score, total, judge count or rule. Its "Match n" is the match's position in the bracket, which is structure, not a score.
+  - The phone body is untouched.
+- **Tests.** 373 Throwdown and core stage unit tests pass. A full unit run before the last small fixes had 2 failures: the `components.test.js` page list (fixed) and `countryPagesPlugin.test.js`, flaky under load and passing alone. Lint and Prettier are clean.
+- **Not run.** Playwright `dev-throwdown` (needs `.env`, not in the worktree). Two specs were updated for the new screens: `tests/e2e/throwdown-event.spec.js` and `throwdown-scoresheet.spec.js` (selectors, and 25 s timeouts for the moment before the champion). CI is their first run.
+- **Visual check.** Harness `src/formats/throwdown/projectorSurface.preview.html` (`?s=<scenario>&page=N`), screenshotted at 1920×1080 and 360 px with Playwright chromium. Not checked on a real TV or tablet; the owner's TV check is owed.
+- **Reviews** (one full pass, owner's Definition of Done):
+  - `module-boundary-checker` (Haiku): no import or branching leaks into core. Important: BTC keeps its own copies of the loop and champion. Recorded as intentional per scope, not fixed. Nits: test kit renamed to `.testkit.js` (fixed); names of formats in core comments (left); round names in three places (left).
+  - `test-auditor`: Important: the scoresheet "Match n" number, read against D8. Answered as intentional: D8 forbids score, total, judge count and rule; a match's position is structure. Wording in `CLAUDE.md` and `projectorMoments.js` corrected; a 4-match scored quarter-final test added that checks every page. Five nits fixed: the testkit asserts the screen exists, timers are asserted, one test retitled, ring selector, guard test.
+  - `ui-accessibility-reviewer`: Important: "Meet the competitors" clipped 16 names at 360 px. Fixed (smaller roster rows at narrow widths, re-shot, all 16 visible). Nits left: long names ellipsised on the round page (full name shown on Up next and in moments); champion and Up next footers cut at 360 px (core footer rule); "competitor/s" title breaks at 360 px; heading order on the Path and Latest pages. Pre-existing, logged: band wordmark overlap at 360 px.
+  - `code-reviewer`: no Important, no D8 leak. Nits fixed: old-payload guard (tested); `where` shadowing. Nit left: the semi-final loser's label differs before and after the 3rd place round exists. This follows the owner's rule ("Plays for third place" only once that match exists).
+- **Follow-ups.** Owner TV check 24 to 25 Nov. CI's first run of the two Throwdown Playwright specs. The BTC and Cup Taster tidy-up above (after 27 Nov).
+
 ## Throwdown: vote cap (a match takes no more taps than judges) · 4.25.1 · 2026-11-20
 
 **Status: done.** Code merged to `dev` as #531 (commits `93c043a`, `68fa9e3`, `e29b89a`) and the owed-review follow-ups as a second PR (below). The migration is applied to the cloud project. No release yet: the screen reaches production with the next `dev` to `main` release.

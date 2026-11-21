@@ -24,6 +24,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
   Owed: the owner to confirm that "This isn't mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish
   after the final and approve the feed queue.
 - **Throwdown vote cap** (#531 and its review follow-ups, on `dev` as 4.25.1, not yet released): a match takes no more taps than judges, plus one tie-break vote when the panel is level (owner, 2026-11-20). Migration applied to the cloud. All Definition-of-Done reviews run (CHANGELOG 4.25.1).
+- **Throwdown projector on the shared kit**: PR open against `dev`, not merged; TV check 24 to 25 Nov owed (CHANGELOG 4.26.0).
 - **Throwdown competitor Edit** (released as **4.25.0**, minor, #532): name, phone and café or team, before and after the
   draw, on edit rules now shared in `core/registration.js` with Cup Taster. No migration. Owed: the owner's tablet check.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in

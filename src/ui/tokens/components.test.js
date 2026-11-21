@@ -316,6 +316,7 @@ const PAGES_THAT_LINK_IT = [
   'src/formats/cup-taster/timingManualScreen.preview.html',
   'src/formats/cup-taster/timingScreen.preview.html',
   'src/formats/throwdown/eventScreen.preview.html',
+  'src/formats/throwdown/projectorSurface.preview.html',
   'src/ui/tokens/preview.html',
 ];
 

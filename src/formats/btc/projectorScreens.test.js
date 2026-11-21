@@ -2,11 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   selectBtcScreen,
   hasBtcProjectorContent,
-  renderSide,
-  renderVs,
   STANDINGS_PAGE_SIZE,
   PAGE_DWELL_MS,
 } from './projectorScreens.js';
+import { renderSide, renderVs } from '../../core/stageMatchCard.js';
 import { btcBand, matchLine, KNOCKOUT_PLACES } from './words.js';
 import { preliminaryPayload, knockoutPayload } from './demoLivePayload.js';
 import { readFileSync } from 'node:fs';
@@ -133,32 +132,30 @@ describe('small shared pieces', () => {
       chips: [{ text: '41 tokens' }, { text: 'Tie-break: coin', kind: 'tiebreak' }],
     });
     expect(side.getAttribute('data-winner')).toBe('true');
-    expect(text(side, '.btc-stage-side-label')).toBe('Goes through');
-    expect(text(side, '.btc-stage-side-name')).toBe('Bean Scene');
-    expect(text(side, '.btc-stage-points')).toBe('48');
-    expect(all(side, '.btc-stage-chip')).toEqual(['41 tokens', 'Tie-break: coin']);
-    expect(side.querySelectorAll('.btc-stage-chip')[1].getAttribute('data-kind')).toBe('tiebreak');
+    expect(text(side, '.stage-side-label')).toBe('Goes through');
+    expect(text(side, '.stage-side-name')).toBe('Bean Scene');
+    expect(text(side, '.stage-points')).toBe('48');
+    expect(all(side, '.stage-chip')).toEqual(['41 tokens', 'Tie-break: coin']);
+    expect(side.querySelectorAll('.stage-chip')[1].getAttribute('data-kind')).toBe('tiebreak');
     expect(renderSide({ name: 'X', winner: false }).getAttribute('data-winner')).toBe('false');
     const plain = renderSide({ name: 'X' });
     expect(plain.hasAttribute('data-winner')).toBe(false);
-    expect(
-      plain.querySelector('.btc-stage-side-label, .btc-stage-points, .btc-stage-chips'),
-    ).toBeNull();
+    expect(plain.querySelector('.stage-side-label, .stage-points, .stage-chips')).toBeNull();
   });
 
   it('renderSide puts a country on its own line above the name, and none when there is no country', () => {
     const side = renderSide({ name: 'Team Kopi', country: { code: 'BN', name: 'Brunei' } });
-    expect(side.querySelector('.btc-stage-side-country').textContent).toBe('Brunei');
-    expect(side.querySelector('.btc-stage-side-name').textContent).toBe('Team Kopi');
+    expect(side.querySelector('.stage-side-country').textContent).toBe('Brunei');
+    expect(side.querySelector('.stage-side-name').textContent).toBe('Team Kopi');
     // the country line comes first, so it reads (and sits) above the name
     expect(
       side
-        .querySelector('.btc-stage-side-country')
-        .compareDocumentPosition(side.querySelector('.btc-stage-side-name')) &
+        .querySelector('.stage-side-country')
+        .compareDocumentPosition(side.querySelector('.stage-side-name')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      renderSide({ name: 'Team Kopi', country: null }).querySelector('.btc-stage-side-country'),
+      renderSide({ name: 'Team Kopi', country: null }).querySelector('.stage-side-country'),
     ).toBeNull();
     const hostile = renderSide({ name: 'n', country: { code: 'BN', name: '<b>x</b>' } });
     expect(hostile.querySelector('b')).toBeNull();
@@ -173,11 +170,11 @@ describe('small shared pieces', () => {
   it('renderVs puts the two sides either side of a "VS" mark that is hidden from assistive technology', () => {
     const vs = renderVs(renderSide({ name: 'A' }), renderSide({ name: 'B' }));
     expect([...vs.children].map((c) => c.className)).toEqual([
-      'btc-stage-side',
-      'btc-stage-vs-mark',
-      'btc-stage-side',
+      'stage-side',
+      'stage-vs-mark',
+      'stage-side',
     ]);
-    expect(vs.querySelector('.btc-stage-vs-mark').getAttribute('aria-hidden')).toBe('true');
+    expect(vs.querySelector('.stage-vs-mark').getAttribute('aria-hidden')).toBe('true');
   });
 });
 
@@ -188,13 +185,13 @@ describe('idle loop: the pages', () => {
     const { host, handle } = mountFor(payload);
     expect(text(host, '.stage-kicker')).toBe('Up next · Preliminary');
     expect(text(host, '.stage-title')).toBe('Preliminary');
-    expect(all(host, '.btc-stage-side-name')).toEqual(['Pour Decisions', 'Steam Team']);
+    expect(all(host, '.stage-side-name')).toEqual(['Pour Decisions', 'Steam Team']);
     // Pour Decisions is from Brunei; Steam Team has no country, so only one country line is drawn
-    const sides = [...host.querySelectorAll('.btc-stage-side')];
-    expect(sides[0].querySelector('.btc-stage-side-country').textContent).toBe('Brunei');
-    expect(sides[1].querySelector('.btc-stage-side-country')).toBeNull();
+    const sides = [...host.querySelectorAll('.stage-side')];
+    expect(sides[0].querySelector('.stage-side-country').textContent).toBe('Brunei');
+    expect(sides[1].querySelector('.stage-side-country')).toBeNull();
     // in the preliminary round a place is only "so far", so no seed is claimed
-    expect(host.querySelector('.btc-stage-side-label')).toBeNull();
+    expect(host.querySelector('.stage-side-label')).toBeNull();
     expect(text(host, '.btc-stage-judges')).toBe('Judges: Judge 1 · Judge 2 · Judge 3');
     handle.destroy();
   });
@@ -204,7 +201,7 @@ describe('idle loop: the pages', () => {
     const payload = preliminaryPayload({ playedCount: 12 });
     payload.upNext.teams[1].country = { code: 'ID', name: 'Indonesia' };
     const { host, handle } = mountFor(payload);
-    expect(all(host, '.btc-stage-side-country')).toEqual(['Brunei', 'Indonesia']);
+    expect(all(host, '.stage-side-country')).toEqual(['Brunei', 'Indonesia']);
     handle.destroy();
   });
 
@@ -231,7 +228,7 @@ describe('idle loop: the pages', () => {
     expect(text(host, '.stage-kicker')).toBe(`Up next · ${payload.upNext.roundLabel}`);
     expect([a.seed, b.seed]).toEqual([1, 8]);
     expect(text(host, '.stage-title')).toBe('Seed 1 meets seed 8');
-    expect(all(host, '.btc-stage-side-label')).toEqual(['Seed 1', 'Seed 8']);
+    expect(all(host, '.stage-side-label')).toEqual(['Seed 1', 'Seed 8']);
     handle.destroy();
   });
 
@@ -252,7 +249,7 @@ describe('idle loop: the pages', () => {
     };
     const { host, handle } = mountFor(payload);
     expect(text(host, '.stage-title')).toBe('Seed 2 meets seed 3');
-    expect(all(host, '.btc-stage-side-label')).toEqual(['Seed 2', 'Seed 3']);
+    expect(all(host, '.stage-side-label')).toEqual(['Seed 2', 'Seed 3']);
     handle.destroy();
   });
 
@@ -262,7 +259,7 @@ describe('idle loop: the pages', () => {
     payload.upNext.teams = payload.upNext.teams.map((team) => ({ ...team, seed: null }));
     const { host, handle } = mountFor(payload);
     expect(text(host, '.stage-title')).toBe('1st meets 8th');
-    expect(all(host, '.btc-stage-side-label')).toEqual(['1st in the table', '8th in the table']);
+    expect(all(host, '.stage-side-label')).toEqual(['1st in the table', '8th in the table']);
     expect(host.textContent).not.toMatch(/seed/i);
     handle.destroy();
   });
@@ -285,7 +282,7 @@ describe('idle loop: the pages', () => {
     const { host, handle } = mountFor(payload);
     expect(text(host, '.stage-title')).toBe('Final');
     expect(host.querySelector('.btc-stage-judges')).toBeNull();
-    expect(all(host, '.btc-stage-side-label')).toEqual(['2nd in the table']);
+    expect(all(host, '.stage-side-label')).toEqual(['2nd in the table']);
     handle.destroy();
   });
 
