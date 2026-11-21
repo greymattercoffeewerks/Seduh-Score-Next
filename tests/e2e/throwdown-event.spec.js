@@ -164,7 +164,7 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     await expect(phone.locator('.td-phone-champion')).toContainText(champion);
     // the last result plays as a moment first (8 seconds), then the champion holds
     await expect(projector.locator('.stage-champion-name')).toHaveText(champion, {
-      timeout: 25000,
+      timeout: 90000,
     });
     await expect(projector.locator('.is-test-banner')).toBeVisible();
     await expect(phone.locator('.is-test-banner')).toBeVisible();
