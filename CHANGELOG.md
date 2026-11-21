@@ -7,6 +7,48 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown: undo a confirmed match, and the vote screen survives a dropped connection · 4.26.0 · 2026-11-21
+
+**Status: done, PR open against `dev`.** Code, tests and the review rounds are finished. Not final yet: the migration `20261129100000_td_reopen_match.sql` is NOT in the cloud. Push it with `apply_migration` after the PR merges and BEFORE the release reaches `main`: `loadThrowdown` now reads `td_match_reopens`, so the event screen fails to load against a cloud database without it. Also owed: the Playwright `throwdown-event` undo step (not run locally, no `.env` in the worktree, so CI is its first run), and the owner's tablet check of Undo and the offline screen before 27 Nov.
+
+- **Why.** The Throwdown event is on 27 Nov. Two ROADMAP open items would bite on the day: an organiser who tapped the wrong winner had no way to fix it ("Corrections after a confirm"), and fully offline the vote screen was lost after one tap.
+- **Undo rules (owner decisions, 2026-11-21, all four recommended answers).**
+  - Allowed until the next round starts. Later rounds, including the 3rd place match and the Final, are removed and rebuilt by `td_advance` when the match is confirmed again.
+  - Votes and score sheets are kept. For a level scored match, the organiser's pick is removed.
+  - Every undo is recorded in the new table `td_match_reopens` (kind, winner, confirmed time, positions, rounds removed, who, when) and shown as a Corrections card on the results page.
+  - Published results are untouched. The confirm step reminds the organiser to publish again.
+  - Refusals: `td_match_bye`, `td_next_round_started`, `td_third_place_changed` (a semi-final loser was withdrawn or restored since, which would add or drop the 3rd place match), `td_leader_changed`.
+- **Offline.**
+  - A failed refresh keeps the last loaded screen and the device's waiting taps (re-read from the local queue).
+  - "No connection…" is shown only for a connection failure (timeout, no code, transient non-PGRST code). Any other error shows its own words.
+  - The screen reloads on the browser `online` event.
+  - `refreshSoon` now returns the running reload to a caller that joins it.
+  - An offline-queued undo hides the later rounds it will remove (`matchesAwaitingUndo`). Without that, the next round stays playable and its taps are dropped as "event not found".
+- **Client mirror.** `src/formats/throwdown/reopen.js`: `reopenState`, `reopenWords`, `matchesAwaitingUndo`. UI: "Undo result" on each undoable match in the Bracket card (its aria-label names the match), two taps ("Yes, undo" / "Keep result"), "Undo waiting to sync." while queued.
+- **Migration.** `20261129100000_td_reopen_match.sql`: `td_reopen_match` (SECURITY DEFINER, `app.td_guard`, advisory lock, idempotent through `processed_operations`) and the table `td_match_reopens`. Rollback block run in a transaction (`schema-guardian`).
+- **Tests.**
+  - pgTAP `093` (83 assertions). Matrices updated: `040` (table), `041` (RPC), `056` (window lock).
+  - Full `npm run db:test` passes. `079`, `085` and `089` print pre-existing plan-count notes.
+  - Unit: `reopen.test.js`, `eventScreen.test.js` (undo, offline, focus, race), `resultsScreen.test.js`.
+  - Full vitest: 7806 pass, except `src/marketing/countryScreen.test.js`, a known flaky test fixed by open PR #536.
+  - Playwright `throwdown-event` gains an undo-the-Final step. Not run locally.
+- **Files.** `supabase/migrations/20261129100000_td_reopen_match.sql`, `supabase/tests/093_td_reopen_match.sql`, `040`, `041`, `056`; `src/formats/throwdown/` `reopen.js` and `.test.js`, `eventScreen.js` and `.test.js`, `eventScreen.css`, `resultsScreen.js` and `.test.js`, `data.js`, `words.js`, `outboxHandlers.js`; `src/admin/adminErrors.test.js`; `tests/e2e/throwdown-event.spec.js`; `src/formats/throwdown/CLAUDE.md`; `ROADMAP.md`; `STATUS.md`; `package.json` and `package-lock.json` (version).
+- **Reviews (three rounds, the CLAUDE.md maximum).**
+  - `schema-guardian`: clean (rollback run in a transaction).
+  - `security-reviewer`: clean (probes as anon, another org, both orgs, the window lock).
+  - `module-boundary-checker`: clean on this change. One 🟣 pre-existing, logged only: `core/errors.js` names format keys.
+  - `code-reviewer`: no 🔴. Two 🟡, fixed: non-network errors were shown as "No connection"; the queued-undo rule was written twice.
+  - `offline-sync-auditor`: round 1 🔴, fixed: an offline-queued undo left the next round playable, so its taps were dropped as "event not found" (`matchesAwaitingUndo`). Its 🟡 matched `code-reviewer`'s and was fixed. Round 2 clean.
+  - `scoring-auditor`: round 1 🔴, fixed: the rebuild re-read withdrawals, so an undo could add or drop the 3rd place match. Fixed by `td_third_place_changed`, tested in both directions. One 🟡 (a refusal's wording promised a step that could not happen), fixed. Round 2 clean, one 🟡 on the rebuild wording, fixed.
+  - `ui-accessibility-reviewer`: round 1 🔴, fixed: "Keep result" and a refused undo dropped focus to `body`; focus now returns to Undo result. Round 2 found the variant where the refusal removes the button; fixed by focusing the Bracket heading. Round 3 found the variant during an in-flight reload; fixed by `refreshSoon` returning the running reload, with a test verified to fail without the fix. One 🟡 (corrections list overflow), fixed.
+  - `test-auditor`: two 🔴, fixed: later-round sheet and walkover clauses were untested in SQL (mutations survived), and the Keep-result test's recorder could never observe an RPC. Three 🟡, fixed: confirmed time was checked only for presence; the rebuilt 3rd place pairing was unchecked; one test title overclaimed. The three SQL mutations are now caught.
+  - The 🔴s were reproduced (SQL script, code trace, or surviving mutation) and each now has a test. Independent-checker agents were not run for them.
+- **Known limits.**
+  - Undo is not on the projector or phone. They show the corrected result on the next publish.
+  - Withdrawing the winner of a re-confirmed semi-final can still mean no 3rd place match, by the existing both-losers-active rule (owner rule, not changed).
+  - The round 3 UI fix (in-flight reload) has had no reviewer pass after it.
+- **Version.** 4.26.0 (minor: a new usable capability, Undo result). `package.json` and `package-lock.json` bumped on this branch.
+
 ## Throwdown: vote cap (a match takes no more taps than judges) · 4.25.1 · 2026-11-20
 
 **Status: done.** Code merged to `dev` as #531 (commits `93c043a`, `68fa9e3`, `e29b89a`) and the owed-review follow-ups as a second PR (below). The migration is applied to the cloud project. No release yet: the screen reaches production with the next `dev` to `main` release.
