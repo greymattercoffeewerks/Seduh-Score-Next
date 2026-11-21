@@ -21,6 +21,7 @@ export const TD_OPERATIONS = Object.freeze({
   walkover: 'td_record_walkover',
   saveSheet: 'td_save_score_sheet',
   confirmScored: 'td_confirm_scored_match',
+  reopen: 'td_reopen_match',
 });
 
 // A plain select returns at most the API's row limit (1000 here), which a large event's vote rows can pass: a
@@ -69,7 +70,7 @@ async function readScoring(client, eventId) {
 
 // Everything one screen or one live payload needs, read together.
 export async function loadThrowdown(eventId, client = getSupabase()) {
-  const [settings, draw, rounds, matches, slots, votes, entries] = await Promise.all([
+  const [settings, draw, rounds, matches, slots, votes, entries, reopens] = await Promise.all([
     client.from('td_settings').select('*').eq('event_id', eventId).maybeSingle(),
     client.from('td_draws').select('*').eq('event_id', eventId).maybeSingle(),
     readAll(client, 'td_rounds', 'id, position, kind, phase', eventId),
@@ -85,6 +86,13 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
       client,
       'event_entries',
       'id, display_name, cafe, bib, person_id, withdrawn, created_at',
+      eventId,
+    ),
+    // every undone result (td_reopen_match), for the match log
+    readAll(
+      client,
+      'td_match_reopens',
+      'id, match_id, round_position, round_phase, match_position, previous_result_kind, previous_winner_entry_id, previous_confirmed_at, rounds_removed, reopened_at',
       eventId,
     ),
   ]);
@@ -107,6 +115,9 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
     ...rows,
     scoreSheets: scoring.sheets,
     scoreDecisions: scoring.decisions,
+    reopens: [...reopens].sort((a, b) =>
+      String(a.reopened_at).localeCompare(String(b.reopened_at)),
+    ),
     bracket: deriveBracket(rows),
   };
 }
@@ -202,6 +213,16 @@ export const confirmScoredMatch = (
     handlers,
   );
 
+// Undo a confirmed result (an organiser confirmed the wrong winner). expectedWinnerSlotId: the winner the organiser saw, so
+// an undo cannot land on a result another device has already changed. The database refuses it once the next round has
+// started (td_next_round_started); see reopen.js.
+export const reopenMatch = ({ orgId, matchId, expectedWinnerSlotId = null }, handlers) =>
+  submit(
+    TD_OPERATIONS.reopen,
+    { p_org_id: orgId, p_match_id: matchId, p_expected_winner_slot_id: expectedWinnerSlotId },
+    handlers,
+  );
+
 export const recordWalkover = ({ orgId, matchId, winnerSlotId }, handlers) =>
   submit(
     TD_OPERATIONS.walkover,
@@ -218,7 +239,13 @@ export async function pendingSnapshot() {
   const matches = new Map();
   const forMatch = (id) => {
     if (!matches.has(id))
-      matches.set(id, { deltas: new Map(), queued: 0, decisionQueued: false, sheets: new Map() });
+      matches.set(id, {
+        deltas: new Map(),
+        queued: 0,
+        decisionQueued: false,
+        reopenQueued: false,
+        sheets: new Map(),
+      });
     return matches.get(id);
   };
   let startQueued = false;
@@ -242,6 +269,8 @@ export async function pendingSnapshot() {
       op.type === TD_OPERATIONS.walkover
     ) {
       forMatch(payload.p_match_id).decisionQueued = true;
+    } else if (op.type === TD_OPERATIONS.reopen) {
+      forMatch(payload.p_match_id).reopenQueued = true;
     }
   }
   return { matches, startQueued, signature: ops.map((o) => o.id).join(',') };
@@ -255,6 +284,7 @@ export async function pendingVoteDeltas(matchId) {
       deltas: new Map(),
       queued: 0,
       decisionQueued: false,
+      reopenQueued: false,
       sheets: new Map(),
     }
   );
