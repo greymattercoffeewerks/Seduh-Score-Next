@@ -157,7 +157,7 @@ rounds) and **Round is set** (pairings revealed one by one). The champion uses `
   decision: no console "call to stage" step); every match has `number`; `upNext`/`thenNext`/`recent` carry `roundLabel`,
   `roundPhase`, `roundSize`, `role`; `recent` adds `confirmedAt`; `stillIn`, `competitorNames` and `judgedRounds` (yes/no only).
   `roundLabel` ("Round of 16") is the projector's name; `label` ("Round 1") stays the console's. A scoresheet match still carries no
-  number (D8): `liveSession.test.js` checks `rounds`, `upNext`, `thenNext` and `recent` for any digit that is not structure.
+  score, total, judge count or rule (D8; its position in its round, "Match 2", is structure, not a score): `liveSession.test.js` checks `rounds`, `upNext`, `thenNext` and `recent` for any digit that is not structure.
 - **Moments key on `id|confirmedAt`** (a republish repeats neither) and need a previous snapshot; `projectorFixtures.js` builds
   payloads through the real `deriveBracket` and assembler for the tests and `projectorSurface.preview.html` (`?s=<scenario>&page=N`).
 - Not changed: the phone body, any migration, BTC's and Cup Taster's idle loops.

@@ -71,9 +71,7 @@ describe('the Result recorded screen', () => {
     expect(screen.all('.stage-side-label')).toEqual(['Goes through', 'Out']);
     expect(screen.all('.stage-points')).toEqual(['2', '1']);
     expect(screen.read('.stage-footer-start')).toBe('P1 beat P2 · 2 to 1');
-    expect(
-      screen.host.querySelector('.stage-footer-end .stage-ring, .stage-footer-end *'),
-    ).not.toBeNull();
+    expect(screen.host.querySelector('.stage-footer-end').children.length).toBeGreaterThan(0);
     screen.handle.destroy();
   });
 
@@ -363,5 +361,13 @@ describe('on a display', () => {
     vi.advanceTimersByTime(8000);
     expect(d.currentKey()).toBe('champion');
     d.destroy();
+  });
+});
+
+describe('a snapshot published before rounds had ids', () => {
+  it('is not compared: nothing is announced from it', () => {
+    const old = quarterFinals(1);
+    old.rounds = old.rounds.map((round) => ({ ...round, id: undefined }));
+    expect(detectThrowdownMoments(old, quarterFinals(3))).toEqual([]);
   });
 });

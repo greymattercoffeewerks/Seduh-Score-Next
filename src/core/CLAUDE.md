@@ -192,7 +192,7 @@ and the ring, and rebuilds ONLY when `signatureOf(payload)` changes, so a republ
 `stageNewResults.js` (`detectNewResults(previous, next, { listOf, keyOf, orderBy })`: results in `next` not in
 `previous`, oldest first, nothing without a previous snapshot), `stageChampionScreen.js` (`createChampionScreen({ paint,
 minDwellMs = 60000 })`, `paint(payload) -> { name, scoreLine?, podiumLine?, footerStart, footerEnd }`) and
-`stageProjectorTestKit.js` (`describeProjectorContract`). The recipe, in order:
+`stageProjector.testkit.js` (`describeProjectorContract`). The recipe, in order:
 
 1. `projectorScreens.js`: `selectScreen(payload)` (champion first, then the loop; null for nothing to show),
    `hasContent` = "`selectScreen` is not null" (the contract test checks they agree), `bandFor(payload)`, `pagesFor(payload)`

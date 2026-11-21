@@ -355,8 +355,16 @@
     display: none;
   }
 
+  /* Sixteen names must still fit one page of a short, narrow screen: two columns of small rows. */
   .td-stage-roster {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(0.8 * var(--stage-fit)) 2vw;
+    margin-top: calc(1.5 * var(--stage-fit));
+  }
+
+  .td-stage-roster-name {
+    padding: calc(0.7 * var(--stage-fit)) 2vw;
+    font-size: max(0.875rem, calc(3 * var(--stage-fit)));
   }
 
   .td-stage-rounds {

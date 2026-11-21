@@ -3,7 +3,7 @@
 // to the change back to the loop.
 //
 //   Result recorded  a match was confirmed: both competitors, who goes through (or out), the vote split for a tap
-//                    round, the winner only for a scoresheet round (D8: the payload carries no number for one), and
+//                    round, the winner only for a scoresheet round (D8: the payload carries no score, total, judge count or rule for one; "Match 2" is its place in the round), and
 //                    a "Walkover" chip. The Final says Champion and Runner-up; a semi-final loser plays for third
 //                    place when that match exists; the 3rd place match says Third place and Fourth place.
 //   Round is set     a new main round appeared between two snapshots: "The quarter-finals are set", the pairings
@@ -31,6 +31,8 @@ const resultKey = (result) => `${result.id}|${result.confirmedAt}`;
 // previous, next: two live payloads. Returns the moments for core/momentPlayer.js: [{ screen, payload }].
 export function detectThrowdownMoments(previous, next) {
   if (!previous || !next) return [];
+  // A snapshot published before rounds had ids cannot be compared: nothing is announced from it.
+  if ((previous.rounds ?? []).some((round) => !round.id)) return [];
   const moments = detectNewResults(previous, next, {
     listOf: (snapshot) => snapshot.recent,
     keyOf: resultKey,

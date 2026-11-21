@@ -76,9 +76,9 @@ function routeFor(entryId, round, bracketRounds, labels) {
     if (index < 0) continue;
     const match = r.matches[index];
     if (!match.decided) return null;
-    const where = `${shortRound(labels.get(r.id))} match ${index + 1}`;
-    if (match.resultKind === 'bye') return `Bye in ${where}`;
-    return `${match.sides.find((s) => s.entryId === entryId)?.winner ? 'Won' : 'Lost'} ${where}`;
+    const place = `${shortRound(labels.get(r.id))} match ${index + 1}`;
+    if (match.resultKind === 'bye') return `Bye in ${place}`;
+    return `${match.sides.find((s) => s.entryId === entryId)?.winner ? 'Won' : 'Lost'} ${place}`;
   }
   return null;
 }

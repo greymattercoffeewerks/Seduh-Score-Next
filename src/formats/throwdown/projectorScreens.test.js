@@ -7,7 +7,7 @@ import {
   PAGE_DWELL_MS,
 } from './projectorScreens.js';
 import { payloadFor, roundOf, namesUpTo } from './projectorFixtures.js';
-import { describeProjectorContract } from '../../core/stageProjectorTestKit.js';
+import { describeProjectorContract } from '../../core/stageProjector.testkit.js';
 
 afterEach(() => vi.useRealTimers());
 
@@ -267,7 +267,7 @@ describe('the live loop', () => {
     expect(node.textContent).not.toContain('Drawn when');
   });
 
-  it('Latest results: the last three, winner first, with the split for a tap round and none for a scoresheet round', () => {
+  it('Latest results: the last three, winner first, with the split for a tap round (the scoresheet case is below)', () => {
     const payload = payloadFor({
       names: namesUpTo(8),
       scoresheet: { preset: 'latte_art_v1', cups: { final: 1 } },
@@ -386,4 +386,41 @@ describeProjectorContract('Throwdown projector', {
       mustShow: [longName, 'Round of 32', 'Meet'].slice(0, 2),
     },
   ],
+});
+
+describe('a scoresheet round inside a multi-match round (D8)', () => {
+  // Quarter-finals decided by scoresheets: two decided (one by sheets), two to play. Names carry no digits, so any
+  // digit on a page is structure ("Match 2", "Round of 8") and not a score.
+  const named = ['Ana', 'Bima', 'Citra', 'Dani', 'Eka', 'Farid', 'Gita', 'Hadi'];
+  const payload = payloadFor({
+    names: named,
+    scoresheet: { preset: 'latte_art_v1', cups: { quarter_final: 2 } },
+    rounds: [
+      {
+        phase: 'main',
+        matches: [
+          { a: 'Ana', b: 'Bima', result: 'scores:2', at: '2026-11-27T10:01:00Z' },
+          { a: 'Citra', b: 'Dani', result: 'scores:1', at: '2026-11-27T10:02:00Z' },
+          { a: 'Eka', b: 'Farid' },
+          { a: 'Gita', b: 'Hadi' },
+        ],
+      },
+    ],
+  });
+
+  it('every page says winners and Judging in words, and no score, total, point, judge or cup', () => {
+    const pages = throwdownPages(payload);
+    expect(pages.length).toBeGreaterThan(2);
+    for (const page of pages) {
+      const text = textOf(page).replace(
+        /Match \d+( of \d+)?|Round of \d+|\d+ of \d+ still in/g,
+        '',
+      );
+      expect(text, page.kind).not.toMatch(/\d|total|point|judges|cup|rule|preferr/i);
+    }
+    const all = pages.map(textOf).join(' ');
+    expect(all).toContain('Judging');
+    expect(all).toContain('Bima beat Ana');
+    expect(all).not.toMatch(/\bto \d/);
+  });
 });

@@ -52,7 +52,7 @@ export function describeProjectorContract(
 
       it(`draws something and ignores an identical republish: ${label}`, () => {
         const screen = selectScreen(payload);
-        if (!screen) return;
+        expect(screen).not.toBeNull();
         vi.useFakeTimers();
         const { host, handle } = mountScreen(screen, payload);
         expect(host.textContent.trim().length).toBeGreaterThan(0);

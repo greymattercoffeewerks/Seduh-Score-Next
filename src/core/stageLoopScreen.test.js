@@ -73,6 +73,7 @@ describe('createLoopScreen', () => {
   it('destroy stops the rotation timers', () => {
     const { screen, host } = setup();
     const handle = screen.mount(host, { pages: ['One', 'Two'] });
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
     handle.destroy();
     expect(vi.getTimerCount()).toBe(0);
   });
