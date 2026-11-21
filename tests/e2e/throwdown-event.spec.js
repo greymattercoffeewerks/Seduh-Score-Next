@@ -172,9 +172,48 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
       'Final',
     ]);
 
+    // ---- the organiser confirmed the wrong winner of the Final: undo it, take back the wrong vote, confirm the other
+    // finalist. The champion banner goes, the Final is playable again with its taps kept, and the fix is recorded.
+    const finalRound = page.locator('.td-round', {
+      has: page.locator('h3', { hasText: /^Final$/ }),
+    });
+    const finalists = (await finalRound.locator('.td-round-match > span').first().textContent())
+      .split(' vs ')
+      .map((n) => n.trim());
+    const otherFinalist = finalists.find((n) => n !== champion);
+    // the semi-finals can no longer be undone (the Final has taps); the Final and the 3rd place match can
+    await expect(
+      page
+        .locator('.td-round', { has: page.locator('h3', { hasText: 'Semi-finals' }) })
+        .getByRole('button', {
+          name: /^Undo result/,
+        }),
+    ).toHaveCount(0);
+    await finalRound.getByRole('button', { name: /^Undo result/ }).click();
+    await expect(page.locator('.td-reopen-q')).toHaveText(`Undo ${champion}’s win?`);
+    await page.getByRole('button', { name: 'Yes, undo' }).click();
+    await expect(page.locator('.td-champion')).toHaveCount(0);
+    const finalCard = page.locator('article.td-match');
+    await expect(finalCard).toHaveCount(1);
+    const winnerSide = finalists.indexOf(champion);
+    await expect(finalCard.locator('.td-count').nth(winnerSide)).toHaveText('2 votes');
+    await finalCard
+      .locator('.td-side')
+      .nth(winnerSide)
+      .getByRole('button', { name: 'Undo', exact: true })
+      .click();
+    await expect(finalCard.locator('.td-count').nth(winnerSide)).toHaveText('1 vote');
+    await tap(finalCard, 1 - winnerSide, 2);
+    await finalCard.getByRole('button', { name: /^Confirm(:| result)/ }).click();
+    await expect(page.locator('.td-champion-name')).toHaveText(otherFinalist);
+    await expect(projector.locator('.stage-champion-name')).toHaveText(otherFinalist);
+
     // ---- publishing: the results screen offers the public archive, but a TEST event is never published. The card
     // says so in words and offers no button (the happy path, with a real event, is covered by the unit tests).
     await page.getByRole('link', { name: 'Results and match log' }).click();
+    await expect(page.getByRole('region', { name: 'Corrections' })).toContainText(
+      `${champion}’s win by votes was undone`,
+    );
     const publish = page.getByRole('region', { name: 'Public results' });
     await expect(publish).toContainText('test event');
     await expect(publish).toContainText('cannot be published');

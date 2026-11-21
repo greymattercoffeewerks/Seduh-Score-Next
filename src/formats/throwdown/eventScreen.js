@@ -1235,7 +1235,7 @@ export async function mountThrowdownEventScreen(
   // ---------- undoing a confirmed result ----------
   // Offered on a decided match while nothing after it has started (reopen.js; the database checks again). Two taps: Undo
   // result, then Yes, undo. The match then reappears under Now playing with its votes or sheets kept.
-  function undoControl(m) {
+  function undoControl(m, roundLabel) {
     if (state.pending.get(m.id)?.reopenQueued) {
       return el('p', { className: 'td-note', text: 'Undo waiting to sync.' });
     }
@@ -1245,7 +1245,7 @@ export async function mountThrowdownEventScreen(
     });
     if (!st.allowed) return null;
     if (state.reopen !== m.id) {
-      return button(
+      const undo = button(
         'Undo result',
         () => {
           state.reopen = m.id;
@@ -1254,6 +1254,9 @@ export async function mountThrowdownEventScreen(
         },
         { key: `td-reopen-${m.id}` },
       );
+      // several matches can offer Undo at once: the name says which (it starts with the visible words, WCAG 2.5.3)
+      undo.setAttribute('aria-label', `Undo result: ${roundLabel}, ${matchTitle(m)}`);
+      return undo;
     }
     const words = reopenWords(m, st.later, {
       scored: cupsForMatch(scoringContext(state.data), m) !== null,
@@ -1322,7 +1325,7 @@ export async function mountThrowdownEventScreen(
                       text: m.playable ? 'Being decided' : 'Waiting',
                     }),
                 auditDetails(m),
-                undoControl(m),
+                undoControl(m, round.label),
               ].filter(Boolean),
             );
           }),
