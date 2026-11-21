@@ -8,6 +8,10 @@
 --     other than a bye (hint td_next_round_started otherwise). Confirming the match again rebuilds them through the same
 --     app.td_advance, in the same order (pairs by match position), so nothing is lost. A 3rd place match and the Final
 --     have nothing after them. A bye has no result to undo (hint td_match_bye).
+--     The rebuild re-reads one thing that can change mid-event: whether a semi-final loser has withdrawn (app.td_advance
+--     makes the 3rd place match only when both losers are active). So undoing a semi-final is refused when the 3rd place
+--     match's existence no longer matches what td_advance would decide today (a loser withdrawn or restored since), hint
+--     td_third_place_changed: otherwise the undo would silently add or drop the 3rd place match and change the podium.
 --   * VOTES AND SHEETS ARE KEPT. The match goes back to open with its taps and its score sheets as they were; the
 --     organiser fixes the wrong tap or sheet and confirms again. A walkover simply goes back to open. An organiser's pick
 --     for a level scored match (td_score_decisions) is removed, because it was part of the result being undone.
@@ -78,6 +82,8 @@ declare
   v_winner    uuid;
   v_winner_entry uuid;
   v_removed   int := 0;
+  v_losers    uuid[];
+  v_would     boolean;
 begin
   v_event := app.td_guard_match('td_reopen_match', p_org_id, p_match_id);
   perform pg_advisory_xact_lock(hashtext('td:' || v_event::text));
@@ -112,6 +118,24 @@ begin
               or exists (select 1 from public.td_score_sheets ss where ss.match_id = m.id))
     ) then
       raise exception 'td_reopen_match: the next round has already started' using hint = 'td_next_round_started';
+    end if;
+    -- a semi-final round (exactly two matches) with rounds after it: the 3rd place match must come back as it is now
+    if (select count(*) from public.td_matches m where m.round_id = v_round.id) = 2
+       and exists (select 1 from public.td_rounds r where r.event_id = v_event and r.position > v_round.position) then
+      select array_agg(l.entry_id order by m.position) into v_losers
+        from public.td_matches m
+        join public.td_match_results x on x.match_id = m.id
+        left join public.td_slots l on l.match_id = m.id and l.id <> x.winner_slot_id and l.entry_id is not null
+       where m.round_id = v_round.id;
+      v_would := coalesce((select s.third_place from public.td_settings s where s.event_id = v_event), true)
+                 and v_losers[1] is not null and v_losers[2] is not null
+                 and not exists (select 1 from public.event_entries e where e.id = any (v_losers) and e.withdrawn);
+      if v_would is distinct from exists (
+           select 1 from public.td_rounds r
+            where r.event_id = v_event and r.position > v_round.position and r.phase = 'third_place') then
+        raise exception 'td_reopen_match: a semi-final loser was withdrawn or restored since; undoing would change the 3rd place match'
+          using hint = 'td_third_place_changed';
+      end if;
     end if;
     delete from public.td_rounds r where r.event_id = v_event and r.position > v_round.position;
     get diagnostics v_removed = row_count;

@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { reopenState, reopenWords, matchesAwaitingUndo } from './reopen.js';
 
 // A small hand-built bracket in deriveBracket's shape: just the fields reopen.js reads.
-const side = (slotId, name, { winner = null, votes = 0 } = {}) => ({ slotId, name, winner, votes });
+const side = (slotId, name, { winner = null, votes = 0 } = {}) => ({
+  slotId,
+  entryId: slotId,
+  name,
+  winner,
+  votes,
+});
 const match = (id, { decided = false, isBye = false, resultKind = null, sides } = {}) => ({
   id,
   decided,
@@ -101,6 +107,35 @@ describe('reopenState: when a confirmed match can be undone', () => {
     });
     expect(reopenState(live, 't')).toEqual({ allowed: true, later: [] });
     expect(reopenState(live, 'f')).toEqual({ allowed: true, later: [] });
+  });
+
+  it('refuses a semi-final when a withdrawal since would change whether the 3rd place match exists', () => {
+    // semisDone: losers are s1-B (entry undefined in these fixtures), so give the sides entry ids
+    const withEntries = (b) => ({
+      rounds: b.rounds.map((r) => ({
+        ...r,
+        matches: r.matches.map((m) => ({
+          ...m,
+          sides: m.sides.map((sd) => ({ ...sd, entryId: sd.slotId })),
+        })),
+      })),
+    });
+    const withThird = withEntries(semisDone());
+    expect(reopenState(withThird, 's1', { entries: [] }).allowed).toBe(true);
+    // a loser (s2b) withdrawn since: the rebuild would drop the 3rd place match
+    expect(reopenState(withThird, 's1', { entries: [{ id: 's2b', withdrawn: true }] }).reason).toBe(
+      'third_place_changed',
+    );
+    // the reverse: no 3rd place match was made (a loser had withdrawn), and nobody is withdrawn now
+    const noThird = withEntries({
+      rounds: [semisDone().rounds[0], round(3, 'main', [match('f')])],
+    });
+    expect(reopenState(noThird, 's1', { entries: [] }).reason).toBe('third_place_changed');
+    expect(reopenState(noThird, 's1', { entries: [{ id: 's1b', withdrawn: true }] }).allowed).toBe(
+      true,
+    );
+    // the setup has no 3rd place match at all: nothing to compare
+    expect(reopenState(noThird, 's1', { entries: [], thirdPlace: false }).allowed).toBe(true);
   });
 
   it('does not offer it again while an undo of the same match is waiting to sync', () => {

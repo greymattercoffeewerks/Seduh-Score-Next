@@ -1253,6 +1253,8 @@ export async function mountThrowdownEventScreen(
     const st = reopenState(state.data.bracket, m.id, {
       sheets: state.data.scoreSheets,
       pending: state.pending,
+      entries: state.data.entries,
+      thirdPlace: state.data.settings.third_place,
     });
     if (st.reason === 'queued') {
       return el('p', { className: 'td-note', text: 'Undo waiting to sync.' });

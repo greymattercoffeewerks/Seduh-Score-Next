@@ -8,8 +8,13 @@
 // The console counts work still waiting in this device's outbox as started too (the database cannot see it yet).
 
 // bracket: deriveBracket's output; sheets: the event's score sheet rows ({ match_id }); pending: the screen's per-match
-// outbox snapshot (pendingSnapshot().matches).
-export function reopenState(bracket, matchId, { sheets = [], pending = new Map() } = {}) {
+// outbox snapshot (pendingSnapshot().matches); entries: the event's entries ({ id, withdrawn }); thirdPlace: the setup's
+// 3rd place switch.
+export function reopenState(
+  bracket,
+  matchId,
+  { sheets = [], pending = new Map(), entries = [], thirdPlace = true } = {},
+) {
   const rounds = bracket?.rounds ?? [];
   const round = rounds.find((r) => r.matches.some((m) => m.id === matchId));
   const match = round?.matches.find((m) => m.id === matchId);
@@ -32,6 +37,17 @@ export function reopenState(bracket, matchId, { sheets = [], pending = new Map()
     }),
   );
   if (started) return { allowed: false, reason: 'next_round_started' };
+  // The rebuild re-reads withdrawals (the 3rd place match needs both semi-final losers active): if one was withdrawn or
+  // restored since, undoing a semi-final would add or drop the 3rd place match, so it is refused (td_third_place_changed).
+  if (round.matches.length === 2 && later.length) {
+    const withdrawn = new Set(entries.filter((e) => e.withdrawn).map((e) => e.id));
+    const losers = round.matches.map(
+      (m) => m.sides.find((s) => s.entryId && !s.winner)?.entryId ?? null,
+    );
+    const would = thirdPlace && losers.every((id) => id && !withdrawn.has(id));
+    const has = later.some((r) => r.phase === 'third_place');
+    if (would !== has) return { allowed: false, reason: 'third_place_changed' };
+  }
   return { allowed: true, later };
 }
 

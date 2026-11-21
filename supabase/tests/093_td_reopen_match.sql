@@ -13,7 +13,7 @@
 --   * a non-member gets "event not found" and reads zero records; nobody writes the record table directly; its event is
 --     frozen.
 begin;
-select plan(63);
+select plan(73);
 
 create schema t093;
 grant usage on schema t093 to anon, authenticated;
@@ -251,10 +251,34 @@ select is((select (match_id is null) || '/' || round_position || '/' || round_ph
              from td_match_reopens where event_id = t093.u(340) and round_position = 3),
   'true/3/main/1/votes', 'the Final''s record survives with its positions, its match id now empty');
 
+-- ============ 350: a withdrawal since the semi-finals would change the 3rd place match, so the undo is refused ============
+insert into events (id, org_id, format, name) values (t093.u(350), t093.u(100), 'throwdown', 'Reopen withdrawn');
+insert into event_entries (id, event_id, display_name) select t093.u(3500 + n), t093.u(350), 'P' || n from generate_series(1, 4) n;
+select is(t093.settings(350) || t093.start(350, array[1,2,3,4]) || t093.decide(350, 1, 1, 1) || t093.decide(350, 1, 2, 1), 'okokokok',
+  'event 350: both semi-finals decided, the 3rd place match P2 v P4 made');
+update event_entries set withdrawn = true where id = t093.u(3504);
+select t093.contains(t093.reopen(350, 1, 1), '%td_third_place_changed%',
+  'P4 has withdrawn since: undoing a semi-final would drop the 3rd place match, so it is refused');
+select is(t093.rounds(350), '1:main:2 2:third_place:1 3:main:1', '...and nothing was removed');
+update event_entries set withdrawn = false where id = t093.u(3504);
+select is(t093.reopen(350, 1, 1), 'ok', 'P4 restored: the undo goes ahead');
+select is(t093.confirm(350, 1, 1), 'ok', 'the semi-final is confirmed again');
+select is(t093.rounds(350), '1:main:2 2:third_place:1 3:main:1', 'and the 3rd place match comes back');
+-- the reverse: a loser withdrawn at the semi-finals (no 3rd place match made), restored before the undo
+insert into events (id, org_id, format, name) values (t093.u(360), t093.u(100), 'throwdown', 'Reopen restored');
+insert into event_entries (id, event_id, display_name) select t093.u(3600 + n), t093.u(360), 'P' || n from generate_series(1, 4) n;
+select is(t093.settings(360) || t093.start(360, array[1,2,3,4]) || t093.decide(360, 1, 1, 1), 'okokok', 'event 360: semi-final 1 decided');
+update event_entries set withdrawn = true where id = t093.u(3604);
+select is(t093.decide(360, 1, 2, 1), 'ok', 'semi-final 2 decided while P4 is withdrawn');
+select is(t093.rounds(360), '1:main:2 2:main:1', 'no 3rd place match is made');
+update event_entries set withdrawn = false where id = t093.u(3604);
+select t093.contains(t093.reopen(360, 1, 1), '%td_third_place_changed%',
+  'P4 restored since: undoing would add a 3rd place match that was never played for, so it is refused');
+
 -- ============ who may undo, and the record table ============
 select t093.contains(t093.reopen(300, 3, 1, null, gen_random_uuid(), 2), '%event not found%',
   'a non-member gets "event not found"');
-select ok(t093.count_as(t093.u(1), 'td_match_reopens') = 8 and t093.count_as(t093.u(2), 'td_match_reopens') = 0,
+select ok(t093.count_as(t093.u(1), 'td_match_reopens') = 9 and t093.count_as(t093.u(2), 'td_match_reopens') = 0,
   'the organiser reads their records; a non-member reads zero');
 select t093.contains(t093.as_user(t093.u(1), format('insert into td_match_reopens (event_id, round_position, round_phase, match_position, previous_result_kind, previous_confirmed_at) values (%L, 1, ''main'', 1, ''votes'', now())', t093.u(300))),
   '42501|%', 'nobody writes a record directly');
