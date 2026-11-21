@@ -7,9 +7,9 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Throwdown projector on the shared projector kit · 4.26.0 (minor, planned; package.json not bumped here, the release PR takes it) · 2026-11-21
+## Throwdown projector on the shared projector kit · 4.26.0 · 2026-11-21
 
-**Status: PR open against `dev`, not merged, not released.** Not final: the owner's TV check (24 to 25 Nov) and CI's first Playwright run of `dev-throwdown` are outstanding. No migration.
+**Status: released as 4.26.0 (minor, #539).** CI passed, including `dev-throwdown`. Not final: the owner's TV check (24 to 25 Nov) is outstanding. No migration.
 
 - **Why.** BTC already had a stage projector (page loop, result moments, champion screen). Throwdown needed the same behaviour. Copying BTC's code a second time would repeat the v4.x defect the module boundary exists to stop (CLAUDE.md, handoff §6), so the parts that are not BTC-specific moved into `src/core/`, and Throwdown's own pages stay in its format folder.
 - **Shared kit (`src/core/`).**
