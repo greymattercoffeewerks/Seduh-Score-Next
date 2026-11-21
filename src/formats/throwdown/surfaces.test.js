@@ -96,8 +96,8 @@ describe('the phone body', () => {
 });
 
 describe('the projector', () => {
-  it('asks for the bracket while live and the champion screen once there is one', () => {
-    expect(selectThrowdownScreen(live).key).toBe('bracket');
+  it('asks for the page loop while live and the champion screen once there is one', () => {
+    expect(selectThrowdownScreen(live).key).toBe('loop');
     expect(selectThrowdownScreen({ ...live, champion: { name: 'Ana' } }).key).toBe('champion');
     expect(selectThrowdownScreen({})).toBeNull();
     expect(hasThrowdownProjectorContent({})).toBe(false);
@@ -113,8 +113,8 @@ describe('the projector', () => {
   it('draws only the rounds in the payload, with counts only on decided votes', () => {
     const host = document.createElement('div');
     const handle = selectThrowdownScreen(live).mount(host, live);
-    expect(host.querySelectorAll('.td-stage-round')).toHaveLength(1);
-    expect(host.querySelector('.td-stage-now').textContent).toContain('Eka');
+    // the first page of a live loop is the round under way (no Up next card in an older payload)
+    expect(host.querySelector('.td-stage-list').textContent).toContain('Eka');
     const votes = [...host.querySelectorAll('.td-stage-votes')].map((n) => n.textContent);
     expect(votes).toEqual(['2', '1']);
     expect(host.textContent).toContain('Walkover');
@@ -171,13 +171,17 @@ describe('a match decided by scoresheets, on the phone and the projector', () =>
     createThrowdownViewerBody().renderBody(phone, p);
     const stage = document.createElement('div');
     selectThrowdownScreen(p).mount(stage, p);
-    return { phone: phone.textContent, stage: stage.textContent };
+    // what the room reads: the screen's main area and footer words (the ring's countdown is not content)
+    const read = [...stage.querySelectorAll('.stage-main, .stage-footer-start')]
+      .map((n) => n.textContent)
+      .join(' ');
+    return { phone: phone.textContent, stage: read };
   };
 
   it('says "Judges scoring" while it runs, and names no number', () => {
     const { phone, stage } = render(payload(judging));
     expect(phone).toContain('Judges scoring');
-    expect(stage).toContain('Judges scoring');
+    expect(stage).toContain('Judging');
     expect(phone + stage).not.toMatch(/\d/);
   });
   it('names the winner only once decided: no score, count or rule', () => {
@@ -190,5 +194,6 @@ describe('a match decided by scoresheets, on the phone and the projector', () =>
     const plain = { ...judging, judging: undefined };
     const { phone, stage } = render(payload(plain));
     expect(phone + stage).not.toContain('Judges scoring');
+    expect(stage).not.toContain('Judging');
   });
 });

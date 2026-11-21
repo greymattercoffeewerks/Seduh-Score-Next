@@ -3,6 +3,7 @@ import { deriveBracket } from './bracket.js';
 import { assembleThrowdownPayload, publishThrowdownLive } from './liveSession.js';
 import { throwdownOutboxHandlers, throwdownOperationLabels } from './outboxHandlers.js';
 import { describeThrowdownError, resultLine } from './words.js';
+import { payloadFor, roundOf, namesUpTo } from './projectorFixtures.js';
 
 const entries = ['A', 'B', 'C', 'D'].map((n) => ({
   id: `e${n}`,
@@ -160,10 +161,13 @@ describe('a match decided by scoresheets on the live payload', () => {
     slots: base.slots.slice(0, 2),
     votes: [],
   };
-  // every number, and every string with a digit in it (ids aside), anywhere under a node
+  // every number, and every string with a digit in it, anywhere under a node. Only ids and the bracket's own
+  // structure (a match's number in its round, the round's size, a route's wording) may carry a digit.
+  const STRUCTURE = new Set(['id', 'number', 'roundSize', 'route', 'roundLabel', 'label']);
   const leaks = (node, key = '') => {
+    if (STRUCTURE.has(key)) return [];
     if (typeof node === 'number') return [`${key}=${node}`];
-    if (typeof node === 'string') return key !== 'id' && /\d/.test(node) ? [`${key}=${node}`] : [];
+    if (typeof node === 'string') return /\d/.test(node) ? [`${key}=${node}`] : [];
     if (node && typeof node === 'object')
       return Object.entries(node).flatMap(([k, v]) => leaks(v, k));
     return [];
@@ -205,5 +209,137 @@ describe('a match decided by scoresheets on the live payload', () => {
   it('does not mark a round the setup leaves to taps', () => {
     const payload = build(pendingOne, { preset: 'latte_art_v1', cups: { third_place: 1 } });
     expect(payload.nowPlaying[0]).not.toHaveProperty('judging');
+  });
+});
+
+describe('the projector additions to the live payload', () => {
+  const T = (m) => `2026-11-27T10:0${m}:00Z`;
+  const sheet = { preset: 'latte_art_v1', cups: { final: 2 } };
+
+  it('upNext and thenNext are the first two undecided playable matches in bracket order', () => {
+    const payload = payloadFor({
+      names: namesUpTo(8),
+      rounds: [
+        {
+          phase: 'main',
+          matches: [
+            { a: 'P1', b: 'P2', result: [2, 1], at: T(1) },
+            { a: 'P3', b: 'P4' },
+            { a: 'P5', b: 'P6', result: [2, 1], at: T(2) },
+            { a: 'P7', b: 'P8' },
+          ],
+        },
+      ],
+    });
+    expect([payload.upNext.number, payload.thenNext.number]).toEqual([2, 4]);
+    expect(payload.upNext).toMatchObject({ roundLabel: 'Quarter-finals', roundSize: 4 });
+    expect(payload.upNext.sides.map((s) => s.name)).toEqual(['P3', 'P4']);
+  });
+
+  it('has neither before the draw nor when nothing is left to play', () => {
+    const setup = payloadFor({ names: namesUpTo(4), rounds: [] });
+    expect([setup.upNext, setup.thenNext]).toEqual([null, null]);
+    expect(setup.competitorNames).toEqual(namesUpTo(4));
+    const done = payloadFor({ names: namesUpTo(2), rounds: [roundOf(1, { decided: 1 })] });
+    expect([done.upNext, done.thenNext]).toEqual([null, null]);
+  });
+
+  it('numbers every match in its round, and names a round the way a room says it', () => {
+    const payload = payloadFor({ names: namesUpTo(16), rounds: [roundOf(8, { decided: 2 })] });
+    expect(payload.rounds[0].matches.map((m) => m.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(payload.rounds[0].roundLabel).toBe('Round of 16');
+    expect(payload.rounds[0].label).toBe('Round 1');
+  });
+
+  it('a result carries its round, role and confirmed time; a vote split only when decided', () => {
+    const payload = payloadFor({ names: namesUpTo(4), rounds: [roundOf(2, { decided: 2 })] });
+    expect(payload.recent[0]).toMatchObject({
+      roundLabel: 'Semi-finals',
+      roundPhase: 'main',
+      role: 'semi_final',
+      confirmedAt: expect.any(String),
+    });
+    expect(payload.upNext).toBeNull();
+  });
+
+  it('routes: where each competitor came from, and nothing in round 1', () => {
+    const r1 = roundOf(4, { decided: 4 });
+    const payload = payloadFor({
+      names: namesUpTo(8),
+      rounds: [
+        r1,
+        {
+          phase: 'main',
+          matches: [
+            { a: 'P1', b: 'P3' },
+            { a: 'P5', b: 'P7' },
+          ],
+        },
+      ],
+    });
+    expect(payload.upNext.sides.map((s) => s.route)).toEqual([
+      'Won quarter-final match 1',
+      'Won quarter-final match 2',
+    ]);
+    const first = payloadFor({ names: namesUpTo(8), rounds: [roundOf(4)] });
+    expect(first.upNext.sides.map((s) => s.route)).toEqual([null, null]);
+  });
+
+  it('a scoresheet match shows only that it is being judged, and no number reaches upNext, thenNext or recent', () => {
+    const payload = payloadFor({
+      names: namesUpTo(4),
+      scoresheet: sheet,
+      rounds: [
+        roundOf(2, { decided: 2 }),
+        { phase: 'main', matches: [{ a: 'P1', b: 'P3' }] },
+        { phase: 'third_place', matches: [{ a: 'P2', b: 'P4' }] },
+      ],
+    });
+    expect(payload.upNext.judging).toBe(true);
+    expect(payload.judgedRounds).toBe(true);
+    const bare = (node, key = '') => {
+      if (
+        ['id', 'number', 'roundSize', 'route', 'roundLabel', 'label', 'confirmedAt'].includes(key)
+      ) {
+        return [];
+      }
+      if (typeof node === 'number') return [`${key}=${node}`];
+      if (node && typeof node === 'object')
+        return Object.entries(node).flatMap(([k, v]) => bare(v, k));
+      return [];
+    };
+    expect(bare(payload.upNext)).toEqual([]);
+    expect(bare(payload.thenNext)).toEqual([]);
+    const decided = payloadFor({
+      names: ['Ana', 'Bima'],
+      scoresheet: sheet,
+      rounds: [{ phase: 'main', matches: [{ a: 'Ana', b: 'Bima', result: 'scores:1' }] }],
+    });
+    expect(bare(decided.recent)).toEqual([]);
+    expect(decided.recent[0].sides.map((s) => s.votes)).toEqual([null, null]);
+    expect(JSON.stringify(decided)).not.toMatch(/judge_|points|total/i);
+  });
+
+  it('says only whether judged rounds exist, with the module off leaving no trace', () => {
+    const payload = payloadFor({ names: namesUpTo(4), rounds: [roundOf(2)] });
+    expect(payload.judgedRounds).toBe(false);
+    expect(JSON.stringify(payload)).not.toContain('judging');
+  });
+
+  it('stillIn lists who is left, and is null until somebody is out', () => {
+    const none = payloadFor({ names: namesUpTo(8), rounds: [roundOf(4)] });
+    expect(none.stillIn).toBeNull();
+    const some = payloadFor({ names: namesUpTo(8), rounds: [roundOf(4, { decided: 1 })] });
+    expect(some.stillIn.of).toBe(8);
+    expect(some.stillIn.names.map((n) => n.name)).toEqual([
+      'P1',
+      'P3',
+      'P4',
+      'P5',
+      'P6',
+      'P7',
+      'P8',
+    ]);
+    expect(some.stillIn.names.filter((n) => n.next).map((n) => n.name)).toEqual(['P3', 'P4']);
   });
 });
