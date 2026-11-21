@@ -36,8 +36,10 @@ import {
   undoVote,
   confirmMatch,
   recordWalkover,
+  reopenMatch,
   pendingSnapshot,
 } from './data.js';
+import { reopenState, reopenWords } from './reopen.js';
 import { tallyVotes, leadOf, canConfirm, voteState } from './votes.js';
 import {
   randomPairs,
@@ -85,6 +87,7 @@ export async function mountThrowdownEventScreen(
     walkoverOpen: null, // matchId whose Walkover disclosure is open
     focusTarget: null, // id to focus after the next render (a phase change replaces the focused control)
     walkover: null, // { matchId, slotId } waiting for the second tap
+    reopen: null, // matchId whose Undo result is waiting for the second tap
     sheetOpen: null, // { matchId, slotId, seat, draft } the paper sheet being typed in
     picks: new Map(), // matchId -> slot position the organiser picked for a level scored match
     feedback: null,
@@ -1229,6 +1232,72 @@ export async function mountThrowdownEventScreen(
     ]);
   }
 
+  // ---------- undoing a confirmed result ----------
+  // Offered on a decided match while nothing after it has started (reopen.js; the database checks again). Two taps: Undo
+  // result, then Yes, undo. The match then reappears under Now playing with its votes or sheets kept.
+  function undoControl(m) {
+    if (state.pending.get(m.id)?.reopenQueued) {
+      return el('p', { className: 'td-note', text: 'Undo waiting to sync.' });
+    }
+    const st = reopenState(state.data.bracket, m.id, {
+      sheets: state.data.scoreSheets,
+      pending: state.pending,
+    });
+    if (!st.allowed) return null;
+    if (state.reopen !== m.id) {
+      return button(
+        'Undo result',
+        () => {
+          state.reopen = m.id;
+          state.focusTarget = `td-reopen-q-${m.id}`;
+          render();
+        },
+        { key: `td-reopen-${m.id}` },
+      );
+    }
+    const words = reopenWords(m, st.later, {
+      scored: cupsForMatch(scoringContext(state.data), m) !== null,
+    });
+    const detailId = `td-reopen-d-${m.id}`;
+    const yes = button(
+      'Yes, undo',
+      () => {
+        state.reopen = null;
+        return act(
+          () =>
+            reopenMatch(
+              { orgId: state.event.org_id, matchId: m.id, expectedWinnerSlotId: m.winnerSlotId },
+              handlers,
+            ),
+          { publish: true },
+        );
+      },
+      { className: 'btn btn-primary tap-target', key: `td-reopen-ok-${m.id}` },
+    );
+    yes.setAttribute('aria-describedby', detailId);
+    return el('div', { className: 'td-reopen' }, [
+      el('p', {
+        id: `td-reopen-q-${m.id}`,
+        className: 'td-reopen-q',
+        text: words.question,
+        attrs: { tabindex: '-1' },
+      }),
+      el('p', { id: detailId, className: 'td-note', text: words.detail }),
+      el('div', { className: 'td-reopen-actions' }, [
+        yes,
+        button(
+          'Keep result',
+          () => {
+            state.reopen = null;
+            state.focusTarget = null;
+            render();
+          },
+          { key: `td-reopen-cancel-${m.id}` },
+        ),
+      ]),
+    ]);
+  }
+
   function bracketCard() {
     const rounds = state.data.bracket.rounds.map((round) =>
       el('section', { className: 'td-round', attrs: { 'aria-label': round.label } }, [
@@ -1253,6 +1322,7 @@ export async function mountThrowdownEventScreen(
                       text: m.playable ? 'Being decided' : 'Waiting',
                     }),
                 auditDetails(m),
+                undoControl(m),
               ].filter(Boolean),
             );
           }),

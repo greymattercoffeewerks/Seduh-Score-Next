@@ -92,6 +92,86 @@ describe('the Throwdown organiser screen', () => {
     ).toBe(true);
   });
 
+  describe('undoing a confirmed result', () => {
+    const decided = {
+      ...started,
+      td_matches: [
+        { ...started.td_matches[0], result_kind: 'votes', confirmed_at: '2026-11-27T10:00:00Z' },
+      ],
+      td_votes: [
+        { id: 'v1', match_id: 'm1', slot_id: 's1', created_at: '1' },
+        { id: 'v2', match_id: 'm1', slot_id: 's1', created_at: '2' },
+        { id: 'v3', match_id: 'm1', slot_id: 's2', created_at: '3' },
+      ],
+    };
+    const byText = (root, text) =>
+      [...root.querySelectorAll('button')].find((b) => b.textContent === text);
+
+    async function mountRecording(tables) {
+      const calls = [];
+      const client = clientWith({ events: [EVENT], ...tables });
+      const rpc = client.rpc;
+      client.rpc = async (name, args) => {
+        calls.push({ name, args });
+        return rpc(name, args);
+      };
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, { eventId: 'ev', client, handlers: {} });
+      return { root, calls };
+    }
+
+    it('asks first, says what is kept, and sends the undo with the winner the organiser saw', async () => {
+      const { root, calls } = await mountRecording(decided);
+      byText(root, 'Undo result').click();
+      const question = root.querySelector('.td-reopen-q');
+      expect(question.textContent).toBe('Undo Ana’s win?');
+      expect(document.activeElement).toBe(question);
+      const yes = byText(root, 'Yes, undo');
+      const detail = root.querySelector(`#${yes.getAttribute('aria-describedby')}`);
+      expect(detail.textContent).toContain('votes kept');
+      expect(detail.textContent).toContain('publish them again');
+      expect(calls.some((c) => c.name === 'td_reopen_match')).toBe(false);
+
+      yes.click();
+      await new Promise((r) => setTimeout(r, 50));
+      // queued in the outbox (this screen gets no flush handlers here), with the winner the organiser saw
+      const { listAllOperations } = await import('../../core/outbox.js');
+      const sent = (await listAllOperations()).find((op) => op.type === 'td_reopen_match');
+      expect(sent.payload).toMatchObject({
+        p_org_id: 'org',
+        p_match_id: 'm1',
+        p_expected_winner_slot_id: 's1',
+      });
+    });
+
+    it('Keep result closes the question and sends nothing', async () => {
+      const { root, calls } = await mountRecording(decided);
+      byText(root, 'Undo result').click();
+      byText(root, 'Keep result').click();
+      expect(root.querySelector('.td-reopen')).toBeNull();
+      expect(byText(root, 'Undo result')).toBeTruthy();
+      expect(calls.some((c) => c.name === 'td_reopen_match')).toBe(false);
+    });
+
+    it('offers no undo on an open match', async () => {
+      const root = await mount(started);
+      expect(byText(root, 'Undo result')).toBeUndefined();
+    });
+
+    it('says an undo is waiting to sync instead of offering it twice', async () => {
+      const { enqueueOperation } = await import('../../core/outbox.js');
+      await enqueueOperation('td_reopen_match', {
+        p_operation_id: 'r',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+      });
+      const root = await mount(decided);
+      expect(byText(root, 'Undo result')).toBeUndefined();
+      expect(root.textContent).toContain('Undo waiting to sync.');
+    });
+  });
+
   describe('losing the connection mid-event', () => {
     // The same read-only client, but every read and write fails while `net.down` is true (a venue's wifi dropping).
     function flakyClient(net) {
