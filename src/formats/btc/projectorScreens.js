@@ -13,6 +13,7 @@
 // feature), so nothing ever pre-empts the loop or a champion except news (a moment).
 import { el } from '../../core/dom.js';
 import { renderScreenFrame } from '../../core/stageDisplay.js';
+import { renderSide, renderVs } from '../../core/stageMatchCard.js';
 import { paginate, pageRange } from '../../core/pageRotator.js';
 import { createStagePageLoop } from '../../core/stagePageLoop.js';
 import { sharedPositions } from '../../core/rankMovement.js';
@@ -56,54 +57,6 @@ const CHAMPION_MIN_DWELL_MS = 60_000;
 // ---------- what the band says ----------
 
 // ---------- small shared pieces (also used by the moments) ----------
-
-// One side of a match card: a label (in words: "3rd in the table", "Goes through"), the team's name, and for a result its
-// points and the chips that explain them. `winner` is true, false, or null when there is no winner to show
-// (a match not yet played, or a tie nobody has decided).
-export function renderSide({
-  label = null,
-  name,
-  country = null,
-  winner = null,
-  points = null,
-  chips = [],
-}) {
-  return el(
-    'div',
-    {
-      className: 'btc-stage-side',
-      attrs: winner === null ? {} : { 'data-winner': String(winner) },
-    },
-    [
-      label ? el('span', { className: 'btc-stage-side-label', text: label }) : null,
-      // The country on its own small line above the name, so a long country never pushes the name off the card.
-      country ? el('span', { className: 'btc-stage-side-country', text: country.name }) : null,
-      el('p', { className: 'btc-stage-side-name', text: name }),
-      points === null ? null : el('p', { className: 'btc-stage-points', text: String(points) }),
-      chips.length
-        ? el(
-            'div',
-            { className: 'btc-stage-chips' },
-            chips.map((chip) =>
-              el('span', {
-                className: 'btc-stage-chip',
-                text: chip.text,
-                attrs: chip.kind ? { 'data-kind': chip.kind } : {},
-              }),
-            ),
-          )
-        : null,
-    ].filter(Boolean),
-  );
-}
-
-export function renderVs(left, right) {
-  return el('div', { className: 'btc-stage-vs' }, [
-    left,
-    el('span', { className: 'btc-stage-vs-mark', text: 'VS', attrs: { 'aria-hidden': 'true' } }),
-    right,
-  ]);
-}
 
 // ---------- idle loop pages ----------
 

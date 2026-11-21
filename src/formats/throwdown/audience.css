@@ -61,28 +61,35 @@
   overflow-wrap: anywhere;
 }
 
-/* ---------- venue display ---------- */
-.td-stage-now,
+/* ---------- venue display ----------
+   Sized from --stage-fit (1% of the screen AREA's height). The shared match card (VS, side, chips) is
+   core/stageMatchCard.css; the kicker, title and champion are core/stageVocabulary.css. Words carry every meaning
+   ("Wins", "Walkover", "Judging"); the outline and weight only add emphasis. */
 .td-stage-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: calc(1.5 * var(--stage-fit));
-}
-
-.td-stage-now {
-  grid-template-columns: repeat(auto-fit, minmax(24vw, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(1.4 * var(--stage-fit)) 1.6vw;
   margin-top: calc(2 * var(--stage-fit));
 }
 
 .td-stage-match {
-  display: flex;
-  flex-direction: column;
-  gap: calc(0.6 * var(--stage-fit));
-  padding: calc(1.6 * var(--stage-fit)) 1.2vw;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.2vw;
+  padding: calc(1.2 * var(--stage-fit)) 1.2vw;
   background: var(--color-surface);
   border: var(--border-hairline) solid var(--color-border);
+  min-width: 0;
+}
+
+.td-stage-sides {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.5 * var(--stage-fit));
   min-width: 0;
 }
 
@@ -97,22 +104,26 @@
   font-weight: var(--font-weight-bold);
 }
 
+.td-stage-side[data-winner='false'] {
+  color: var(--color-text-secondary);
+}
+
 .td-stage-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: max(1rem, calc(3.4 * var(--stage-fit)));
+  font-size: max(1rem, calc(4.2 * var(--stage-fit)));
 }
 
 .td-stage-votes {
   font-family: var(--font-display);
-  font-size: max(1rem, calc(3.4 * var(--stage-fit)));
+  font-size: max(1rem, calc(4.2 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
 }
 
-.td-stage-chip,
-.td-stage-note {
+.td-stage-chip {
   background: var(--color-accent);
   color: var(--color-accent-contrast);
   font-size: max(0.75rem, calc(2.2 * var(--stage-fit)));
@@ -121,16 +132,91 @@
   text-transform: uppercase;
   padding: 0 0.6vw;
   align-self: center;
+  white-space: nowrap;
+}
+
+.td-stage-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: calc(0.4 * var(--stage-fit));
+  text-align: right;
+}
+
+.td-stage-num,
+.td-stage-note {
+  color: var(--color-text-secondary);
+  font-size: max(0.75rem, calc(2.4 * var(--stage-fit)));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .td-stage-note {
-  align-self: flex-start;
+  font-weight: var(--font-weight-bold);
 }
 
+/* ---------- Meet the competitors / Still in ---------- */
+.td-stage-roster {
+  list-style: none;
+  margin: calc(3 * var(--stage-fit)) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(1.6 * var(--stage-fit)) 1.6vw;
+}
+
+.td-stage-roster-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8vw;
+  min-width: 0;
+  padding: calc(1.2 * var(--stage-fit)) 1vw;
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  font-size: max(1rem, calc(3.8 * var(--stage-fit)));
+  overflow-wrap: anywhere;
+}
+
+.td-stage-roster-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- How it works ---------- */
+.td-stage-steps {
+  margin: calc(3 * var(--stage-fit)) 0 0;
+  padding-left: 3vw;
+  display: grid;
+  gap: calc(2.4 * var(--stage-fit));
+}
+
+.td-stage-step {
+  font-size: max(1.25rem, calc(5 * var(--stage-fit)));
+  line-height: 1.2;
+}
+
+.td-stage-card {
+  margin: calc(3 * var(--stage-fit)) 0 0;
+  padding: calc(1.6 * var(--stage-fit)) 1.4vw;
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(3.6 * var(--stage-fit)));
+}
+
+/* ---------- Up next ---------- */
+.td-stage-judging {
+  margin-top: calc(3 * var(--stage-fit));
+  justify-content: center;
+}
+
+/* ---------- Path to the final ---------- */
 .td-stage-rounds {
   display: flex;
   gap: 2vw;
-  margin-top: calc(3 * var(--stage-fit));
+  margin-top: calc(2 * var(--stage-fit));
   overflow: hidden;
 }
 
@@ -145,4 +231,135 @@
   font-size: max(0.875rem, calc(2.6 * var(--stage-fit)));
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.td-stage-path-list {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 0;
+}
+
+.td-stage-path-match {
+  grid-template-columns: minmax(0, 1fr);
+  padding: calc(0.9 * var(--stage-fit)) 1vw;
+}
+
+.td-stage-path-match .td-stage-name,
+.td-stage-path-match .td-stage-votes {
+  font-size: max(0.875rem, calc(3 * var(--stage-fit)));
+}
+
+/* A round of more than four matches is two columns of cards inside its own, so eight still fit the screen. */
+.td-stage-round[data-dense] {
+  flex: 2.2 1 0;
+}
+
+.td-stage-path-list[data-dense] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(0.8 * var(--stage-fit)) 1vw;
+}
+
+.td-stage-collapsed {
+  margin: calc(1 * var(--stage-fit)) 0 0;
+  color: var(--color-text-secondary);
+  font-size: max(0.875rem, calc(3 * var(--stage-fit)));
+  letter-spacing: 0.04em;
+}
+
+.td-stage-future {
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: center;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(3.6 * var(--stage-fit)));
+}
+
+/* ---------- Latest results ---------- */
+.td-stage-latest {
+  list-style: none;
+  margin: calc(3 * var(--stage-fit)) 0 0;
+  padding: 0;
+  display: grid;
+  gap: calc(2 * var(--stage-fit));
+}
+
+.td-stage-latest-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2vw;
+  padding: calc(2 * var(--stage-fit)) 1.4vw;
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+}
+
+.td-stage-latest-line {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-display);
+  font-size: max(1.25rem, calc(5.4 * var(--stage-fit)));
+}
+
+.td-stage-latest-round {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: max(0.875rem, calc(2.8 * var(--stage-fit)));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ---------- Round is set ---------- */
+.td-stage-pairs {
+  list-style: none;
+  margin: calc(2 * var(--stage-fit)) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(1.4 * var(--stage-fit)) 1.6vw;
+}
+
+.td-stage-pair,
+.td-stage-pair-more {
+  padding: calc(1.6 * var(--stage-fit)) 1.2vw;
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  font-size: max(1rem, calc(4.2 * var(--stage-fit)));
+  overflow-wrap: anywhere;
+}
+
+.td-stage-pair-more {
+  color: var(--color-text-secondary);
+  background: none;
+  border-style: dashed;
+}
+
+/* Narrow screens (a phone-width preview): the round page stays two columns of cards, each card one column, so the
+   eight matches of a page still fit the screen's height. */
+@media (max-width: 640px) {
+  .td-stage-pairs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .td-stage-match {
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(0.6 * var(--stage-fit));
+  }
+
+  .td-stage-aside {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: baseline;
+  }
+
+  .td-stage-num {
+    display: none;
+  }
+
+  .td-stage-roster {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .td-stage-rounds {
+    flex-direction: column;
+  }
 }

@@ -142,10 +142,11 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
     await expect(page.locator('.td-vote')).toHaveCount(0);
     await expect(page.locator('.td-sheets-count').first()).toContainText('Sheets in: 0 of 6');
     await expect(phone.locator('.td-phone')).toContainText('Judges scoring', { timeout: 20000 });
-    await expect(projector.locator('.td-stage-now')).toContainText('Judges scoring');
+    // the loop's Up next and round pages both say Judging (it rotates every 10 seconds)
+    await expect(projector.locator('.stage-main')).toContainText('Judging', { timeout: 25000 });
     // while judging, neither audience surface shows any number tied to a result, or a hint of the rules
     for (const surface of [phone, projector]) {
-      const judging = await surface.locator('.td-phone, .td-stage-now').first().innerText();
+      const judging = await surface.locator('.td-phone, .stage-main').first().innerText();
       expect(judging).not.toMatch(LEAK);
     }
 
@@ -192,7 +193,7 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
     // ---- the audience learns the winner only
     await expect(page.locator('.td-champion')).toBeVisible();
     await expect(phone.locator('.td-phone-champion')).toBeVisible();
-    await expect(projector.locator('.stage-champion-name')).toBeVisible();
+    await expect(projector.locator('.stage-champion-name')).toBeVisible({ timeout: 25000 });
     for (const surface of [phone, projector]) {
       const text = await surface.locator('body').innerText();
       expect(text).not.toMatch(LEAK);
