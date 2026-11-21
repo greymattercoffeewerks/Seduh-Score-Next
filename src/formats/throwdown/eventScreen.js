@@ -183,22 +183,26 @@ export async function mountThrowdownEventScreen(
 
   // A judge's tap must never be dropped because another write is in flight: taps queue (the outbox keeps their order)
   // and the screen reloads once the burst settles.
-  let refreshing = false;
+  // A caller that awaits refreshSoon() is answered when the screen has caught up with its write: joining a reload already
+  // running returns that run, which goes round once more for the new write, so code after the await sees the final screen.
+  let refreshRun = null;
   let refreshAgain = false;
-  async function refreshSoon() {
-    if (refreshing) {
+  function refreshSoon() {
+    if (refreshRun) {
       refreshAgain = true;
-      return;
+      return refreshRun;
     }
-    refreshing = true;
-    try {
-      do {
-        refreshAgain = false;
-        await refresh();
-      } while (refreshAgain);
-    } finally {
-      refreshing = false;
-    }
+    refreshRun = (async () => {
+      try {
+        do {
+          refreshAgain = false;
+          await refresh();
+        } while (refreshAgain);
+      } finally {
+        refreshRun = null;
+      }
+    })();
+    return refreshRun;
   }
   async function tapAct(work, announce) {
     if (signal?.aborted) return;

@@ -13,7 +13,7 @@
 --   * a non-member gets "event not found" and reads zero records; nobody writes the record table directly; its event is
 --     frozen.
 begin;
-select plan(73);
+select plan(83);
 
 create schema t093;
 grant usage on schema t093 to anon, authenticated;
@@ -159,6 +159,9 @@ select is(t093.reopen(300, 1, 1), 'ok', 'undoing a match that is not decided yet
 select is(t093.records(300), 0, '...and records nothing');
 
 select is(t093.decide(300, 1, 1, 1), 'ok', 'the wrong winner, P1, is confirmed 2-1');
+-- the confirmed time, backdated so it cannot equal the undo's own time in this one transaction
+update td_matches set confirmed_at = now() - interval '7 minutes' where id = t093.m(300, 1, 1);
+create table t093.seen as select confirmed_at from td_matches where id = t093.m(300, 1, 1);
 select is(t093.rounds(300), '1:main:2', 'the other semi-final is still open, so nothing follows yet');
 select t093.contains(t093.reopen(300, 1, 1, t093.s(300, 1, 1, 2)), '%td_leader_changed%',
   'an undo naming a winner the match does not have is refused');
@@ -170,8 +173,9 @@ select is((select previous_result_kind || '/' || e.display_name || '/' || round_
                   || '/' || rounds_removed || '/' || (reopened_by = t093.u(1)) || '/' || (match_id = t093.m(300, 1, 1))
              from td_match_reopens r join event_entries e on e.id = r.previous_winner_entry_id where r.event_id = t093.u(300)),
   'votes/P1/1/main/1/0/true/true', 'the undo is recorded: the result kind, the winner it had, where, nothing removed, who');
-select ok((select previous_confirmed_at is not null and reopened_at is not null from td_match_reopens where event_id = t093.u(300)),
-  '...with when it had been confirmed and when it was undone');
+select ok((select r.previous_confirmed_at = x.confirmed_at and r.reopened_at is not null
+             from td_match_reopens r, t093.seen x where r.event_id = t093.u(300)),
+  '...with the time it had been confirmed (not the time of the undo) and when it was undone');
 select is(t093.untap(300, 1, 1, 1, 1) || t093.tap(300, 1, 1, 2, 1), 'okok', 'the wrong tap is taken back and the right one made');
 select is(t093.confirm(300, 1, 1), 'ok', 'the match is confirmed again');
 select is(t093.winner(300, 1, 1), 'P2', 'P2 now wins it');
@@ -187,6 +191,8 @@ select is(t093.confirm(300, 1, 1), 'ok', 'the same semi-final is confirmed again
 select is(t093.rounds(300), '1:main:2 2:third_place:1 3:main:1', 'the 3rd place match and the Final are made again');
 select is((select string_agg(e.display_name, ' v ' order by s.position) from td_slots s join event_entries e on e.id = s.entry_id
             where s.match_id = t093.m(300, 3, 1)), 'P2 v P3', 'the Final is the same pairing as before');
+select is((select string_agg(e.display_name, ' v ' order by s.position) from td_slots s join event_entries e on e.id = s.entry_id
+            where s.match_id = t093.m(300, 2, 1)), 'P1 v P4', 'and the 3rd place match is the two semi-final losers');
 
 select is(t093.tap(300, 3, 1, 1, 1), 'ok', 'a judge taps in the Final');
 select t093.contains(t093.reopen(300, 1, 1), '%td_next_round_started%', 'now a semi-final can no longer be undone');
@@ -274,6 +280,28 @@ select is(t093.rounds(360), '1:main:2 2:main:1', 'no 3rd place match is made');
 update event_entries set withdrawn = false where id = t093.u(3604);
 select t093.contains(t093.reopen(360, 1, 1), '%td_third_place_changed%',
   'P4 restored since: undoing would add a 3rd place match that was never played for, so it is refused');
+
+-- ============ 370/380: a later walkover, or a later score sheet, also counts as started (and they are kept) ============
+insert into events (id, org_id, format, name) values
+  (t093.u(370), t093.u(100), 'throwdown', 'Reopen later walkover'),
+  (t093.u(380), t093.u(100), 'throwdown', 'Reopen later sheet');
+insert into event_entries (id, event_id, display_name)
+select t093.u(e.ev * 10 + n), t093.u(e.ev), 'P' || n from (values (370), (380)) e(ev), generate_series(1, 4) n;
+select is(t093.settings(370) || t093.start(370, array[1,2,3,4]) || t093.decide(370, 1, 1, 1) || t093.decide(370, 1, 2, 1), 'okokokok',
+  'event 370: semi-finals decided, the 3rd place match and the Final made');
+select is(t093.as_user(t093.u(1), format('select public.td_record_walkover(gen_random_uuid(), %L, %L, %L)',
+  t093.u(100), t093.m(370, 2, 1), t093.s(370, 2, 1, 1))), 'ok', 'the 3rd place match is decided by walkover');
+select t093.contains(t093.reopen(370, 1, 1), '%td_next_round_started%', 'a walkover in the next round blocks the undo');
+select is(t093.rounds(370), '1:main:2 2:third_place:1 3:main:1', '...nothing is removed');
+select is((select result_kind from td_matches where id = t093.m(370, 2, 1)), 'walkover', '...and the walkover is kept');
+select is(t093.settings(380, '{"scoresheet": {"preset": "latte_art_v1", "cups": {"final": 1}}}') || t093.start(380, array[1,2,3,4])
+          || t093.decide(380, 1, 1, 1) || t093.decide(380, 1, 2, 1), 'okokokok', 'event 380: a scored Final is made');
+select is(t093.as_user(t093.u(1), format('select public.td_save_score_sheet(gen_random_uuid(), %L, %L, %L, 1, %L)',
+  t093.u(100), t093.m(380, 3, 1), t093.s(380, 3, 1, 1),
+  '{"1": {"contrast": 1, "surface": 1, "harmony": 1, "size_position": 1, "achieved": 1, "appeal": 1}}')), 'ok',
+  'one judge''s sheet is saved in the Final');
+select t093.contains(t093.reopen(380, 1, 1), '%td_next_round_started%', 'a score sheet in the next round blocks the undo');
+select is((select count(*) from td_score_sheets where match_id = t093.m(380, 3, 1))::int, 6, '...and the sheet is kept');
 
 -- ============ who may undo, and the record table ============
 select t093.contains(t093.reopen(300, 3, 1, null, gen_random_uuid(), 2), '%event not found%',

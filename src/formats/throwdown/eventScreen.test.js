@@ -8,6 +8,17 @@ import { parsePhone, phoneErrorMessage } from '../../core/phone.js';
 
 const EVENT = { id: 'ev', org_id: 'org', format: 'throwdown', name: 'Rehearsal', is_test: true };
 
+// Waits until `check` holds (polled), so a test does not depend on how fast a busy machine runs a reload.
+async function waitUntil(check, ms = 4000) {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) return;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}
+const liveText = (root) =>
+  [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+
 // A tiny read-only client: tables answer with the rows given, the events table answers the event.
 function clientWith(tables, event = EVENT) {
   return {
@@ -107,23 +118,25 @@ describe('the Throwdown organiser screen', () => {
     const byText = (root, text) =>
       [...root.querySelectorAll('button')].find((b) => b.textContent === text);
 
+    // the flush really runs this handler for a queued undo, so `sent` is what reached the database
     async function mountRecording(tables) {
-      const calls = [];
+      const sent = [];
       const client = clientWith({ events: [EVENT], ...tables });
-      const rpc = client.rpc;
-      client.rpc = async (name, args) => {
-        calls.push({ name, args });
-        return rpc(name, args);
-      };
       const root = document.createElement('div');
       document.body.append(root);
-      await mountThrowdownEventScreen(root, { eventId: 'ev', client, handlers: {} });
-      return { root, calls };
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client,
+        handlers: { td_reopen_match: async (payload) => sent.push(payload) },
+      });
+      return { root, sent };
     }
+    const settle = () => new Promise((r) => setTimeout(r, 50));
 
     it('asks first, says what is kept, and sends the undo with the winner the organiser saw', async () => {
-      const { root, calls } = await mountRecording(decided);
+      const { root, sent } = await mountRecording(decided);
       byText(root, 'Undo result').click();
+      await settle();
       const question = root.querySelector('.td-reopen-q');
       expect(question.textContent).toBe('Undo Ana’s win?');
       expect(document.activeElement).toBe(question);
@@ -131,14 +144,12 @@ describe('the Throwdown organiser screen', () => {
       const detail = root.querySelector(`#${yes.getAttribute('aria-describedby')}`);
       expect(detail.textContent).toContain('votes kept');
       expect(detail.textContent).toContain('publish them again');
-      expect(calls.some((c) => c.name === 'td_reopen_match')).toBe(false);
+      expect(sent).toHaveLength(0);
 
       yes.click();
-      await new Promise((r) => setTimeout(r, 50));
-      // queued in the outbox (this screen gets no flush handlers here), with the winner the organiser saw
-      const { listAllOperations } = await import('../../core/outbox.js');
-      const sent = (await listAllOperations()).find((op) => op.type === 'td_reopen_match');
-      expect(sent.payload).toMatchObject({
+      await waitUntil(() => sent.length > 0);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
         p_org_id: 'org',
         p_match_id: 'm1',
         p_expected_winner_slot_id: 's1',
@@ -146,12 +157,15 @@ describe('the Throwdown organiser screen', () => {
     });
 
     it('Keep result closes the question and sends nothing', async () => {
-      const { root, calls } = await mountRecording(decided);
+      const { root, sent } = await mountRecording(decided);
       byText(root, 'Undo result').click();
       byText(root, 'Keep result').click();
+      await settle();
       expect(root.querySelector('.td-reopen')).toBeNull();
       expect(byText(root, 'Undo result')).toBeTruthy();
-      expect(calls.some((c) => c.name === 'td_reopen_match')).toBe(false);
+      expect(sent).toHaveLength(0);
+      const { listAllOperations } = await import('../../core/outbox.js');
+      expect((await listAllOperations()).some((op) => op.type === 'td_reopen_match')).toBe(false);
     });
 
     it('Keep result puts focus back on that match’s Undo result button', async () => {
@@ -229,12 +243,104 @@ describe('the Throwdown organiser screen', () => {
       });
       root.querySelector('[aria-label^="Undo result: Semi-finals, Ana"]').click();
       byText(root, 'Yes, undo').click();
-      await new Promise((r) => setTimeout(r, 100));
+      await waitUntil(() => document.activeElement?.id === 'td-bracket-h');
+      await new Promise((r) => setTimeout(r, 200));
       expect(root.querySelector('#td-reopen-btn-m1')).toBeNull();
       expect(document.activeElement).toBe(root.querySelector('#td-bracket-h'));
       const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
       expect(live).toContain('The next round has already started');
     });
+
+    it('...also when a reload was already running as the undo was refused', async () => {
+      const tables = {
+        td_rounds: [
+          { id: 'r1', position: 1, kind: 'pair', phase: 'main' },
+          { id: 'r2', position: 2, kind: 'pair', phase: 'main' },
+        ],
+        td_matches: [
+          {
+            id: 'm1',
+            round_id: 'r1',
+            position: 1,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm2',
+            round_id: 'r1',
+            position: 2,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm3',
+            round_id: 'r2',
+            position: 1,
+            result_kind: null,
+            confirmed_at: null,
+            walkover_winner_position: null,
+          },
+        ],
+        td_slots: [
+          { id: 'a', match_id: 'm1', position: 1, entry_id: 'eAna' },
+          { id: 'b', match_id: 'm1', position: 2, entry_id: 'eBima' },
+          { id: 'c', match_id: 'm2', position: 1, entry_id: 'eCitra' },
+          { id: 'd', match_id: 'm2', position: 2, entry_id: 'eDani' },
+          { id: 'e', match_id: 'm3', position: 1, entry_id: 'eAna' },
+          { id: 'f', match_id: 'm3', position: 2, entry_id: 'eCitra' },
+        ],
+        td_votes: [],
+        td_settings: [{ event_id: 'ev', judge_count: 3, third_place: false, modules: {} }],
+        event_entries: ['Ana', 'Bima', 'Citra', 'Dani'].map((n) => ({
+          id: `e${n}`,
+          display_name: n,
+          withdrawn: false,
+        })),
+      };
+      const base = clientWith({ events: [EVENT], ...tables });
+      let slow = false;
+      // while `slow`, every read waits a little: a reload started by 'online' is still running when Yes, undo is tapped
+      const client = {
+        from(name) {
+          const q = base.from(name);
+          if (!slow) return q;
+          const then = q.then;
+          q.then = (res, rej) => new Promise((r) => setTimeout(r, 300)).then(() => then(res, rej));
+          return q;
+        },
+        rpc: null,
+      };
+      client.rpc = async (name) => {
+        if (name !== 'td_reopen_match') return { error: null, status: 200 };
+        // meanwhile a judge on another device tapped in the Final: the database refuses, and the refresh shows that tap
+        tables.td_votes.push({ id: 'v', match_id: 'm3', slot_id: 'e', created_at: '1' });
+        return {
+          error: { code: 'P0001', message: 'started', hint: 'td_next_round_started' },
+          status: 400,
+        };
+      };
+      const { dataHandlers } = await import('./data.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client,
+        handlers: dataHandlers(client),
+      });
+      root.querySelector('[aria-label^="Undo result: Semi-finals, Ana"]').click();
+      slow = true;
+      window.dispatchEvent(new Event('online'));
+      byText(root, 'Yes, undo').click();
+      // wait for the focus to land, then longer than one slow reload, so a later re-render cannot have taken it away
+      await waitUntil(() => document.activeElement?.id === 'td-bracket-h', 8000);
+      await new Promise((r) => setTimeout(r, 800));
+      expect(root.querySelector('#td-reopen-btn-m1')).toBeNull();
+      expect(document.activeElement).toBe(root.querySelector('#td-bracket-h'));
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('The next round has already started');
+    }, 15000);
 
     it('while a semi-final’s undo waits to sync, the Final it will remove cannot be played', async () => {
       // two semi-finals decided, the Final made and open; then the organiser's undo of semi-final 1 is queued (offline)
@@ -342,7 +448,7 @@ describe('the Throwdown organiser screen', () => {
       };
     }
 
-    it('keeps the match on screen after a tap, counts the tap as waiting, and catches up when back online', async () => {
+    it('keeps the match on screen after a tap, counts the tap as waiting, and drops the No connection line when back online', async () => {
       const net = { down: false };
       const root = document.createElement('div');
       document.body.append(root);
@@ -355,7 +461,7 @@ describe('the Throwdown organiser screen', () => {
 
       net.down = true;
       root.querySelector('.td-vote').click();
-      await new Promise((r) => setTimeout(r, 50));
+      await waitUntil(() => liveText(root).includes('No connection'));
 
       // not the full-screen load error with only Retry: the match, its Vote buttons and the waiting tap are all there
       expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
@@ -365,7 +471,7 @@ describe('the Throwdown organiser screen', () => {
 
       net.down = false;
       window.dispatchEvent(new Event('online'));
-      await new Promise((r) => setTimeout(r, 50));
+      await waitUntil(() => !liveText(root).includes('No connection'));
       const after = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
       expect(after).not.toContain('No connection');
     });
@@ -399,7 +505,7 @@ describe('the Throwdown organiser screen', () => {
       await mountThrowdownEventScreen(root, { eventId: 'ev', client, handlers: {} });
       expired = true;
       window.dispatchEvent(new Event('online'));
-      await new Promise((r) => setTimeout(r, 50));
+      await waitUntil(() => liveText(root).trim() !== '');
       expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
       const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
       expect(live).not.toContain('No connection');
