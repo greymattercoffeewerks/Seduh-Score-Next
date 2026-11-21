@@ -7,9 +7,9 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Throwdown: undo a confirmed match, and the vote screen survives a dropped connection · 4.26.0 · 2026-11-21
+## Throwdown: undo a confirmed match, and the vote screen survives a dropped connection · 4.27.0 · 2026-11-21
 
-**Status: done, PR open against `dev`.** Code, tests and the review rounds are finished. Not final yet: the migration `20261129100000_td_reopen_match.sql` is NOT in the cloud. Push it with `apply_migration` after the PR merges and BEFORE the release reaches `main`: `loadThrowdown` now reads `td_match_reopens`, so the event screen fails to load against a cloud database without it. Also owed: the Playwright `throwdown-event` undo step (not run locally, no `.env` in the worktree, so CI is its first run), and the owner's tablet check of Undo and the offline screen before 27 Nov.
+**Status: done, PR open against `dev`.** Migration pushed to the cloud on 2026-11-21 (verified: policies, grants, the guard). Code, tests and the review rounds are finished. Not final yet: the migration `20261129100000_td_reopen_match.sql` is NOT in the cloud. Push it with `apply_migration` after the PR merges and BEFORE the release reaches `main`: `loadThrowdown` now reads `td_match_reopens`, so the event screen fails to load against a cloud database without it. Also owed: the Playwright `throwdown-event` undo step (not run locally, no `.env` in the worktree, so CI is its first run), and the owner's tablet check of Undo and the offline screen before 27 Nov.
 
 - **Why.** The Throwdown event is on 27 Nov. Two ROADMAP open items would bite on the day: an organiser who tapped the wrong winner had no way to fix it ("Corrections after a confirm"), and fully offline the vote screen was lost after one tap.
 - **Undo rules (owner decisions, 2026-11-21, all four recommended answers).**
@@ -47,11 +47,11 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
   - Undo is not on the projector or phone. They show the corrected result on the next publish.
   - Withdrawing the winner of a re-confirmed semi-final can still mean no 3rd place match, by the existing both-losers-active rule (owner rule, not changed).
   - The round 3 UI fix (in-flight reload) has had no reviewer pass after it.
-- **Version.** 4.26.0 (minor: a new usable capability, Undo result). `package.json` and `package-lock.json` bumped on this branch.
+- **Version.** 4.27.0 (minor: a new usable capability, Undo result; 4.26.0 went to the Throwdown projector release). `package.json` and `package-lock.json` bumped on this branch.
 
-## Throwdown projector on the shared projector kit · 4.26.0 (minor, planned; package.json not bumped here, the release PR takes it) · 2026-11-21
+## Throwdown projector on the shared projector kit · 4.26.0 · 2026-11-21
 
-**Status: PR open against `dev`, not merged, not released.** Not final: the owner's TV check (24 to 25 Nov) and CI's first Playwright run of `dev-throwdown` are outstanding. No migration.
+**Status: released as 4.26.0 (minor, #539).** CI passed, including `dev-throwdown`. Not final: the owner's TV check (24 to 25 Nov) is outstanding. No migration.
 
 - **Why.** BTC already had a stage projector (page loop, result moments, champion screen). Throwdown needed the same behaviour. Copying BTC's code a second time would repeat the v4.x defect the module boundary exists to stop (CLAUDE.md, handoff §6), so the parts that are not BTC-specific moved into `src/core/`, and Throwdown's own pages stay in its format folder.
 - **Shared kit (`src/core/`).**

@@ -145,7 +145,7 @@ that event's matches (owner to confirm at review). Details: `CONVENTIONS.md`, "S
 ## Undo a confirmed match (2026-11-21)
 
 Owner decisions, 2026-11-21 (all four recommended answers). Built as migration `20261129100000` (pgTAP `093`) and
-`src/formats/throwdown/reopen.js`; CHANGELOG 4.26.0 has the review trail.
+`src/formats/throwdown/reopen.js`; CHANGELOG 4.27.0 has the review trail.
 
 - **When.** `td_reopen_match` undoes a confirmed match only until the next round starts. Refused: `td_match_bye`,
   `td_next_round_started`, `td_third_place_changed` (a semi-final loser was withdrawn or restored since, which would add or
