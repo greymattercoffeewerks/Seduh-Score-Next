@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Throwdown projector surface — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/components.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/core/stageDisplay.css" />
+    <link rel="stylesheet" href="/src/core/stageSurface.css" />
+    <link rel="stylesheet" href="/src/core/stageMoments.css" />
+    <link rel="stylesheet" href="/src/core/stageVocabulary.css" />
+    <link rel="stylesheet" href="/src/core/stageMatchCard.css" />
+    <link rel="stylesheet" href="/src/core/rankMotion.css" />
+    <link rel="stylesheet" href="/src/core/brandSlot.css" />
+    <link rel="stylesheet" href="/src/formats/throwdown/audience.css" />
+    <style>
+      /* Demo-harness-only layout. The real surface fills the screen and every size in it is --stage-fit or vw. */
+      body {
+        margin: 0;
+      }
+      .demo-controls {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 50;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.85);
+        font-family: var(--font-body);
+      }
+      .demo-controls button {
+        min-height: 36px;
+        padding: 4px 10px;
+        border: 1px solid #8fa7a9;
+        background: #16393a;
+        color: #f2f7f6;
+        font-family: var(--font-body);
+        font-size: 13px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Demo-only harness for Throwdown's venue display (same role as every other *.preview.html). It mounts the REAL
+      projector body on payloads built by the REAL assembler (projectorFixtures.js), so each screen is shown on exactly
+      the shape production publishes. Moment buttons show the earlier snapshot and then the next one, the way a
+      confirm does. `?page=N` holds the loop on page N so a screenshot can be taken without waiting.
+    -->
+    <div class="demo-controls" id="controls"></div>
+    <div id="root" class="stage-surface" data-surface="stage">
+      <div class="viewer-shell">
+        <div class="viewer-shell-body" id="body"></div>
+      </div>
+    </div>
+
+    <script>
+      // ?page=N holds the loop on page N (0 is the first) so a screenshot needs no waiting: the 10 second page timer
+      // fires at once N times and then never. Harness only.
+      (() => {
+        const hold = new URLSearchParams(location.search).get('page');
+        if (hold === null) return;
+        let left = Number(hold);
+        const real = window.setTimeout.bind(window);
+        window.setTimeout = (fn, delay, ...rest) => {
+          if (delay === 10000) {
+            if (left > 0) {
+              left -= 1;
+              return real(fn, 0, ...rest);
+            }
+            return 0;
+          }
+          return real(fn, delay, ...rest);
+        };
+      })();
+    </script>
+    <script type="module">
+      import { createThrowdownProjectorBody } from './projectorBody.js';
+      import { payloadFor, roundOf, namesUpTo } from './projectorFixtures.js';
+
+      const long = 'Muhammad Abdul-Rahman bin Haji Mohd Yusof al-Brunei';
+      const t = (m) => `2026-11-27T10:${String(m).padStart(2, '0')}:00Z`;
+      const sheet = { preset: 'latte_art_v1', cups: { final: 2, third_place: 1 } };
+      const winners = (n) => Array.from({ length: n }, (_, i) => `P${i * 2 + 1}`);
+      const pairs = (names, decided) =>
+        Array.from({ length: names.length / 2 }, (_, i) => ({
+          a: names[i * 2],
+          b: names[i * 2 + 1],
+          ...(i < decided ? { result: [2, 1], at: t(i + 1) } : {}),
+        }));
+      const r16 = (decided, nameList = namesUpTo(16)) =>
+        payloadFor({
+          names: nameList,
+          rounds: [{ phase: 'main', matches: pairs(nameList, decided) }],
+        });
+      const qfRounds = (qf) => {
+        const w = winners(8);
+        return [
+          { phase: 'main', matches: pairs(namesUpTo(16), 8) },
+          { phase: 'main', matches: pairs(w, qf) },
+        ];
+      };
+      const sfRounds = (sf, third) => {
+        const w = winners(8);
+        const qw = [w[0], w[2], w[4], w[6]];
+        return [
+          ...qfRounds(4),
+          { phase: 'main', matches: pairs(qw, sf) },
+          ...(third ? [{ phase: 'third_place', matches: [{ a: w[2], b: w[6] }] }] : []),
+        ];
+      };
+      const names16 = namesUpTo(16);
+      const withLong = [long, ...names16.slice(1)];
+
+      const scenarios = {
+        setup: () => [payloadFor({ names: namesUpTo(20), rounds: [] })],
+        'Setup, scoresheet on': () => [
+          payloadFor({ names: namesUpTo(8), rounds: [], scoresheet: sheet }),
+        ],
+        'R16 under way': () => [r16(3)],
+        'R32 (16 matches)': () => [
+          payloadFor({
+            names: namesUpTo(32),
+            rounds: [{ phase: 'main', matches: pairs(namesUpTo(32), 5) }],
+          }),
+        ],
+        'Quarter-finals': () => [payloadFor({ names: names16, rounds: qfRounds(1) })],
+        'Semi-finals + 3rd': () => [payloadFor({ names: names16, rounds: sfRounds(2, true) })],
+        'Scoresheet final': () => [
+          payloadFor({
+            names: names16,
+            scoresheet: sheet,
+            rounds: [
+              { phase: 'main', matches: pairs(namesUpTo(4), 2) },
+              { phase: 'main', matches: [{ a: 'P1', b: 'P3' }] },
+              { phase: 'third_place', matches: [{ a: 'P2', b: 'P4' }] },
+            ],
+          }),
+        ],
+        'Long names': () => [r16(2, withLong)],
+        'Result moment': () => [r16(2), r16(3)],
+        'Round set moment': () => [
+          payloadFor({ names: names16, rounds: qfRounds(3) }),
+          payloadFor({ names: names16, rounds: sfRounds(0, false) }),
+        ],
+        'Draw moment (R16)': () => [payloadFor({ names: names16, rounds: [] }), r16(0)],
+        Champion: () => [
+          payloadFor({
+            names: namesUpTo(4),
+            rounds: [
+              { phase: 'main', matches: pairs(namesUpTo(4), 2) },
+              { phase: 'main', matches: [{ a: 'P1', b: 'P3', result: [3, 1], at: t(9) }] },
+              { phase: 'third_place', matches: [{ a: 'P2', b: 'P4', result: [2, 1], at: t(10) }] },
+            ],
+          }),
+        ],
+      };
+
+      const body = createThrowdownProjectorBody();
+      const bodyEl = document.getElementById('body');
+      const controls = document.getElementById('controls');
+      function push(payload) {
+        // what core/viewer-shell does on every live payload: clear the body, ask the kept display to draw
+        bodyEl.replaceChildren();
+        body.renderBody(bodyEl, payload);
+      }
+      let timer = null;
+      function run(name) {
+        clearTimeout(timer);
+        const [first, second] = scenarios[name]();
+        push(first);
+        if (second) timer = setTimeout(() => push(second), 1500);
+      }
+      for (const name of Object.keys(scenarios)) {
+        const b = document.createElement('button');
+        b.textContent = name;
+        b.addEventListener('click', () => {
+          const page = new URLSearchParams(location.search).get('page');
+          location.search = `?s=${encodeURIComponent(name)}${page === null ? '' : `&page=${page}`}`;
+        });
+        controls.append(b);
+      }
+      const chosen = new URLSearchParams(location.search).get('s') ?? 'R16 under way';
+      run(chosen);
+    </script>
+  </body>
+</html>

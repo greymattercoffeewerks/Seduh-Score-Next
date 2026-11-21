@@ -50,7 +50,7 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     page,
     browser,
   }) => {
-    test.setTimeout(240000);
+    test.setTimeout(480000);
     tenant = await createTenant({ label: 'td1', live: false });
     const event = await tenant.createEvent({
       format: 'throwdown',
@@ -109,7 +109,8 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     await phone.goto(`/app/#/live/${tenant.slug}/phone`);
     await expect(phone.locator('.td-phone')).toContainText('Quarter-finals');
     await expect(phone.locator('.is-test-banner')).toBeVisible();
-    await expect(projector.locator('.td-stage-now')).toBeVisible();
+    // the venue display opens on the page loop: the first page is Up next
+    await expect(projector.locator('.stage-kicker').first()).toContainText('Up next');
     await expect(projector.locator('.is-test-banner')).toBeVisible();
 
     // ---- play: every round until a champion. One walkover along the way; every other match by judges' taps.
@@ -161,7 +162,10 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     expect(NAMES).toContain(champion);
     await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
     await expect(phone.locator('.td-phone-champion')).toContainText(champion);
-    await expect(projector.locator('.stage-champion-name')).toHaveText(champion);
+    // the last result plays as a moment first (8 seconds), then the champion holds
+    await expect(projector.locator('.stage-champion-name')).toHaveText(champion, {
+      timeout: 90000,
+    });
     await expect(projector.locator('.is-test-banner')).toBeVisible();
     await expect(phone.locator('.is-test-banner')).toBeVisible();
     // a bracket with a Final, and the 3rd place match was played (a walkover semi-final still gets one: both losers exist and are active)
@@ -206,7 +210,10 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     await tap(finalCard, 1 - winnerSide, 2);
     await finalCard.getByRole('button', { name: /^Confirm(:| result)/ }).click();
     await expect(page.locator('.td-champion-name')).toHaveText(otherFinalist);
-    await expect(projector.locator('.stage-champion-name')).toHaveText(otherFinalist);
+    // the projector holds a champion screen for at least a minute, then the corrected result plays as a moment first
+    await expect(projector.locator('.stage-champion-name')).toHaveText(otherFinalist, {
+      timeout: 150000,
+    });
 
     // ---- publishing: the results screen offers the public archive, but a TEST event is never published. The card
     // says so in words and offers no button (the happy path, with a real event, is covered by the unit tests).

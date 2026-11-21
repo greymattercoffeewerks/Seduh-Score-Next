@@ -1,0 +1,112 @@
+/*
+ * The two-sided match card every venue display shares (core/stageMatchCard.js): a "VS" row of two sides, each a label,
+ * a name, an optional country line, points and chips. Extracted from BTC's projector screens when Throwdown became
+ * the second format to need it. Token-only, sized from --stage-fit (1% of the screen AREA's height, see
+ * stageDisplay.css) or a vw width. Meaning is carried by words, never by colour alone: the side that goes through
+ * says so in its label and wears the heavy outline as emphasis only. Gold is a FILL (a chip with its contrast
+ * colour), never a text colour (DESIGN.md). Link it with the other stage sheets, before a format's own.
+ */
+
+.stage-vs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 2vw;
+  margin-top: calc(3 * var(--stage-fit));
+}
+
+.stage-vs-mark {
+  align-self: center;
+  color: var(--color-text-secondary);
+  font-family: var(--font-display);
+  font-size: max(1.25rem, calc(6 * var(--stage-fit)));
+  letter-spacing: 0.06em;
+}
+
+.stage-side {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1.4 * var(--stage-fit));
+  padding: calc(3 * var(--stage-fit)) 1.6vw;
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  min-width: 0;
+}
+
+/* The side that goes through wears the heavy outline, and says so in words. */
+.stage-side[data-winner='true'] {
+  border: var(--border-strong) solid var(--color-accent);
+}
+
+.stage-side-label {
+  color: var(--color-accent);
+  font-size: max(0.875rem, calc(3.2 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stage-side[data-winner='false'] .stage-side-label,
+.stage-side:not([data-winner]) .stage-side-label {
+  color: var(--color-text-secondary);
+}
+
+.stage-side-country {
+  display: block;
+  font-family: var(--font-body);
+  font-size: max(1rem, calc(3.2 * var(--stage-fit)));
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.stage-side-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: max(1.5rem, calc(8 * var(--stage-fit)));
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.stage-side[data-winner='false'] .stage-side-name {
+  color: var(--color-text-secondary);
+}
+
+.stage-points {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: max(2.5rem, calc(19 * var(--stage-fit)));
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-side[data-winner='false'] .stage-points {
+  color: var(--color-text-secondary);
+}
+
+.stage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(1 * var(--stage-fit)) 0.8vw;
+}
+
+.stage-chip {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: calc(0.5 * var(--stage-fit)) 0.9vw;
+  border: var(--border-hairline) solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: max(0.875rem, calc(3.2 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* The organiser's tie-break decision: a gold fill with its contrast colour, never gold text. */
+.stage-chip[data-kind='tiebreak'] {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  color: var(--color-gold-contrast);
+}

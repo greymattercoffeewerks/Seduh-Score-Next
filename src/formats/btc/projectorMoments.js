@@ -23,7 +23,7 @@ import { renderMovementRows } from '../../core/rankMovementRows.js';
 import { rankImpactRows, leadMovement, topMover } from '../../core/rankImpact.js';
 import { ordinalLabel } from '../../core/ordinal.js';
 import { stageKicker } from '../../core/stageVocabulary.js';
-import { renderSide, renderVs } from './projectorScreens.js';
+import { renderSide, renderVs } from '../../core/stageMatchCard.js';
 import { matchLine, outcomeLine, tiebreakText } from './words.js';
 
 // Long enough to read the points and what they were made of, short enough that the room is not waiting.

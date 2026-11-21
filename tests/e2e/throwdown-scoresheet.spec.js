@@ -1,5 +1,6 @@
 import { test, expect as baseExpect } from '@playwright/test';
 import { createTenant } from './support/tenants.js';
+import { watchProjector } from './support/projector.js';
 
 // Throwdown scoresheet module (stage 2): an 8-competitor TEST event with the module on (Final 2 cups, 3rd place 1 cup,
 // 3 judges). The quarter- and semi-finals are tap-voted as ever; the 3rd place match and the Final are decided by the
@@ -142,12 +143,17 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
     await expect(page.locator('.td-vote')).toHaveCount(0);
     await expect(page.locator('.td-sheets-count').first()).toContainText('Sheets in: 0 of 6');
     await expect(phone.locator('.td-phone')).toContainText('Judges scoring', { timeout: 20000 });
-    await expect(projector.locator('.td-stage-now')).toContainText('Judges scoring');
-    // while judging, neither audience surface shows any number tied to a result, or a hint of the rules
-    for (const surface of [phone, projector]) {
-      const judging = await surface.locator('.td-phone, .td-stage-now').first().innerText();
-      expect(judging).not.toMatch(LEAK);
-    }
+    // the venue display rotates pages (10 s each) and plays a moment per result, so watch it for a whole cycle: it says
+    // Judging on the pages that carry the match, and NO screen of the loop or any moment shows a number or a rule
+    const judgingScreens = await watchProjector(projector, {
+      needs: ['Judging', 'Path to the final'],
+    });
+    expect(
+      judgingScreens.done,
+      `the projector never showed: ${judgingScreens.screens.join(' // ')}`,
+    ).toBe(true);
+    for (const screen of judgingScreens.screens) expect(screen).not.toMatch(LEAK);
+    expect(await phone.locator('.td-phone').innerText()).not.toMatch(LEAK);
 
     // ---- first match: the totals are level but two judges scored Competitor 1 higher => "more judges"
     const first = page.locator('article.td-scored').first();
@@ -192,7 +198,18 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
     // ---- the audience learns the winner only
     await expect(page.locator('.td-champion')).toBeVisible();
     await expect(phone.locator('.td-phone-champion')).toBeVisible();
-    await expect(projector.locator('.stage-champion-name')).toBeVisible();
+    // the last results play as moments (8 s each) before the champion holds: watch them all for a leak
+    const endScreens = await watchProjector(projector, {
+      needs: ['Result recorded', 'Congratulations'],
+    });
+    expect(endScreens.done, `the projector never showed: ${endScreens.screens.join(' // ')}`).toBe(
+      true,
+    );
+    for (const screen of endScreens.screens) {
+      expect(screen).not.toMatch(LEAK);
+      expect(screen).not.toContain('Judging');
+    }
+    await expect(projector.locator('.stage-champion-name')).toBeVisible({ timeout: 60000 });
     for (const surface of [phone, projector]) {
       const text = await surface.locator('body').innerText();
       expect(text).not.toMatch(LEAK);

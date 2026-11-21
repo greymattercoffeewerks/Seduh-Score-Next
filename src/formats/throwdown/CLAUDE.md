@@ -163,3 +163,23 @@ Owner decisions, 2026-11-21 (all four recommended answers). Built as migration `
 - **UI.** "Undo result" on each undoable match in the Bracket card (aria-label names the match), two taps ("Yes, undo" /
   "Keep result"), "Undo waiting to sync." while queued. Focus returns to Undo result, or to the Bracket heading when a refusal
   removes the button.
+
+## Projector on BTC's model (2026-11-21)
+
+The venue display is a loop of pages (10 s each, with the ring) plus moments, on the shared projector kit (`core/CLAUDE.md`,
+"Projector kit"). `projectorScreens.js` holds the pages: before Round 1 **Meet the competitors** (names only, 16 to a page)
+and **How it works** (a scoresheet card only when `judgedRounds`, never a judge count); live **Up next** (VS card, each side's
+route, footer "Then: A vs B"), the **round page** (8 matches to a page, words for every state), **Still in**, **Path to the
+final** (columns only for rounds of 8 matches or fewer; a bigger round is one line; a future round is only "Drawn when the X is
+complete") and **Latest results**. `projectorMoments.js` holds the 8 s moments: **Result recorded** (Champion/Runner-up,
+"Plays for third place" only when the 3rd place match exists, vote split for tap rounds and the winner only for scoresheet
+rounds) and **Round is set** (pairings revealed one by one). The champion uses `createChampionScreen` and holds 60 s.
+
+- **Payload** (`liveSession.js`, pure): `upNext` / `thenNext` are the first two undecided playable matches in BRACKET order (owner
+  decision: no console "call to stage" step); every match has `number`; `upNext`/`thenNext`/`recent` carry `roundLabel`,
+  `roundPhase`, `roundSize`, `role`; `recent` adds `confirmedAt`; `stillIn`, `competitorNames` and `judgedRounds` (yes/no only).
+  `roundLabel` ("Round of 16") is the projector's name; `label` ("Round 1") stays the console's. A scoresheet match still carries no
+  score, total, judge count or rule (D8; its position in its round, "Match 2", is structure, not a score): `liveSession.test.js` checks `rounds`, `upNext`, `thenNext` and `recent` for any digit that is not structure.
+- **Moments key on `id|confirmedAt`** (a republish repeats neither) and need a previous snapshot; `projectorFixtures.js` builds
+  payloads through the real `deriveBracket` and assembler for the tests and `projectorSurface.preview.html` (`?s=<scenario>&page=N`).
+- Not changed: the phone body, any migration, BTC's and Cup Taster's idle loops.
