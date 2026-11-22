@@ -23,6 +23,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown vote cap** (#531 and its review follow-ups, on `dev` as 4.25.1, not yet released): a match takes no more taps than judges, plus one tie-break vote when the panel is level (owner, 2026-11-20). Migration applied to the cloud. All Definition-of-Done reviews run (CHANGELOG 4.25.1).
 - **Throwdown projector on the shared kit**: released as **4.26.0** (minor, #539), no migration; owner's TV check 24 to 25 Nov owed.
 - **Throwdown competitor Edit** (released as **4.25.0**, #532): name, phone and café or team, before and after the draw. Owed: the owner's tablet check.
+- **Throwdown dashboard, Phase B** (on #543, no bump): built, not routed yet. CHANGELOG 2026-11-22.
 - **Throwdown undo and offline vote screen** (4.27.0, PR #540 into `dev`): undo a confirmed match; the event screen survives a dropped connection. Migration `20261129100000` is in the cloud (pushed 2026-11-21). Owed: the owner's tablet check before 27 Nov (CHANGELOG 4.27.0).
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).

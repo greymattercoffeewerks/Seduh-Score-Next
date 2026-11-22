@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Throwdown Event Dashboard — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/components.css" />
+    <link rel="stylesheet" href="/src/formats/throwdown/eventDashboardScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the Throwdown run-sheet dashboard (not part of the shipped module graph). No Supabase:
+      the loader is injected from dashboardFixtures.js and a tiny fake client answers only the live check.
+      Pick a state with the buttons, or ?stage=<name> (mid, predraw, test, failed).
+    -->
+    <p id="stages"></p>
+    <div id="app"></div>
+    <script type="module">
+      import { mountThrowdownEventDashboardScreen } from './eventDashboardScreen.js';
+      import { bracketOf, dashboardData, entriesOf, match } from './dashboardFixtures.js';
+
+      const EVENT = {
+        id: 'ev1',
+        org_id: 'org1',
+        name: 'Throwdown Nov',
+        is_test: false,
+        event_date: '2026-11-27',
+        venue: 'Hall A',
+        city: 'Bandar',
+      };
+      const STAGES = ['mid', 'predraw', 'test', 'failed'];
+
+      function scenario(stage) {
+        const entries = entriesOf(8);
+        if (stage === 'predraw') {
+          return {
+            ...dashboardData({ entries, bracket: bracketOf(entries, []) }),
+            event: EVENT,
+          };
+        }
+        // Mid event: the quarter-finals, one decided, one level at 2-2 (3 judges), two with taps in progress.
+        const bracket = bracketOf(entries, [
+          {
+            matches: [
+              match(['e1', 'e2'], { result: 'votes', votes: [3, 0] }),
+              match(['e3', 'e4'], { votes: [2, 2] }),
+              match(['e5', 'e6'], { votes: [1, 0] }),
+              match(['e7', 'e8']),
+            ],
+          },
+        ]);
+        return {
+          ...dashboardData({ entries, bracket, queuedCount: 4 }),
+          event: { ...EVENT, is_test: stage === 'test' },
+        };
+      }
+
+      const client = {
+        from: () => {
+          const answer = { data: null, error: null };
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            maybeSingle: () => Promise.resolve(answer),
+            then: (res, rej) => Promise.resolve(answer).then(res, rej),
+          };
+          return builder;
+        },
+      };
+
+      function mount(stage) {
+        const app = document.getElementById('app');
+        app.innerHTML = '';
+        let first = true;
+        mountThrowdownEventDashboardScreen(app, {
+          eventId: 'ev1',
+          client,
+          handlers: {},
+          loadData: async () => {
+            // "failed" fails the first load, so Retry shows the real screen.
+            if (stage === 'failed' && first) {
+              first = false;
+              throw new Error('Preview: the first load fails on purpose.');
+            }
+            return scenario(stage === 'failed' ? 'mid' : stage);
+          },
+          audienceLinks: {
+            phone: 'https://www.seduhscore.com/#/live/demo/phone',
+            projector: 'https://www.seduhscore.com/#/live/demo/projector',
+            splash: 'https://www.seduhscore.com/#/live/demo/splash',
+          },
+        });
+      }
+      for (const stage of STAGES) {
+        const b = document.createElement('button');
+        b.textContent = stage;
+        b.addEventListener('click', () => mount(stage));
+        document.getElementById('stages').append(b, ' ');
+      }
+      mount(new URLSearchParams(location.search).get('stage') ?? 'mid');
+    </script>
+  </body>
+</html>
