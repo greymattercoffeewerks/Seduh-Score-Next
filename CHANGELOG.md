@@ -7,6 +7,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown: event dashboard, Phase B (not routed yet) · no version bump · 2026-11-22
+
+**Status: done, on #543. Not routed yet:** Phase C wires `#/events/:id` and the matches console.
+
+- **Why.** Throwdown's organiser screen gets BTC's run-sheet dashboard on the core kit. Copied, not shared: `src/core/` was out of scope.
+- **What.** `eventDashboardScreen.{js,css,preview.html,test.js}` (new, 24 tests). `loadData` lets the preview and tests supply data offline. Preview page is in `PAGES_THAT_LINK_IT`.
+- **Reviews.**
+  - `code-reviewer`: clean (2 nits).
+  - `module-boundary-checker`: 1 Important, the shell duplicates BTC's (intentional this phase; should move to core). 2 nits: `safeText`, slug helper duplicated.
+  - `test-auditor`: 2 Important (CSV-on-mount and cross-event live check unpinned), both fixed; 1 nit fixed.
+  - `ui-accessibility-reviewer`: 1 Important, core `describeError` shows save-error copy for a missing event (shared with BTC; follow-up); 1 nit fixed.
+- **Follow-ups.** Extract the dashboard shell to core. Core `describeError` wording for "no event" and "connection lost". Move `safeCell` and the slug helper to core. None is in `docs/backlog/` yet.
+
 ## Throwdown: undo a confirmed match, and the vote screen survives a dropped connection · 4.27.0 · 2026-11-21
 
 **Status: done, PR open against `dev`.** Migration pushed to the cloud on 2026-11-21 (verified: policies, grants, the guard). Code, tests and the review rounds are finished. Not final yet: the migration `20261129100000_td_reopen_match.sql` is NOT in the cloud. Push it with `apply_migration` after the PR merges and BEFORE the release reaches `main`: `loadThrowdown` now reads `td_match_reopens`, so the event screen fails to load against a cloud database without it. Also owed: the Playwright `throwdown-event` undo step (not run locally, no `.env` in the worktree, so CI is its first run), and the owner's tablet check of Undo and the offline screen before 27 Nov.
