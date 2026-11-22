@@ -33,7 +33,7 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
   `kind` (`pair` now, `pool` reserved) and `phase` (`main | third_place | redemption`). A module
   must not change these shapes; if it has to, the core was not ready.
 - **All writes are SECURITY DEFINER functions** (`td_save_settings`, `td_start_event`,
-  `td_cast_vote`, `td_undo_vote`, `td_confirm_match`, `td_record_walkover`); the API roles hold
+  `td_cast_vote`, `td_undo_vote`, `td_confirm_match`, `td_record_walkover`, `td_reopen_match`); the API roles hold
   SELECT only on the six `td_*` tables. Each function opens with `app.td_guard` (membership,
   org/event agreement, format, Per-event window lock: one answer, "event not found"), takes an
   advisory lock per event, and is idempotent through `processed_operations` (an outbox replay of
@@ -142,6 +142,28 @@ A claimed person's profile shows their published Throwdown place and their knock
 semi-final losers and "walkovers do not count" are owner-confirmed (2026-11-20). "This isn't mine" on a Throwdown result also hides
 that event's matches (owner to confirm at review). Details: `CONVENTIONS.md`, "Seduh ID profile door".
 
+## Undo a confirmed match (2026-11-21)
+
+Owner decisions, 2026-11-21 (all four recommended answers). Built as migration `20261129100000` (pgTAP `093`) and
+`src/formats/throwdown/reopen.js`; CHANGELOG 4.27.0 has the review trail.
+
+- **When.** `td_reopen_match` undoes a confirmed match only until the next round starts. Refused: `td_match_bye`,
+  `td_next_round_started`, `td_third_place_changed` (a semi-final loser was withdrawn or restored since, which would add or
+  drop the 3rd place match), `td_leader_changed`.
+- **What is kept and removed.** Votes and score sheets are kept. The organiser's pick for a level scored match is removed. Later
+  rounds, the 3rd place match and the Final included, are removed; `td_advance` rebuilds them when the match is confirmed again.
+- **Record.** Every undo writes a row to `td_match_reopens` (kind, winner, confirmed time, positions, rounds removed, who, when),
+  shown as a Corrections card on the results page. Published results are not touched; the confirm step reminds the organiser to
+  publish again.
+- **Client mirror.** `reopen.js` (`reopenState`, `reopenWords`, `matchesAwaitingUndo`) has the same rules. An offline-queued undo
+  hides the later rounds it will remove, so their taps are not sent (they would be dropped as "event not found").
+- **Offline screen.** A failed refresh keeps the last loaded screen and the device's queued taps (re-read from the local queue).
+  "No connection…" is shown only for a connection failure; any other error shows its own words. The screen reloads on the browser
+  `online` event, and `refreshSoon` returns the running reload to a caller that joins it.
+- **UI.** "Undo result" on each undoable match in the Bracket card (aria-label names the match), two taps ("Yes, undo" /
+  "Keep result"), "Undo waiting to sync." while queued. Focus returns to Undo result, or to the Bracket heading when a refusal
+  removes the button.
+
 ## Projector on BTC's model (2026-11-21)
 
 The venue display is a loop of pages (10 s each, with the ring) plus moments, on the shared projector kit (`core/CLAUDE.md`,
@@ -161,3 +183,8 @@ rounds) and **Round is set** (pairings revealed one by one). The champion uses `
 - **Moments key on `id|confirmedAt`** (a republish repeats neither) and need a previous snapshot; `projectorFixtures.js` builds
   payloads through the real `deriveBracket` and assembler for the tests and `projectorSurface.preview.html` (`?s=<scenario>&page=N`).
 - Not changed: the phone body, any migration, BTC's and Cup Taster's idle loops.
+
+**Event dashboard (Phases B and C, 2026-11-22).** `eventDashboardScreen.js` is a copy of BTC's run-sheet dashboard on the core organiser
+kit, with an optional `loadData` option so the preview and tests can supply data without the network. It is routed: `#/events/:id`
+is the dashboard, and the console (setup, draw, vote cards, bracket) is `#/events/:id/throwdown/matches`, where organisers vote.
+Copied, not shared, because `src/core/` was out of scope; extracting the shell to core is the follow-up (CHANGELOG 2026-11-22).

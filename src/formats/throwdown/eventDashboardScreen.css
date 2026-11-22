@@ -1,0 +1,25 @@
+/*
+ * Throwdown event dashboard (organiser run sheet). The cards themselves are the organiser kit's (`.ok-*`, in
+ * src/ui/tokens/components.css); this file holds only the page's own spacing and the row of screen links.
+ * Two links, so a two-column row from phone width up.
+ */
+
+.td-event-dashboard-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.td-event-dashboard-screen > h1 {
+  margin: 0;
+}
+
+.td-event-meta {
+  margin: 0;
+}
+
+.td-event-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}

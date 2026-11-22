@@ -50,7 +50,7 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     page,
     browser,
   }) => {
-    test.setTimeout(240000);
+    test.setTimeout(480000);
     tenant = await createTenant({ label: 'td1', live: false });
     const event = await tenant.createEvent({
       format: 'throwdown',
@@ -69,8 +69,20 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     }, event.id);
     await page.goto('about:blank');
     await page.goto(`/app/#/events/${event.id}`);
+    // the event home is the run-sheet dashboard; the console (setup, draw, votes) is its Matches page
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Throwdown');
     await expect(page.locator('.is-test-banner')).toBeVisible();
+    await expect(page.locator('.ok-next')).toContainText('Next step');
+    await expect(page.getByRole('heading', { name: 'Run sheet' })).toBeVisible();
+    await expect(page.locator('.ok-phases .ok-phase').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Needs attention/ })).toBeVisible();
+    await expect(page.locator('.ok-live')).toBeVisible();
+    await page
+      .getByRole('navigation', { name: 'Event screens' })
+      .getByRole('link', { name: 'Matches' })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`#/events/${event.id}/throwdown/matches$`));
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Throwdown');
 
     // the audience: anonymous, in their own contexts
     const projector = await (
@@ -148,6 +160,20 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
         await expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
         await confirm.click();
         await expect(card).toBeHidden();
+        if (guard === 1 && i === 1) {
+          // the dashboard's run sheet is derived on load: two quarter-finals are decided (the walkover and this one)
+          await page.getByRole('link', { name: 'Event home' }).first().click();
+          await expect(page).toHaveURL(new RegExp(`#/events/${event.id}$`));
+          await expect(
+            // by the phase id: the "Rounds to come" row's reason also names the quarter-finals
+            page.locator('.ok-phase[data-phase="round-1"]').locator('.ok-phase-count'),
+          ).toHaveText('2 of 4 decided');
+          await page
+            .getByRole('navigation', { name: 'Event screens' })
+            .getByRole('link', { name: 'Matches' })
+            .click();
+          await expect(page.getByRole('heading', { name: 'Now playing' })).toBeVisible();
+        }
       }
     }
     // one walkover in the quarter-finals and one in the semi-finals: the 3rd place match is still played
@@ -176,9 +202,51 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
       'Final',
     ]);
 
+    // ---- the organiser confirmed the wrong winner of the Final: undo it, take back the wrong vote, confirm the other
+    // finalist. The champion banner goes, the Final is playable again with its taps kept, and the fix is recorded.
+    const finalRound = page.locator('.td-round', {
+      has: page.locator('h3', { hasText: /^Final$/ }),
+    });
+    const finalists = (await finalRound.locator('.td-round-match > span').first().textContent())
+      .split(' vs ')
+      .map((n) => n.trim());
+    const otherFinalist = finalists.find((n) => n !== champion);
+    // the semi-finals can no longer be undone (the Final has taps); the Final and the 3rd place match can
+    await expect(
+      page
+        .locator('.td-round', { has: page.locator('h3', { hasText: 'Semi-finals' }) })
+        .getByRole('button', {
+          name: /^Undo result/,
+        }),
+    ).toHaveCount(0);
+    await finalRound.getByRole('button', { name: /^Undo result/ }).click();
+    await expect(page.locator('.td-reopen-q')).toHaveText(`Undo ${champion}’s win?`);
+    await page.getByRole('button', { name: 'Yes, undo' }).click();
+    await expect(page.locator('.td-champion')).toHaveCount(0);
+    const finalCard = page.locator('article.td-match');
+    await expect(finalCard).toHaveCount(1);
+    const winnerSide = finalists.indexOf(champion);
+    await expect(finalCard.locator('.td-count').nth(winnerSide)).toHaveText('2 votes');
+    await finalCard
+      .locator('.td-side')
+      .nth(winnerSide)
+      .getByRole('button', { name: 'Undo', exact: true })
+      .click();
+    await expect(finalCard.locator('.td-count').nth(winnerSide)).toHaveText('1 vote');
+    await tap(finalCard, 1 - winnerSide, 2);
+    await finalCard.getByRole('button', { name: /^Confirm(:| result)/ }).click();
+    await expect(page.locator('.td-champion-name')).toHaveText(otherFinalist);
+    // the projector holds a champion screen for at least a minute, then the corrected result plays as a moment first
+    await expect(projector.locator('.stage-champion-name')).toHaveText(otherFinalist, {
+      timeout: 150000,
+    });
+
     // ---- publishing: the results screen offers the public archive, but a TEST event is never published. The card
     // says so in words and offers no button (the happy path, with a real event, is covered by the unit tests).
     await page.getByRole('link', { name: 'Results and match log' }).click();
+    await expect(page.getByRole('region', { name: 'Corrections' })).toContainText(
+      `${champion}’s win by votes was undone`,
+    );
     const publish = page.getByRole('region', { name: 'Public results' });
     await expect(publish).toContainText('test event');
     await expect(publish).toContainText('cannot be published');

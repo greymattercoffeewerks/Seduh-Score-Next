@@ -267,3 +267,6 @@ One line per entry moved out of `CHANGELOG.md`: date, heading, file. The most re
 - Public page hero consistency · 2026-11-09 → [`2026-11-H1-b`](docs/archive/changelog/2026-11-H1-b.md)
 - BTC Build B part 1: the draw engine (database and pure functions, no screen) · 2026-11-09 → [`2026-11-H1-b`](docs/archive/changelog/2026-11-H1-b.md)
 - BTC Build D: the finish-time input check · 2026-11-09 → [`2026-11-H1-b`](docs/archive/changelog/2026-11-H1-b.md)
+- Petrol Kaizen P6: token roles and compact density · 2026-11-13 → [`2026-11-H1-c`](docs/archive/changelog/2026-11-H1-c.md)
+- Petrol Kaizen P5: the vocabulary (status marks, tabs, stats, meter, steps) · 2026-11-13 → [`2026-11-H1-c`](docs/archive/changelog/2026-11-H1-c.md)
+- Petrol Kaizen P4: the feedback ladder (toast, confirm, dialog, empty state, field errors) · 2026-11-13 → [`2026-11-H1-c`](docs/archive/changelog/2026-11-H1-c.md)

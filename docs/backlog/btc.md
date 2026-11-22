@@ -214,3 +214,11 @@ _The two Records-card downloads (`scoresExport.js`, `scoresExportData.js`) follo
 - **The preview's `.ok-cut-table` stacks its cells at 360px** (its own markup in `preview.html`, not the standings screen); harmless, left.
 - **`tools/check-doc-budgets.test.js` "flags a relative link" fails on Windows** (a fake `/r/` path); pre-existing, unrelated to P6.
 - **Guard gaps from `test-auditor` (nits):** the role-reader check is substring presence per part, so a part can flip back to `var(--color-accent)` unnoticed (pin each part's `var(--role)` read count); `directRadiusReads` misses a semantic radius hidden behind a custom property.
+
+## From the Throwdown dashboard, Phase B (2026-11-22)
+
+Shared organiser-dashboard work, found while copying BTC's dashboard for Throwdown (both formats are affected):
+
+- Extract the dashboard shell (loading, error and Retry, live check, take-over read-back, links row, layout) from `btc/eventDashboardScreen.js` and `throwdown/eventDashboardScreen.js` into one `core/` primitive taking the per-format callbacks.
+- `core/errors.js` `describeError`: any error with a `.code` reads "Something went wrong saving that", so a missing event and a lost connection on a load show save wording and Retry can never succeed for a missing event. Needs a load-specific wording.
+- Move the CSV formula guard (`safeText` in throwdown `recordsExport.js`, near-copy in btc `scoresExport.js`) and the file-name slug helper (three copies) to `core/`.

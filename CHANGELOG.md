@@ -7,6 +7,80 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown: event dashboard routed, organisers vote on the Matches page · 4.28.0 · 2026-11-22
+
+**Status: NOT FINAL.** PR stacked on #544 and #543 (merge in order). Open: the full Playwright suite was not run in this worktree (no `.env`), so `throwdown-event` and `throwdown-scoresheet` first run in CI; the owner's tablet check before 27 Nov.
+
+- **Why.** Phase B built the run-sheet dashboard but left it unrouted. Throwdown's event home `#/events/:id` now shows the dashboard, as BTC's does: next step, phases, needs attention, live links. **Organisers now vote on the Matches page** (`#/events/:id/throwdown/matches`): setup, draw, vote cards and bracket moved there, so the event home is the run-sheet dashboard, not the console.
+- **What.**
+  - `main.js`: `#/events/:eventId` for Throwdown mounts `mountThrowdownEventDashboardScreen` (now passed `audienceLinks`). New route `#/events/:eventId/throwdown/matches` mounts `mountThrowdownEventScreen` with the outbox handlers.
+  - `eventSections.js`: Throwdown's section nav gains a Matches link between Event home and Results; `/throwdown/matches` maps to `matches`.
+  - Tests: `main.test.js` (+55) and `eventSections.test.js` (+18) pin the routes and the nav. e2e: `throwdown-event` checks the dashboard, opens Matches, and after the first quarter-final checks "2 of 4 decided" from Event home; `throwdown-scoresheet` opens `/throwdown/matches`.
+- **Files.** `src/main.js`, `src/main.test.js`, `src/eventSections.js`, `src/eventSections.test.js`, `tests/e2e/throwdown-event.spec.js`, `tests/e2e/throwdown-scoresheet.spec.js`, `src/formats/throwdown/CLAUDE.md`, `STATUS.md`, `CHANGELOG.md`.
+- **Version.** Minor (4.28.0): a new organiser screen (the run-sheet dashboard) is now reachable. No migration; nothing to push to the cloud.
+- **Checks.** `npm test` (7980) and lint pass. Playwright: the 4 failures seen in the full suite were environment (no `.env` in this worktree), not Throwdown.
+- **Reviews.**
+  - `module-boundary-checker` (haiku): clean. Two 🟣 pre-existing, logged not fixed: `core/errors.js:13` holds `throwdown_participants`; `organiserHome.js:10` imports `MIN_JUDGES` from `formats/btc`.
+  - `code-reviewer`: one 🔴, fixed. `tests/e2e/throwdown-scoresheet.spec.js` still opened the old event-home address; now `/throwdown/matches`.
+  - `ui-accessibility-reviewer`: no 🔴. Two 🟡 nits, left for a follow-up: `aria-current` appears on both the breadcrumb span and the Event home pill on the dashboard; the dashboard's bottom "Event screens" nav repeats the bar's Matches and Results links.
+  - `test-auditor`: no 🔴, three 🟡 nits, all fixed: the Throwdown handlers are now asserted through a spy, `audienceLinks` is asserted by value, and the dashboard's sign-in gate has its own test.
+- **Follow-ups.** The two 🟡 nits above (not yet in `docs/backlog/`). Extracting the dashboard shell to core is already logged in `docs/backlog/btc.md`.
+
+## Throwdown: event dashboard, Phase B (not routed yet) · no version bump · 2026-11-22
+
+**Status: done, on #543. Not routed yet:** Phase C wires `#/events/:id` and the matches console.
+
+- **Why.** Throwdown's organiser screen gets BTC's run-sheet dashboard on the core kit. Copied, not shared: `src/core/` was out of scope.
+- **What.** `eventDashboardScreen.{js,css,preview.html,test.js}` (new, 24 tests). `loadData` lets the preview and tests supply data offline. Preview page is in `PAGES_THAT_LINK_IT`.
+- **Reviews.**
+  - `code-reviewer`: clean (2 nits).
+  - `module-boundary-checker`: 1 Important, the shell duplicates BTC's (intentional this phase; should move to core). 2 nits: `safeText`, slug helper duplicated.
+  - `test-auditor`: 2 Important (CSV-on-mount and cross-event live check unpinned), both fixed; 1 nit fixed.
+  - `ui-accessibility-reviewer`: 1 Important, core `describeError` shows save-error copy for a missing event (shared with BTC; follow-up); 1 nit fixed.
+- **Follow-ups.** Extract the dashboard shell to core. Core `describeError` wording for "no event" and "connection lost". Move `safeCell` and the slug helper to core. None is in `docs/backlog/` yet.
+
+## Throwdown: undo a confirmed match, and the vote screen survives a dropped connection · 4.27.0 · 2026-11-21
+
+**Status: done, PR open against `dev`.** Migration pushed to the cloud on 2026-11-21 (verified: policies, grants, the guard). Code, tests and the review rounds are finished. Not final yet: the migration `20261129100000_td_reopen_match.sql` is NOT in the cloud. Push it with `apply_migration` after the PR merges and BEFORE the release reaches `main`: `loadThrowdown` now reads `td_match_reopens`, so the event screen fails to load against a cloud database without it. Also owed: the Playwright `throwdown-event` undo step (not run locally, no `.env` in the worktree, so CI is its first run), and the owner's tablet check of Undo and the offline screen before 27 Nov.
+
+- **Why.** The Throwdown event is on 27 Nov. Two ROADMAP open items would bite on the day: an organiser who tapped the wrong winner had no way to fix it ("Corrections after a confirm"), and fully offline the vote screen was lost after one tap.
+- **Undo rules (owner decisions, 2026-11-21, all four recommended answers).**
+  - Allowed until the next round starts. Later rounds, including the 3rd place match and the Final, are removed and rebuilt by `td_advance` when the match is confirmed again.
+  - Votes and score sheets are kept. For a level scored match, the organiser's pick is removed.
+  - Every undo is recorded in the new table `td_match_reopens` (kind, winner, confirmed time, positions, rounds removed, who, when) and shown as a Corrections card on the results page.
+  - Published results are untouched. The confirm step reminds the organiser to publish again.
+  - Refusals: `td_match_bye`, `td_next_round_started`, `td_third_place_changed` (a semi-final loser was withdrawn or restored since, which would add or drop the 3rd place match), `td_leader_changed`.
+- **Offline.**
+  - A failed refresh keeps the last loaded screen and the device's waiting taps (re-read from the local queue).
+  - "No connection…" is shown only for a connection failure (timeout, no code, transient non-PGRST code). Any other error shows its own words.
+  - The screen reloads on the browser `online` event.
+  - `refreshSoon` now returns the running reload to a caller that joins it.
+  - An offline-queued undo hides the later rounds it will remove (`matchesAwaitingUndo`). Without that, the next round stays playable and its taps are dropped as "event not found".
+- **Client mirror.** `src/formats/throwdown/reopen.js`: `reopenState`, `reopenWords`, `matchesAwaitingUndo`. UI: "Undo result" on each undoable match in the Bracket card (its aria-label names the match), two taps ("Yes, undo" / "Keep result"), "Undo waiting to sync." while queued.
+- **Migration.** `20261129100000_td_reopen_match.sql`: `td_reopen_match` (SECURITY DEFINER, `app.td_guard`, advisory lock, idempotent through `processed_operations`) and the table `td_match_reopens`. Rollback block run in a transaction (`schema-guardian`).
+- **Tests.**
+  - pgTAP `093` (83 assertions). Matrices updated: `040` (table), `041` (RPC), `056` (window lock).
+  - Full `npm run db:test` passes. `079`, `085` and `089` print pre-existing plan-count notes.
+  - Unit: `reopen.test.js`, `eventScreen.test.js` (undo, offline, focus, race), `resultsScreen.test.js`.
+  - Full vitest: 7806 pass, except `src/marketing/countryScreen.test.js`, a known flaky test fixed by open PR #536.
+  - Playwright `throwdown-event` gains an undo-the-Final step. Not run locally.
+- **Files.** `supabase/migrations/20261129100000_td_reopen_match.sql`, `supabase/tests/093_td_reopen_match.sql`, `040`, `041`, `056`; `src/formats/throwdown/` `reopen.js` and `.test.js`, `eventScreen.js` and `.test.js`, `eventScreen.css`, `resultsScreen.js` and `.test.js`, `data.js`, `words.js`, `outboxHandlers.js`; `src/admin/adminErrors.test.js`; `tests/e2e/throwdown-event.spec.js`; `src/formats/throwdown/CLAUDE.md`; `ROADMAP.md`; `STATUS.md`; `package.json` and `package-lock.json` (version).
+- **Reviews (three rounds, the CLAUDE.md maximum).**
+  - `schema-guardian`: clean (rollback run in a transaction).
+  - `security-reviewer`: clean (probes as anon, another org, both orgs, the window lock).
+  - `module-boundary-checker`: clean on this change. One 🟣 pre-existing, logged only: `core/errors.js` names format keys.
+  - `code-reviewer`: no 🔴. Two 🟡, fixed: non-network errors were shown as "No connection"; the queued-undo rule was written twice.
+  - `offline-sync-auditor`: round 1 🔴, fixed: an offline-queued undo left the next round playable, so its taps were dropped as "event not found" (`matchesAwaitingUndo`). Its 🟡 matched `code-reviewer`'s and was fixed. Round 2 clean.
+  - `scoring-auditor`: round 1 🔴, fixed: the rebuild re-read withdrawals, so an undo could add or drop the 3rd place match. Fixed by `td_third_place_changed`, tested in both directions. One 🟡 (a refusal's wording promised a step that could not happen), fixed. Round 2 clean, one 🟡 on the rebuild wording, fixed.
+  - `ui-accessibility-reviewer`: round 1 🔴, fixed: "Keep result" and a refused undo dropped focus to `body`; focus now returns to Undo result. Round 2 found the variant where the refusal removes the button; fixed by focusing the Bracket heading. Round 3 found the variant during an in-flight reload; fixed by `refreshSoon` returning the running reload, with a test verified to fail without the fix. One 🟡 (corrections list overflow), fixed.
+  - `test-auditor`: two 🔴, fixed: later-round sheet and walkover clauses were untested in SQL (mutations survived), and the Keep-result test's recorder could never observe an RPC. Three 🟡, fixed: confirmed time was checked only for presence; the rebuilt 3rd place pairing was unchecked; one test title overclaimed. The three SQL mutations are now caught.
+  - The 🔴s were reproduced (SQL script, code trace, or surviving mutation) and each now has a test. Independent-checker agents were not run for them.
+- **Known limits.**
+  - Undo is not on the projector or phone. They show the corrected result on the next publish.
+  - Withdrawing the winner of a re-confirmed semi-final can still mean no 3rd place match, by the existing both-losers-active rule (owner rule, not changed).
+  - The round 3 UI fix (in-flight reload) has had no reviewer pass after it.
+- **Version.** 4.27.0 (minor: a new usable capability, Undo result; 4.26.0 went to the Throwdown projector release). `package.json` and `package-lock.json` bumped on this branch.
+
 ## Throwdown projector on the shared projector kit · 4.26.0 · 2026-11-21
 
 **Status: released as 4.26.0 (minor, #539).** CI passed, including `dev-throwdown`. Not final: the owner's TV check (24 to 25 Nov) is outstanding. No migration.
@@ -689,68 +763,5 @@ Upgrading the CLI is now a deliberate one-line change in `.github/workflows/ci.y
   - **Re-review.** The Important fixes above (the 2 from `ui-accessibility-reviewer`, and the header and table fixes from `test-auditor`) were checked mechanically and by new tests. They have not been re-run by the reviewers that raised them, nor by a fresh-context checker. Protocol step 6 requires that re-run on the new diff.
   - **Build.** `npm run build` and the `/tour/` prerender are not verified locally: `libphonenumber-js` is missing from the shared `node_modules`, which is unrelated to this change. CI must confirm the `/tour/` prerender.
   - **Real-device check** of the 360px layout on the Honor phone and tablet (the primary devices), and of the table's keyboard path.
-
----
-
-## Petrol Kaizen P6: token roles and compact density · 2026-11-13
-
-**Task:** Petrol Kaizen P6 ("token roles"), the last Kaizen phase. Branch `claude/petrol-kaizen-p6-f3656c`, cut from `dev` at `0a439a6` (P4 live as 4.6.0, P5 merged); PR into `dev`. No migration, no cloud change, no scoring logic. **No version bump** (the main session sets the release number).
-
-- **Role layer.** New `src/ui/tokens/roles.css` (imported by `index.css`): radius roles `--radius-field` and `-selector` (3px), `--radius-box` (6px), `--radius-dialog` (10px); colour roles `--btn-primary-bg/-fg/-hover`, `--btn-danger-bg/-fg`, `--btn-outline-edge`, `--field-edge`, `--field-edge-error`, `--box-edge`, `--selected-bg/-fg/-edge`. Each is a bare `var()` of a semantic token. `components`, `base`, `feedback` and `vocabulary` read them (28 radius reads, about 45 colour reads). The colour roles are declared on `:root, [data-surface], [data-brand]` because a `var()` custom property resolves where it is declared; on `:root` alone a stage subtree would keep the paper accent.
-- **Pixel proof.** In a browser, old tokens against new, on the token preview (327 elements, all computed properties) and a synthetic page with every part in paper, stage and a branded subtree (70 elements, light and stage, plus `::before`/`::after`): about 260,000 property comparisons, no difference (one animated opacity on the breathing live blip differed by timing). `roles.test.js` resolves every role through the ramp in both modes against the semantic token it names.
-- **Compact density.** `data-density="compact"` (`density.css` tokens; shared-part overrides at the end of `components.css`; format rules in the format sheets). Opt-in on three screen roots: BTC matches, BTC standings (cut table), Cup Taster heats. Spacing only; the 44px floor is held by a test (a `[data-density]` rule may set only padding, gap and margin-top; `--tap-target-min` is defined once; `density.css` sets no height). Measured: heat card 215 to 183px and screen 1310 to 1180px at 820px; BTC matches screen 4657 to 4112px at 360px; a kit match row 123 to 58px at 820px; every control 44px.
-- **Drift guard.** Token parts may not read `--radius-sm/-md/-lg`; a role-covered semantic colour only where `COVERED_COLOUR_READS` lists it; screen, tool and public sheets are a ratchet (`DIRECT_RADIUS`: 22 files, 71 reads, exact both ways, with `bts` and `results` carrying their reason); the disabled-opacity rule also covers `.is-disabled`, `.disabled`, `[data-disabled]`; the density rules and "written only on a screen root" are tested. Three mutations checked to fail.
-- **Docs and preview.** `DESIGN.md` "Token layers and density"; `preview.html` shows the roles as resolved in paper and stage and compact next to normal with measured heights; backlog items in `docs/backlog/btc.md`.
-- **Browser.** 360px first, then 820px, paper and stage: no horizontal overflow, controls 44px, compact screens shorter. Real-iPad check owed.
-- **Tests.** Lint and prettier clean; full suite passes except `tools/check-doc-budgets.test.js` "flags a relative link", a Windows path problem that predates this work. `sharedPrimitives.test.js` regex widened to accept the role radii.
-- **Reviews:** see the PR description (ui-accessibility-reviewer, module-boundary-checker, code-reviewer, test-auditor).
-
----
-
-## Petrol Kaizen P5: the vocabulary (status marks, tabs, stats, meter, steps) · 2026-11-13
-
-**Task:** Petrol Kaizen P5 ("vocabulary"), the third of the four post-V2 Kaizen items. Branch `claude/petrol-kaizen-p5-25fb67`, cut from P4's branch `claude/keen-wiles-9e7b3c`, so this is a **draft PR against P4's branch**, not into `dev`; P4 is PR #457, still open. No migration, no cloud change, no scoring, ranking or timing logic changed. **No version bump**, same as P4: this stacks on an unreleased branch and the release PR takes it. It is a visible restyle, so expect a minor at release (`docs/versioning.md`; the release owner's call). **Not final:** the UI checks listed under Reviews are owed.
-
-- **What.** One vocabulary for the state words the app shows, in `src/ui/tokens/vocabulary.css` (imported by `index.css`). `.status` takes `data-state` `live`, `queued`, `done`, `attention`, `failed`, `offline` or `test`; each state has a shape and a colour, so it is never colour alone. `live` breathes only under `prefers-reduced-motion: no-preference`. `test` is the only violet. Also `.tabs` / `.tab`, `.stat` / `.stats`, `.meter`, `.steps` / `.steps-link`, and `.countdown-cue` (in `core/countdownDisplay.css`). Core JS: `core/tablist.js` (`buildTablist()`: roving tabindex, Arrow, Home and End keys, tabpanel labelling) and `core/vocabulary.js` (`statusMark()`, `kitState()`, `buildMeter()`, `meterSegments()`, `buildStat()`). Written up in `DESIGN.md` ("Vocabulary") and shown on `preview.html`.
-- **Why.** Each screen had its own badge, live line and tab row, so one state read differently from screen to screen. The aim: one look per state, never colour alone, and a real tab pattern for the cheat-sheet views.
-- **Migrated.**
-  - `.ok-tag` and `.ok-bar` removed (runSheet, eventWarnings, groupedMatchList). The progress bar is now `role="meter"`.
-  - Viewer chrome badge: Live = `live`, Not live = `queued`, Reconnecting = `offline`. `viewer-badge` stays as a hook class for e2e.
-  - Admin badges: `adm-badge` stays as a hook class.
-  - Cup Taster: the dashboard live line and the heat "Confirmed" label.
-  - Brew Planner: the cheat-sheet views are a real tablist, the stepper is `.steps`, the verdict tiles are `.stat`, the coverage pills are `.status`.
-  - The urgent countdown ring, written three times, is now one `.countdown-cue` in `core/countdownDisplay.css` (timing screen and standalone Timer; `tools/timer/index.html` links it).
-- **Left as-is.** About 45 badge, chip, status and pill names stay, each with a reason in `LEFT_AS_IS` in `tokenDrift.test.js`: status text lines; interactive chips (sync chip, filter chips); the splash credit pill; the station badge; GTB pills; name chips whose state is in their words (`viewer-heat-chip`, the BTC and TD stage chips, `gtb-session-row-status`). No standings view switch exists, so nothing moved to the tablist. BTC run-sheet phase cards stay cards. No "records counts" tile exists on the BTC dashboard (the records card is a download list). The GTB start countdown is a 3-2-1 splash, so it stays.
-- **Tests.** `tokenDrift.test.js` gained "vocabulary drift guard": a new badge, status, chip or pill class must be on `LEFT_AS_IS` or use the vocabulary; stale entries fail; token CSS is scanned too; `role="tab"` appears only in `core/tablist.js`. New `core/tablist.test.js` and `core/vocabulary.test.js` (the mapping is pinned; every state has a shape in the stylesheet). Brew Planner tablist and steps tests added. ESLint clean. Vitest 6609 of 6610 pass; the one failure is `tools/check-doc-budgets.test.js` (a Windows path separator), pre-existing and not this change. `libphonenumber-js` is not installed in the shared `node_modules` (environmental), so a scratch copy was junction-linked to run five test files; that copy is not part of the change.
-- **Browser.** `preview.html` and Brew Planner at 360px in paper: good. `preview.html` in stage: good. One real bug found and fixed: the done, attention and failed mark backgrounds used `currentColor`, which resolved to the glyph colour.
-- **Reviews** (how each ended):
-  - `ui-accessibility-reviewer`: no Important. Nits fixed: a forced-colors meter fill; `.status--light` documented as for the surface colour only (under 4.5:1 on paper sunken). Not fixed: "Done" is announced only through CSS alt text on `.steps`; `.steps` has `list-style: none`, so VoiceOver may drop list semantics; the step-item border is 2.47:1 (pre-existing). Not checked: viewer chrome RECONNECTING at 360px with a long brand; admin key-status label overflow at 360px; a forced-colors and reduced-motion run.
-  - `module-boundary-checker`: clean. Pre-existing, logged here: `timingScreen` and `timerScreen` run their own countdown tickers instead of `core/countdownDisplay.js` `renderCountdown`.
-  - `code-reviewer`: 1 Important, fixed: an ESLint `no-useless-escape` in `admin.css.test.js`. Nits fixed: stale comments in `timer.css` and `splashScreen.css`; `TAB_ROLE` quoted-key form.
-  - `test-auditor`: 3 Important, all fixed: the drift guard scanned no token CSS; the `kitState` mapping was not pinned; the stylesheet shape per state was untested. Nits fixed. Known gap, not fixed: the drift guard misses backtick and template-literal `className` forms.
-  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor` (no standings, ranking or scoring code touched), `offline-sync-auditor` (no outbox or sync change).
-- **Follow-ups** (not yet filed in `docs/backlog/`; no area file fits the shared kit, so the owner picks one): move the name chips to `.status`; unify the three countdown tickers on `renderCountdown`; give "Done" a real text node in `.steps`; run the forced-colors, reduced-motion and 360px chrome checks above. **Owed:** a real-device check of the status marks and the tablist on the Honor tablet (the primary device).
-
----
-
-## Petrol Kaizen P4: the feedback ladder (toast, confirm, dialog, empty state, field errors) · 2026-11-13
-
-**Task:** Petrol Kaizen P4 ("feedback"), the first of the four post-V2 Kaizen items; it ships alone first (owner decision, 2026-11-12). Branch `claude/keen-wiles-9e7b3c`, cut from `dev`, **uncommitted** (the main session commits). **No version bump** in this change: the release PR takes it. The change is visible, so expect a minor at release (`docs/versioning.md`; the release owner's call). No migration, no cloud change, no format module touched. **Not final only for** the real-tablet check of the dialog and panel (see Follow-ups); the three 🔴 fixes were re-checked by the reviewer that raised each one (clean).
-
-- **What.** One written ladder for how the app talks back, in `DESIGN.md` ("Feedback ladder"): inline line (`.screen-feedback`, `.form-field-error`), toast (`toast()`, success only, about 3 s, polite region), confirm in place (`confirmInPlace()`, for anything that can be undone or redone), dialog (`confirmDialog()`, native `<dialog>`, for a permanent delete only). Also `emptyState()` and `.empty` with `data-kind` `first-use` / `done` / `no-results`. Parts: `src/core/feedback.js`, `src/ui/tokens/feedback.css` (imported by `index.css`). Guess the Bean, the Timer and Behind the Seduh do not load `components.css`, so the parts carry their own `.fb-btn`.
-- **Field states.** `aria-invalid="true"` on an input gives a 2px `--color-danger` edge; `.form-field-error` has its own mark, so the error is not colour alone. Readonly is dashed. Disabled uses a new `--opacity-disabled` (0.5, `spacing.css`); the three disabled opacities that were hand-written (0.6 in GTB, the BTC token and `.btn`; 0.42 in the random selector) now use it. `tour.css` 0.68 is not a disabled control and is left.
-- **Migrated.** All seven `window.confirm` calls are gone. In place: BTC lock top 8, redraw a round, remove a match. Dialog: BTC demo load (it erases a test event's roster), Guess the Bean reset data and end session, and the admin console's leave-screen and sign-out warning. The admin one stays a dialog on purpose: a one-time password cannot be recovered, so it is a stop, not an undo (the owner can overrule). Field errors in adm, btc and gtb now use the core `.form-field-error`. Five empty classes became `.empty` (`bts-empty`, `gtb-display-empty`, `ok-records-empty`, `ok-warn-empty`, `rs-history-empty`). Two were not empty states and were renamed: `.app-shell-context-empty` is a layout flag (now `.app-shell-context-idle`), and `ok-signoff-empty` on the print sign-off sheet is a plain line, not a dashed box (now `ok-signoff-none`).
-- **Why.** `window.confirm` is unstyled, blocks the thread and is hard to read at 360px. A permanent delete needs a stop the user cannot tap past by reflex; an undoable action needs only a panel beside its button, so the decision stays where the finger is. Errors never go in a toast (it is gone before it is read); they stay inline. The ladder is written down so the next screen picks the step without a review round.
-- **Tests.** `tokenDrift.test.js` gained "feedback ladder drift guard" (no `confirm(` in `src` JS; no `*-field-error` or `*-empty` class outside core; disabled rules use the token). New `core/feedback.test.js` (19 tests). `core/feedbackTestKit.js` is test-only. `testSetup.js` has a global `afterEach` that removes leftover dialogs, panels and the toast region. The BTC remove-declined test now flushes and checks that nothing was deleted or published. About 6,590 vitest tests pass; ESLint clean. The one failure, `tools/check-doc-budgets.test.js` (`brokenLinks`, a Windows path), also fails on `dev`: pre-existing.
-- **Browser.** `preview.html` at 360px, paper and stage: focus starts on Cancel; `aria-expanded` and `aria-controls` track the panel; the violet strip shows on `is_test`; the dialog is modal; no horizontal overflow.
-- **Reviews** (how each ended):
-  - `ui-accessibility-reviewer` (360px first): 1 Important, fixed. A confirm panel inside the match list's grid row auto-placed into the narrow number column; now `grid-column: 1 / -1`. Nits fixed: stage glyph contrast (muted to secondary); `aria-expanded` removed on close; Cancel and Confirm `aria-describedby` the question; the toast region announces its first message once the region exists. Not fixed: the admin hint sits before its input, so the sibling selector cannot hide it (DESIGN says the hint goes after the input). Logged (`admin-gating-branding.md`). Pre-existing, logged: errors shown through the 1.5 s in-screen toast (BTC matches remove, GTB reset and end session) and errors in polite status regions (BTC standings, admin plan panel).
-  - `code-reviewer`: 1 Important, fixed. A screen re-render under an open panel left its promise pending and the trigger `aria-expanded`; a `MutationObserver` now settles it as declined. Nits fixed: a duplicated CSS line; an admin Back press during the sign-out dialog now restores the address.
-  - `module-boundary-checker`: clean (no `core/` to `formats/` or `admin/` violation). Flagged, deliberate, not fixed: core `toast()` has no production caller yet, because five screens keep their own in-screen `showToast` (they also move focus and show errors). Recorded in DESIGN.md as a follow-up. It also flagged the admin leave-warning as not a permanent delete; kept as a dialog (above).
-  - `test-auditor`: 1 Important, fixed (the BTC remove-declined test, above). Nits fixed: refused-gate asserts now assert that no question was asked; `is_test` strip asserted for Redraw; `feedback.test.js` added; regex gaps widened. Not done: no test for `feedbackTestKit.js` (it is test-only).
-  - Not run: `schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor` (no migration, RLS, scoring or outbox change).
-  - Re-check (2026-11-13): `ui-accessibility-reviewer`, `code-reviewer` and `test-auditor` each re-ran on the fixes: no failed fix, no regression. One nit from it fixed (first toast of a page could reorder two same-tick messages). Left, noted: `tokenDrift.test.js`'s confirm matcher misses `window['confirm'](` and a `//` inside a string on the same line (no such call in `src/` today).
-- **Follow-ups** (filed in `docs/backlog/`): migrate the five in-screen toasts (BTC matches, standings, setup and bracket; GTB setup) to `toast()` for success and inline lines for errors (`btc.md`, `guess-the-bean.md`); the older inline confirms in Cup Taster and Throwdown (`#confirm-finish-*`) and Team and Events (`#team-confirm-*`) (`cup-taster.md`, `tenancy.md`); `.gtb-input` has no `aria-invalid` edge because GTB does not load `components.css` (`guess-the-bean.md`); the admin hint order (`admin-gating-branding.md`). **Owed:** a real-device check of the dialog and the confirm panel on the tablet (Honor tablet is the primary device).
-- **Archive.** `CHANGELOG.md` was at 199.6 KB before this entry, so the four 2026-10-29 entries moved verbatim to `docs/archive/changelog/2026-10-H2-d.md` (indexed). The header now reads "2026-10-30 or later".
 
 ---
