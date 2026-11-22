@@ -165,7 +165,8 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
           await page.getByRole('link', { name: 'Event home' }).first().click();
           await expect(page).toHaveURL(new RegExp(`#/events/${event.id}$`));
           await expect(
-            page.locator('.ok-phase', { hasText: 'Quarter-finals' }).locator('.ok-phase-count'),
+            // by the phase id: the "Rounds to come" row's reason also names the quarter-finals
+            page.locator('.ok-phase[data-phase="round-1"]').locator('.ok-phase-count'),
           ).toHaveText('2 of 4 decided');
           await page
             .getByRole('navigation', { name: 'Event screens' })
