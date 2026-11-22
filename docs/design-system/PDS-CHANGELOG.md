@@ -20,6 +20,38 @@ none are given here, except where an entry states one.
 
 ---
 
+## Versioning and naming (proposed 2026-11-22; owner confirmed V2 = RON 95)
+
+**Format:** `Petrol <fuel grade> · <codename>`, for example "Petrol RON 95 · ECU".
+
+- **Fuel grade = a major era** (an architectural shift or breaking change). It rises in octane: RON 92, 95, 98,
+  100 or 102, then Avgas 100LL.
+- **Codename = a minor release inside a grade** (new parts, tuning, diagnostics). Named for what it does. No
+  alphabetical order is required; the dates give the order.
+- **No SemVer for now.** The app already uses SemVer (see `docs/versioning.md`), and the tokens are not a published
+  package. The DS label is a name, not a number. Revisit when a package exists.
+- **No pre-release tags or tracks yet** (Crude, Octane Booster, Nitro, Reserve Tank). Add them when there is a channel
+  that consumes them. **E85 / FlexFuel** is the one track name with a real fit: the per-organiser brand accent
+  (`core/brandColor.js`, `data-brand`) already points at multi-brand theming.
+- **Reserved for later, in this order of ambition:** RON 98, RON 100 / 102, Avgas 100LL; paradigm names
+  Afterburner, Hyperdrive, KERS, Volt / Hybrid.
+- **Changelog header:** `## Petrol RON 95 · ECU · 2026-11-13`.
+
+### Retroactive labels (all proposed, owner may rename)
+
+| Era | Grade | Codename | Why this name |
+|---|---|---|---|
+| Petrol V1 (2026-09-13) | RON 92 | none (first grade) | Street fuel baseline. The "92" comes from the other discussion; the repo does not record it. |
+| V2 P1 tokens, P2 components, P3 surfaces (2026-11-08) | **RON 95** | none (the grade's launch) | Matches the repo's "RON 95" plan name. |
+| V2 drift guard + public pages (2026-11-08 to 09) | RON 95 | **Dyno** | The guard is a test bench that fails on any drift from the tokens; the public pages were the first rollout it measured. |
+| Kaizen P4: feedback ladder (2026-11-13) | RON 95 | **Telemetry** | How the app reports back to the operator (inline, toast, confirm, dialog). |
+| Kaizen P5: vocabulary (2026-11-13) | RON 95 | **Gauge** | Status marks, meter, stat, steps: the instrument cluster. |
+| Kaizen P6: token roles + compact density (2026-11-13) | RON 95 | **ECU** | A role layer between parts and tokens: one control unit mapping intent to values. |
+
+"Kaizen" stays as the programme name for P4 to P6 in the older entries; the codenames are the release names within it.
+
+---
+
 ## Before Petrol (context)
 
 ### Editorial → Cherry · 2026-09-11
@@ -166,6 +198,7 @@ Sources: `CHANGELOG.md` (lines 695 to 755); `src/ui/tokens/DESIGN.md`; backlog i
 
 - No entry for a Kaizen P1 to P3 (or the fourth Kaizen item beyond P4 to P6).
 - Release numbers for V1, V2 and P5/P6 are not stated in the source entries.
+- The retroactive grade for V1 (RON 92) and every codename are proposals; only "V2 = RON 95" is owner-confirmed.
 - The V2 plan's open questions (15px versus 16px phone body; uppercase marketing kickers) have no recorded answer here.
   Whether the plan's §2.2 items (type scale, `--text-xs` retirement, fluid type, `core/breakpoints.js`, state
   tokens) all shipped was not checked against code for this file.
