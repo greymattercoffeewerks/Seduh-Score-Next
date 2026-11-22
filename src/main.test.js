@@ -374,7 +374,7 @@ describe('mountApp routing', () => {
     expect(findEvent).toHaveBeenCalledTimes(2);
   });
 
-  it('#/events/:eventId routes a Throwdown event to its run-sheet dashboard (not the console, not BTC or Cup Taster), with the audience links and every format\'s handlers', async () => {
+  it("#/events/:eventId routes a Throwdown event to its run-sheet dashboard (not the console, not BTC or Cup Taster), with the audience links and every format's handlers", async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     stubScreen(mountThrowdownEventDashboardScreen, 'TD_DASHBOARD_SCREEN');
     const tdEvent = { id: 'ev1', format: 'throwdown', name: 'Throwdown' };
