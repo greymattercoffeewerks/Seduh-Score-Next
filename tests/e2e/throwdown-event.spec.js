@@ -69,8 +69,20 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     }, event.id);
     await page.goto('about:blank');
     await page.goto(`/app/#/events/${event.id}`);
+    // the event home is the run-sheet dashboard; the console (setup, draw, votes) is its Matches page
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Throwdown');
     await expect(page.locator('.is-test-banner')).toBeVisible();
+    await expect(page.locator('.ok-next')).toContainText('Next step');
+    await expect(page.getByRole('heading', { name: 'Run sheet' })).toBeVisible();
+    await expect(page.locator('.ok-phases .ok-phase').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Needs attention/ })).toBeVisible();
+    await expect(page.locator('.ok-live')).toBeVisible();
+    await page
+      .getByRole('navigation', { name: 'Event screens' })
+      .getByRole('link', { name: 'Matches' })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`#/events/${event.id}/throwdown/matches$`));
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Throwdown');
 
     // the audience: anonymous, in their own contexts
     const projector = await (
@@ -148,6 +160,20 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
         await expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
         await confirm.click();
         await expect(card).toBeHidden();
+        if (guard === 1 && i === 1) {
+          // the dashboard's run sheet is derived on load: two quarter-finals are decided (the walkover and this one)
+          await page.getByRole('link', { name: 'Event home' }).first().click();
+          await expect(page).toHaveURL(new RegExp(`#/events/${event.id}$`));
+          await expect(
+            // by the phase id: the "Rounds to come" row's reason also names the quarter-finals
+            page.locator('.ok-phase[data-phase="round-1"]').locator('.ok-phase-count'),
+          ).toHaveText('2 of 4 decided');
+          await page
+            .getByRole('navigation', { name: 'Event screens' })
+            .getByRole('link', { name: 'Matches' })
+            .click();
+          await expect(page.getByRole('heading', { name: 'Now playing' })).toBeVisible();
+        }
       }
     }
     // one walkover in the quarter-finals and one in the semi-finals: the 3rd place match is still played

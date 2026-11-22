@@ -184,7 +184,7 @@ rounds) and **Round is set** (pairings revealed one by one). The champion uses `
   payloads through the real `deriveBracket` and assembler for the tests and `projectorSurface.preview.html` (`?s=<scenario>&page=N`).
 - Not changed: the phone body, any migration, BTC's and Cup Taster's idle loops.
 
-**Event dashboard (Phase B, 2026-11-22).** `eventDashboardScreen.js` is a copy of BTC's run-sheet dashboard on the core organiser
-kit, with an optional `loadData` option so the preview and tests can supply data without the network. It is not routed yet:
-Phase C wires `#/events/:id` and moves the console to `#/events/:id/throwdown/matches`. Copied, not shared, because `src/core/`
-was out of scope; extracting the shell to core is the follow-up (CHANGELOG 2026-11-22).
+**Event dashboard (Phases B and C, 2026-11-22).** `eventDashboardScreen.js` is a copy of BTC's run-sheet dashboard on the core organiser
+kit, with an optional `loadData` option so the preview and tests can supply data without the network. It is routed: `#/events/:id`
+is the dashboard, and the console (setup, draw, vote cards, bracket) is `#/events/:id/throwdown/matches`, where organisers vote.
+Copied, not shared, because `src/core/` was out of scope; extracting the shell to core is the follow-up (CHANGELOG 2026-11-22).

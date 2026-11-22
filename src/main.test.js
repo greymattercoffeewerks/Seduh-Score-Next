@@ -186,9 +186,20 @@ vi.mock('./formats/btc/outboxHandlers.js', () => ({
   btcOutboxHandlers: (...args) => btcOutboxHandlers(...args),
   btcOperationLabels,
 }));
+// Contributes no keys (existing tests compare the composed map exactly); a spy so the Throwdown screens'
+// wiring can still prove the composition includes it.
+const throwdownOutboxHandlers = vi.fn(() => ({}));
 vi.mock('./formats/throwdown/outboxHandlers.js', () => ({
-  throwdownOutboxHandlers: () => ({}),
+  throwdownOutboxHandlers: (...args) => throwdownOutboxHandlers(...args),
   throwdownOperationLabels: {},
+}));
+const mountThrowdownEventDashboardScreen = vi.fn();
+vi.mock('./formats/throwdown/eventDashboardScreen.js', () => ({
+  mountThrowdownEventDashboardScreen: (...args) => mountThrowdownEventDashboardScreen(...args),
+}));
+const mountThrowdownEventScreen = vi.fn();
+vi.mock('./formats/throwdown/eventScreen.js', () => ({
+  mountThrowdownEventScreen: (...args) => mountThrowdownEventScreen(...args),
 }));
 const stopTrackingInputModality = vi.fn();
 const trackInputModality = vi.fn(() => stopTrackingInputModality);
@@ -361,6 +372,67 @@ describe('mountApp routing', () => {
     // assertion fails here, at the line that explains why, instead of silently
     // leaking a stale queued value into a later, unrelated test.
     expect(findEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("#/events/:eventId routes a Throwdown event to its run-sheet dashboard (not the console, not BTC or Cup Taster), with the audience links and every format's handlers", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountThrowdownEventDashboardScreen, 'TD_DASHBOARD_SCREEN');
+    const tdEvent = { id: 'ev1', format: 'throwdown', name: 'Throwdown' };
+    findEvent.mockResolvedValueOnce(tdEvent).mockResolvedValueOnce(tdEvent);
+    const { root } = await startApp();
+    location.hash = '#/events/ev1';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('TD_DASHBOARD_SCREEN');
+    const props = mountThrowdownEventDashboardScreen.mock.calls[0][1];
+    expect(props.eventId).toBe('ev1');
+    expect(props.signal).toBeInstanceOf(AbortSignal);
+    expect(props.handlers).toEqual(
+      expect.objectContaining({ ...cupTasterOutboxHandlers(), ...btcOutboxHandlers() }),
+    );
+    // the composed map includes Throwdown's handlers (its mock adds no keys, so the call is the proof)
+    expect(throwdownOutboxHandlers).toHaveBeenCalled();
+    expect(props.audienceLinks).toEqual(audienceLinksFor('org-one'));
+    expect(props.audienceLinks).not.toBeNull();
+    expect(mountThrowdownEventScreen).not.toHaveBeenCalled();
+    expect(mountEventDashboardScreen).not.toHaveBeenCalled();
+    expect(mountBtcEventDashboardScreen).not.toHaveBeenCalled();
+  });
+
+  it('#/events/:eventId/throwdown/matches mounts the existing Throwdown console with the same arguments as before', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountThrowdownEventScreen, 'TD_CONSOLE_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/throwdown/matches';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('TD_CONSOLE_SCREEN');
+    const props = mountThrowdownEventScreen.mock.calls[0][1];
+    expect(Object.keys(props).sort()).toEqual(['client', 'eventId', 'handlers', 'signal']);
+    expect(props.eventId).toBe('ev1');
+    expect(props.signal).toBeInstanceOf(AbortSignal);
+    expect(props.handlers).toEqual(
+      expect.objectContaining({ ...cupTasterOutboxHandlers(), ...btcOutboxHandlers() }),
+    );
+    // the composed map includes Throwdown's handlers (its mock adds no keys, so the call is the proof)
+    expect(throwdownOutboxHandlers).toHaveBeenCalled();
+    expect(mountThrowdownEventDashboardScreen).not.toHaveBeenCalled();
+  });
+
+  it('#/events/:eventId (the Throwdown dashboard) is behind the sign-in gate', async () => {
+    stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    stubScreen(mountThrowdownEventDashboardScreen, 'TD_DASHBOARD_SCREEN');
+    location.hash = '#/events/ev1';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('LOGIN_SCREEN');
+    expect(mountThrowdownEventDashboardScreen).not.toHaveBeenCalled();
+  });
+
+  it('#/events/:eventId/throwdown/matches is behind the sign-in gate', async () => {
+    stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    stubScreen(mountThrowdownEventScreen, 'TD_CONSOLE_SCREEN');
+    location.hash = '#/events/ev1/throwdown/matches';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('LOGIN_SCREEN');
+    expect(mountThrowdownEventScreen).not.toHaveBeenCalled();
   });
 
   it('passes every configured format to the events screen as formatOptions, each with its words, and the home its describer', async () => {

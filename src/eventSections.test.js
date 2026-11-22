@@ -24,6 +24,7 @@ describe('route patterns', () => {
       '/events/:eventId/btc/bracket',
       '/events/:eventId/btc/sign-off',
       '/events/:eventId/btc/matches/:matchId/scoring',
+      '/events/:eventId/throwdown/matches',
       '/events/:eventId/throwdown/results',
     ];
     for (const p of patterns) expect(routes.has(p), p).toBe(true);
@@ -58,6 +59,23 @@ describe('describeEventBar', () => {
     const leaf = describeEventBar(ev('btc'), '/events/:eventId/btc/matches/:matchId/scoring');
     expect(leaf.currentKey).toBeNull();
     expect(leaf.currentLabel).toBe('Score match');
+  });
+
+  it('Throwdown: Event home, Matches and Results; the console route marks Matches current', () => {
+    const matches = describeEventBar(ev('throwdown'), '/events/:eventId/throwdown/matches');
+    expect(matches.sections.map((s) => [s.label, s.href])).toEqual([
+      ['Event home', '#/events/e1'],
+      ['Matches', '#/events/e1/throwdown/matches'],
+      ['Results', '#/events/e1/throwdown/results'],
+    ]);
+    expect(matches.currentKey).toBe('matches');
+    expect(matches.currentLabel).toBe('Matches');
+    const home = describeEventBar(ev('throwdown'), '/events/:eventId');
+    expect(home.currentKey).toBe('home');
+    expect(home.currentLabel).toBeNull();
+    expect(describeEventBar(ev('throwdown'), '/events/:eventId/throwdown/results').currentKey).toBe(
+      'results',
+    );
   });
 
   it('a heat screen is a leaf of Cup Taster', () => {
