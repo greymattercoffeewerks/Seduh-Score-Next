@@ -87,7 +87,8 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
       if (error) throw new Error(error.message);
     }, event.id);
     await page.goto('about:blank');
-    await page.goto(`/app/#/events/${event.id}`);
+    // the console lives on the Matches page; the event home is the run-sheet dashboard
+    await page.goto(`/app/#/events/${event.id}/throwdown/matches`);
     await expect(page.locator('.is-test-banner')).toBeVisible();
 
     const projector = await (

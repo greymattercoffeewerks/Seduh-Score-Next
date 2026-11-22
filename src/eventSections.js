@@ -51,9 +51,14 @@ const FORMATS = {
     },
   },
   throwdown: {
-    sections: [HOME, { key: 'results', label: 'Results', path: '/throwdown/results' }],
+    sections: [
+      HOME,
+      { key: 'matches', label: 'Matches', path: '/throwdown/matches' },
+      { key: 'results', label: 'Results', path: '/throwdown/results' },
+    ],
     patterns: {
       '/events/:eventId': 'home',
+      '/events/:eventId/throwdown/matches': 'matches',
       '/events/:eventId/throwdown/results': 'results',
     },
     leaves: {},
