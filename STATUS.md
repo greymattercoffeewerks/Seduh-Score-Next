@@ -32,7 +32,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 
 The pitch went well. The owner presents to the Board in March 2027, and the app may be used in the real competition as a
 **shadow beta** (manual scoring stays authoritative; Seduh Score runs in parallel and is compared afterwards). The plan is
-[`MARCH-2027-BOARD-PLAN.md`](MARCH-2027-BOARD-PLAN.md): BTC team and country model with an optional member backfill to
+`Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only, not in git): BTC team and country model with an optional member backfill to
 Seduh ID, Petrol V2 refinement, UX audit and Tour. Known (owner, 2026-11-07): tentatively 20 teams, 2 to 3 per country,
 each with its own team name; two preliminary rounds (round 1 random, round 2's rule to be confirmed), then the committee
 picks the top 8 by points, ties by the sum of each team's two finish times, confirmed manually by the organiser (wins no
