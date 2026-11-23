@@ -1,7 +1,7 @@
 # BTC engine changes for March 2027: spec draft
 
 _Draft, 2026-11-07. Status: **for the owner's review; nothing here is built.** Follows from
-[`MARCH-2027-BOARD-PLAN.md`](../../MARCH-2027-BOARD-PLAN.md) (section 3.3 proposals 1 and 1b) and the owner's answers
+`Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only) (section 3.3 proposals 1 and 1b) and the owner's answers
 of 2026-11-07. Each work item below becomes its own task with the reviewers named in section 8. Not part of the frozen
 handoff; it is a correction-level spec for one format, so it lives here and not in `Handoffs and Specs/`._
 

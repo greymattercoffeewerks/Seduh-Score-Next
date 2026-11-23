@@ -2,7 +2,7 @@
 
 _2026-11-08. Status: **approved to build** (owner asked for this plan to be executed). First of the March 2027 engine
 items, in the order of [`BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md`](BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md) section 8 (E, A,
-D, B, C). Sources: that spec's section 7 and [`MARCH-2027-BOARD-PLAN.md`](../../MARCH-2027-BOARD-PLAN.md) section
+D, B, C). Sources: that spec's section 7 and `Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only) section
 1.2.A. Where this plan decides something those two leave open, it says so ("Decided here"); the owner can overrule
 any of those before the PR merges._
 
