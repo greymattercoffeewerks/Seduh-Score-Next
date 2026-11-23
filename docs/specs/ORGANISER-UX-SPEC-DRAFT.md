@@ -1,7 +1,7 @@
 # Organiser UX for the March 2027 run: spec draft
 
 _Draft, 2026-11-10. Build progress: S1 (core kit, PR #446) and S2 (BTC dashboard, PR #447) are merged into `dev`;
-S3 to S5 not started (section 11). Source: [`MARCH-2027-BOARD-PLAN.md`](../../MARCH-2027-BOARD-PLAN.md)
+S3 to S5 not started (section 11). Source: `Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only)
 section 3 (the UX audit) and its timeline, read against what has shipped since (Builds E, A, D and B part 1, see
 `CHANGELOG.md`). The owner answered Q1 to Q12 on 2026-11-10 (section 9); the text below follows those answers. Only
 Q10 (the committee's paper scoresheet) is waiting on a document._

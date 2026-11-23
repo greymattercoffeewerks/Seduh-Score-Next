@@ -174,3 +174,7 @@ scripts/country-history/out/
 
 # A person's own Seduh ID record load SQL holds real personal data: never committed.
 scripts/seduh-id-record/out/
+
+# The March 2027 Board plan is private planning: local-only, under Handoffs and Specs/ (2026-11-23).
+# Ignored at the root too so it cannot be re-added by accident.
+/MARCH-2027-BOARD-PLAN.md

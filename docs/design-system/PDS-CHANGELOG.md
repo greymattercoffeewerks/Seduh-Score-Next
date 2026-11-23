@@ -16,7 +16,7 @@ live in `CHANGELOG.md` and `docs/archive/changelog/`; those stay the detailed so
 | **Petrol Kaizen P5**                                         | 2026-11-13               | 4.7.0 (dev #458, release #460)                                 | Vocabulary                                                      | Shipped; real-device check owed |
 | **Petrol Kaizen P6**                                         | 2026-11-13               | 4.8.0 (dev #461; reached main in release #462, which is 4.9.0) | Token roles and density                                         | Shipped; real-device check owed |
 
-"RON 95" appears only in `MARCH-2027-BOARD-PLAN.md` §2 (the V2 plan). The shipped changelog entries say "Petrol V2".
+"RON 95" appears only in `Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only) §2 (the V2 plan). The shipped changelog entries say "Petrol V2".
 
 **Where the version numbers come from** (checked 2026-11-23, in git on `origin/main` and `origin/dev`): the
 `package.json` version at each release merge commit, and the release commit messages. V1: merge #87 (`4a61157`,
@@ -100,7 +100,7 @@ marketing must not import `src/ui/tokens/colors.css`: marketing and console now 
 - Dimmed "soon" rows stacked `opacity: 0.7` on marginal contrast; opacity removed.
 - Several controls under the 44px tap-target floor (nav toggle, slide dots, CTAs, links) fixed to `--tap-target-min`.
 
-**Known weaknesses that V2 later addressed** (recorded in `MARCH-2027-BOARD-PLAN.md` §2.1)
+**Known weaknesses that V2 later addressed** (recorded in `Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only) §2.1)
 
 - Small type dominated; thirteen type steps, no fluid steps.
 - Input border failed WCAG 1.4.11 (2.47:1 on surface).
@@ -161,7 +161,7 @@ with that merge, and it went live with release #435.
 - Tags are 11px mono caps with a 3px corner; cards and the landing plate 6px.
 - Guard extended to painted boxes with no token radius and to page-local tag/badge/dot/toggle copies.
 
-Sources: `docs/archive/changelog/2026-11-H2.md` (lines 31 to 88); plan in `MARCH-2027-BOARD-PLAN.md` §2.
+Sources: `docs/archive/changelog/2026-11-H2.md` (lines 31 to 88); plan in `Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only) §2.
 
 ---
 
