@@ -210,7 +210,7 @@ Sources: `CHANGELOG.md` (lines 695 to 755); `src/ui/tokens/DESIGN.md`; backlog i
 
 ## Since Kaizen
 
-Design-system-relevant entries in `CHANGELOG.md` after P6, to current dev (4.28.0):
+Design-system-relevant entries in `CHANGELOG.md` after P6, to current dev (4.29.0):
 
 - **Console Menu button in forced colours, 4.17.2 · 2026-11-17:** the three bars get `ButtonText` under
   `forced-colors: active`. Owner check on a real Windows high-contrast render is owed.
@@ -223,8 +223,15 @@ Design-system-relevant entries in `CHANGELOG.md` after P6, to current dev (4.28.
 - **Throwdown projector on the shared projector kit, 4.26.0 · 2026-11-21 (#539):** stage match card, page loop,
   new-result detection and champion screen moved into `src/core/` (`stage-*` classes renamed from `btc-stage-*`).
   A component extraction, not a token change. The owner's TV check is outstanding.
+- **Figma review fixes, 4.29.0 · 2026-11-24:** an outside (Figma) review of Petrol was checked against the code; three
+  gaps were real. (1) Stage muted text moved from `petrol-400` (4.46:1 canvas, 4.16:1 surface) to a new ramp step
+  `--clr-petrol-350` (`#82938f`, 6.01:1 and 5.60:1), the only token value change after P6 (paper untouched, borders
+  untouched). (2) The audience display now shows "Updated HH:MM" and, on a lost connection or 90 s of silence,
+  "Connection lost — showing results from HH:MM" with its Live marker withdrawn (`core/freshness.js`, in the viewer
+  shell, so every format gets it). (3) The standalone Timer's Reset is its own row and asks first (feedback ladder
+  step 3) while a run is going. Rules in `DESIGN.md` "Figma review fixes". Owner's real-venue check owed.
 
-No new Petrol identity or token release is recorded after Kaizen P6.
+No new Petrol identity release is recorded after Kaizen P6; the 4.29.0 muted step is a token correction inside it.
 
 ---
 

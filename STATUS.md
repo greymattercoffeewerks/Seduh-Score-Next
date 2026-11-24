@@ -1,10 +1,11 @@
 # Status — read this first
 
-_As of 2026-11-22, app version 4.28.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-24, app version 4.29.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
+- **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
@@ -20,11 +21,10 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
-- **Throwdown vote cap** (#531 and its review follow-ups, on `dev` as 4.25.1, not yet released): a match takes no more taps than judges, plus one tie-break vote when the panel is level (owner, 2026-11-20). Migration applied to the cloud. All Definition-of-Done reviews run (CHANGELOG 4.25.1).
-- **Throwdown projector on the shared kit**: released as **4.26.0** (minor, #539), no migration; owner's TV check 24 to 25 Nov owed.
-- **Throwdown competitor Edit** (released as **4.25.0**, #532): name, phone and café or team, before and after the draw. Owed: the owner's tablet check.
+- **Throwdown vote cap** (4.25.1, on `dev`, not released): a match takes no more taps than judges, plus one tie-break vote when level. Migration in the cloud (CHANGELOG 4.25.1).
+- **Throwdown competitor Edit** (4.25.0) and **projector on the shared kit** (4.26.0): owner's tablet and TV checks owed.
 - **Throwdown dashboard, Phases B and C** (4.28.0, stacked on #544/#543): routed; votes on Matches.
-- **Throwdown undo and offline vote screen** (4.27.0, PR #540 into `dev`): undo a confirmed match; the event screen survives a dropped connection. Migration `20261129100000` is in the cloud (pushed 2026-11-21). Owed: the owner's tablet check before 27 Nov (CHANGELOG 4.27.0).
+- **Throwdown undo and offline vote screen** (4.27.0): undo a confirmed match; the event screen survives a dropped connection. Migration in the cloud. Owed: the owner's tablet check before 27 Nov.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 

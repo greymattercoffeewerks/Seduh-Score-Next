@@ -7,6 +7,32 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Petrol: Figma review fixes (stage muted contrast, audience freshness, Timer Reset guard) · 4.29.0 · 2026-11-24
+
+**Status: NOT FINAL.** Owed: the owner's real-venue or TV check of the freshness bar at the stage edge, and a screen-reader pass on the bar's `role="alert"` announcement (unverified; the accessibility review could not check it). Both logged in `docs/backlog/cup-taster.md`.
+
+- **Why.** The Figma review found the stage's muted text below 4.5:1 on the stage surfaces. The audience view also went blank on a dropped channel: the holding card replaced the results, so a venue that lost its connection for a minute saw nothing. Timer Reset sat in the same row as Pause/Resume, so a stray tap could clear a running countdown.
+- **What.**
+  - **Stage muted text.** `--color-text-muted` on the stage points at a new ramp step, `--clr-petrol-350` (`#82938f`), not `petrol-400`, so no other use of `petrol-400` changes. Ratios before to after: canvas 4.46 to 6.01, surface 4.16 to 5.60, surface-sunken 3.76 to 5.07, gold tint 3.59 to 4.84. Borders (already 3:1 or more) and paper are untouched. `src/ui/tokens/stageMuted.test.js` pins the ratios.
+  - **Audience freshness.** New `src/core/freshness.js`, mounted by `core/viewer-shell.js`, so the Cup Taster, BTC and Throwdown projectors and the phone view get it with no format edit. While fresh: a quiet "Updated HH:MM". On channel loss or 90 s of silence: "Connection lost — showing results from HH:MM" (attention mark plus words, `role="alert"` once, warning edge). Results stay on screen under the bar. The holding card now shows only before the first successful read. The display's `.stage-band-live` is hidden while lost. A 30 s quiet heartbeat re-reads the row: timers run only while results are on screen, it never redraws an unchanged row, and it never takes a `requestSeq`. Stage overscan inset added so the bar is not flush at the top edge.
+  - **Timer Reset guard** (`src/tools/timer`). Reset is its own row, a `--space-6` gap below Pause/Resume, and asks via `confirmInPlace` while running or paused. Idle and expired reset in one tap. Cup Taster's timing screen has Stop but no reset control, and BTC and Throwdown have no timer controls, so nothing changed there. Note added to `src/tools/CLAUDE.md`.
+- **Files.** `src/ui/tokens/colors.css`, `src/ui/tokens/stageMuted.test.js` (new), `src/core/freshness.js` (new), `src/core/freshness.test.js` (new), `src/core/viewer-shell.js`, `src/core/viewer-shell.css`, `src/core/viewer-shell.test.js` (the old "replacing real content" test now asserts the new contract), `src/tools/timer/timerScreen.js`, `src/tools/timer/timerScreen.test.js`, `src/tools/timer/timer.css`, `src/tools/CLAUDE.md`, `src/ui/tokens/DESIGN.md` and `docs/design-system/PDS-CHANGELOG.md` (token entry, written earlier), `docs/backlog/cup-taster.md`, `docs/backlog/README.md`, `STATUS.md`, `CHANGELOG.md`, `package.json` and `package-lock.json` (4.29.0).
+- **Version.** Minor (4.29.0): the freshness bar is a new visible capability on every live surface. Not a new format, so no major and no place-name move. No migration; nothing to push to the cloud.
+- **Decisions.**
+  - New ramp step, not a re-point of `petrol-400`, so the change stays on the stage's muted text.
+  - Results stay on screen under the lost bar. The holding card is kept only before the first successful read, when there is nothing to show.
+  - The heartbeat takes no `requestSeq`. A heartbeat that bumped it could drop an in-flight realtime read (the sync finding below), so heartbeats are guarded by `pendingReads` and never advance the sequence.
+  - No heartbeat behind the holding card. `liveSurfaces` already says nothing ticks there, and supabase-js reports channel drops. Logged as a known limit.
+  - Timer Reset uses `confirmInPlace` only while a countdown is running or paused. Idle and expired stay one tap, because there is nothing to lose.
+- **Checks.** Verified in the browser preview at 360 px, 375 px and desktop, including a simulated disconnect and a TEST event. `freshness.test.js`, `viewer-shell.test.js`, `stageMuted.test.js` and `timerScreen.test.js` pass (133 tests).
+- **Reviews.**
+  - `code-reviewer`: 0 important, 2 nits. The lost-alert text was rewritten every 5 s; fixed, with a test. The recovery redraw of an unchanged body: intentional, left.
+  - `module-boundary-checker`: 0 important, 1 nit. `core/feedback.js` was missing from `src/tools/CLAUDE.md`; added.
+  - `ui-accessibility-reviewer`: 1 important, fixed: the freshness bar sat flush at the stage's top edge; inset added. 1 nit (comment), fixed. Screen-reader announce-on-insert of the `role="alert"` bar unverified: owner or device check owed.
+  - `test-auditor`: 3 important, all confirmed by mutation, all fixed: the silence path did not prove the phone badge; the 90 s threshold was asserted only as an inequality; Reset had no negative case. 2 nits, fixed.
+  - `offline-sync-auditor`: finding 1 real, fixed: a heartbeat that bumped `requestSeq` could drop an in-flight realtime read; now guarded by `pendingReads`, with no seq for the heartbeat. Finding 2, not fixed on purpose: no heartbeat behind the holding card (known limit). Finding 3, pre-existing, not fixed: a first-read timeout leaves "Connection lost" until a publish event. Both in the backlog. Nit (unhandled rejection from the heartbeat), fixed with `.catch`.
+- **Follow-ups.** The owed checks above, and the two backlog items in `docs/backlog/cup-taster.md` ("Known open items from Petrol Figma review fixes").
+
 ## Throwdown: event dashboard routed, organisers vote on the Matches page · 4.28.0 · 2026-11-22
 
 **Status: NOT FINAL.** PR stacked on #544 and #543 (merge in order). Open: the full Playwright suite was not run in this worktree (no `.env`), so `throwdown-event` and `throwdown-scoresheet` first run in CI; the owner's tablet check before 27 Nov.
