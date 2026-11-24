@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountTimer } from './timerScreen.js';
+import { readFileSync } from 'node:fs';
 import { STORAGE_KEY } from './timer.js';
+import { answerFeedback, feedbackButton, openFeedbackText } from '../../core/feedbackTestKit.js';
 
 function fakeStorage() {
   const map = new Map();
@@ -42,7 +44,7 @@ describe('mountTimer', () => {
     expect(root.querySelector('#timer-pause-button')).toBeNull();
   });
 
-  it('sits in the shared community frame and hides all of it while a countdown is on screen', () => {
+  it('sits in the shared community frame and hides all of it while a countdown is on screen', async () => {
     mountTimer(root, { storage, now });
     expect(root.querySelector('.public-header')).not.toBeNull();
     expect(root.querySelector('.ct-crumb-current').textContent).toBe('Competition Timer');
@@ -60,6 +62,9 @@ describe('mountTimer', () => {
     expect(root.querySelector('.timer-brand-link')).not.toBeNull();
 
     root.querySelector('#timer-reset-button').click();
+    answerFeedback('confirm');
+    await Promise.resolve();
+    await Promise.resolve();
     expect([header.hidden, strip.hidden, bar.hidden]).toEqual([false, false, false]);
   });
 
@@ -94,12 +99,65 @@ describe('mountTimer', () => {
     expect(document.activeElement.id).toBe('timer-pause-button');
   });
 
-  it('Reset returns to the setup form and moves focus to the title input', () => {
+  it('Reset returns to the setup form and moves focus to the title input, once a running timer is confirmed', async () => {
     mountTimer(root, { storage, now });
     startTimer(root, { minutes: '8', seconds: '0' });
     root.querySelector('#timer-reset-button').click();
+    expect(openFeedbackText()).toContain('Reset the timer?');
+    answerFeedback('confirm');
+    await Promise.resolve();
+    await Promise.resolve();
     expect(root.querySelector('#timer-start-button')).not.toBeNull();
     expect(document.activeElement.id).toBe('timer-title-input');
+  });
+
+  it('Reset on a running or paused timer asks first, and Cancel keeps the run going', async () => {
+    mountTimer(root, { storage, now });
+    startTimer(root, { minutes: '8', seconds: '0' });
+    nowMs += 10_000;
+    root.querySelector('#timer-pause-button').click();
+    root.querySelector('#timer-reset-button').click();
+    expect(feedbackButton('confirm')).not.toBeNull();
+    answerFeedback('cancel');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(root.querySelector('.timer-display-value').textContent).toBe('7:50');
+    expect(root.querySelector('#timer-start-button')).toBeNull();
+  });
+
+  it('Reset on an expired timer asks nothing: there is no run left to lose', async () => {
+    mountTimer(root, { storage, now });
+    startTimer(root, { minutes: '0', seconds: '3' });
+    nowMs += 5_000;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(root.querySelector('#timer-pause-button')).toBeNull(); // expired
+    root.querySelector('#timer-reset-button').click();
+    expect(feedbackButton('confirm')).toBeNull();
+    await Promise.resolve();
+    expect(root.querySelector('#timer-start-button')).not.toBeNull();
+  });
+
+  it('Cancel on a RUNNING timer keeps it counting', async () => {
+    mountTimer(root, { storage, now });
+    startTimer(root, { minutes: '8', seconds: '0' });
+    root.querySelector('#timer-reset-button').click();
+    answerFeedback('cancel');
+    await Promise.resolve();
+    await Promise.resolve();
+    nowMs += 5_000;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(root.querySelector('#timer-start-button')).toBeNull();
+    expect(root.querySelector('#timer-pause-button').textContent).toBe('Pause');
+  });
+
+  it('keeps Reset out of the Pause row, on a 44px tap floor', () => {
+    mountTimer(root, { storage, now });
+    startTimer(root, { minutes: '8', seconds: '0' });
+    const pauseRow = root.querySelector('#timer-pause-button').closest('.timer-controls');
+    expect(pauseRow.contains(root.querySelector('#timer-reset-button'))).toBe(false);
+    const css = readFileSync('src/tools/timer/timer.css', 'utf8');
+    expect(css).toMatch(/\.timer-controls-group\s*\{[^}]*gap:\s*var\(--space-6\)/);
+    expect(css).toMatch(/\.timer-btn\s*\{[^}]*min-height:\s*var\(--tap-target-min\)/);
   });
 
   it('announces the urgent threshold exactly once via the polite live region, right at the <= 10s boundary', () => {

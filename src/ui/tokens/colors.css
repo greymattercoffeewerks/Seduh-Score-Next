@@ -36,6 +36,7 @@
   --clr-petrol-100: #dfe4e2;
   --clr-petrol-200: #c3cac8;
   --clr-petrol-300: #93a19e;
+  --clr-petrol-350: #82938f; /* stage muted text: 6.0:1 on canvas, 5.6:1 on surface (DESIGN.md "Figma review fixes") */
   --clr-petrol-400: #6b7d79;
   --clr-petrol-500: #4a5a57;
   --clr-petrol-600: #3a4448;
@@ -169,7 +170,7 @@
 
   --color-text: var(--clr-petrol-50);
   --color-text-secondary: var(--clr-petrol-300);
-  --color-text-muted: var(--clr-petrol-400);
+  --color-text-muted: var(--clr-petrol-350);
 
   --color-accent: var(--clr-teal-300);
   --color-accent-hover: var(--clr-teal-500);

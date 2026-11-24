@@ -265,3 +265,75 @@
 .viewer-holding-title {
   text-wrap: balance;
 }
+
+/* Freshness (core/freshness.js): "Updated HH:MM" while the display is hearing from the server, a clear warning bar
+   when it is not (the warning edge and bang are the amber of the warning role). Token-only, so data-surface="stage" repaints it; on the stage it is sized from --stage-unit
+   (1% of screen height) so it reads across a room, with a floor so a small preview stays legible. The lost bar is a
+   mark (the attention bang) AND words, never colour alone, and it does not animate, so reduced motion needs nothing.
+   `is_test` is violet and lives in its own banner above; this bar never uses that colour. */
+.viewer-freshness-host:empty {
+  display: none;
+}
+
+.viewer-freshness {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-1) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.viewer-freshness[data-kind='lost'] {
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-block: 3px solid var(--color-warning);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
+}
+
+/* The status mark's own small caps look is for a table row; here it is the headline, so it takes the bar's type and
+   keeps only its shape (the warning bang), scaled up with the text. */
+.viewer-freshness[data-kind='lost'] .status {
+  --status-ink: var(--color-warning);
+  border: 0;
+  padding: 0;
+  gap: 0.6em;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: normal;
+}
+
+.viewer-freshness[data-kind='lost'] .status::before {
+  width: 1.25em;
+  height: 1.25em;
+  font-size: 0.85em;
+}
+
+[data-surface='stage'] .viewer-freshness {
+  padding: calc(0.6 * var(--stage-unit, 1vh)) 2.5vw;
+  /* min(..., vw): in a portrait window the height unit is huge, so the width caps it. */
+  font-size: max(0.875rem, min(calc(2.4 * var(--stage-unit, 1vh)), 2.2vw));
+}
+
+[data-surface='stage'] .viewer-freshness[data-kind='lost'] {
+  padding: calc(1.2 * var(--stage-unit, 1vh)) 2.5vw;
+  font-size: max(1.125rem, min(calc(3.6 * var(--stage-unit, 1vh)), 3.4vw));
+}
+
+/* A display's own Live marker must not stand unqualified through an interruption: the lost bar says what is true. */
+.viewer-shell[data-freshness='lost'] .stage-band-live {
+  display: none;
+}
+
+/* Stage overscan: with no TEST banner above it, the bar would sit on the true top edge, where a TV crops (the banner
+   host is inset for the same reason). Behind a banner the banner's own inset already covers it. */
+[data-surface='stage'] .viewer-banner-host:empty + .viewer-freshness-host:not(:empty) {
+  padding-top: var(--space-5);
+}
