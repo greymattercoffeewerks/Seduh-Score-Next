@@ -60,6 +60,7 @@ Every section moved out of `ROADMAP.md`'s open-items run, by heading, with the f
 - Known open items from T-GATE.B4 (one open event, finish and release, BTC at go-live; shipped dark, 2026-10-23) → [`admin-gating-branding.md`](admin-gating-branding.md)
 - Known open items from T-GATE.B3 (enforcement hooks, shipped dark, 2026-10-23) → [`admin-gating-branding.md`](admin-gating-branding.md)
 - Known open items from T-GATE.B2 (admin grant writers and key switch, 2026-10-23) → [`admin-gating-branding.md`](admin-gating-branding.md)
+- Known open items from Petrol Figma review fixes (4.29.0, 2026-11-24) → [`cup-taster.md`](cup-taster.md)
 - Known open items from T-GATE.B1 (entitlement core, 2026-10-23) → [`admin-gating-branding.md`](admin-gating-branding.md)
 - Known open items from T-ADM.\* (admin console v1, 2026-10-16) → [`admin-gating-branding.md`](admin-gating-branding.md)
 - Known open items from BR-D1 and BR-D2 (2026-10-17) → [`admin-gating-branding.md`](admin-gating-branding.md)

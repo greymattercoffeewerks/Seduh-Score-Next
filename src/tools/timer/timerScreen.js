@@ -8,6 +8,7 @@
 // used cupping-specific wording throughout and that read as narrower than
 // intended.
 import { el, labeledField, brandMark } from '../../core/dom.js';
+import { confirmInPlace } from '../../core/feedback.js';
 import { buildCommunityToolChrome } from '../../community/toolChrome.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import {
@@ -535,18 +536,39 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
       text: 'Reset',
       attrs: { type: 'button' },
     });
-    resetButton.addEventListener('click', () => {
+    function doReset() {
       state = resetTimer(state);
       persist();
       wakeLock.disable();
       focusAfterRender = '#timer-title-input';
       render();
+    }
+    resetButton.addEventListener('click', async () => {
+      // A run in progress is the only thing a Reset can throw away, and it sits one tap from Pause on a phone
+      // held in one hand: ask first (Petrol feedback ladder, step 3 — in place, no dialog). Idle and expired
+      // have nothing left to lose, so Reset stays a single tap there.
+      const live = getStatus(state);
+      if (live === 'running' || live === 'paused') {
+        const ok = await confirmInPlace(resetButton, {
+          title: 'Reset the timer?',
+          body: 'The time left on this run will be lost.',
+          confirmLabel: 'Reset',
+          anchor: resetRow,
+        });
+        if (!ok) return;
+      }
+      doReset();
     });
 
-    const buttons = [resetButton];
-    if (status !== 'expired') buttons.unshift(pauseResumeButton);
+    // Reset is its own row, a full gap below Pause/Resume, so a thumb aimed at Pause cannot land on it.
+    const resetRow = el('div', { className: 'timer-controls timer-controls-reset' }, [resetButton]);
+    const buttons = [];
+    if (status !== 'expired') {
+      buttons.push(el('div', { className: 'timer-controls' }, [pauseResumeButton]));
+    }
+    buttons.push(resetRow);
 
-    return el('div', { className: 'timer-controls' }, buttons);
+    return el('div', { className: 'timer-controls-group' }, buttons);
   }
 
   function buildSoundToggle() {

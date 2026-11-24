@@ -886,6 +886,11 @@ _Result-recorded and rank-impact screens shipped; these were flagged and documen
 
 - **Older inline confirms are not on the ladder.** Cup Taster's finish confirm (`#confirm-finish-*`) and Throwdown's use the old in-line pattern. Move them to `confirmInPlace` (undoable) or `confirmDialog` (permanent delete) from `src/core/feedback.js`. Not done in P4, which was limited to the seven `window.confirm` calls.
 
+## Known open items from Petrol Figma review fixes (4.29.0, 2026-11-24)
+
+- **No heartbeat behind the holding card.** The 30 s heartbeat re-read and the 90 s silence check run only while results are on screen. Before the first successful read nothing ticks, as `liveSurfaces`' contract requires; a channel drop in that state is reported by supabase-js, not by our timer. Known limit, accepted by the offline-sync review.
+- **First-read timeout leaves "Connection lost" up.** A first read that times out shows the "Connection lost" card until the next publish event arrives. Pre-existing (the holding card path predates 4.29.0), not fixed. The heartbeat above cannot clear it, since it does not run behind the holding card.
+
 ## Known open items from the Throwdown competitor phone task (2026-11-20; registration shared by Cup Taster and Throwdown)
 
 - ~~**Cup Taster's registration and edit inputs type their caps as literals**~~ CLOSED 2026-11-20: every `maxlength` in

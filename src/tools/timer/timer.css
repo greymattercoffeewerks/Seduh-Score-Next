@@ -224,6 +224,15 @@ body {
   justify-content: center;
 }
 
+/* Pause/Resume and Reset are separate rows with a full section gap between them (not side by side), so one
+   thumb cannot hit Reset when it meant Pause. */
+.timer-controls-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+}
+
 .timer-presets {
   display: flex;
   flex-wrap: wrap;
