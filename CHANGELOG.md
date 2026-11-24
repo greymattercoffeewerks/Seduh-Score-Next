@@ -7,6 +7,13 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## CI: Supabase start retries after a failed start · no version change · 2026-11-24
+
+- **Why.** On 2026-11-24 the Playwright e2e job failed twice before any test ran (PR #551 and release PR #552). The image registry answered "Rate exceeded", `supabase start` gave up part way, and the containers it had already started kept their ports (54422, 54424), so the job died on "address already in use". A bare `supabase start` cannot recover from that.
+- **What.** New `.github/scripts/supabase-start.sh`: up to three attempts, each failure followed by `supabase stop --no-backup`, removal of any leftover `supabase_*` container, and a 30 s then 60 s wait. Both CI jobs that start Supabase (e2e, and migrations + pgTAP) call it. Both leave out the services no test uses (`studio,postgres-meta,imgproxy,logflare,vector`), so there are fewer images to pull and fewer pulls to be refused. Auth, REST, realtime, storage, mail and Edge Functions still start.
+- **Version.** None: CI-only (`docs/versioning.md`, "The CI gate").
+- **Reviews.** None run; CI config only. The PR's own CI run is the test of the exclusion names on CLI 3.2.0.
+
 ## Petrol: Figma review fixes (stage muted contrast, audience freshness, Timer Reset guard) · 4.29.0 · 2026-11-24
 
 **Status: NOT FINAL.** Owed: the owner's real-venue or TV check of the freshness bar at the stage edge, and a screen-reader pass on the bar's `role="alert"` announcement (unverified; the accessibility review could not check it). Both logged in `docs/backlog/cup-taster.md`.

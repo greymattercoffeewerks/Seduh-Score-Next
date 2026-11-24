@@ -93,7 +93,10 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 3.2.0
-      - run: supabase start
+      # Retries after a failed start (registry rate limit, leftover ports); see the script's header.
+      # The e2e specs use auth, REST, realtime, storage, mail and Edge Functions, so only Studio, its
+      # meta API, image transforms and the logging pair are left out.
+      - run: bash .github/scripts/supabase-start.sh studio,postgres-meta,imgproxy,logflare,vector
       - run: npm run build
         env:
           # Same non-secret local-dev demo credentials as the `app` job's own
@@ -128,5 +131,7 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 3.2.0
-      - run: supabase start
+      # Retries after a failed start; see the script's header. pgTAP needs the database plus the
+      # services whose schemas it reads (auth, storage), so the same unused set is left out.
+      - run: bash .github/scripts/supabase-start.sh studio,postgres-meta,imgproxy,logflare,vector
       - run: supabase test db supabase/tests
