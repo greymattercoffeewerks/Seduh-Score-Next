@@ -9,6 +9,7 @@
     "prerender:public": "node tools/prerender-public-pages.mjs",
     "check:admin-leak": "node tools/check-admin-bundle-leak.mjs",
     "check:docs": "node tools/check-doc-budgets.mjs",
+    "tokens:figma": "node tools/export-figma-tokens.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
