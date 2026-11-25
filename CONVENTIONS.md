@@ -469,6 +469,10 @@ permission covers the Board only. A wider listing, or search indexing of the pag
 real files and the generated SQL are never committed** (the repository is public): keep them outside the repo, or in
 `scripts/country-history/out/`, which is gitignored; never `git add -f`.
 
+**0. Intake** (optional): the `history-intake` skill (`.claude/skills/history-intake/SKILL.md`, `/history-intake`) turns
+the organiser's images, PDFs or pages into the two CSVs, has a fresh agent re-transcribe them to catch misreadings,
+runs step 1 until it passes and writes the questions file. It stops there; steps 2 onwards still need the owner.
+
 **1. Preview** (changes nothing, connects to nothing):
 
 ```bash

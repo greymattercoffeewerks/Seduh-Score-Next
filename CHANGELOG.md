@@ -7,6 +7,24 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Tooling: history-intake skill for country-history batches · no version change · 2026-11-25
+
+**Status: NOT FINAL.** Owed: one end-to-end run on new sources (the 2019 to 2022 files, when the owner supplies them). The checker and the misread catch are verified (see Verification); the full skill flow is not.
+
+- **Why.** Past-edition results for the country pages were transcribed by hand, which is slow and error-prone. The owner asked about AI agents on 2026-11-25; this is the second one adopted, after the daily read-only "Seduh cloud drift check" scheduled task in the desktop app (outside the repo, first run all clear). It is an operator tool, not a product feature.
+- **What.** New project skill `.claude/skills/history-intake/SKILL.md` (`/history-intake`). It turns an organiser's past results (images, PDFs, pages) into the rounds and template CSVs in the main checkout's gitignored `Handoffs and Specs/country-history/<batch>/`, has a fresh subagent re-transcribe the sources independently to catch misreadings, runs `scripts/country-history/import.mjs` until it passes, writes `QUESTIONS.md` and stops. A load happens only after the owner approves; the cloud load only on the owner's explicit say-so per batch. The main checkout is found with `git worktree list`; the skill stops if `QUESTIONS.md` is missing, so earlier team-identity answers are never skipped.
+- **Also.** `CONVENTIONS.md`, "Country history: the owner's runbook": a "0. Intake" paragraph ahead of step 1.
+- **Decisions.** The skill forbids `--write-sql` while a permission is still "PENDING". The importer accepts any non-empty `permission_ref`, so the rule lives in the skill's text, not in a guard (found while testing). Real results stay out of git: no `git add -f` on either gitignored path.
+- **Verification.**
+  - The checker command from the skill, on the approved ACF 2023 to 2026 files: 70 results, 134 rounds, 0 errors.
+  - Negative case: a deliberately misread 2024 final score was caught as 2 errors, and nothing was written.
+  - Not run end to end on new sources: the original images are not on disk.
+- **Reviews.** `code-reviewer`, two rounds.
+  - Round 1: 1 Important, fixed. The skill pointed at gitignored `Handoffs and Specs` paths that do not exist in a worktree, so earlier answers would be skipped and a batch lost on cleanup. Fixed by resolving the main checkout via `git worktree list` and stopping if `QUESTIONS.md` is missing. Verified by hand (`ls`); no separate fresh-context checker was run, which the protocol asks for on every 🔴 finding.
+  - Round 1 nits, all fixed: a stage/placement mapping table; opponent = clean `team_name`; a real team-identity example replaced by a made-up one; the checker subagent given round names and a match key.
+  - Round 2: fix confirmed. One new nit (Prettier pulled a sentence into the table), fixed.
+- **Open.** The importer's `permission_ref` check (above) is logged in `docs/backlog/public-site.md`. Not a §14 build-plan task, so there is no task ID.
+
 ## CI: Supabase start retries after a failed start · no version change · 2026-11-24
 
 - **Why.** On 2026-11-24 the Playwright e2e job failed twice before any test ran (PR #551 and release PR #552). The image registry answered "Rate exceeded", `supabase start` gave up part way, and the containers it had already started kept their ports (54422, 54424), so the job died on "address already in use". A bare `supabase start` cannot recover from that.

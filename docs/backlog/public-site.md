@@ -80,3 +80,9 @@ The four public tool and Community pages gained an `og:image` and a touch icon (
 
 - **Real WhatsApp preview not checked.** The tags are in the built HTML and the test pins them, but no live share was made. WhatsApp caches previews, so a link shared before the deploy may keep the old thumbnail. Owed: a fresh share, or Facebook's Sharing Debugger, after the deploy. (share images fix)
 - **Pages shared with no share tags.** `results/`, `id/`, `id/country/`, the `/id/<handle>/` shell, `guess-the-bean/play/` and the app's audience links have `og:title` or no tags at all, so a shared link falls back to the upscaled favicon. Pre-existing; `shareImages.test.js` covers only the pages that set `og:title`. Add the tags to each, reusing `share-mark.png`. (share images fix, `code-reviewer`)
+
+## Known open items from the history-intake skill (tooling, no version change, 2026-11-25)
+
+The country-history intake skill (`/history-intake`, CHANGELOG entry of the same date) left one item.
+
+- **Importer accepts any non-empty `permission_ref`.** `scripts/country-history/lib.mjs` (line 256) checks only that the reference is non-empty and at most 300 characters, so a `PENDING` placeholder passes and `--write-sql` would write load SQL. The skill forbids `--write-sql` while pending, but that is a rule in the skill's text, not a guard. Owed: refuse a `PENDING` (or empty) reference in the importer, with a test in `scripts/country-history/lib.test.js`.
