@@ -97,7 +97,7 @@ describe('mountBtcEventDashboardScreen', () => {
     const screen = await mount(root, {});
     expect(shell.hasAttribute('data-surface')).toBe(false);
     const toggle = root.querySelector('.console-surface-switch');
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
     toggle.click();
     expect(shell.getAttribute('data-surface')).toBe('stage');
     expect(localStorage.getItem('seduh.consoleSurface')).toBe('night');

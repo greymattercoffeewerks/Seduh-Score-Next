@@ -55,15 +55,30 @@ export function buildSurfaceSwitch({
   storage,
 }) {
   let current = initial === 'night' ? 'night' : 'day';
-  const button = el('button', {
-    className: 'btn btn-outline tap-target console-surface-switch',
-    text: current === 'night' ? 'Night mode: on' : 'Night mode: off',
-    attrs: { type: 'button', 'aria-pressed': String(current === 'night') },
+  const word = el('span', { className: 'console-surface-switch-text', text: 'Night mode' });
+  const state = el('span', {
+    className: 'console-surface-switch-state',
+    text: current === 'night' ? 'On' : 'Off',
   });
+  // A real toggle switch: a button with role="switch", a track and a thumb, and the state in words as well.
+  const button = el(
+    'button',
+    {
+      className: 'console-surface-switch tap-target',
+      attrs: { type: 'button', role: 'switch', 'aria-checked': String(current === 'night') },
+    },
+    [
+      word,
+      el('span', { className: 'console-surface-switch-track', attrs: { 'aria-hidden': 'true' } }, [
+        el('span', { className: 'console-surface-switch-thumb' }),
+      ]),
+      state,
+    ],
+  );
   button.addEventListener('click', () => {
     current = current === 'night' ? 'day' : 'night';
-    button.setAttribute('aria-pressed', String(current === 'night'));
-    button.textContent = current === 'night' ? 'Night mode: on' : 'Night mode: off';
+    button.setAttribute('aria-checked', String(current === 'night'));
+    state.textContent = current === 'night' ? 'On' : 'Off';
     writeSurfacePreference(current, storage);
     applyConsoleSurface(target, current);
     onChange?.(current);

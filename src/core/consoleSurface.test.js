@@ -47,14 +47,14 @@ describe('console surface', () => {
     expect(node.hasAttribute('data-surface')).toBe(false);
   });
 
-  it('the switch toggles aria-pressed, the node and the stored choice, even with storage blocked', () => {
+  it('the switch toggles aria-checked, the node and the stored choice, even with storage blocked', () => {
     const node = document.createElement('div');
     const storage = memoryStorage();
     const onChange = vi.fn();
     const button = buildSurfaceSwitch({ target: node, initial: 'day', onChange, storage });
-    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(button.getAttribute('aria-checked')).toBe('false');
     button.click();
-    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.getAttribute('aria-checked')).toBe('true');
     expect(node.getAttribute('data-surface')).toBe('stage');
     expect(storage.getItem(SURFACE_KEY)).toBe('night');
     expect(onChange).toHaveBeenCalledWith('night');
