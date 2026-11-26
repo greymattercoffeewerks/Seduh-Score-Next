@@ -165,7 +165,7 @@ export function mountAppShell(
   // navEl's own children, on every setNav()) — same persistent-node
   // reasoning the toggle below already relied on for `navEl`.
   // The active organisation's FULL name, on its own wrapping line at the top of the menu: the header's
-  // slot truncates a long name, and below 1366px (where the slot is tight) this is where it can be read
+  // slot truncates a long name, and below 1024px (where the slot is tight) this is where it can be read
   // in full. Sighted aid only: a screen reader already gets the slot's own "Organisation: …" label.
   const orgFullEl = el('div', {
     className: 'app-shell-org-full',
@@ -269,10 +269,10 @@ export function mountAppShell(
   // `lastHeaderFocus` remembers the header element that last had focus (cleared
   // on any pointer press), since by the
   // time the media query's change event fires the browser may already have
-  // moved focus to <body>. Must match the min-width:1366px block in
+  // moved focus to <body>. Must match the min-width:1024px block in
   // appShell.css. matchMedia is absent in jsdom, so this is skipped there
   // unless a test stubs it.
-  const INLINE_NAV_QUERY = '(min-width: 1366px)';
+  const INLINE_NAV_QUERY = '(min-width: 1024px)';
   const trackHeaderFocus = (event) => {
     lastHeaderFocus = header.contains(event.target) ? event.target : null;
   };
@@ -300,7 +300,7 @@ export function mountAppShell(
     // it. Read before closeMenu() below clears that memory for the panel.
     const active = document.activeElement;
     const from = !active || active === document.body ? lastHeaderFocus : active;
-    // Inline (>= 1366px): the toggle is gone and the panel is always shown,
+    // Rail (>= 1024px): the toggle is gone and the panel is always shown,
     // so its open/closed state is moot; collapsing: come back closed.
     closeMenu();
     if (event.matches) {
@@ -376,12 +376,19 @@ export function mountAppShell(
   // control a press on which must not dismiss it (the button the warning is about).
   let noticeOnDismiss = null;
   let noticeKeepOpenFor = null;
+  // Behind the open drawer (below 1024px): a tap on it closes the menu. Never shown from 1024px up, where the
+  // menu is the rail. Not focusable: Escape and the Menu button are the keyboard's ways out.
+  const scrimEl = el('div', { className: 'app-shell-scrim', attrs: { 'aria-hidden': 'true' } });
+  scrimEl.addEventListener('click', () => {
+    closeMenu();
+  });
   const header = el('header', { className: 'app-shell-header' }, [
     brandEl,
     orgEl,
     contextEl,
     navToggle,
     navPanel,
+    scrimEl,
     orgNoticeEl,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
@@ -979,12 +986,14 @@ export function mountAppShell(
   // environment (jsdom never performs real layout) leaves the CSS
   // fallback value in place instead of clobbering it with a meaningless 0.
   function syncHeaderHeightVar() {
-    const height = header.getBoundingClientRect().height;
-    if (height > 0) root.style.setProperty('--app-shell-header-height', `${height}px`);
+    // The rail is beside the page, not above it: nothing to clear.
+    const rail = inlineNavQuery?.matches === true;
+    const height = rail ? 0 : header.getBoundingClientRect().height;
+    if (rail || height > 0) root.style.setProperty('--app-shell-header-height', `${height}px`);
   }
   // The header's height also changes without any setNav()/sync-notice call:
   // opening the hamburger menu, a window resize or a tablet rotation across
-  // the 1366px breakpoint. Without re-measuring, scroll-margin-top (which
+  // the 1024px breakpoint. Without re-measuring, scroll-margin-top (which
   // reads this var) could leave a focused heading or error behind the sticky
   // header. Absent in jsdom, where nothing lays out anyway.
   const headerResizeObserver =

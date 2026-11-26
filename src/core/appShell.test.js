@@ -478,9 +478,9 @@ describe('mountAppShell', () => {
     const cross = (matches) => listeners.forEach((fn) => fn({ matches }));
     const isOpen = (panel) => panel.classList.contains('app-shell-nav-panel-open');
 
-    it('watches the same breakpoint appShell.css uses for the inline row (min-width: 1366px) — if either drifts, this fails', async () => {
+    it('watches the same breakpoint appShell.css uses for the inline row (min-width: 1024px) — if either drifts, this fails', async () => {
       await mountShell();
-      expect(queries).toEqual(['(min-width: 1366px)']);
+      expect(queries).toEqual(['(min-width: 1024px)']);
     });
 
     it('going inline with focus still on the toggle closes the menu and moves focus to the first nav link, not <body>', async () => {
@@ -3032,6 +3032,9 @@ describe('mountAppShell — sync panel', () => {
             '.app-shell-context => display, flex, min-height, order',
             '.app-shell-context => display',
             '.app-shell-context-idle => display',
+            // The rail (from 1024px): the context stacks in the rail, and the overlays open beside it.
+            '.app-shell-context:not(.app-shell-context-idle) => display, flex, min-height',
+            '.app-shell-org-notice.app-shell-org-notice-open, .app-shell-sync.app-shell-sync-open => left, right, top, width',
             '.app-shell-sync => height, margin, position, white-space, width',
             '.app-shell-sync-chip => display, flex, min-height, position, white-space',
             '.app-shell-sync-chip[hidden] => display',
