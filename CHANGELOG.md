@@ -9,14 +9,14 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## The left side menu (rail), app-wide · 4.31.0 · 2026-11-27
 
-**Status: NOT FINAL, do not release while a live event runs.** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and the real-browser e2e run (`organiser-flow.spec.js` header tests, which still describe the old 1366px top bar).
+**Status: NOT FINAL, do not release while a live event runs.** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and a green CI run of `organiser-flow.spec.js`, whose header tests were rewritten for the rail and drawer (1023/1024px) but not run locally (they need the local database).
 
 - **What.** From 1024px the console header is a left rail (15rem): brand, organisation, event name and sync chip, the links with the current one marked by the accent edge, and the account (email, Change password, Sign out) at the foot. Below 1024px the header stays a slim top bar and the same panel opens as a drawer from the left over a dimmed page (tap the dim area, Escape or the Menu button to close).
 - **360px, no scroll bar.** The concept's phone strip scrolled sideways. Here nothing is wider than the screen: the drawer is `min(18rem, 100vw - 4.5rem)` so the Menu button stays in view as the way to close it, and the drawer scrolls only vertically inside itself (measured at 360px: page width 360, drawer width = its client width).
 - **How.** CSS in `appShell.css` plus a scrim node and the breakpoint `INLINE_NAV_QUERY` moved 1366px to 1024px in `appShell.js`. The rail is the root grid (`.app-shell-root`); the header's height variable is 0 in the rail because the header is beside the page, not above it. The notices (organisation, sync) open beside the rail.
 - **Not changed.** Routes, nav content, `main.js`, the sync/organisation/sign-out logic. Screens that carry their own inner dashboard grid (BTC) keep it.
 - **Screens.** `/mnt/project-files/design/left-rail/` (1440 and 360, day and night, drawer open).
-- **Reviews.** `ui-accessibility-reviewer`: rail link focus rings were clipped sideways (fixed with side padding); notices could open under the drawer (fixed, z-index above it); a dead selector removed; two nits left (Escape only works while focus is in the menu; sync chip below 44px, pre-existing). `code-reviewer`: same notice finding (fixed), stale 1366px comments (fixed), and `organiser-flow.spec.js` header tests still describe the 1366px bar (owed, cannot run here: needs the local database).
+- **Reviews.** `ui-accessibility-reviewer`: rail link focus rings were clipped sideways (fixed with side padding); notices could open under the drawer (fixed, z-index above it); a dead selector removed; two nits left (Escape only works while focus is in the menu; sync chip below 44px, pre-existing). `code-reviewer`: same notice finding (fixed), stale 1366px comments (fixed), and the `organiser-flow.spec.js` header tests that assumed the 1366px bar (rewritten, see above).
 
 ---
 
