@@ -2964,6 +2964,10 @@ describe('mountAppShell — sync panel', () => {
           .map((b) => b.body)
           .join(';');
 
+      it('paints the header one step off the canvas (--color-chrome), not on the surface step', () => {
+        expect(decls(/^\.app-shell-header$/)).toMatch(/background:\s*var\(--color-chrome\)/);
+      });
+
       it('keeps the Menu button bars visible in forced-colors mode (they are only a background)', () => {
         // The block walker sees a media query's inner rule as its own block, so read the media block from the text.
         const media =
