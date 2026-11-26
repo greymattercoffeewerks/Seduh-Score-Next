@@ -90,23 +90,70 @@ describe('mountBtcEventDashboardScreen', () => {
     expect(cells[0].getAttribute('aria-current')).toBe('step');
   });
 
-  it('night mode flips the surface on the shell, and unmount puts it back', async () => {
+  it('night mode flips the whole page (the <html> element), and unmount puts it back', async () => {
+    // Regression: night used to be set on the app shell only, so the canvas behind it and every inherited text
+    // colour stayed light: dark text on dark cards.
     localStorage.removeItem('seduh.consoleSurface');
+    const page = document.documentElement;
     const shell = document.createElement('div');
     shell.className = 'app-shell-root';
     shell.appendChild(root);
     document.body.appendChild(shell);
     const screen = await mount(root, {});
-    expect(shell.hasAttribute('data-surface')).toBe(false);
+    expect(page.hasAttribute('data-surface')).toBe(false);
     const toggle = root.querySelector('.console-surface-switch');
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     toggle.click();
-    expect(shell.getAttribute('data-surface')).toBe('stage');
+    expect(page.getAttribute('data-surface')).toBe('stage');
     expect(localStorage.getItem('seduh.consoleSurface')).toBe('night');
+    toggle.click();
+    expect(page.hasAttribute('data-surface')).toBe(false);
+    toggle.click();
     screen.unmount();
-    expect(shell.hasAttribute('data-surface')).toBe(false);
+    expect(page.hasAttribute('data-surface')).toBe(false);
     localStorage.removeItem('seduh.consoleSurface');
     shell.remove();
+  });
+
+  it('two dashboards overlapping (new mounted before the old is unmounted) keep night until the last goes', async () => {
+    localStorage.setItem('seduh.consoleSurface', 'night');
+    const page = document.documentElement;
+    const rootB = document.createElement('div');
+    document.body.appendChild(rootB);
+    const a = await mount(root, {});
+    const b = await mount(rootB, {});
+    a.unmount();
+    expect(page.getAttribute('data-surface')).toBe('stage');
+    b.unmount();
+    expect(page.hasAttribute('data-surface')).toBe(false);
+    a.unmount();
+    expect(page.hasAttribute('data-surface')).toBe(false);
+    localStorage.removeItem('seduh.consoleSurface');
+    rootB.remove();
+  });
+
+  it('lays the page out in the concept order: top strip, head, next step, strip, then two columns', async () => {
+    await mount(root, {});
+    const order = [
+      '.btc-event-topbar',
+      '.btc-event-head',
+      '.ok-next',
+      '.runsheet',
+      '.btc-event-cols',
+    ].map((sel) => root.querySelector(sel));
+    order.forEach((node) => expect(node).not.toBeNull());
+    for (let i = 1; i < order.length; i++) {
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+    expect(root.querySelector('.btc-event-cols .needs-you')).not.toBeNull();
+    const headings = [...root.querySelectorAll('.btc-event-cols h2')].map((h) => h.textContent);
+    expect(headings).toContain('Standings');
+    // The switch and the freshness line sit in the top strip.
+    const strip = root.querySelector('.btc-event-topbar');
+    expect(strip.querySelector('.console-surface-switch')).not.toBeNull();
+    expect(strip.querySelector('.btc-event-fresh')).not.toBeNull();
   });
 
   it('shows quiet Updated time, then a Connection lost alert when the device goes offline', async () => {

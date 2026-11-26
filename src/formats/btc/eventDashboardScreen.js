@@ -39,6 +39,9 @@ const NOT_SENT_MESSAGE =
   'Not on the displays yet. It is saved on this device and sends when the connection returns.';
 
 // "Sat 14 Mar 2027 · Venue · City", whatever of it the event has.
+// Who holds the page's night/day attribute right now (see the mount below).
+const surfaceOwner = { token: null, before: null };
+
 function metaLine(event, phaseLabel) {
   const parts = [phaseLabel];
   if (event.event_date) {
@@ -108,10 +111,16 @@ export async function mountBtcEventDashboardScreen(
   let data = null;
   let isLive = null;
   let updatedAt = null;
-  // Night or day: set on the app shell (so its header follows) and put back when this screen unmounts.
-  const surfaceTarget = root.closest?.('.app-shell-root') ?? root;
+  // Night or day: set on the page itself (the <html> element), so the canvas behind everything, the header and the
+  // inherited text colour all follow, not only the cards. Put back when this screen unmounts.
+  const surfaceTarget = root.ownerDocument?.documentElement ?? root;
   let surface = readSurfacePreference();
+  // Two dashboards can overlap (the router mounts the next screen before it unmounts the last), and they share the
+  // one <html>: the value from before the FIRST of them is the one to put back, and only the NEWEST one puts it back.
   const surfaceBefore = applyConsoleSurface(surfaceTarget, surface);
+  const surfaceToken = {};
+  if (surfaceOwner.token === null) surfaceOwner.before = surfaceBefore;
+  surfaceOwner.token = surfaceToken;
   let freshSlot = null;
 
   // Quiet "Updated HH:MM", or the full "Connection lost" bar while the device is offline (results stay on screen).
@@ -244,25 +253,12 @@ export async function mountBtcEventDashboardScreen(
     const band = renderStatusBand(event);
     if (band) container.appendChild(band);
 
-    container.appendChild(
-      el('h1', {
-        id: 'btc-event-dashboard-heading',
-        text: event.name,
-        attrs: { tabindex: '-1' },
-      }),
-    );
-    container.appendChild(
-      el('p', {
-        className: 'stage-meta btc-event-meta',
-        text: metaLine(event, currentPhaseLabel(phases)),
-      }),
-    );
-
     freshSlot = el('div', { className: 'btc-event-fresh' });
-    container.appendChild(freshSlot);
     paintFreshness();
+    // The top strip of the page: when it was last loaded (left) and the night switch (right).
     container.appendChild(
-      el('div', { className: 'btc-event-tools' }, [
+      el('div', { className: 'btc-event-topbar' }, [
+        freshSlot,
         buildSurfaceSwitch({
           target: surfaceTarget,
           initial: surface,
@@ -275,6 +271,25 @@ export async function mountBtcEventDashboardScreen(
 
     const sheet = buildRunSheet(phases);
     const [nextCard, runSection] = [...sheet.children];
+
+    // Page head: a small label, the event name, and the two things an organiser reaches for most.
+    container.appendChild(
+      el('header', { className: 'btc-event-head' }, [
+        el('div', { className: 'btc-event-head-text' }, [
+          el('p', {
+            className: 'eyebrow btc-event-meta',
+            text: metaLine(event, currentPhaseLabel(phases)),
+          }),
+          el('h1', {
+            id: 'btc-event-dashboard-heading',
+            text: event.name,
+            attrs: { tabindex: '-1' },
+          }),
+        ]),
+      ]),
+    );
+
+    // "Next to score" takes the slot the live On-stage hero will have (spec Phase 2), full width above the strip.
     container.appendChild(nextCard);
     const strip = buildRunStrip(phases);
     if (strip) container.appendChild(strip);
@@ -286,24 +301,33 @@ export async function mountBtcEventDashboardScreen(
       takeOver: handlers ? takeOver : null,
     });
 
+    // Two columns from wide screens: what needs you and what is on the screens, beside the standings.
     container.appendChild(
-      el('div', { className: 'ok-dashboard' }, [
-        el('div', { className: 'ok-dashboard-main' }, [
-          runSection,
+      el('div', { className: 'btc-event-cols' }, [
+        el('div', { className: 'btc-event-col' }, [buildNeedsYou(warnings), liveCard.element]),
+        el('div', { className: 'btc-event-col' }, [
           buildDashboardStandings({
             teams: data.teams,
             seedingRows: data.seedingRows,
             href: links.standings,
           }),
-          buildHomepageListingCard(event, { client }),
-        ]),
-        el('div', { className: 'ok-dashboard-rail' }, [
-          buildNeedsYou(warnings),
-          liveCard.element,
-          buildRecordsCard(recordsFor(event, client)),
         ]),
       ]),
     );
+    container.appendChild(
+      el('div', { className: 'btc-event-cols btc-event-cols-b' }, [
+        buildRecordsCard(recordsFor(event, client)),
+        buildHomepageListingCard(event, { client }),
+      ]),
+    );
+
+    // The phase cards say each phase a second time, with its own actions and reasons: kept, folded away.
+    const allPhases = el('details', { className: 'btc-event-allphases' }, [
+      el('summary', { className: 'tap-target', text: 'All phases, with their actions' }),
+      runSection,
+    ]);
+    if (phases.some((p) => p.status === 'blocked')) allPhases.open = true;
+    container.appendChild(allPhases);
     container.appendChild(linksRow(links));
     root.appendChild(container);
 
@@ -320,7 +344,9 @@ export async function mountBtcEventDashboardScreen(
     unmount() {
       globalThis.removeEventListener?.('online', paintFreshness);
       globalThis.removeEventListener?.('offline', paintFreshness);
-      restoreSurface(surfaceTarget, surfaceBefore);
+      if (surfaceOwner.token !== surfaceToken) return;
+      surfaceOwner.token = null;
+      restoreSurface(surfaceTarget, surfaceOwner.before);
     },
   };
 }

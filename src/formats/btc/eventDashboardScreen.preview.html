@@ -6,6 +6,8 @@
     <title>BTC Event Dashboard — preview</title>
     <link rel="stylesheet" href="/src/ui/tokens/index.css" />
     <link rel="stylesheet" href="/src/ui/tokens/components.css" />
+    <link rel="stylesheet" href="/src/core/appShell.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
     <link rel="stylesheet" href="/src/formats/btc/shared.css" />
     <link rel="stylesheet" href="/src/formats/btc/eventDashboardScreen.css" />
   </head>
@@ -13,12 +15,14 @@
     <!--
       Demo-only harness for the BTC run-sheet dashboard (not part of the shipped module graph). No Supabase: an
       in-memory fake client answers every read. Pick a stage with the buttons, or ?stage=<name>[&shadow=1]
-      (empty, blocked, round1, round2, cut, knockout, podium, test, failed).
+      (empty, blocked, round1, round2, cut, knockout, podium, test, failed). Add &shell=1 to mount the page inside the
+      real organiser shell (header, menu, canvas), which is how it looks in the app.
     -->
     <p id="stages"></p>
     <div id="app"></div>
     <script type="module">
       import { mountBtcEventDashboardScreen } from './eventDashboardScreen.js';
+      import { mountAppShell } from '../../core/appShell.js';
 
       const STAGES = [
         'empty',
@@ -258,8 +262,28 @@
       const shadow = params.get('shadow') === '1';
       function mount(stage) {
         seq = 0;
-        document.getElementById('app').innerHTML = '';
-        mountBtcEventDashboardScreen(document.getElementById('app'), {
+        const host = document.getElementById('app');
+        host.innerHTML = '';
+        let target = host;
+        if (params.get('shell') === '1') {
+          const shellRoot = document.createElement('div');
+          shellRoot.className = 'app-shell-root';
+          host.append(shellRoot);
+          const authClient = {
+            auth: {
+              onAuthStateChange: (cb) => {
+                setTimeout(() =>
+                  cb('INITIAL_SESSION', { user: { id: 'u1', email: 'organiser@example.org' } }),
+                );
+                return { data: { subscription: { unsubscribe() {} } } };
+              },
+            },
+            from: createClient(scenario('round2', false), false).from,
+            rpc: () => Promise.resolve({ data: null, error: null }),
+          };
+          target = mountAppShell(shellRoot, { client: authClient }).outlet;
+        }
+        mountBtcEventDashboardScreen(target, {
           eventId: 'ev1',
           client: createClient(scenario(stage, shadow), stage === 'failed'),
           handlers: {},
