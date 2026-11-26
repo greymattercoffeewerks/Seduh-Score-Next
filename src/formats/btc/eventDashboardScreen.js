@@ -13,7 +13,15 @@ import { buildHomepageListingCard } from '../../core/homepageListingCard.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
 import { getDisputePack } from '../../core/disputePack.js';
 import { buildRunSheet } from '../../core/runSheet.js';
-import { buildEventWarnings } from '../../core/eventWarnings.js';
+import { buildNeedsYou } from '../../core/needsYou.js';
+import { buildRunStrip } from '../../core/runStrip.js';
+import { freshnessState, renderFreshness } from '../../core/freshness.js';
+import {
+  applyConsoleSurface,
+  buildSurfaceSwitch,
+  readSurfacePreference,
+  restoreSurface,
+} from '../../core/consoleSurface.js';
 import { buildLiveCard } from '../../core/liveCard.js';
 import { buildRecordsCard } from '../../core/recordsCard.js';
 import { renderStatusBand } from '../../core/statusBand.js';
@@ -98,6 +106,27 @@ export async function mountBtcEventDashboardScreen(
   let focusAfterRender = null;
   let data = null;
   let isLive = null;
+  let updatedAt = null;
+  // Night or day: set on the app shell (so its header follows) and put back when this screen unmounts.
+  const surfaceTarget = root.closest?.('.app-shell-root') ?? root;
+  const surfaceBefore = applyConsoleSurface(surfaceTarget, readSurfacePreference());
+  let freshSlot = null;
+
+  // Quiet "Updated HH:MM", or the full "Connection lost" bar while the device is offline (results stay on screen).
+  function paintFreshness() {
+    if (!freshSlot) return;
+    const bar = renderFreshness(
+      freshnessState({
+        now: Date.now(),
+        active: data != null,
+        channelLost: globalThis.navigator?.onLine === false,
+        lastOkAt: updatedAt,
+      }),
+    );
+    freshSlot.replaceChildren(...(bar ? [bar] : []));
+  }
+  globalThis.addEventListener?.('online', paintFreshness);
+  globalThis.addEventListener?.('offline', paintFreshness);
 
   function renderLoading() {
     root.innerHTML = '';
@@ -153,6 +182,7 @@ export async function mountBtcEventDashboardScreen(
         .then((activeId) => activeId === eventId)
         .catch(() => null);
       data = loaded;
+      updatedAt = Date.now();
       loadFailedMessage = null;
       // Same Retry-only focus gap Cup Taster's own eventDashboardScreen.js closed: the very first successful
       // mount is covered by router.js's heading fallback, but a Retry click does not go through the router.
@@ -227,9 +257,20 @@ export async function mountBtcEventDashboardScreen(
       }),
     );
 
+    freshSlot = el('div', { className: 'btc-event-fresh' });
+    container.appendChild(freshSlot);
+    paintFreshness();
+    container.appendChild(
+      el('div', { className: 'btc-event-tools' }, [
+        buildSurfaceSwitch({ target: surfaceTarget, initial: readSurfacePreference() }),
+      ]),
+    );
+
     const sheet = buildRunSheet(phases);
     const [nextCard, runSection] = [...sheet.children];
     container.appendChild(nextCard);
+    const strip = buildRunStrip(phases);
+    if (strip) container.appendChild(strip);
 
     const liveCard = buildLiveCard({
       isLive,
@@ -245,7 +286,7 @@ export async function mountBtcEventDashboardScreen(
           buildHomepageListingCard(event, { client }),
         ]),
         el('div', { className: 'ok-dashboard-rail' }, [
-          buildEventWarnings(warnings),
+          buildNeedsYou(warnings),
           liveCard.element,
           buildRecordsCard(recordsFor(event, client)),
         ]),
@@ -265,7 +306,9 @@ export async function mountBtcEventDashboardScreen(
 
   return {
     unmount() {
-      // No timers or listeners outside the elements themselves: nothing to tear down.
+      globalThis.removeEventListener?.('online', paintFreshness);
+      globalThis.removeEventListener?.('offline', paintFreshness);
+      restoreSurface(surfaceTarget, surfaceBefore);
     },
   };
 }
