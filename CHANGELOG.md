@@ -7,6 +7,34 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC event dashboard: night edition, Phase 1 · 4.30.0 · 2026-11-26
+
+**Status: NOT FINAL.** PR #557 to `dev` stays a draft until the owner's tablet and phone check. Owed: that check; a keyboard and screen-reader pass; a rendered contrast check (the reviewer measured from tokens only).
+
+- **Why.** The owner wants the BTC event dashboard usable in a dim room during a night session, and wants the organiser to see who is level at the cut before the committee sign-off. Phase 1 of `docs/specs/BTC-NIGHT-DASHBOARD-SPEC.md`, built on the Petrol night tokens (4.29.1).
+- **What.**
+  - `src/core/consoleSurface.js`: night or day is `data-surface="stage"` on `.app-shell-root`, kept in localStorage (read and write wrapped in try/catch), shown as a `role="switch"` toggle.
+  - `src/core/needsYou.js`: the `.queue` list, built from the `eventWarnings` data.
+  - `src/core/runStrip.js`: the `.runsheet` strip across the top.
+  - BTC only, `src/formats/btc/dashboardStandings.js`: top 8, plus 2 from `seedingRows`, with a `.cutline` after the 8th and a draft note. Where 8th and 9th are level on points, a note names the committee rule: the shortest combined preliminary time goes through. The organiser records the order on the Standings screen. The database orders by points only; the dashboard never decides.
+  - Freshness: "Updated HH:MM" is the last load time. "Connection lost" shows only when `navigator` is offline. The page does not poll.
+  - `eventDashboardScreen.js` and its CSS wire these in. Phase cards still sit under the strip (not replaced yet).
+- **Files.** `src/core/consoleSurface.js`, `needsYou.js`, `runStrip.js` (each with a `.test.js`); `src/formats/btc/dashboardStandings.js` (+ test), `eventDashboardScreen.js` (+ test), `eventDashboardScreen.css`; `docs/specs/BTC-NIGHT-DASHBOARD-SPEC.md`; `CHANGELOG.md`, `STATUS.md`, `package.json`, `package-lock.json`.
+- **No migration, RPC or new read.** Everything uses data the dashboard already loads.
+- **Decisions (owner, 2026-11-26).**
+  - No live On-stage hero now. It is written up as Phase 2 in the spec.
+  - Night is a toggle switch, not a third mode.
+  - Standings ship now as a draft preview.
+  - "Watching on phones" and "behind plan" need new data, so they wait.
+- **Verification.** Vitest core and btc: 4084 pass. ESLint and Prettier clean. CI was green on earlier heads of this branch; not re-confirmed on the current head. Screenshots taken at 360px and at 1280px in night mode (not committed).
+- **Reviews.**
+  - `code-reviewer`, pass 1: 1 Important. The freshness bar said "Connection lost" after 90s while online. Fixed: only offline says lost. Pass 2: clean, 1 nit (the level-at-the-cut note stayed after the tie was settled). Fixed.
+  - `module-boundary-checker`: clean, 2 nits, both left on purpose: the shell class lookup in the BTC screen; `needsYou` is a second renderer beside `eventWarnings` (it reads the same data, renders its own list).
+  - `ui-accessibility-reviewer`, pass 1: the stale freshness finding (same as above, fixed). An is_test finding was WRONG: `renderStatusBand` already draws the is_test mark, so nothing changed. Switch state disagreed with storage after a storage failure (fixed). Pressed state was not visible (fixed with On/Off words). Pass 2: 1 nit, the state word doubled in the switch's accessible name (fixed with `aria-hidden`).
+  - `test-auditor`: 1 Important, no negative test for a tie away from the cut (fixed: tests for a tie above, below, and once settled). 4 nits fixed.
+  - Not triggered: `security-reviewer`, `schema-guardian`, `scoring-auditor`, `offline-sync-auditor` (no RLS, migration, scoring or outbox change).
+- **Version.** Minor (4.29.1 to 4.30.0, `npm version minor --no-git-tag-version`, which also moved `package-lock.json`). The night switch and the standings preview are new things an organiser can use. The CI "Version bump" job runs only on PRs into `main`, so it does not check this PR; the release PR is the backstop.
+
 ## Petrol: night console tokens and parts · 4.29.1 · 2026-11-26
 
 - **Why.** The owner asked for a night-mode BTC Event dashboard concept, then to feed what worked back into Petrol (and take Petrol back into the concept). A separate thread builds that dashboard and takes these names as they are, so the tokens land first.
