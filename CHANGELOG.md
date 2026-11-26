@@ -7,6 +7,14 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Behind the Seduh: brought up to 4.30.0 · 4.30.1 · 2026-11-26
+
+- **Why.** The page said v4.22.0; the app was at 4.30.0. Throwdown's scoresheet, Seduh ID and organiser work, and the Petrol freshness and BTC night releases were missing.
+- **What.** Two new Kiarong chapters at the top, six entries: "A night console for BTC, and results that stay on screen" (4.29.0 to 4.30.0) and "Throwdown, readied for its first real event" (4.23.0 to 4.28.0). Scoreboard v4.30.1, 67 log entries, 10 Kiarong chapters, latest-chapter link. Throwdown still said as not yet run at a live event.
+- **Files.** `bts/index.html`, `CHANGELOG.md`, `STATUS.md`, `package.json`, `package-lock.json`. No code, migration or cloud change.
+- **Version.** Patch: copy only. The CI gate needs a bump because an `.html` file changed.
+- **Reviews.** `btsPage.test.js` (place, version, entry count, topics, links). No reviewer run: copy only.
+
 ## BTC event dashboard: night edition, Phase 1 · 4.30.0 · 2026-11-26
 
 **Status: NOT FINAL.** PR #557 to `dev` stays a draft until the owner's tablet and phone check. Owed: that check; a keyboard and screen-reader pass; a rendered contrast check (the reviewer measured from tokens only).
