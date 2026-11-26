@@ -18,7 +18,11 @@ beforeEach(() => {
   root = document.querySelector('#app');
 });
 const text = () => root.textContent;
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+// Waits for the Share to story note to say `words`; never a fixed number of ticks (the draw awaits a lazy flag import).
+const settled = (words) =>
+  vi.waitFor(() => expect(root.querySelector('.country-share-note').textContent).toContain(words), {
+    timeout: 5000,
+  });
 
 describe('the country page', () => {
   const mount = (record = RECORD, extra = {}) =>
@@ -214,9 +218,9 @@ describe('the country page', () => {
     const alert = root.querySelector('[role="alert"]');
     expect(alert.textContent).toContain('Something went wrong');
     alert.querySelector('button').click();
-    await flush();
-    await flush();
-    expect(root.querySelector('.country-champ')).not.toBeNull();
+    await vi.waitFor(() => expect(root.querySelector('.country-champ')).not.toBeNull(), {
+      timeout: 4000,
+    });
   });
 });
 
@@ -236,8 +240,8 @@ describe('Share to story', () => {
     const share = vi.fn(async () => 'shared');
     const button = await mountWith(share, render);
     button.click();
-    await flush();
-    await flush();
+    // The flag is a lazily imported module, so how long the draw takes depends on load: wait for the outcome.
+    await settled('Shared.');
     const spec = render.mock.calls[0][0];
     expect(spec.title).toBe('Brunei');
     expect(spec.tile).toBe('BN');
@@ -262,15 +266,10 @@ describe('Share to story', () => {
     const share = vi.fn(async () => 'saved');
     const button = await mountWith(share, render);
     button.click();
-    await flush();
-    await flush();
-    expect(root.querySelector('.country-share-note').textContent).toContain(
-      'Could not make the picture',
-    );
+    await settled('Could not make the picture');
+    expect(button.hasAttribute('aria-busy')).toBe(false);
     button.click();
-    await flush();
-    await flush();
-    expect(root.querySelector('.country-share-note').textContent).toContain('Picture saved');
+    await settled('Picture saved');
   });
 });
 
