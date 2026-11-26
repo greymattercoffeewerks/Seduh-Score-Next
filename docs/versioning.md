@@ -86,9 +86,12 @@ The move tracks code shipping to the repo, not the separate deploy step.
 ## Planned bumps (a reminder, not a place move)
 
 - **When the Admin World console ships** (the redesigned `/admin/`, stages W1 to W7 of the world console spec), bump
-  the version then. The default is a **minor**: it is a new platform capability for the operator, not a new format, so
-  the place stays Kiarong. The owner has not said whether a major is wanted instead; ask before bumping. Also add a
-  chapter for it to the Behind the Seduh page (below) in the same release.
+  a **major** (owner decision, 2026-11-26: it is treated as a relaunch of the operator side, not a minor feature). A
+  major moves the place name, so pick the next unused place then and update the BTS page and the place table above.
+  Note the clash: Menglait and 5.0.0 are planned for Liga Seduh (the fourth format), so decide at that point which of
+  the two takes the next major. Add a chapter for it to the Behind the Seduh page (below) in the same release.
+- **A sub-format under an existing format** (for example a new Cup Taster variant) is a **minor**, not a major: it is a
+  new capability inside a format that already exists. A major is for a whole new format or a relaunch.
 
 ## The Behind the Seduh page (`/bts/`)
 
