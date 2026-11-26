@@ -50,6 +50,12 @@ import {
   phoneWillChange,
 } from '../../core/registry.js';
 import { DEFAULT_COUNTRY } from '../../core/phone.js';
+import {
+  loadDemoRoster,
+  describeDemoRosterError,
+  describeDemoRosterLoaded,
+  renderDemoRosterCard,
+} from '../../core/demoRoster.js';
 import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
 import {
   REGISTRATION_LIMITS,
@@ -713,6 +719,18 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     form.addEventListener('submit', handleRegister);
     container.appendChild(form);
 
+    // Test events only (the database refuses a real event regardless): eight made-up cuppers, no typing.
+    if (event?.is_test) {
+      container.appendChild(
+        renderDemoRosterCard({
+          idPrefix: 'roster',
+          noun: 'cuppers',
+          busy,
+          onLoad: handleLoadDemoRoster,
+        }),
+      );
+    }
+
     container.appendChild(
       renderRosterEntries(entries, {
         onToggleWithdrawn: handleToggleWithdrawn,
@@ -793,6 +811,27 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       pendingError = describeError(err);
     }
 
+    busy = false;
+    render();
+  }
+
+  async function handleLoadDemoRoster() {
+    if (busy) return;
+    savedNote = null;
+    busy = true;
+    render();
+    try {
+      const loaded = await loadDemoRoster(event.org_id, eventId, client);
+      try {
+        applyPersisted(await loadPersisted());
+        pendingSuccess = describeDemoRosterLoaded(loaded);
+      } catch {
+        pendingSuccess =
+          'Demo people loaded, but the screen could not refresh — reload to see the roster.';
+      }
+    } catch (err) {
+      pendingError = describeDemoRosterError(err);
+    }
     busy = false;
     render();
   }

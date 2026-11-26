@@ -125,6 +125,7 @@ insert into e1.rpc (name, sql, org_only) values
   ('generate_btc_bracket', 'select public.generate_btc_bracket(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('create_btc_bracket_match', 'select public.create_btc_bracket_match(e1.u(''@'',100), e1.u(''%'',14), array[e1.u(''%'',11)])', false),
   ('load_btc_demo', 'select public.load_btc_demo(e1.u(''@'',100), e1.u(''%'',50), true)', false),
+  ('load_demo_roster', 'select public.load_demo_roster(e1.u(''@'',100), e1.u(''%'',50))', false),
   ('create_btc_round', 'select public.create_btc_round(e1.u(''@'',100), e1.u(''%'',1), 1::smallint, ''random'', ''seed'', jsonb_build_array(jsonb_build_object(''team1_id'', e1.u(''%'',9), ''team2_id'', e1.u(''%'',10), ''judge_ids'', jsonb_build_array(e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)))))', false),
   ('redraw_btc_round', 'select public.redraw_btc_round(e1.u(''@'',100), e1.u(''%'',1), 1::smallint)', false),
   ('create_btc_match', 'select public.create_btc_match(e1.u(''%'',1), ''preliminary'', e1.u(''%'',9), e1.u(''%'',10), array[e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)])', false),
@@ -169,10 +170,11 @@ update e1.rpc set own_expect = case name
   when 'td_confirm_match'            then 'P0001: td_confirm_match: the votes are level'
   when 'td_save_score_sheet'         then 'P0001: td_save_score_sheet: this match is decided by taps, not by scoresheets'
   when 'td_confirm_scored_match'     then 'P0001: td_confirm_scored_match: this match is decided by taps, not by scoresheets'
+  when 'load_demo_roster'            then 'P0001: load_demo_roster: demo roster is only available for Cup Taster and Throwdown events'
   when 'issue_seduh_claim_link'      then 'P0001: This person has no Seduh ID yet'
   when 'revoke_seduh_claim_link'     then 'P0001: There is no open claim link for this person'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 44, 'the matrix covers 44 RPCs');
+select is((select count(*)::int from e1.rpc), 45, 'the matrix covers 45 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
