@@ -5,7 +5,7 @@
 -- non-member are refused with a hint; a demo person has no Seduh ID link; the phones are valid E.164 and the names
 -- say Demo; anon cannot execute it.
 begin;
-select plan(30);
+select plan(29);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@t094.seduh-next'),

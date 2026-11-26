@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(106);
+select plan(108);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
