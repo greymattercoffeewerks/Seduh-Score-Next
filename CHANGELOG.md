@@ -7,6 +7,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Petrol: night console tokens and parts · 4.29.1 · 2026-11-26
+
+- **Why.** The owner asked for a night-mode BTC Event dashboard concept, then to feed what worked back into Petrol (and take Petrol back into the concept). A separate thread builds that dashboard and takes these names as they are, so the tokens land first.
+- **What.** `--clr-petrol-975` and `--color-chrome` (stage: under the canvas; paper: the surface step), `--tracking-caps`, and the parts `.eyebrow`, `.queue` (with `.queue-title`, `.queue-detail`, `data-severity="attention"`), `.runsheet` (with `.runsheet-title`, `.runsheet-detail`) and `.cutline` in `vocabulary.css`. "Console parts" section in `preview.html` (paper and stage). `DESIGN.md` "Night console and console parts"; `PDS-CHANGELOG.md` entry. No screen changed.
+- **Decisions.**
+  - The night console is the existing `data-surface="stage"`, not a third mode.
+  - The concept's gold on a tie is dropped (gold is ceremonial); the queue has accent and warning edges.
+  - No `.btn-sm`: the concept's small button is not added, since `.btn` already holds the 44px floor.
+  - Eyebrow is 12px (`--text-2xs`); the concept used 11px.
+- **Verification.** `src/ui/tokens` tests 113 pass (new `consoleChrome.test.js`: chrome and the parts' text pairings at 4.5:1 and the queue edges at 3:1, both modes; the parts reach every page; no raw colour, clip-path or shadow in the new block). ESLint and Prettier clean. The preview rendered in a real browser in paper and stage (checked by eye).
+- **Reviews.** `code-reviewer`: clean (one nit, fixed: the "975 used once" check now scans every token file). `ui-accessibility-reviewer`: 1 Important, fixed. The queue's attention edge was colour only, so an attention item now also carries a `.status` mark with a word (contract, preview, DESIGN.md), and 2 nits fixed (runsheet cells get a forced-colours border; the upcoming cell says "Upcoming"). `test-auditor`: 3 Important, all fixed: a missing marker made the "takes tokens" test vacuous, the raw-colour check was hex-only, and the queue edge was not tested where it is set. Fixes were not re-run past a second reviewer; the full suite (8,029 tests) and lint pass. Owed: a keyboard and screen-reader pass once a live screen uses the parts.
+- **Version.** Patch: groundwork nobody can use yet. The dashboard that uses it is the minor.
+
 ## Tooling: history-intake skill for country-history batches · no version change · 2026-11-25
 
 **Status: NOT FINAL.** Owed: one end-to-end run on new sources (the 2019 to 2022 files, when the owner supplies them). The checker and the misread catch are verified (see Verification); the full skill flow is not.

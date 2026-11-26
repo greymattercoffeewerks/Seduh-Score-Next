@@ -58,4 +58,6 @@
   --tracking-tight: -0.02em;
   --tracking-normal: 0em;
   --tracking-wide: 0.02em;
+  /* Mono uppercase labels (the .eyebrow part, table heads, status marks). */
+  --tracking-caps: 0.14em;
 }
