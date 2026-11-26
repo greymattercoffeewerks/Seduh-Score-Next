@@ -43,6 +43,24 @@ describe('standings preview', () => {
     expect(describeStandingsPreview({ teams, seedingRows: rows }).level).toBe(true);
   });
 
+  it('does not flag a tie wholly above or wholly below the line, or one the organiser has settled', () => {
+    const tied = (pairs, resolved = false) =>
+      seeding(distinct).map((r, i) =>
+        pairs.includes(i)
+          ? { ...r, totalPoints: 999 - (i < 2 ? 0 : 500), tiedCount: 2, groupResolved: resolved }
+          : r,
+      );
+    const level = (rows) => describeStandingsPreview({ teams, seedingRows: rows }).level;
+    expect(level(tied([0, 1]))).toBe(false); // seeds 1 and 2
+    expect(level(tied([8, 9]))).toBe(false); // seeds 9 and 10
+    const border = seeding(distinct).map((r, i) =>
+      i === 7 || i === 8 ? { ...r, totalPoints: 15, tiedCount: 2, groupResolved: true } : r,
+    );
+    expect(level(border)).toBe(false); // organiser already recorded the order
+    const card = buildDashboardStandings({ teams, seedingRows: tied([0, 1]) });
+    expect(card.textContent).not.toContain(LEVEL_NOTE);
+  });
+
   it('draws the cut line once, after 8th, with the draft note and the committee tie rule when level', () => {
     const rows = seeding(distinct).map((r, i) =>
       i === 7 || i === 8 ? { ...r, totalPoints: 15, tiedCount: 2, groupResolved: false } : r,

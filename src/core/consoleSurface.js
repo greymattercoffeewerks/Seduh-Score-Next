@@ -59,6 +59,8 @@ export function buildSurfaceSwitch({
   const state = el('span', {
     className: 'console-surface-switch-state',
     text: current === 'night' ? 'On' : 'Off',
+    // the switch's name stays "Night mode"; aria-checked carries the state, so it is not read twice
+    attrs: { 'aria-hidden': 'true' },
   });
   // A real toggle switch: a button with role="switch", a track and a thumb, and the state in words as well.
   const button = el(

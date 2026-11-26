@@ -21,7 +21,9 @@ describe('buildRunStrip', () => {
 
   it('draws a meter only for a phase with progress, and nothing for no phases', () => {
     const cells = [...buildRunStrip(phases).querySelectorAll('li')];
-    expect(cells[1].querySelector('[role="meter"]')).not.toBeNull();
+    const meter = cells[1].querySelector('[role="meter"]');
+    expect(meter).not.toBeNull();
+    expect(meter.getAttribute('aria-valuetext')).toBe('3 of 8 done');
     expect(cells[0].querySelector('[role="meter"]')).toBeNull();
     expect(buildRunStrip([])).toBeNull();
   });

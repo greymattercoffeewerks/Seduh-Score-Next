@@ -61,5 +61,7 @@ describe('console surface', () => {
     const b2 = buildSurfaceSwitch({ target: node, initial: 'night', storage: blocked });
     expect(() => b2.click()).not.toThrow();
     expect(node.hasAttribute('data-surface')).toBe(false);
+    expect(b2.getAttribute('aria-checked')).toBe('false');
+    expect(b2.querySelector('.console-surface-switch-state').textContent).toBe('Off');
   });
 });

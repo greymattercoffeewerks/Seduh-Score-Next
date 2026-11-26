@@ -78,6 +78,7 @@ describe('mountBtcEventDashboardScreen', () => {
     downloadCsv.mockReset();
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     root.remove();
   });
 
@@ -86,6 +87,7 @@ describe('mountBtcEventDashboardScreen', () => {
     const cells = root.querySelectorAll('.runsheet > li');
     expect(cells).toHaveLength(6);
     expect(root.querySelectorAll('.runsheet [aria-current="step"]')).toHaveLength(1);
+    expect(cells[0].getAttribute('aria-current')).toBe('step');
   });
 
   it('night mode flips the surface on the shell, and unmount puts it back', async () => {
@@ -108,7 +110,7 @@ describe('mountBtcEventDashboardScreen', () => {
   });
 
   it('shows quiet Updated time, then a Connection lost alert when the device goes offline', async () => {
-    await mount(root, {});
+    const screen = await mount(root, {});
     expect(root.querySelector('.viewer-freshness').dataset.kind).toBe('fresh');
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     window.dispatchEvent(new Event('offline'));
@@ -116,7 +118,7 @@ describe('mountBtcEventDashboardScreen', () => {
     expect(bar.dataset.kind).toBe('lost');
     expect(bar.getAttribute('role')).toBe('alert');
     expect(bar.textContent).toContain('Connection lost');
-    vi.restoreAllMocks();
+    screen.unmount();
   });
 
   it('shows the event name as the heading, with a meta line, and focuses it', async () => {

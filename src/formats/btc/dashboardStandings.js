@@ -5,7 +5,7 @@
 // (cutData.js draws the order the database gave; this file only takes the top rows of it).
 import { el } from '../../core/dom.js';
 import { kitId } from '../../core/kitLink.js';
-import { deriveCutRows, isLevelRows, rankCutRows } from './cutData.js';
+import { deriveCutRows, isLevelRows, isSettledRows, rankCutRows } from './cutData.js';
 import { KNOCKOUT_PLACES, teamLabelNode } from './words.js';
 
 // How many rows the preview shows: the eight, and two below the line so a close call is visible.
@@ -37,7 +37,8 @@ export function describeStandingsPreview({ teams, seedingRows }) {
     state: 'rows',
     rows,
     hidden: Math.max(0, all.length - rows.length),
-    level: Boolean(last && next && isLevelRows(last, next)),
+    // level and not yet put in order by the organiser (the standings screen records it)
+    level: Boolean(last && next && isLevelRows(last, next) && !isSettledRows([last, next])),
   };
 }
 
