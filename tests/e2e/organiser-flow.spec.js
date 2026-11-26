@@ -784,7 +784,9 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // The open panel at 900px is a drawer on the left: the links are one column (the same left edge, one under
     // another), it is as tall as the screen, and no wider than 18rem (288px).
     await toggle.click();
-    const layout = await page.evaluate(() => {
+    const layout = await page.evaluate(async () => {
+      // The drawer slides in: measure it where it comes to rest, not part-way.
+      await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {})));
       const rects = [...document.querySelectorAll('.app-shell-nav a')].map((a) =>
         a.getBoundingClientRect(),
       );
