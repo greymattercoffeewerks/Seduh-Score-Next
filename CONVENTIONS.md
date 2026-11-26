@@ -701,6 +701,12 @@ section only records the conventions a new screen or token needs to follow.
   `@media (prefers-reduced-motion: no-preference)` block, as `.screen-feedback:not(:empty)` does in `components.css`,
   and a test pins the wrap. `base.css`'s global reduce rule is the backstop (it cuts animation to 0.01ms), not the
   guard. Rules that still rely on the backstop alone are logged in `docs/backlog/tenancy.md`.
+- **An organiser screen at night (4.30.0).** Night is `data-surface="stage"` on the shell, not a third mode; use
+  `core/consoleSurface.js` (it restores the surface on unmount, and treats blocked storage as day) and the parts
+  `.eyebrow`, `.queue`, `.runsheet`, `.cutline` and `--color-chrome` from `src/ui/tokens` (`DESIGN.md` "Night console and
+  console parts"). Do not hand-pick hex for a night screen, and do not paint urgency with colour alone: a `.queue` row
+  that is urgent carries a `.status` word. A status line that shows a time must say what the time is (a load, not a
+  heartbeat) and may say "Connection lost" only from a signal the screen really has.
 - `src/ui/tokens/preview.html` renders every token in both surface modes — open it
   (`npm run dev`, then `/src/ui/tokens/preview.html`) when changing any token value, and
   keep its demo copy format-agnostic (a leaked Cup-Taster-specific term here was
