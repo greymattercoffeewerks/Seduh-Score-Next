@@ -2,6 +2,13 @@
 
 One line per entry moved out of `CHANGELOG.md`: date, heading, file. The most recent entries are in [`CHANGELOG.md`](CHANGELOG.md).
 
+- Public site: three small backlog fixes · 2026-11-14 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)
+- Public header links: one list for every public page (fix) · 2026-11-14 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)
+- Country pages: a compact pass (owner visual feedback) · 2026-11-14 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)
+- Country pages: matches won and lost removed · 2026-11-13 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)
+- Seduh ID country pages: pages, switched-off entry points, story card (T-CTY.3, T-CTY.4, T-CTY.5) · 2026-11-13 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)
+- Seduh ID country pages: database and import script (T-CTY.1, T-CTY.2) · 2026-11-13 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)
+- Public Tour refresh (`/tour/`, draft v4) · 2026-11-13 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)
 - D-PW1: organiser password recovery and Change password · 2026-10-23 → [`2026-10-H2`](docs/archive/changelog/2026-10-H2.md)
 - T-GATE.C: the admin Plan panel (gating step 3), still dark · 2026-10-23 → [`2026-10-H2`](docs/archive/changelog/2026-10-H2.md)
 - T-GATE.B5: the Per-event 5-day window lock, shipped dark · 2026-10-23 → [`2026-10-H2`](docs/archive/changelog/2026-10-H2.md)
