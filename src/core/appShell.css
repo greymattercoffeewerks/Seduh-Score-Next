@@ -20,7 +20,8 @@
      rather than relying on default stacking order by accident. */
   position: sticky;
   top: 0;
-  background: var(--color-surface);
+  /* One step off the canvas at night (--color-chrome); in the paper surface it is the same as --color-surface. */
+  background: var(--color-chrome);
   z-index: 10;
   /* One line of the sync chip (see .app-shell-sync-chip): its height in every state. */
   --app-shell-chip-height: calc(var(--leading-normal) * var(--text-sm) + 2 * var(--space-1));

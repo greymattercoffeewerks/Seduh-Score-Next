@@ -7,6 +7,19 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC dashboard night mode, fix against the concept · 4.30.1 · 2026-11-26
+
+**Status: NOT FINAL.** The owner opened 4.30.0 in production and found it incomplete (screenshot): only the cards went dark, text on them was unreadable, and the layout was far from the concept. This is the fix. Owed: the owner's check on the real tablet and phone, a keyboard and screen-reader pass, and a decision on the side menu (below).
+
+- **Root cause.** 4.30.0 put `data-surface="stage"` on the app shell node. The page background and the text colour are set on `<body>`, outside it, so the canvas stayed light, and every element that does not set its own colour inherited body's dark `color`: "Round 2", "Setup" and the standings rows were dark on dark. The tests only checked that the attribute was set, and the preview harness had no shell, so none of it showed.
+- **Fix.** The night switch now sets the surface on `<html>`, so canvas, header, text and cards all follow, and `unmount` puts it back. The shell header sits one step off the canvas (`--color-chrome`; the same as the surface in day mode, so day is unchanged). The page is laid out in the concept's order: a top strip (Updated time, night switch), the event name over a mono label, the Next step, the six-phase strip, then two columns (Needs you and Live now beside Standings), then Records and the homepage listing. The six phase cards, which repeated the strip, are folded into "All phases, with their actions" (open by itself when a phase is blocked, so a blocking reason is never hidden). Panels use the hairline box edge.
+- **Not done, on purpose.** The concept's left side menu: the real app has a top header with the event links, and a side rail is an app-shell change for every screen, not a dashboard fix. The concept's live On-stage hero and stats row are Phase 2 (they need data the page does not have). Both are listed in `docs/backlog/btc.md`.
+- **Preview harness.** `eventDashboardScreen.preview.html` takes `&shell=1` to mount the page inside the real organiser shell, which is how it looks in the app; screens of the page must be checked that way.
+- **Tests.** The surface is asserted on `<html>` (and cleared on unmount), the page order and the top strip are asserted, and a stylesheet guard fails if the shell header leaves `--color-chrome`.
+- **Reviews.** Pending (see PR).
+
+---
+
 ## BTC event dashboard: night edition, Phase 1 · 4.30.0 · 2026-11-26
 
 **Status: NOT FINAL.** PR #557 to `dev` stays a draft until the owner's tablet and phone check. Owed: that check; a keyboard and screen-reader pass; a rendered contrast check (the reviewer measured from tokens only).
