@@ -44,6 +44,9 @@
   --clr-petrol-800: #1a2124;
   --clr-petrol-900: #12171a;
   --clr-petrol-950: #0b0e10;
+  /* One step under the stage canvas, for the console's chrome (side menu, top bar) at night: see --color-chrome.
+     Not a text or surface colour: nothing but --color-chrome reads it. (Night console concept, 2026-11-26) */
+  --clr-petrol-975: #070a0b;
 
   /* Teal — primary brand/interactive accent. Dropped the coffee-cherry
      meaning Cherry's chartreuse accent carried; teal here reads as
@@ -124,6 +127,10 @@
   /* Form-control edges (WCAG 1.4.11, 3:1): same ramp step as the card edge, named for its role. */
   --color-border-input: var(--clr-petrol-400);
 
+  /* The console's chrome: the side menu and top bar that frame a screen. Paper: the surface step. Stage: one step
+     under the canvas (--clr-petrol-975), so the frame reads as the outermost layer at night. */
+  --color-chrome: var(--clr-petrol-50);
+
   --color-text: var(--clr-petrol-950);
   --color-text-secondary: var(--clr-petrol-700);
   --color-text-muted: var(--clr-petrol-600);
@@ -167,6 +174,8 @@
   --color-border-card: var(--clr-petrol-400);
   /* Form-control edges (WCAG 1.4.11, 3:1): same ramp step as the card edge, named for its role. */
   --color-border-input: var(--clr-petrol-400);
+
+  --color-chrome: var(--clr-petrol-975);
 
   --color-text: var(--clr-petrol-50);
   --color-text-secondary: var(--clr-petrol-300);

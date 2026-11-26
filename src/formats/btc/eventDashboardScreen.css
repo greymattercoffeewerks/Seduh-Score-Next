@@ -29,3 +29,105 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+.btc-event-tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The freshness line is quiet; the lost bar is a bordered strip with the mark and the sentence (words and shape). */
+.btc-event-fresh .viewer-freshness-text {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.btc-event-fresh .viewer-freshness[data-kind='lost'] {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-strong) solid var(--color-warning);
+  border-radius: var(--radius-box);
+  background: var(--color-surface-sunken);
+}
+
+/* The night switch: label, a track with a thumb, and On/Off in words. Roles and tokens only. */
+.console-surface-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-hairline) solid var(--btn-outline-edge);
+  border-radius: var(--radius-field);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.console-surface-switch-track {
+  position: relative;
+  width: 2.5rem;
+  height: 1.5rem;
+  flex: none;
+  border: var(--border-strong) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+}
+
+.console-surface-switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 1rem;
+  height: 1rem;
+  transform: translateY(-50%);
+  border-radius: var(--radius-full);
+  background: var(--color-text-secondary);
+}
+
+.console-surface-switch[aria-checked='true'] .console-surface-switch-track {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.console-surface-switch[aria-checked='true'] .console-surface-switch-thumb {
+  left: calc(100% - 1rem - 2px);
+  background: var(--color-accent-contrast);
+}
+
+.console-surface-switch-state {
+  min-width: 1.75rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .console-surface-switch-thumb {
+    transition: left var(--dur-fast) var(--ease-out);
+  }
+}
+
+.btc-dash-standings {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.btc-dash-standings th,
+.btc-dash-standings td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  font-weight: var(--font-weight-regular);
+}
+
+.btc-dash-standings td:nth-child(3),
+.btc-dash-standings td:nth-child(4),
+.btc-dash-standings thead th:nth-child(3),
+.btc-dash-standings thead th:nth-child(4) {
+  text-align: right;
+}
+
+.btc-dash-standings td:has(> .cutline) {
+  padding: 0;
+  border-bottom: 0;
+}

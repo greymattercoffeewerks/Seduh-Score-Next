@@ -1,10 +1,11 @@
 # Status — read this first
 
-_As of 2026-11-24, app version 4.29.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-26, app version 4.30.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
+- **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Owed: the owner's tablet and phone check (CHANGELOG 4.30.0). Its Petrol tokens (4.29.1) are in a PR to `dev`.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
@@ -12,12 +13,12 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0), discovery (4.17.3, behind its off switch), courses and certificates (4.19.0), "This isn't mine" on a recorded result (4.20.0), all live (the owner still to confirm the dispute policy, CHANGELOG 4.20.0, and the discovery search policy, 4.17.3); the archive feed (1b) is in `queue` mode and
   has published nothing yet.
-- **Organiser home** (`#/events` rebuild, `/events/new`, the `org_event_summaries` door): live as 4.17.0 (#496, release #499); its migration is in the cloud. Owner's real-device check owed.
+- **Organiser home** (`#/events` rebuild): live as 4.17.0; its migration is in the cloud. Owner's real-device check owed.
 - **Country pages** (4.10.2): live, data in the cloud. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
 - **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
 - **Cloud database in sync (checked 2026-11-20):** all 128 migrations on `dev` are in the cloud project, none extra, including
   `seduh_throwdown_profile` (4.24.0), pushed after #529 merged.
-- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`, first adopter of the shared community chrome): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout to the Timer, Brew Planner and Guess the Bean organiser page (#521) and the share-preview fix (#520, 4.21.1) are released as **4.22.0** (minor: every tool now links to the others).
+- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout and share-preview fix are released as **4.22.0** (minor: every tool links to the others).
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
@@ -25,8 +26,8 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown competitor Edit** (4.25.0) and **projector on the shared kit** (4.26.0): owner's tablet and TV checks owed.
 - **Throwdown dashboard, Phases B and C** (4.28.0, stacked on #544/#543): routed; votes on Matches.
 - **Throwdown undo and offline vote screen** (4.27.0): undo a confirmed match; the event screen survives a dropped connection. Migration in the cloud. Owed: the owner's tablet check before 27 Nov.
-- **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
-  PR #297 (no database door, so no brand shows).
+- **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started. Organiser branding
+  BR-E1 merged in #297 (2026-10-22) and is on `main`, but the database door (BR-B1) is KIV, so no brand shows.
 
 ## In flight: the March 2027 Board and a beta run
 
@@ -63,6 +64,6 @@ Moved verbatim to [`docs/archive/status/handover-2026-11-08.md`](docs/archive/st
 
 ## Keeping the hot files short
 
-New deferred findings go to the area's file in `docs/backlog/`, not `ROADMAP.md`. When `CHANGELOG.md` passes about 200 KB,
+Deferred findings go to `docs/backlog/`, not `ROADMAP.md`. When `CHANGELOG.md` passes about 200 KB,
 move its oldest entries verbatim to `docs/archive/changelog/<period>.md` and add one line each to `CHANGELOG-INDEX.md`.
 `npm run check:docs` fails CI on a blown budget, a broken link, or an indexed heading missing from its archive file.

@@ -231,6 +231,8 @@ Design-system-relevant entries in `CHANGELOG.md` after P6, to current dev (4.29.
   shell, so every format gets it). (3) The standalone Timer's Reset is its own row and asks first (feedback ladder
   step 3) while a run is going. Rules in `DESIGN.md` "Figma review fixes". Owner's real-venue check owed.
 
+- **Night console parts, 4.29.1 · 2026-11-26:** from the BTC dashboard concept (the first design made as a Petrol concept before code): `--clr-petrol-975` and `--color-chrome` for the console's side menu and top bar, `--tracking-caps`, and the parts `.eyebrow`, `.queue`, `.runsheet` and `.cutline` in `vocabulary.css`. Additive. First consumer: the BTC event dashboard, 4.30.0 (#557; Night mode switch, run-sheet strip, Needs you, standings with the cut line). The organiser console at night is the existing stage surface. Concept ideas not taken: the hero grid, a per-viewer accent, cut-corner buttons, gold on a tie. Rules in `DESIGN.md` "Night console and console parts"; tested in `consoleChrome.test.js`.
+
 No new Petrol identity release is recorded after Kaizen P6; the 4.29.0 muted step is a token correction inside it.
 
 ---
