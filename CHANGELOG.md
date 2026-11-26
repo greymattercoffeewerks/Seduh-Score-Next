@@ -9,7 +9,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## Docs: bump the version when Admin World ships · no version change · 2026-11-26
 
-- **What.** A remark in `ROADMAP.md` (version cycle plan) and a "Planned bumps" section in `docs/versioning.md`: bump a major when the Admin World console ships (owner decision; the place name moves, and Menglait/5.0.0 is also planned for Liga Seduh, so decide which takes it), add a Behind the Seduh chapter, and a note that a sub-format under an existing format is a minor. Docs only.
+- **What.** A remark in `ROADMAP.md` (version cycle plan) and a "Planned bumps" section in `docs/versioning.md`: bump a major when the Admin World console ships (owner decision; the place name moves; whichever of Admin World and Liga Seduh ships first takes 5.0.0 / Menglait, the other the next major), add a Behind the Seduh chapter, and a note that a sub-format under an existing format is a minor. Docs only.
 
 ## Behind the Seduh: brought up to 4.30.0 · 4.30.1 · 2026-11-26
 
