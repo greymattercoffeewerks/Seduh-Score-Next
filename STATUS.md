@@ -25,8 +25,8 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown competitor Edit** (4.25.0) and **projector on the shared kit** (4.26.0): owner's tablet and TV checks owed.
 - **Throwdown dashboard, Phases B and C** (4.28.0, stacked on #544/#543): routed; votes on Matches.
 - **Throwdown undo and offline vote screen** (4.27.0): undo a confirmed match; the event screen survives a dropped connection. Migration in the cloud. Owed: the owner's tablet check before 27 Nov.
-- **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
-  PR #297 (no database door, so no brand shows).
+- **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started. Organiser branding
+  BR-E1 merged in #297 (2026-10-22) and is on `main`, but the database door (BR-B1) is KIV, so no brand shows.
 
 ## In flight: the March 2027 Board and a beta run
 
