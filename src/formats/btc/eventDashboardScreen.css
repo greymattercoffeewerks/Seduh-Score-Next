@@ -34,3 +34,16 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* The freshness line is quiet; the lost bar is a bordered strip with the mark and the sentence (words and shape). */
+.btc-event-fresh .viewer-freshness-text {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.btc-event-fresh .viewer-freshness[data-kind='lost'] {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-strong) solid var(--color-warning);
+  border-radius: var(--radius-box);
+  background: var(--color-surface-sunken);
+}

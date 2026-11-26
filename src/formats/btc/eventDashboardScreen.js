@@ -15,7 +15,7 @@ import { getDisputePack } from '../../core/disputePack.js';
 import { buildRunSheet } from '../../core/runSheet.js';
 import { buildNeedsYou } from '../../core/needsYou.js';
 import { buildRunStrip } from '../../core/runStrip.js';
-import { freshnessState, renderFreshness } from '../../core/freshness.js';
+import { formatClock, renderFreshness } from '../../core/freshness.js';
 import {
   applyConsoleSurface,
   buildSurfaceSwitch,
@@ -109,20 +109,20 @@ export async function mountBtcEventDashboardScreen(
   let updatedAt = null;
   // Night or day: set on the app shell (so its header follows) and put back when this screen unmounts.
   const surfaceTarget = root.closest?.('.app-shell-root') ?? root;
-  const surfaceBefore = applyConsoleSurface(surfaceTarget, readSurfacePreference());
+  let surface = readSurfacePreference();
+  const surfaceBefore = applyConsoleSurface(surfaceTarget, surface);
   let freshSlot = null;
 
   // Quiet "Updated HH:MM", or the full "Connection lost" bar while the device is offline (results stay on screen).
   function paintFreshness() {
     if (!freshSlot) return;
-    const bar = renderFreshness(
-      freshnessState({
-        now: Date.now(),
-        active: data != null,
-        channelLost: globalThis.navigator?.onLine === false,
-        lastOkAt: updatedAt,
-      }),
-    );
+    // The time is the last successful load (this page does not poll), so only the device going offline says
+    // "lost"; a quiet page never claims a connection problem it cannot see.
+    const lost = globalThis.navigator?.onLine === false;
+    const bar = renderFreshness({
+      kind: lost ? 'lost' : 'fresh',
+      clock: formatClock(updatedAt),
+    });
     freshSlot.replaceChildren(...(bar ? [bar] : []));
   }
   globalThis.addEventListener?.('online', paintFreshness);
@@ -262,7 +262,13 @@ export async function mountBtcEventDashboardScreen(
     paintFreshness();
     container.appendChild(
       el('div', { className: 'btc-event-tools' }, [
-        buildSurfaceSwitch({ target: surfaceTarget, initial: readSurfacePreference() }),
+        buildSurfaceSwitch({
+          target: surfaceTarget,
+          initial: surface,
+          onChange: (next) => {
+            surface = next;
+          },
+        }),
       ]),
     );
 

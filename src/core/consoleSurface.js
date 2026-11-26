@@ -57,12 +57,13 @@ export function buildSurfaceSwitch({
   let current = initial === 'night' ? 'night' : 'day';
   const button = el('button', {
     className: 'btn btn-outline tap-target console-surface-switch',
-    text: 'Night mode',
+    text: current === 'night' ? 'Night mode: on' : 'Night mode: off',
     attrs: { type: 'button', 'aria-pressed': String(current === 'night') },
   });
   button.addEventListener('click', () => {
     current = current === 'night' ? 'day' : 'night';
     button.setAttribute('aria-pressed', String(current === 'night'));
+    button.textContent = current === 'night' ? 'Night mode: on' : 'Night mode: off';
     writeSurfacePreference(current, storage);
     applyConsoleSurface(target, current);
     onChange?.(current);
