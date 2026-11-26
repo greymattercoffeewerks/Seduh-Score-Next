@@ -1,10 +1,11 @@
 # Status — read this first
 
-_As of 2026-11-20, app version 4.25.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-24, app version 4.29.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
+- **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
@@ -18,13 +19,12 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
   `seduh_throwdown_profile` (4.24.0), pushed after #529 merged.
 - **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`, first adopter of the shared community chrome): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout to the Timer, Brew Planner and Guess the Bean organiser page (#521) and the share-preview fix (#520, 4.21.1) are released as **4.22.0** (minor: every tool now links to the others).
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
-- **Throwdown joins Seduh ID** (released as **4.24.0**, minor: #527 competitors register with a phone, #528 organisers publish
-  results so the archive feed can create identities, #529 the profile shows Throwdown places and the knockout record; owner
-  decisions 2026-11-20: two semi-final losers share 3rd with no 3rd place match, walkovers do not count, the 3rd place match does).
-  Owed: the owner to confirm that "This isn't mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish
-  after the final and approve the feed queue.
-- **Throwdown competitor Edit** (released as **4.25.0**, minor, #532): name, phone and café or team, before and after the
-  draw, on edit rules now shared in `core/registration.js` with Cup Taster. No migration. Owed: the owner's tablet check.
+- **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
+  mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
+- **Throwdown vote cap** (4.25.1, on `dev`, not released): a match takes no more taps than judges, plus one tie-break vote when level. Migration in the cloud (CHANGELOG 4.25.1).
+- **Throwdown competitor Edit** (4.25.0) and **projector on the shared kit** (4.26.0): owner's tablet and TV checks owed.
+- **Throwdown dashboard, Phases B and C** (4.28.0, stacked on #544/#543): routed; votes on Matches.
+- **Throwdown undo and offline vote screen** (4.27.0): undo a confirmed match; the event screen survives a dropped connection. Migration in the cloud. Owed: the owner's tablet check before 27 Nov.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started; organiser branding BR-E1 in
   PR #297 (no database door, so no brand shows).
 
@@ -32,7 +32,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 
 The pitch went well. The owner presents to the Board in March 2027, and the app may be used in the real competition as a
 **shadow beta** (manual scoring stays authoritative; Seduh Score runs in parallel and is compared afterwards). The plan is
-[`MARCH-2027-BOARD-PLAN.md`](MARCH-2027-BOARD-PLAN.md): BTC team and country model with an optional member backfill to
+`Handoffs and Specs/MARCH-2027-BOARD-PLAN.md` (local only, not in git): BTC team and country model with an optional member backfill to
 Seduh ID, Petrol V2 refinement, UX audit and Tour. Known (owner, 2026-11-07): tentatively 20 teams, 2 to 3 per country,
 each with its own team name; two preliminary rounds (round 1 random, round 2's rule to be confirmed), then the committee
 picks the top 8 by points, ties by the sum of each team's two finish times, confirmed manually by the organiser (wins no

@@ -43,6 +43,15 @@ append-only scoring record.
 | `/pricing/`                                                    | Pricing and plans                                           |
 | `/about/`, `/contact/`, `/privacy/`, `/terms/`, `/neutrality/` | Trust pages                                                 |
 
+## Design system
+
+The product has one design system, **Petrol (PDS)**: shared tokens for the console and the marketing pages, with
+light (paper) and dark (stage) surface modes. The proposed label for the current state is "Petrol RON 95 · ECU".
+Only "RON 95" (Petrol V2) is owner-confirmed; the codenames are proposals.
+
+- [`src/ui/tokens/DESIGN.md`](src/ui/tokens/DESIGN.md): the current spec.
+- [`docs/design-system/PDS-CHANGELOG.md`](docs/design-system/PDS-CHANGELOG.md): the history and the naming scheme.
+
 ## Stack
 
 Vite with vanilla ES modules (no framework), and Supabase for Postgres, Auth, Realtime

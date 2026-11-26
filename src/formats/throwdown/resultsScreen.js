@@ -35,8 +35,47 @@ function auditSections(bracket, ctx) {
   );
 }
 
-// scoring: scoringContext(data) of the event, or null when the scoresheet module is off.
-export function buildResultsView(event, bracket, scoring = null) {
+// Every undone result (td_match_reopens), oldest first, in words: which match, whose win, how it had been decided, when
+// it was undone. The round may since have been removed and made again, so it is named by its stored position and phase.
+const KIND_WORDS = { votes: 'by votes', walkover: 'by walkover', scores: 'by scoresheets' };
+export function correctionLines(reopens, bracket, entries) {
+  return reopens.map((r) => {
+    const round = bracket.rounds.find(
+      (x) => x.position === r.round_position && x.phase === r.round_phase,
+    );
+    const where = `${round?.label ?? (r.round_phase === 'third_place' ? '3rd place match' : `Round ${r.round_position}`)}, match ${r.match_position}`;
+    const winner =
+      entries.find((e) => e.id === r.previous_winner_entry_id)?.display_name ?? 'the winner';
+    const at = new Date(r.reopened_at).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const removed =
+      r.rounds_removed > 0
+        ? ` ${r.rounds_removed === 1 ? 'The round after it was' : `The ${r.rounds_removed} rounds after it were`} removed and made again.`
+        : '';
+    return `${where}: ${winner}’s win ${KIND_WORDS[r.previous_result_kind] ?? ''} was undone at ${at}.${removed}`;
+  });
+}
+
+function correctionsSection(lines) {
+  if (!lines.length) return null;
+  return el(
+    'section',
+    { className: 'card td-card', attrs: { 'aria-labelledby': 'td-corrections-h' } },
+    [
+      el('h2', { id: 'td-corrections-h', text: 'Corrections' }),
+      el(
+        'ul',
+        { className: 'td-corrections' },
+        lines.map((text) => el('li', { text })),
+      ),
+    ],
+  );
+}
+
+// scoring: scoringContext(data) of the event, or null when the scoresheet module is off. corrections: correctionLines(...).
+export function buildResultsView(event, bracket, scoring = null, corrections = []) {
   return el(
     'section',
     { className: 'screen-container td-results' },
@@ -94,6 +133,7 @@ export function buildResultsView(event, bracket, scoring = null) {
           ]),
         ]),
       ),
+      correctionsSection(corrections),
     ]
       .filter(Boolean)
       .concat(auditSections(bracket, scoring)),
@@ -120,7 +160,12 @@ export async function mountThrowdownResultsScreen(
       );
       if (signal?.aborted) return;
       root.innerHTML = '';
-      const view = buildResultsView(event, data.bracket, scoringContext(data));
+      const view = buildResultsView(
+        event,
+        data.bracket,
+        scoringContext(data),
+        correctionLines(data.reopens ?? [], data.bracket, data.entries),
+      );
       const print = el('button', {
         className: 'btn btn-outline tap-target td-no-print',
         text: 'Print or save as PDF',

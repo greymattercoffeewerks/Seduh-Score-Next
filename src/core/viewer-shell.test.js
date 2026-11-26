@@ -849,7 +849,16 @@ describe('mountViewerShell', () => {
     }
   });
 
-  it('shows the connection-lost state on a channel error, replacing real content that was showing', async () => {
+  it('shows the connection-lost holding card when the first read fails, replacing nothing', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([], { failNextRead: true });
+    await mountViewerShell(root, { orgId: 'org1', renderBody: vi.fn(), showChrome: false, client });
+    expect(root.textContent).toContain('Connection lost');
+    expect(root.querySelector('.viewer-holding-card')).not.toBeNull();
+    expect(root.querySelector('.viewer-freshness')).toBeNull();
+  });
+
+  it('keeps real content on screen through a channel error, labelled by the connection-lost bar', async () => {
     const root = document.createElement('div');
     const client = fakeClient([session({ payload: { a: 1 } })]);
     await mountViewerShell(root, {
@@ -865,7 +874,9 @@ describe('mountViewerShell', () => {
 
     client._triggerStatus('CHANNEL_ERROR');
     expect(root.textContent).toContain('Connection lost');
-    expect(root.textContent).not.toContain('STANDINGS HERE');
+    expect(root.textContent).toContain('STANDINGS HERE');
+    expect(root.querySelector('.viewer-holding-card')).toBeNull();
+    expect(root.querySelector('.viewer-freshness[data-kind="lost"][role="alert"]')).not.toBeNull();
   });
 
   it('clears the connection-lost state and re-reads fresh data once the channel reconnects', async () => {
@@ -876,6 +887,7 @@ describe('mountViewerShell', () => {
 
     client._triggerStatus('CHANNEL_ERROR');
     expect(root.textContent).toContain('Connection lost');
+    expect(renderBody).toHaveBeenCalledTimes(1); // kept, not redrawn, while lost
 
     // Data changes while disconnected — a synchronous "just clear the flag
     // and repaint from cached state" implementation could not reflect
@@ -1676,5 +1688,141 @@ describe('mountViewerShell: rank motion and the loading placeholder', () => {
     } finally {
       rect.mockRestore();
     }
+  });
+});
+
+describe('mountViewerShell freshness (core/freshness.js)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  async function mountLive(overrides = {}, { showChrome = false } = {}) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-24T14:30:00'));
+    const root = document.createElement('div');
+    const renderBody = vi.fn((container) => {
+      container.textContent = 'STANDINGS';
+    });
+    const client = fakeClient([session({ snapshot_at: '2026-11-24T14:25:00', ...overrides })]);
+    const handle = await mountViewerShell(root, { orgId: 'org1', renderBody, showChrome, client });
+    return { root, renderBody, client, handle };
+  }
+  const bar = (root) => root.querySelector('.viewer-freshness');
+
+  it('shows a quiet "Updated HH:MM" while fresh, with no alert role', async () => {
+    const { root } = await mountLive();
+    expect(bar(root).dataset.kind).toBe('fresh');
+    expect(bar(root).textContent).toBe('Updated 14:30');
+    expect(bar(root).getAttribute('role')).toBeNull();
+    expect(root.querySelector('.viewer-shell').dataset.freshness).toBe('fresh');
+  });
+
+  it('shows nothing until results are on screen (holding cards carry their own words)', async () => {
+    const root = document.createElement('div');
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client: fakeClient([]),
+    });
+    expect(bar(root)).toBeNull();
+    expect(root.querySelector('.viewer-shell').dataset.freshness).toBe('hidden');
+  });
+
+  it('on a channel drop, says when the results on screen are from (the snapshot time, not now)', async () => {
+    const { root, client } = await mountLive();
+    vi.setSystemTime(new Date('2026-11-24T14:40:00'));
+    client._triggerStatus('CLOSED');
+    expect(bar(root).dataset.kind).toBe('lost');
+    expect(bar(root).textContent).toBe('Connection lost — showing results from 14:25');
+    expect(root.querySelector('.viewer-shell').dataset.freshness).toBe('lost');
+    expect(root.textContent).toContain('STANDINGS');
+  });
+
+  it('goes stale with no error at all: failed heartbeats only count against the clock', async () => {
+    const { root, client } = await mountLive();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    client._failNextRead();
+    await vi.advanceTimersByTimeAsync(30_000); // one failed beat: not yet lost
+    expect(bar(root).dataset.kind).toBe('fresh');
+    client._failNextRead();
+    await vi.advanceTimersByTimeAsync(30_000);
+    client._failNextRead();
+    await vi.advanceTimersByTimeAsync(40_000); // 100 s since the last good read
+    expect(bar(root).dataset.kind).toBe('lost');
+    quiet.mockRestore();
+  });
+
+  it('the heartbeat of an unchanged session moves the clock and redraws nothing else', async () => {
+    const { root, renderBody } = await mountLive();
+    await vi.advanceTimersByTimeAsync(31_000);
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(renderBody).toHaveBeenCalledTimes(1);
+    expect(bar(root).textContent).toBe('Updated 14:31');
+  });
+
+  it('a heartbeat that finds changed results does redraw them', async () => {
+    const { client, renderBody } = await mountLive();
+    client.db.live_sessions[0].payload = { standings: [2] };
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(renderBody).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers: the next good read brings back the quiet bar and redraws', async () => {
+    const { root, client, renderBody } = await mountLive();
+    client._triggerStatus('CHANNEL_ERROR');
+    expect(bar(root).dataset.kind).toBe('lost');
+    client._triggerStatus('SUBSCRIBED');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(bar(root).dataset.kind).toBe('fresh');
+    expect(renderBody).toHaveBeenCalledTimes(2);
+  });
+
+  it('announces the lost bar once, not on every tick while it stays lost', async () => {
+    const { root, client } = await mountLive();
+    client._triggerStatus('CHANNEL_ERROR');
+    const first = bar(root);
+    const mutations = [];
+    const watcher = new MutationObserver((list) => mutations.push(...list));
+    watcher.observe(first, { childList: true, subtree: true, characterData: true });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(bar(root)).toBe(first);
+    // nothing inside the alert is rewritten while the words are unchanged, so it is not re-announced
+    expect(watcher.takeRecords().concat(mutations)).toEqual([]);
+    watcher.disconnect();
+  });
+
+  it('the phone chrome says Reconnecting on a lost connection while results stay', async () => {
+    const { root, client } = await mountLive({}, { showChrome: true });
+    expect(root.querySelector('.viewer-badge').textContent).toContain('Live');
+    client._triggerStatus('CHANNEL_ERROR');
+    expect(root.querySelector('.viewer-badge').textContent).toContain('Reconnecting');
+    expect(root.textContent).toContain('STANDINGS');
+  });
+
+  it('silence alone (no channel error) turns the phone badge to Reconnecting too, after 90 s and not before', async () => {
+    const { root, client } = await mountLive({}, { showChrome: true });
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    client._setReadDelay(1_000_000); // every heartbeat now hangs until its own timeout: no error ever reaches the channel
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(bar(root).dataset.kind).toBe('fresh');
+    expect(root.querySelector('.viewer-badge').textContent).toContain('Live');
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(bar(root).dataset.kind).toBe('lost');
+    expect(root.querySelector('.viewer-badge').textContent).toContain('Reconnecting');
+    expect(root.querySelector('.viewer-shell').dataset.freshness).toBe('lost');
+    quiet.mockRestore();
+  });
+
+  it('stops its timers on unmount', async () => {
+    const { handle, renderBody } = await mountLive();
+    handle.unmount();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(renderBody).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('the stylesheet retires the display Live marker while lost', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('src/core/viewer-shell.css', 'utf8');
+    expect(css).toMatch(/\[data-freshness='lost'\]\s+\.stage-band-live\s*\{\s*display:\s*none/);
   });
 });

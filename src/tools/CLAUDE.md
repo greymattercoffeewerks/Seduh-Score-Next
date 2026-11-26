@@ -18,7 +18,7 @@ required for the production build to include it, same as `src/marketing/`'s own 
 note).
 
 A tool here MAY import from `src/core/` when a piece of it is genuinely format-agnostic
-engine logic (e.g. `core/countdown.js`, `core/dom.js`, `core/duration.js`) — that's the
+engine logic (e.g. `core/countdown.js`, `core/dom.js`, `core/duration.js`, and `core/feedback.js` for the Petrol feedback ladder, e.g. the Timer's confirm-before-Reset) — that's the
 same direction `src/marketing/` already imports in, and `core/` has no reverse
 dependency on either. A tool may also import `src/community/toolChrome.js` and `communityTools.js` (the shared tool frame; the Random Selector first), which in turn reads `src/marketing/publicHeader.js`; that is the one allowed path from a tool into `marketing/` and `community/`, and it carries the header's `COUNTRY_PAGES_PUBLIC` switch. A tool here must never import from `src/formats/` — pulling in a
 format's UI classes (e.g. Cup Taster's `.screen-container` in `heatsScreen.css`) would tie a

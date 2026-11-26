@@ -441,6 +441,49 @@ match row 123 to 58px at 820px (a round of eight matches gives back about half a
   display is read from across a room; compact is for the hand-held organiser and judge views), and the 360px stacked
   table layouts (they have their own spacing).
 
+## Figma review fixes (2026-11-24)
+
+An outside design review (Figma) was checked against the code. Most of its gaps were already built (role tokens P6,
+feedback ladder P4, the tap-target floor, sync state); three were real and are fixed here.
+
+**Stage muted text.** `--color-text-muted` on the stage surface was `petrol-400` (4.46:1 on the canvas, 4.16:1 on the
+surface: under 4.5:1). It is now the new ramp step `--clr-petrol-350` (`#82938f`), between 300 and 400:
+
+| pairing (stage)                                     | before | after |
+| --------------------------------------------------- | ------ | ----- |
+| muted on `--color-canvas`                           | 4.46   | 6.01  |
+| muted on `--color-surface`                          | 4.16   | 5.60  |
+| muted on `--color-surface-sunken`                   | 3.76   | 5.07  |
+| muted on `--color-gold-tint` (the leader highlight) | 3.59   | 4.84  |
+
+It stays quieter than secondary text (`petrol-300`, 7.2:1 on the canvas), so the hierarchy survives. Card and input
+edges stay `petrol-400` (4.46 and 4.16 on the canvas and surface: above the 3:1 non-text floor). Paper is unchanged.
+`stageMuted.test.js` holds all of this: 4.5:1 on every stage background, about 5:1 of margin on the canvas and surface,
+muted quieter than secondary quieter than body, and the 3:1 border floor.
+
+**Freshness on the audience display (`src/core/freshness.js`, mounted by `core/viewer-shell.js`).** A venue display
+must never show old results as if they were live. Rule: while results are on screen there are only two honest states.
+_Fresh_: a quiet "Updated HH:MM" (muted text, top right, not announced). _Lost_: a full-width bar, "Connection lost
+— showing results from HH:MM", with the attention mark (a shape) and words, a warning edge, `role="alert"` so it is
+spoken once; the results stay on screen under it and the display's own Live marker is hidden
+(`[data-freshness='lost'] .stage-band-live`), so "Live" is never unqualified during a known interruption. Lost means
+the realtime channel dropped OR nothing has been heard from the server for 90 s (`STALE_AFTER_MS`). A silently dead
+socket gives no error, so the shell re-reads on a 30 s heartbeat (`HEARTBEAT_MS`); one failed beat is not an outage,
+three are. The heartbeat redraws nothing when the row is unchanged, and its timers run only while results are on
+screen. "Results from" is the session's `snapshot_at`; "Updated" is the last good read. Before the first successful
+read there is nothing to keep, so the old "Connection lost" holding card still shows. Sizes come from `--stage-unit`
+(capped by `vw` so a portrait window stays sane); stage tokens only; no animation, so reduced motion needs nothing;
+`is_test` violet stays in its own banner above and the bar never uses violet. Because it lives in the shell, Cup Taster,
+BTC and Throwdown get it and a new format gets it with no edit. The phone view shows the same bar.
+
+**Reset is never beside Stop.** The only timing surface that put a reset next to its start-stop control was the
+standalone Timer tool (Pause/Resume next to Reset). Reset is now its own row, a full `--space-6` below Pause/Resume, and
+while a run is in progress or paused it asks first through the feedback ladder (`confirmInPlace`, step 3: in place,
+never `window.confirm`, never a dialog), "The time left on this run will be lost." Idle and expired runs reset in one
+tap. The 44px floor holds. Checked and left unchanged: Cup Taster's timing screen has Stop but no reset or clear
+control (a wrong time is corrected through the manual-time editor, which already confirms), and BTC and Throwdown have no
+timer controls of this kind.
+
 ## Drift guard
 
 A second check covers the public pages (`src/marketing/*.css`, `src/community/communityHub.css`). It is a heuristic,

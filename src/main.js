@@ -62,6 +62,7 @@ import {
   throwdownOperationLabels,
 } from './formats/throwdown/outboxHandlers.js';
 import { mountThrowdownEventScreen } from './formats/throwdown/eventScreen.js';
+import { mountThrowdownEventDashboardScreen } from './formats/throwdown/eventDashboardScreen.js';
 import { mountThrowdownResultsScreen } from './formats/throwdown/resultsScreen.js';
 import { trackInputModality } from './core/inputModality.js';
 
@@ -579,11 +580,12 @@ function mountEventHomeScreen(outlet, { eventId, client, signal, audienceLinks =
       });
     }
     if (event.format === 'throwdown') {
-      return mountThrowdownEventScreen(outlet, {
+      return mountThrowdownEventDashboardScreen(outlet, {
         eventId,
         client,
         signal,
         handlers: allOutboxHandlers(client),
+        audienceLinks,
       });
     }
     return mountEventDashboardScreen(outlet, { eventId, client, signal });
@@ -993,6 +995,20 @@ export function buildRoutes({
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
           mountBtcSetupScreen(outlet, {
+            eventId,
+            client,
+            signal,
+            handlers: allOutboxHandlers(client),
+          }),
+        auth,
+      ),
+    },
+    {
+      // The Throwdown console (setup, draw, vote cards, bracket); the event home is now the run-sheet dashboard.
+      pattern: '/events/:eventId/throwdown/matches',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountThrowdownEventScreen(outlet, {
             eventId,
             client,
             signal,

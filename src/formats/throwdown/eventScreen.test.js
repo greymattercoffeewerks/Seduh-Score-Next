@@ -8,6 +8,17 @@ import { parsePhone, phoneErrorMessage } from '../../core/phone.js';
 
 const EVENT = { id: 'ev', org_id: 'org', format: 'throwdown', name: 'Rehearsal', is_test: true };
 
+// Waits until `check` holds (polled), so a test does not depend on how fast a busy machine runs a reload.
+async function waitUntil(check, ms = 4000) {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) return;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}
+const liveText = (root) =>
+  [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+
 // A tiny read-only client: tables answer with the rows given, the events table answers the event.
 function clientWith(tables, event = EVENT) {
   return {
@@ -92,6 +103,428 @@ describe('the Throwdown organiser screen', () => {
     ).toBe(true);
   });
 
+  describe('undoing a confirmed result', () => {
+    const decided = {
+      ...started,
+      td_matches: [
+        { ...started.td_matches[0], result_kind: 'votes', confirmed_at: '2026-11-27T10:00:00Z' },
+      ],
+      td_votes: [
+        { id: 'v1', match_id: 'm1', slot_id: 's1', created_at: '1' },
+        { id: 'v2', match_id: 'm1', slot_id: 's1', created_at: '2' },
+        { id: 'v3', match_id: 'm1', slot_id: 's2', created_at: '3' },
+      ],
+    };
+    const byText = (root, text) =>
+      [...root.querySelectorAll('button')].find((b) => b.textContent === text);
+
+    // the flush really runs this handler for a queued undo, so `sent` is what reached the database
+    async function mountRecording(tables) {
+      const sent = [];
+      const client = clientWith({ events: [EVENT], ...tables });
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client,
+        handlers: { td_reopen_match: async (payload) => sent.push(payload) },
+      });
+      return { root, sent };
+    }
+    const settle = () => new Promise((r) => setTimeout(r, 50));
+
+    it('asks first, says what is kept, and sends the undo with the winner the organiser saw', async () => {
+      const { root, sent } = await mountRecording(decided);
+      byText(root, 'Undo result').click();
+      await settle();
+      const question = root.querySelector('.td-reopen-q');
+      expect(question.textContent).toBe('Undo Ana’s win?');
+      expect(document.activeElement).toBe(question);
+      const yes = byText(root, 'Yes, undo');
+      const detail = root.querySelector(`#${yes.getAttribute('aria-describedby')}`);
+      expect(detail.textContent).toContain('votes kept');
+      expect(detail.textContent).toContain('publish them again');
+      expect(sent).toHaveLength(0);
+
+      yes.click();
+      await waitUntil(() => sent.length > 0);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
+        p_org_id: 'org',
+        p_match_id: 'm1',
+        p_expected_winner_slot_id: 's1',
+      });
+    });
+
+    it('Keep result closes the question and sends nothing', async () => {
+      const { root, sent } = await mountRecording(decided);
+      byText(root, 'Undo result').click();
+      byText(root, 'Keep result').click();
+      await settle();
+      expect(root.querySelector('.td-reopen')).toBeNull();
+      expect(byText(root, 'Undo result')).toBeTruthy();
+      expect(sent).toHaveLength(0);
+      const { listAllOperations } = await import('../../core/outbox.js');
+      expect((await listAllOperations()).some((op) => op.type === 'td_reopen_match')).toBe(false);
+    });
+
+    it('Keep result puts focus back on that match’s Undo result button', async () => {
+      const root = await mount(decided);
+      byText(root, 'Undo result').click();
+      byText(root, 'Keep result').click();
+      expect(document.activeElement).toBe(byText(root, 'Undo result'));
+    });
+
+    it('a refused undo whose button is gone (another device started the Final) leaves focus on the Bracket heading', async () => {
+      const tables = {
+        td_rounds: [
+          { id: 'r1', position: 1, kind: 'pair', phase: 'main' },
+          { id: 'r2', position: 2, kind: 'pair', phase: 'main' },
+        ],
+        td_matches: [
+          {
+            id: 'm1',
+            round_id: 'r1',
+            position: 1,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm2',
+            round_id: 'r1',
+            position: 2,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm3',
+            round_id: 'r2',
+            position: 1,
+            result_kind: null,
+            confirmed_at: null,
+            walkover_winner_position: null,
+          },
+        ],
+        td_slots: [
+          { id: 'a', match_id: 'm1', position: 1, entry_id: 'eAna' },
+          { id: 'b', match_id: 'm1', position: 2, entry_id: 'eBima' },
+          { id: 'c', match_id: 'm2', position: 1, entry_id: 'eCitra' },
+          { id: 'd', match_id: 'm2', position: 2, entry_id: 'eDani' },
+          { id: 'e', match_id: 'm3', position: 1, entry_id: 'eAna' },
+          { id: 'f', match_id: 'm3', position: 2, entry_id: 'eCitra' },
+        ],
+        td_votes: [],
+        td_settings: [{ event_id: 'ev', judge_count: 3, third_place: false, modules: {} }],
+        event_entries: ['Ana', 'Bima', 'Citra', 'Dani'].map((n) => ({
+          id: `e${n}`,
+          display_name: n,
+          withdrawn: false,
+        })),
+      };
+      const client = clientWith({ events: [EVENT], ...tables });
+      client.rpc = async (name) => {
+        if (name !== 'td_reopen_match') return { error: null, status: 200 };
+        // meanwhile a judge on another device tapped in the Final: the database refuses, and the refresh shows that tap
+        tables.td_votes.push({ id: 'v', match_id: 'm3', slot_id: 'e', created_at: '1' });
+        return {
+          error: { code: 'P0001', message: 'started', hint: 'td_next_round_started' },
+          status: 400,
+        };
+      };
+      const { dataHandlers } = await import('./data.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client,
+        handlers: dataHandlers(client),
+      });
+      root.querySelector('[aria-label^="Undo result: Semi-finals, Ana"]').click();
+      byText(root, 'Yes, undo').click();
+      await waitUntil(() => document.activeElement?.id === 'td-bracket-h');
+      await new Promise((r) => setTimeout(r, 200));
+      expect(root.querySelector('#td-reopen-btn-m1')).toBeNull();
+      expect(document.activeElement).toBe(root.querySelector('#td-bracket-h'));
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('The next round has already started');
+    });
+
+    it('...also when a reload was already running as the undo was refused', async () => {
+      const tables = {
+        td_rounds: [
+          { id: 'r1', position: 1, kind: 'pair', phase: 'main' },
+          { id: 'r2', position: 2, kind: 'pair', phase: 'main' },
+        ],
+        td_matches: [
+          {
+            id: 'm1',
+            round_id: 'r1',
+            position: 1,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm2',
+            round_id: 'r1',
+            position: 2,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm3',
+            round_id: 'r2',
+            position: 1,
+            result_kind: null,
+            confirmed_at: null,
+            walkover_winner_position: null,
+          },
+        ],
+        td_slots: [
+          { id: 'a', match_id: 'm1', position: 1, entry_id: 'eAna' },
+          { id: 'b', match_id: 'm1', position: 2, entry_id: 'eBima' },
+          { id: 'c', match_id: 'm2', position: 1, entry_id: 'eCitra' },
+          { id: 'd', match_id: 'm2', position: 2, entry_id: 'eDani' },
+          { id: 'e', match_id: 'm3', position: 1, entry_id: 'eAna' },
+          { id: 'f', match_id: 'm3', position: 2, entry_id: 'eCitra' },
+        ],
+        td_votes: [],
+        td_settings: [{ event_id: 'ev', judge_count: 3, third_place: false, modules: {} }],
+        event_entries: ['Ana', 'Bima', 'Citra', 'Dani'].map((n) => ({
+          id: `e${n}`,
+          display_name: n,
+          withdrawn: false,
+        })),
+      };
+      const base = clientWith({ events: [EVENT], ...tables });
+      let slow = false;
+      // while `slow`, every read waits a little: a reload started by 'online' is still running when Yes, undo is tapped
+      const client = {
+        from(name) {
+          const q = base.from(name);
+          if (!slow) return q;
+          const then = q.then;
+          q.then = (res, rej) => new Promise((r) => setTimeout(r, 300)).then(() => then(res, rej));
+          return q;
+        },
+        rpc: null,
+      };
+      client.rpc = async (name) => {
+        if (name !== 'td_reopen_match') return { error: null, status: 200 };
+        // meanwhile a judge on another device tapped in the Final: the database refuses, and the refresh shows that tap
+        tables.td_votes.push({ id: 'v', match_id: 'm3', slot_id: 'e', created_at: '1' });
+        return {
+          error: { code: 'P0001', message: 'started', hint: 'td_next_round_started' },
+          status: 400,
+        };
+      };
+      const { dataHandlers } = await import('./data.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client,
+        handlers: dataHandlers(client),
+      });
+      root.querySelector('[aria-label^="Undo result: Semi-finals, Ana"]').click();
+      slow = true;
+      window.dispatchEvent(new Event('online'));
+      byText(root, 'Yes, undo').click();
+      // wait for the focus to land, then longer than one slow reload, so a later re-render cannot have taken it away
+      await waitUntil(() => document.activeElement?.id === 'td-bracket-h', 8000);
+      await new Promise((r) => setTimeout(r, 800));
+      expect(root.querySelector('#td-reopen-btn-m1')).toBeNull();
+      expect(document.activeElement).toBe(root.querySelector('#td-bracket-h'));
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('The next round has already started');
+    }, 15000);
+
+    it('while a semi-final’s undo waits to sync, the Final it will remove cannot be played', async () => {
+      // two semi-finals decided, the Final made and open; then the organiser's undo of semi-final 1 is queued (offline)
+      const semis = {
+        td_rounds: [
+          { id: 'r1', position: 1, kind: 'pair', phase: 'main' },
+          { id: 'r2', position: 2, kind: 'pair', phase: 'main' },
+        ],
+        td_matches: [
+          {
+            id: 'm1',
+            round_id: 'r1',
+            position: 1,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm2',
+            round_id: 'r1',
+            position: 2,
+            result_kind: 'walkover',
+            confirmed_at: 't',
+            walkover_winner_position: 1,
+          },
+          {
+            id: 'm3',
+            round_id: 'r2',
+            position: 1,
+            result_kind: null,
+            confirmed_at: null,
+            walkover_winner_position: null,
+          },
+        ],
+        td_slots: [
+          { id: 'a', match_id: 'm1', position: 1, entry_id: 'eAna' },
+          { id: 'b', match_id: 'm1', position: 2, entry_id: 'eBima' },
+          { id: 'c', match_id: 'm2', position: 1, entry_id: 'eCitra' },
+          { id: 'd', match_id: 'm2', position: 2, entry_id: 'eDani' },
+          { id: 'e', match_id: 'm3', position: 1, entry_id: 'eAna' },
+          { id: 'f', match_id: 'm3', position: 2, entry_id: 'eCitra' },
+        ],
+        td_settings: [{ event_id: 'ev', judge_count: 3, third_place: false, modules: {} }],
+        event_entries: ['Ana', 'Bima', 'Citra', 'Dani'].map((n) => ({
+          id: `e${n}`,
+          display_name: n,
+          withdrawn: false,
+        })),
+      };
+      let root = await mount(semis);
+      expect(root.querySelectorAll('article.td-match')).toHaveLength(1);
+
+      const { enqueueOperation } = await import('../../core/outbox.js');
+      await enqueueOperation('td_reopen_match', {
+        p_operation_id: 'r',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+      });
+      document.body.innerHTML = '';
+      root = await mount(semis);
+      expect(root.querySelectorAll('article.td-match')).toHaveLength(0);
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(0);
+      expect(root.textContent).toContain('Removed when the undo syncs');
+      expect(root.textContent).toContain('Undo waiting to sync.');
+    });
+
+    it('offers no undo on an open match', async () => {
+      const root = await mount(started);
+      expect(byText(root, 'Undo result')).toBeUndefined();
+    });
+
+    it('says an undo is waiting to sync instead of offering it twice', async () => {
+      const { enqueueOperation } = await import('../../core/outbox.js');
+      await enqueueOperation('td_reopen_match', {
+        p_operation_id: 'r',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+      });
+      const root = await mount(decided);
+      expect(byText(root, 'Undo result')).toBeUndefined();
+      expect(root.textContent).toContain('Undo waiting to sync.');
+    });
+  });
+
+  describe('losing the connection mid-event', () => {
+    // The same read-only client, but every read and write fails while `net.down` is true (a venue's wifi dropping).
+    function flakyClient(net) {
+      const base = clientWith({ events: [EVENT], ...started });
+      const offline = () => Promise.reject(new TypeError('Failed to fetch'));
+      return {
+        from(name) {
+          if (!net.down) return base.from(name);
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: () => q,
+            single: offline,
+            maybeSingle: offline,
+            then: (resolve, reject) => offline().then(resolve, reject),
+          };
+          return q;
+        },
+        rpc: (...args) => (net.down ? offline() : base.rpc(...args)),
+      };
+    }
+
+    it('keeps the match on screen after a tap, counts the tap as waiting, and drops the No connection line when back online', async () => {
+      const net = { down: false };
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client: flakyClient(net),
+        handlers: {},
+      });
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
+
+      net.down = true;
+      root.querySelector('.td-vote').click();
+      await waitUntil(() => liveText(root).includes('No connection'));
+
+      // not the full-screen load error with only Retry: the match, its Vote buttons and the waiting tap are all there
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
+      expect(root.textContent).toContain('1 waiting to sync');
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('No connection. Showing the last loaded screen.');
+
+      net.down = false;
+      window.dispatchEvent(new Event('online'));
+      await waitUntil(() => !liveText(root).includes('No connection'));
+      const after = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(after).not.toContain('No connection');
+    });
+
+    it('says a failure that is not the connection in its own words, keeping the screen', async () => {
+      const base = clientWith({ events: [EVENT], ...started });
+      let expired = false;
+      const client = {
+        from(name) {
+          if (!expired) return base.from(name);
+          const fail = () =>
+            Promise.resolve({
+              data: null,
+              error: { code: 'PGRST303', message: 'JWT expired', hint: null },
+            });
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: () => q,
+            single: fail,
+            maybeSingle: fail,
+            then: (r) => fail().then(r),
+          };
+          return q;
+        },
+        rpc: base.rpc,
+      };
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, { eventId: 'ev', client, handlers: {} });
+      expired = true;
+      window.dispatchEvent(new Event('online'));
+      await waitUntil(() => liveText(root).trim() !== '');
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(2);
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).not.toContain('No connection');
+      expect(live.trim()).not.toBe('');
+    });
+
+    it('still shows the load error with Retry when the very first load fails', async () => {
+      const root = document.createElement('div');
+      document.body.append(root);
+      await mountThrowdownEventScreen(root, {
+        eventId: 'ev',
+        client: flakyClient({ down: true }),
+        handlers: {},
+      });
+      expect(root.querySelectorAll('.td-vote')).toHaveLength(0);
+      expect([...root.querySelectorAll('button')].map((b) => b.textContent)).toContain('Retry');
+    });
+  });
+
   it('before the draw offers competitors, setup and the draw, and no module controls', async () => {
     const root = await mount({ event_entries: entries });
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
@@ -149,6 +582,43 @@ describe('the Throwdown organiser screen', () => {
       expect(root.textContent).toContain('2 of 2 votes in, plus the tie-break vote.');
     });
 
+    it('closes an even panel that is not level (2-0 takes no tie-break vote)', async () => {
+      const root = await mount(panel(2, ['s1', 's1']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('2 of 2 votes in. Every judge has voted.');
+    });
+
+    it('names more votes than judges as such, never as a tie-break or a call for another vote', async () => {
+      let root = await mount(panel(2, ['s1', 's2', 's1', 's2']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('More votes than judges (4 for 2)');
+      expect(root.textContent).not.toContain('Take another vote');
+
+      document.body.innerHTML = '';
+      root = await mount(panel(3, ['s1', 's1', 's1', 's2']));
+      expect(voteOff(root)).toEqual([true, true]);
+      expect(root.textContent).toContain('More votes than judges (4 for 3)');
+      expect(root.textContent).not.toMatch(/tie-break/);
+    });
+
+    it('points each Vote button at the note that says why it is off', async () => {
+      const root = await mount(panel(3, ['s1', 's1', 's2']));
+      const note = root.querySelector('.td-match .td-note');
+      expect(note.id).toBeTruthy();
+      for (const b of root.querySelectorAll('.td-vote')) {
+        expect(b.getAttribute('aria-describedby')).toBe(note.id);
+      }
+      expect(note.textContent).toContain('Every judge has voted.');
+    });
+
+    it('says, with the tap that fills the panel, that every judge has voted', async () => {
+      const root = await mount(panel(3, ['s1', 's2']));
+      root.querySelector('.td-vote').click();
+      await new Promise((r) => setTimeout(r, 50));
+      const live = [...root.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ');
+      expect(live).toContain('Ana: 2 votes. Every judge has voted.');
+    });
+
     it('counts taps still waiting to sync toward the cap', async () => {
       const { enqueueOperation } = await import('../../core/outbox.js');
       await enqueueOperation('td_cast_vote', {
@@ -157,9 +627,23 @@ describe('the Throwdown organiser screen', () => {
         p_match_id: 'm1',
         p_slot_id: 's1',
       });
-      const root = await mount(panel(2, ['s1']));
+      let root = await mount(panel(2, ['s1']));
       expect(root.textContent).toContain('1 waiting to sync');
       expect(voteOff(root)).toEqual([true, true]);
+
+      // a queued tap past the cap (a quick double tap on a 3-judge panel at 2-0) is shown as a tap that will be
+      // refused, never as the tie-break vote an odd panel cannot have
+      await enqueueOperation('td_cast_vote', {
+        p_operation_id: 'q2',
+        p_org_id: 'org',
+        p_match_id: 'm1',
+        p_slot_id: 's2',
+      });
+      document.body.innerHTML = '';
+      root = await mount(panel(3, ['s1', 's1']));
+      expect(root.textContent).toContain('More taps than judges (4 for 3)');
+      expect(root.textContent).toContain('will be refused when they sync');
+      expect(root.textContent).not.toMatch(/tie-break/);
     });
   });
 

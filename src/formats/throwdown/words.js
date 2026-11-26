@@ -5,6 +5,11 @@ import { describeError } from '../../core/errors.js';
 const REFUSALS = {
   td_votes_level: 'The votes are level. Take another vote before confirming.',
   td_match_decided: 'That match has already been decided.',
+  td_match_bye: 'A bye has no result to undo.',
+  td_next_round_started:
+    'The next round has already started, so this result can no longer be undone.',
+  td_third_place_changed:
+    'A semi-final loser was withdrawn or restored since this round ended, so undoing it would change the 3rd place match. Put the withdrawal back as it was first.',
   td_votes_full:
     'Every judge has voted in this match, and any tie-break vote is in. Undo a vote to change it.',
   td_match_not_ready: 'That match does not have two competitors yet.',

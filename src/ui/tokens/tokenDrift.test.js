@@ -775,8 +775,8 @@ const LEFT_AS_IS = [
   ),
   ...LEFT(
     'a name or label chip whose state is already in its words (a check mark or "max" in the label), a candidate for .status in a later pass',
-    'btc-stage-chip',
-    'btc-stage-chips',
+    'stage-chip',
+    'stage-chips',
     'td-stage-chip',
     'viewer-heat-chip',
     'viewer-heat-chips',

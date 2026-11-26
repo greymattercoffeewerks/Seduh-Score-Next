@@ -25,7 +25,7 @@ import {
   PUBLISHED_EDIT_WARNING,
 } from '../../core/registration.js';
 import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
-import { droppedErrorFor } from '../../core/outbox.js';
+import { droppedErrorFor, isTransientErrorCode } from '../../core/outbox.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { newSeed } from '../../core/seededShuffle.js';
 import {
@@ -36,9 +36,11 @@ import {
   undoVote,
   confirmMatch,
   recordWalkover,
+  reopenMatch,
   pendingSnapshot,
 } from './data.js';
-import { tallyVotes, leadOf, canConfirm } from './votes.js';
+import { reopenState, reopenWords, matchesAwaitingUndo } from './reopen.js';
+import { tallyVotes, leadOf, canConfirm, voteState } from './votes.js';
 import {
   randomPairs,
   normalisePairs,
@@ -85,6 +87,7 @@ export async function mountThrowdownEventScreen(
     walkoverOpen: null, // matchId whose Walkover disclosure is open
     focusTarget: null, // id to focus after the next render (a phase change replaces the focused control)
     walkover: null, // { matchId, slotId } waiting for the second tap
+    reopen: null, // matchId whose Undo result is waiting for the second tap
     sheetOpen: null, // { matchId, slotId, seat, draft } the paper sheet being typed in
     picks: new Map(), // matchId -> slot position the organiser picked for a level scored match
     feedback: null,
@@ -135,33 +138,71 @@ export async function mountThrowdownEventScreen(
       };
       state.pending = pending.matches;
       state.startQueued = pending.startQueued;
+      if (state.feedback === staleFeedback) state.feedback = null;
     } catch (err) {
-      state.loadError = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try Retry.'
-        : describeThrowdownError(err);
+      if (state.data) {
+        // A failed REFRESH keeps the screen: the organiser must still see the match and the taps waiting on this
+        // device (the queue is local, so it reads offline). Only a first load with nothing to show becomes the error.
+        try {
+          const pending = await pendingSnapshot();
+          state.pending = pending.matches;
+          state.startQueued = pending.startQueued;
+        } catch {
+          // keep the last snapshot
+        }
+        // Only a dropped connection says "No connection"; any other failure (an expired sign-in, a server refusal) is
+        // said in its own words, with the screen still kept.
+        if (isConnectionFailure(err)) {
+          if (!state.feedback?.tone) state.feedback = staleFeedback;
+        } else {
+          state.feedback = { tone: 'error', text: describeThrowdownError(err) };
+        }
+      } else {
+        state.loadError = err.timedOut
+          ? 'This is taking longer than expected — check your connection and try Retry.'
+          : describeThrowdownError(err);
+      }
     }
     state.loading = false;
     render();
   }
 
+  // A read that never reached the database: our own timeout, a fetch failure (supabase-js answers it with no SQLSTATE), or
+  // a transient database code. Sign-in problems (PGRST3xx) are not the connection, whatever the outbox does with them.
+  const isConnectionFailure = (err) =>
+    Boolean(err?.timedOut) ||
+    !err?.code ||
+    (isTransientErrorCode(err.code) && !String(err.code).startsWith('PGRST'));
+
+  // Shown (as the same object, so a later successful refresh can recognise and clear it) when a refresh fails but the
+  // last loaded screen is kept.
+  const staleFeedback = {
+    tone: 'error',
+    text: 'No connection. Showing the last loaded screen. Taps made on this device are saved and send when the connection is back.',
+  };
+
   // A judge's tap must never be dropped because another write is in flight: taps queue (the outbox keeps their order)
   // and the screen reloads once the burst settles.
-  let refreshing = false;
+  // A caller that awaits refreshSoon() is answered when the screen has caught up with its write: joining a reload already
+  // running returns that run, which goes round once more for the new write, so code after the await sees the final screen.
+  let refreshRun = null;
   let refreshAgain = false;
-  async function refreshSoon() {
-    if (refreshing) {
+  function refreshSoon() {
+    if (refreshRun) {
       refreshAgain = true;
-      return;
+      return refreshRun;
     }
-    refreshing = true;
-    try {
-      do {
-        refreshAgain = false;
-        await refresh();
-      } while (refreshAgain);
-    } finally {
-      refreshing = false;
-    }
+    refreshRun = (async () => {
+      try {
+        do {
+          refreshAgain = false;
+          await refresh();
+        } while (refreshAgain);
+      } finally {
+        refreshRun = null;
+      }
+    })();
+    return refreshRun;
   }
   async function tapAct(work, announce) {
     if (signal?.aborted) return;
@@ -1041,32 +1082,44 @@ export async function mountThrowdownEventScreen(
     const { tallies, queued, decisionQueued } = displayedTallies(match);
     const lead = leadOf(tallies);
     const judges = state.data.settings.judge_count;
-    // One tap is one judge's vote: once every judge has voted (taps still waiting to sync included), the Vote buttons
-    // stop, except for ONE tie-break vote when the panel is even and comes out level. The database holds the same rule
-    // (td_cast_vote, hint td_votes_full); Undo frees a vote.
-    const tieBreak = lead.total === judges && lead.level;
-    const full = lead.total >= judges && !tieBreak;
+    // One tap is one judge's vote (votes.js voteState, the same rule as td_cast_vote): the Vote buttons stop once every
+    // judge has voted, taps still waiting to sync included, except for ONE tie-break vote when an even panel is level.
+    // Undo frees a vote. The note below says why Vote is off; each Vote button points at it (aria-describedby).
+    const cap = voteState(tallies, judges);
+    const noteId = `td-vote-note-${match.id}`;
     const sides = match.sides.map((side, i) => {
       const count = tallies.find((t) => t.slotId === side.slotId)?.votes ?? 0;
+      // what this tap does to the cap, spoken with the new count so a screen reader hears why Vote then stops
+      const after = voteState(
+        tallies.map((t) => (t.slotId === side.slotId ? { ...t, votes: t.votes + 1 } : t)),
+        judges,
+      );
+      const afterWords = after.tieBreakOpen
+        ? ' Level with every judge in: the tie-break judge casts one more vote.'
+        : after.open
+          ? ''
+          : ' Every judge has voted.';
+      const vote = button(
+        `Vote ${side.name}`,
+        () =>
+          tapAct(
+            () =>
+              castVote(
+                { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
+                handlers,
+              ),
+            `${side.name}: ${count + 1} ${count + 1 === 1 ? 'vote' : 'votes'}.${afterWords}`,
+          ),
+        {
+          className: 'btn btn-primary tap-target td-vote',
+          key: `td-vote-${match.id}-${i}`,
+          ignoreBusy: true,
+          disabled: !cap.open || decisionQueued || state.deciding,
+        },
+      );
+      vote.setAttribute('aria-describedby', noteId);
       return el('div', { className: 'td-side' }, [
-        button(
-          `Vote ${side.name}`,
-          () =>
-            tapAct(
-              () =>
-                castVote(
-                  { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
-                  handlers,
-                ),
-              `${side.name}: ${count + 1} ${count + 1 === 1 ? 'vote' : 'votes'}`,
-            ),
-          {
-            className: 'btn btn-primary tap-target td-vote',
-            key: `td-vote-${match.id}-${i}`,
-            ignoreBusy: true,
-            disabled: full || decisionQueued || state.deciding,
-          },
-        ),
+        vote,
         el('p', {
           className: 'td-count',
           text: `${count} ${count === 1 ? 'vote' : 'votes'}`,
@@ -1092,17 +1145,21 @@ export async function mountThrowdownEventScreen(
     });
     const status = decisionQueued
       ? 'The result is waiting to sync. Voting is closed for this match.'
-      : lead.total === 0
+      : cap.total === 0
         ? `Waiting for votes (${judges} ${judges === 1 ? 'judge' : 'judges'}).`
-        : tieBreak
-          ? 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
-          : lead.level
-            ? 'The votes are level. Take another vote before confirming.'
-            : lead.total === judges + 1
-              ? `${judges} of ${judges} votes in, plus the tie-break vote. Every judge has voted.`
-              : full
-                ? `${lead.total} of ${judges} votes in. Every judge has voted.`
-                : `${lead.total} of ${judges} votes in.`;
+        : cap.over
+          ? queued
+            ? `More taps than judges (${cap.total} for ${judges}). Taps past the limit will be refused when they sync; check the count then, before using Undo.`
+            : `More votes than judges (${cap.total} for ${judges}). Use Undo to take back the extra votes.`
+          : cap.tieBreakOpen
+            ? 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
+            : lead.level
+              ? 'The votes are level. Take another vote before confirming.'
+              : cap.tieBreakUsed
+                ? `${judges} of ${judges} votes in, plus the tie-break vote. Every judge has voted.`
+                : cap.open
+                  ? `${cap.total} of ${judges} votes in.`
+                  : `${cap.total} of ${judges} votes in. Every judge has voted.`;
     const winnerName = lead.leaderSlotId
       ? match.sides.find((s) => s.slotId === lead.leaderSlotId)?.name
       : null;
@@ -1114,6 +1171,7 @@ export async function mountThrowdownEventScreen(
         el('div', { className: 'td-sides' }, sides),
         el('p', {
           className: 'td-note',
+          id: noteId,
           text: status + (queued ? ` ${queued} waiting to sync.` : ''),
         }),
         button(
@@ -1191,7 +1249,89 @@ export async function mountThrowdownEventScreen(
     ]);
   }
 
+  // ---------- undoing a confirmed result ----------
+  // Offered on a decided match while nothing after it has started (reopen.js; the database checks again). Two taps: Undo
+  // result, then Yes, undo. The match then reappears under Now playing with its votes or sheets kept.
+  function undoControl(m, roundLabel) {
+    if (matchesAwaitingUndo(state.data.bracket, state.pending).has(m.id)) return null;
+    const st = reopenState(state.data.bracket, m.id, {
+      sheets: state.data.scoreSheets,
+      pending: state.pending,
+      entries: state.data.entries,
+      thirdPlace: state.data.settings.third_place,
+    });
+    if (st.reason === 'queued') {
+      return el('p', { className: 'td-note', text: 'Undo waiting to sync.' });
+    }
+    if (!st.allowed) return null;
+    if (state.reopen !== m.id) {
+      const undo = button(
+        'Undo result',
+        () => {
+          state.reopen = m.id;
+          state.focusTarget = `td-reopen-q-${m.id}`;
+          render();
+        },
+        { key: `td-reopen-${m.id}` },
+      );
+      // several matches can offer Undo at once: the name says which (it starts with the visible words, WCAG 2.5.3)
+      undo.setAttribute('aria-label', `Undo result: ${roundLabel}, ${matchTitle(m)}`);
+      undo.id = `td-reopen-btn-${m.id}`;
+      return undo;
+    }
+    const words = reopenWords(m, st.later, {
+      scored: cupsForMatch(scoringContext(state.data), m) !== null,
+    });
+    const detailId = `td-reopen-d-${m.id}`;
+    const yes = button(
+      'Yes, undo',
+      () => {
+        state.reopen = null;
+        // a refusal re-renders this match with Undo result again (focus goes back there; success moves it to Now playing)
+        state.focusTarget = `td-reopen-btn-${m.id}`;
+        return act(
+          () =>
+            reopenMatch(
+              { orgId: state.event.org_id, matchId: m.id, expectedWinnerSlotId: m.winnerSlotId },
+              handlers,
+            ),
+          { publish: true },
+        ).then(() => {
+          // ...unless the refusal is that the match can no longer be undone (another device started the next round),
+          // so the button is gone: focus the Bracket heading, beside the refusal, never the page body
+          if (state.feedback?.tone === 'error' && !root.querySelector(`#td-reopen-btn-${m.id}`)) {
+            root.querySelector('#td-bracket-h')?.focus();
+          }
+        });
+      },
+      { className: 'btn btn-primary tap-target', key: `td-reopen-ok-${m.id}` },
+    );
+    yes.setAttribute('aria-describedby', detailId);
+    return el('div', { className: 'td-reopen' }, [
+      el('p', {
+        id: `td-reopen-q-${m.id}`,
+        className: 'td-reopen-q',
+        text: words.question,
+        attrs: { tabindex: '-1' },
+      }),
+      el('p', { id: detailId, className: 'td-note', text: words.detail }),
+      el('div', { className: 'td-reopen-actions' }, [
+        yes,
+        button(
+          'Keep result',
+          () => {
+            state.reopen = null;
+            state.focusTarget = `td-reopen-btn-${m.id}`;
+            render();
+          },
+          { key: `td-reopen-cancel-${m.id}` },
+        ),
+      ]),
+    ]);
+  }
+
   function bracketCard() {
+    const awaitingUndo = matchesAwaitingUndo(state.data.bracket, state.pending);
     const rounds = state.data.bracket.rounds.map((round) =>
       el('section', { className: 'td-round', attrs: { 'aria-label': round.label } }, [
         el('h3', { text: round.label }),
@@ -1212,9 +1352,14 @@ export async function mountThrowdownEventScreen(
                     })
                   : el('span', {
                       className: 'td-result',
-                      text: m.playable ? 'Being decided' : 'Waiting',
+                      text: awaitingUndo.has(m.id)
+                        ? 'Removed when the undo syncs'
+                        : m.playable
+                          ? 'Being decided'
+                          : 'Waiting',
                     }),
                 auditDetails(m),
+                undoControl(m, round.label),
               ].filter(Boolean),
             );
           }),
@@ -1224,7 +1369,7 @@ export async function mountThrowdownEventScreen(
     return el(
       'section',
       { className: 'card td-card', attrs: { 'aria-labelledby': 'td-bracket-h' } },
-      [el('h2', { id: 'td-bracket-h', text: 'Bracket' }), ...rounds],
+      [el('h2', { id: 'td-bracket-h', text: 'Bracket', attrs: { tabindex: '-1' } }), ...rounds],
     );
   }
 
@@ -1297,7 +1442,8 @@ export async function mountThrowdownEventScreen(
       if (!state.data.bracket.started) {
         container.append(competitorsCard(), setupCard(), drawCard());
       } else {
-        const playable = state.data.bracket.playableMatches;
+        const awaitingUndo = matchesAwaitingUndo(state.data.bracket, state.pending);
+        const playable = state.data.bracket.playableMatches.filter((m) => !awaitingUndo.has(m.id));
         container.appendChild(
           el('section', { className: 'td-now', attrs: { 'aria-labelledby': 'td-now-h' } }, [
             el('h2', {
@@ -1337,12 +1483,19 @@ export async function mountThrowdownEventScreen(
     });
   }
 
+  // When the connection comes back, reload: the outbox drains on its own, and the screen should catch up with it.
+  const onOnline = () => {
+    if (!signal?.aborted) refreshSoon();
+  };
+  globalThis.addEventListener?.('online', onOnline);
+  signal?.addEventListener('abort', () => globalThis.removeEventListener?.('online', onOnline));
+
   render();
   await refresh();
 
   return {
     unmount() {
-      // No timers or listeners outside the nodes the router removes.
+      globalThis.removeEventListener?.('online', onOnline);
     },
   };
 }

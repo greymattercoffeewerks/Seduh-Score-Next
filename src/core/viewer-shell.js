@@ -77,6 +77,7 @@ import { renderPoweredBy } from './poweredBy.js';
 import { renderStageBand } from './stageBand.js';
 import { captureRankState, playRankMotion } from './rankMotion.js';
 import { renderSkeletonBoard } from './skeletonBoard.js';
+import { freshnessState, renderFreshness, HEARTBEAT_MS } from './freshness.js';
 
 // The one place this string is spelled out — both the chrome's visible <h1>
 // (renderChrome, showChrome:true) and mountViewerShell's own visually-hidden
@@ -270,6 +271,15 @@ export async function mountViewerShell(
   let session = null;
   let phase = 'connecting';
   let connectionLost = false;
+  // Freshness (core/freshness.js): when a read last succeeded, whether that has gone quiet for too long, and whether
+  // results are on screen right now (a lost connection keeps them there, labelled, rather than blanking the room).
+  let lastOkAt = null;
+  let stale = false;
+  let bodyIsLive = false;
+  let lastKey = null;
+  let freshnessKind = 'hidden';
+  let heartbeatTimer = null;
+  let tickTimer = null;
   let mounted = false;
   let requestSeq = 0;
   let lastIsTest = null;
@@ -311,7 +321,15 @@ export async function mountViewerShell(
     className: 'viewer-shell-body',
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
-  container.append(...(hiddenHeading ? [hiddenHeading] : []), chromeHost, bannerHost, body);
+  // Under the TEST banner, above the results: "Updated HH:MM" while fresh, a clear "Connection lost" bar when not.
+  const freshnessHost = el('div', { className: 'viewer-freshness-host' });
+  container.append(
+    ...(hiddenHeading ? [hiddenHeading] : []),
+    chromeHost,
+    bannerHost,
+    freshnessHost,
+    body,
+  );
   root.appendChild(container);
 
   // The credit lives in its own footer, after the body, and exists only while the shell is branded.
@@ -354,7 +372,7 @@ export async function mountViewerShell(
     applyBrandColors(container, brand, 'paper');
     if (chromeEl) {
       // Replace the heading's CHILDREN, never the heading: it may hold the screen reader's focus (see render()).
-      const fresh = renderChrome(session, connectionLost, brand);
+      const fresh = renderChrome(session, isLost(), brand);
       chromeEl.firstElementChild.replaceChildren(...fresh.firstElementChild.childNodes);
     }
     const credit = brand ? renderPoweredBy('powered-by-footer') : null;
@@ -382,6 +400,65 @@ export async function mountViewerShell(
     }
   }
 
+  // Lost = the realtime channel said so, or nothing has been heard from the server for too long.
+  function isLost() {
+    return connectionLost || stale;
+  }
+
+  // The heartbeat re-reads while a session is up, and the ticker notices when nothing has come back for too long
+  // (a dead socket gives no error) and keeps the "Updated HH:MM" clock moving. They run only while results are on screen
+  // (a display with nothing to show, or whose session ended, must have nothing ticking behind its holding card) and stop with the shell.
+  function syncTimers() {
+    const want = mounted && !unmounted && session != null && bodyIsLive;
+    if (want && !heartbeatTimer) {
+      heartbeatTimer = setInterval(() => {
+        if (mounted && session && pendingReads === 0) {
+          refresh({ quiet: true }).catch((err) =>
+            console.error('viewer-shell: heartbeat failed', err),
+          );
+        }
+      }, HEARTBEAT_MS);
+      tickTimer = setInterval(() => {
+        if (!mounted || !bodyIsLive) return;
+        const wasLost = isLost();
+        stale =
+          freshnessState({ now: Date.now(), active: true, channelLost: false, lastOkAt }).kind ===
+          'lost';
+        if (isLost() !== wasLost) render();
+        else paintFreshness();
+      }, 5000);
+    } else if (!want && heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      clearInterval(tickTimer);
+      heartbeatTimer = tickTimer = null;
+    }
+  }
+
+  // Redraws only the freshness bar (and the hook the stylesheet uses to retire the display's own Live marker).
+  // The bar is rebuilt only when its KIND changes; within a kind its words are updated in place, so the lost bar's
+  // role="alert" speaks once, when it appears, and not on every heartbeat.
+  function paintFreshness() {
+    if (unmounted) return;
+    syncTimers();
+    const state = freshnessState({
+      now: Date.now(),
+      active: bodyIsLive,
+      channelLost: isLost(),
+      lastOkAt,
+      publishedAt: session?.snapshot_at ?? session?.updated_at ?? null,
+    });
+    container.dataset.freshness = state.kind;
+    if (state.kind !== freshnessKind) {
+      freshnessKind = state.kind;
+      const bar = renderFreshness(state);
+      freshnessHost.replaceChildren(...(bar ? [bar] : []));
+      return;
+    }
+    const text = freshnessHost.querySelector('.viewer-freshness-text, .viewer-freshness-mark');
+    const next = renderFreshness(state);
+    if (text && next && text.textContent !== next.textContent) text.textContent = next.textContent;
+  }
+
   function render() {
     reportEvent();
     // Only the status badge — renderChrome()'s own SECOND child — is ever
@@ -405,7 +482,7 @@ export async function mountViewerShell(
     if (showChrome) {
       // Only the badge is taken after the first build, so later updates ask for an unbranded chrome: building the
       // brand's logo again on every live update would start a throwaway image request for a node nobody uses.
-      const freshChrome = renderChrome(session, connectionLost, chromeEl ? null : brand);
+      const freshChrome = renderChrome(session, isLost(), chromeEl ? null : brand);
       if (!chromeEl) {
         chromeEl = freshChrome;
         chromeHost.appendChild(chromeEl);
@@ -446,6 +523,13 @@ export async function mountViewerShell(
 
     if (!showChrome && brand) paintHoldingBand();
 
+    // A lost connection does not blank a room that already has results on screen: they stay, labelled by the
+    // freshness bar ("Connection lost — showing results from HH:MM"), and the body is only redrawn once a read
+    // succeeds again. Before the first successful read there is nothing to keep, so the holding card shows.
+    if (isLost() && bodyIsLive) {
+      paintFreshness();
+      return;
+    }
     bodyCleanup?.();
     bodyCleanup = null;
     // Rows a format marked (core/rankMotion.js) slide to their new place when the body is redrawn below.
@@ -453,6 +537,7 @@ export async function mountViewerShell(
     body.replaceChildren();
     if (connectionLost) {
       body.appendChild(renderHoldingState('lost'));
+      bodyIsLive = false;
     } else if (phase === 'live') {
       // The real Cup Taster viewer-body (T5.4) treats a manual-mode heat
       // with no started_at as ITS OWN defined no-clock state (§8.2: cupper
@@ -468,8 +553,10 @@ export async function mountViewerShell(
         format: session.format,
         eventId: session.event_id,
       });
+      bodyIsLive = true;
       safely(() => playRankMotion(body, rankBefore));
     } else {
+      bodyIsLive = false;
       body.appendChild(renderHoldingState(phase));
       // First load only: a board-shaped placeholder under the words, so the page does not jump when the data
       // arrives. Never for a state that means "nothing is coming" (no event, not started, not published).
@@ -488,6 +575,7 @@ export async function mountViewerShell(
         }
       }
     }
+    paintFreshness();
   }
 
   function computePhase() {
@@ -498,8 +586,24 @@ export async function mountViewerShell(
       : 'pending';
   }
 
-  async function refresh() {
-    const seq = ++requestSeq;
+  // `quiet` is the heartbeat (core/freshness.js): a plain "is the server still there?" read. It never flips the
+  // screen to lost on one failed read (the stale timer does that, after three missed beats), and a read that finds
+  // nothing new touches nothing on screen but the freshness bar, so a heartbeat never redraws a display mid-screen.
+  // A heartbeat never takes a sequence number, so it can never make an in-flight realtime read look superseded and
+  // drop the publish it was fetching (and the heartbeat waits its turn while such a read is out).
+  let pendingReads = 0;
+  async function refresh(options = {}) {
+    if (options.quiet) return readSession(options);
+    pendingReads += 1;
+    try {
+      return await readSession(options);
+    } finally {
+      pendingReads -= 1;
+    }
+  }
+
+  async function readSession({ quiet = false } = {}) {
+    const seq = quiet ? requestSeq : ++requestSeq;
     const { data, error } = await withTimeout(
       client.from('live_sessions').select('*').eq('org_id', orgId).eq('active', true).maybeSingle(),
       REFRESH_TIMEOUT_MS,
@@ -524,10 +628,18 @@ export async function mountViewerShell(
       // channel drop shows, but still worth a diagnostic for whoever's
       // debugging a viewer stuck here in production.
       console.error('viewer-shell: failed to read live_sessions', error);
+      if (quiet) return;
       connectionLost = true;
       render();
       return;
     }
+    const key = JSON.stringify(data);
+    if (quiet && !isLost() && bodyIsLive && key === lastKey) {
+      lastOkAt = Date.now();
+      paintFreshness();
+      return;
+    }
+    lastKey = key;
     session = data;
     if (session) {
       hasEvent = true; // an active live_sessions row implies its event exists
@@ -570,6 +682,8 @@ export async function mountViewerShell(
     // the exact unbounded-stuck-state failure mode the timeout above
     // exists to prevent, just reached a different way.
     connectionLost = false;
+    stale = false;
+    lastOkAt = Date.now();
     render();
   }
 
@@ -632,6 +746,7 @@ export async function mountViewerShell(
     unmount() {
       mounted = false;
       unmounted = true;
+      syncTimers();
       bodyCleanup?.();
       bodyCleanup = null;
       // Removes only this shell's own container, NOT `root.innerHTML = ''`:

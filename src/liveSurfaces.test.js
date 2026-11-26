@@ -656,7 +656,7 @@ describe('BTC on the live surfaces', () => {
     const client = fakeClient(cupTasterSession);
     const handle = await mountProjector(root, { orgId: 'org1', client });
     client.setRow(btcRow(preliminaryPayload({ playedCount: 13 }), { event_id: 'ev2' }));
-    await vi.waitFor(() => expect(root.querySelector('.btc-stage-vs')).not.toBeNull());
+    await vi.waitFor(() => expect(root.querySelector('.stage-vs')).not.toBeNull());
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(root.textContent).not.toContain('Result recorded');
     expect(root.textContent).not.toContain('Alex');

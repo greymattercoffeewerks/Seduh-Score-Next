@@ -84,9 +84,9 @@ describe('detectBtcMoments: what counts as news', () => {
     countried.teams[1].country = null;
     const moments = detectBtcMoments(previous, withResults(preliminaryPayload(), countried));
     const { host } = play(moments[0]);
-    const sides = [...host.querySelectorAll('.btc-stage-side')];
-    expect(sides[0].querySelector('.btc-stage-side-country').textContent).toBe('Singapore');
-    expect(sides[1].querySelector('.btc-stage-side-country')).toBeNull();
+    const sides = [...host.querySelectorAll('.stage-side')];
+    expect(sides[0].querySelector('.stage-side-country').textContent).toBe('Singapore');
+    expect(sides[1].querySelector('.stage-side-country')).toBeNull();
   });
 
   it('announces a match again when it was re-scored or decided by tie-break (same match, new confirmedAt)', () => {
@@ -285,14 +285,14 @@ describe('result screen', () => {
   it('shows a preliminary result: who won, both totals, and what each total is made of', () => {
     const { host, handle } = mountResult(result());
     expect(text(host, '.stage-kicker')).toBe('Result recorded · Preliminary');
-    expect(all(host, '.btc-stage-side-label')).toEqual(['Winner', 'Lost']);
-    expect(all(host, '.btc-stage-side-name')).toEqual(['Alpha', 'Beta']);
-    expect(all(host, '.btc-stage-points')).toEqual(['35', '15']);
-    expect(all(host, '.btc-stage-side:first-child .btc-stage-chip')).toEqual([
+    expect(all(host, '.stage-side-label')).toEqual(['Winner', 'Lost']);
+    expect(all(host, '.stage-side-name')).toEqual(['Alpha', 'Beta']);
+    expect(all(host, '.stage-points')).toEqual(['35', '15']);
+    expect(all(host, '.stage-side:first-child .stage-chip')).toEqual([
       '30 tokens',
       '+5 won the match',
     ]);
-    expect(all(host, '.btc-stage-side:last-child .btc-stage-chip')).toEqual(['15 tokens']);
+    expect(all(host, '.stage-side:last-child .stage-chip')).toEqual(['15 tokens']);
     expect(text(host, '.stage-footer-start')).toBe('Alpha win');
     expect(host.querySelector('.btc-stage-note')).toBeNull();
     handle.destroy();
@@ -321,7 +321,7 @@ describe('result screen', () => {
         ],
       }),
     );
-    expect(all(host, '.btc-stage-side:first-child .btc-stage-chip')).toEqual([
+    expect(all(host, '.stage-side:first-child .stage-chip')).toEqual([
       '30 tokens',
       '+5 won the match',
       '+2 fastest',
@@ -339,7 +339,7 @@ describe('result screen', () => {
         ],
       }),
     );
-    expect(all(host, '.btc-stage-side:first-child .btc-stage-chip')).toEqual(['30 tokens']);
+    expect(all(host, '.stage-side:first-child .stage-chip')).toEqual(['30 tokens']);
     handle.destroy();
   });
 
@@ -350,7 +350,7 @@ describe('result screen', () => {
     ['third_place', ['Third place', 'Fourth place'], 'Alpha take third place'],
   ])('a %s result is worded for what it decided', (round, labels, footer) => {
     const { host, handle } = mountResult(result({ round, roundLabel: round }));
-    expect(all(host, '.btc-stage-side-label')).toEqual(labels);
+    expect(all(host, '.stage-side-label')).toEqual(labels);
     expect(text(host, '.stage-footer-start')).toBe(footer);
     handle.destroy();
   });
@@ -369,11 +369,11 @@ describe('result screen', () => {
         teams: level,
       }),
     );
-    const chips = [...host.querySelectorAll('.btc-stage-chip')];
+    const chips = [...host.querySelectorAll('.stage-chip')];
     const tie = chips.filter((c) => c.getAttribute('data-kind') === 'tiebreak');
     expect(tie).toHaveLength(1);
     expect(tie[0].textContent).toBe('Tie-break: <b>Sudden-death</b> cup');
-    expect(tie[0].closest('.btc-stage-side').getAttribute('data-winner')).toBe('true');
+    expect(tie[0].closest('.stage-side').getAttribute('data-winner')).toBe('true');
     expect(host.querySelector('b')).toBeNull();
     expect(text(host, '.stage-kicker')).toBe('Result recorded · Quarterfinal');
     handle.destroy();
@@ -393,7 +393,7 @@ describe('result screen', () => {
       }),
     );
     expect(text(host, '.stage-kicker')).toBe('Result recorded · Quarterfinal · level on points');
-    expect(all(host, '.btc-stage-side-label')).toEqual(['Level', 'Level']);
+    expect(all(host, '.stage-side-label')).toEqual(['Level', 'Level']);
     expect(host.querySelectorAll('[data-winner]')).toHaveLength(0);
     expect(text(host, '.btc-stage-note')).toBe('The organiser decides who goes through.');
     expect(text(host, '.stage-footer-start')).toMatch(/waiting for the organiser/);
@@ -504,7 +504,7 @@ describe('with the real assembler (the shapes production publishes)', () => {
       return play(moments[0]);
     })();
     expect(text(host, '.stage-kicker')).toBe('Result recorded · Preliminary');
-    expect(host.querySelectorAll('.btc-stage-side')).toHaveLength(2);
+    expect(host.querySelectorAll('.stage-side')).toHaveLength(2);
     handle.destroy();
   });
 
@@ -778,7 +778,7 @@ describe('result screen: wording for what a result decided', () => {
         ],
       }),
     );
-    expect(all(host, '.btc-stage-side:last-child .btc-stage-chip')).toEqual(['1 token']);
+    expect(all(host, '.stage-side:last-child .stage-chip')).toEqual(['1 token']);
     handle.destroy();
   });
 });
@@ -790,7 +790,7 @@ describe('with the real assembler: what a result is made of', () => {
     const next = preliminaryPayload({ playedCount: 13 });
     const moment = detectBtcMoments(previous, next).find((m) => m.screen.key === 'result');
     const { host, handle } = play(moment);
-    const chips = all(host, '.btc-stage-chip');
+    const chips = all(host, '.stage-chip');
     expect(chips).toContain('+5 won the match');
     expect(chips.some((chip) => /^\d+ tokens?$/.test(chip))).toBe(true);
     handle.destroy();

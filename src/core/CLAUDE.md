@@ -184,6 +184,34 @@ icon and name into separate destinations or leave either as a non-interactive fa
 
 **Organiser home (`#/events`, 2026-11-17, v4.17.0 planned)** — the events landing page is three pure-plus-DOM modules and one door. `eventHome.js` is pure (`buildHome`, `findLiveEvent`, `findNextEvent`, `filterByFormat`, `countsLine`, `rowTags`, `collectAttention`); `eventsScreen.js` renders the list and the format filter; `newEventScreen.js` (`#/events/new`) takes its format options from the caller and imports no format. The per-event state line is format wording, so it is built in `src/organiserHome.js` (`describeEventForHome`, which holds BTC's readiness rule through `MIN_JUDGES` from `formats/btc/runSheet.js`) and passed down; core only shows the raw counts from `listEventSummaries` (`events.js`, the `org_event_summaries` door, migration `20261124100000`). A new format adds its facts to that door and its wording to `organiserHome.js`, not to `core/`.
 
+**Projector kit: adding a projector to a format (Throwdown, 2026-11-21).** The venue-display engine is core; a format
+writes only its words. Pieces: `stageMatchCard.js` (+ `.css`, `stage-side*`, `stage-vs*`, `stage-chip*`: `renderSide` and
+`renderVs`, the two-sided VS card, moved out of BTC's screens), `stageLoopScreen.js` (`createLoopScreen({ key, pagesFor,
+signatureOf, dwellMs, footerFor })`: a screen for `screenDirector` that builds pages, shows each `dwellMs` with the footer
+and the ring, and rebuilds ONLY when `signatureOf(payload)` changes, so a republish never restarts the loop),
+`stageNewResults.js` (`detectNewResults(previous, next, { listOf, keyOf, orderBy })`: results in `next` not in
+`previous`, oldest first, nothing without a previous snapshot), `stageChampionScreen.js` (`createChampionScreen({ paint,
+minDwellMs = 60000 })`, `paint(payload) -> { name, scoreLine?, podiumLine?, footerStart, footerEnd }`) and
+`stageProjector.testkit.js` (`describeProjectorContract`). The recipe, in order:
+
+1. `projectorScreens.js`: `selectScreen(payload)` (champion first, then the loop; null for nothing to show),
+   `hasContent` = "`selectScreen` is not null" (the contract test checks they agree), `bandFor(payload)`, `pagesFor(payload)`
+   returning `[{ render() -> nodes, label, footer? }]` (leave out a page with nothing to say), then
+   `createLoopScreen` and `createChampionScreen`. Sizes come from `--stage-fit`; link `stageVocabulary.css` and
+   `stageMatchCard.css` before the format's own sheet in `app/index.html`.
+2. `projectorMoments.js`: `detectMoments(previous, next)` returns `[{ screen, payload }]` (use `detectNewResults`; each
+   moment screen has a `minDwellMs`, a footer ring from `mountFooterRing`, a rise-in from `revealOnMount` for lists). Key a
+   result by its id AND its confirmed time; return `[]` without a previous snapshot.
+3. `projectorBody.js`: `createStageBody({ selectScreen, bandFor, hasContent, detectMoments, ...options })`, passing
+   `options` through (brand), and register it in `src/liveSurfaces.js`.
+4. Test it: `describeProjectorContract(name, { selectScreen, hasContent, samples, worstCases })` (selectScreen and
+   hasContent agree; every screen draws, ignores an identical republish and destroys; worst cases render every page
+   with the longest names and the fullest page), plus the format's own tests for each page, each moment, "no moment
+   without a previous snapshot" and "no replay on a republish". A `*.preview.html` on the real assembler's payloads is
+   how the owner checks it at 1920x1080 and 360 px (jsdom has no layout).
+5. Words not colour; the TEST banner is the shell's; nothing in core names a format. BTC and Cup Taster still keep their
+   own idle loops (a tidy-up for later: they can move to `createLoopScreen` unedited).
+
 ## `main.js` (composition root)
 
 Not physically under `core/`, but its conventions live here since it's the wiring that

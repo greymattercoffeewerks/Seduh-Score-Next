@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(104);
+select plan(106);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -148,7 +148,8 @@ insert into e1.rpc (name, sql, org_only) values
   ('td_confirm_match', 'select public.td_confirm_match(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62))', false),
   ('td_record_walkover', 'select public.td_record_walkover(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), e1.u(''%'',63))', false),
   ('td_save_score_sheet', 'select public.td_save_score_sheet(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), e1.u(''%'',63), 1, ''{"1": {}}''::jsonb)', false),
-  ('td_confirm_scored_match', 'select public.td_confirm_scored_match(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), 1, null)', false);
+  ('td_confirm_scored_match', 'select public.td_confirm_scored_match(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), 1, null)', false),
+  ('td_reopen_match', 'select public.td_reopen_match(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62))', false);
 
 update e1.rpc set org_arg = false where name in ('create_btc_match', 'issue_seduh_claim_link', 'revoke_seduh_claim_link');
 -- Where the organisation's own call is stopped by a LATER rule of the function (the fixture is a pending heat, an
@@ -171,7 +172,7 @@ update e1.rpc set own_expect = case name
   when 'issue_seduh_claim_link'      then 'P0001: This person has no Seduh ID yet'
   when 'revoke_seduh_claim_link'     then 'P0001: There is no open claim link for this person'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 43, 'the matrix covers 43 RPCs');
+select is((select count(*)::int from e1.rpc), 44, 'the matrix covers 44 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
