@@ -359,3 +359,158 @@
   text-align: start;
   cursor: pointer;
 }
+
+/* ---- Console parts from the night concept (2026-11-26): .eyebrow, .queue, .runsheet, .cutline ----
+   Drawn first for the BTC event dashboard, built so any format's organiser screen can take them. Paper and stage both come
+   from the colour tokens. Roles only for radius, and flat: an edge or a surface step, nothing cut or lifted. */
+
+/* .eyebrow: the small mono uppercase label above a heading, a table head, a stat or a section. Muted ink, so it never
+   competes with the thing it labels. A <span>, <p> or <th>; it names, it does not announce. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: var(--tracking-caps);
+  line-height: var(--leading-snug);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* ---- .queue: the "needs you" list ----
+   <ul class="queue"><li data-severity="attention">
+     <div><p class="queue-title"><span class="status" data-state="attention">Waiting</span> …</p>
+     <p class="queue-detail">…</p></div><a class="btn btn-outline">Action</a>
+   </li></ul>
+   One item, one action. The left edge is a colour only, so an item with data-severity="attention" MUST also carry a
+   .status mark with its word in the title (a screen reader and forced colours both lose the edge). Without the attribute
+   the edge is the accent (to check) and needs no mark. No gold: gold is ceremonial. A parent card or panel draws the
+   box; the list draws only its rows. */
+.queue {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue > li {
+  --queue-edge: var(--selected-edge);
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.queue > li:last-child {
+  border-bottom: 0;
+}
+
+.queue > li::before {
+  content: '';
+  align-self: stretch;
+  border-radius: var(--radius-selector);
+  background: var(--queue-edge);
+}
+
+.queue > li[data-severity='attention'] {
+  --queue-edge: var(--color-warning);
+}
+
+.queue-title,
+.queue-detail {
+  margin: 0;
+}
+
+.queue-title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.queue-detail {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* ---- .runsheet: the phases of an event, one cell each ----
+   <ol class="runsheet"><li data-state="done|upcoming" [aria-current="step"]>
+     <span class="eyebrow">01 · Done</span><span class="runsheet-title">Setup</span>
+     <div class="meter">…</div><span class="runsheet-detail">16 teams</span>
+   </li></ol>
+   The sibling of .steps for a phase that has its own progress (a .meter per cell). The current phase takes the
+   selected tint; the cells reflow on a narrow screen. Put the state in words in the eyebrow ("Done", "Now", "Upcoming"). */
+.runsheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--border-hairline);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  background: var(--color-border);
+  border: var(--border-hairline) solid var(--box-edge);
+  border-radius: var(--radius-box);
+}
+
+.runsheet > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+}
+
+.runsheet > li[aria-current='step'] {
+  background: var(--selected-bg);
+}
+
+.runsheet > li[aria-current='step'] .eyebrow {
+  color: var(--selected-fg);
+}
+
+.runsheet-title {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.runsheet > li[data-state='upcoming'] .runsheet-title {
+  color: var(--color-text-secondary);
+}
+
+.runsheet-detail {
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+}
+
+/* ---- .cutline: a labelled dashed rule between two ranks (the cut to the top 8) ----
+   <div class="cutline">The cut · top 8 go through</div>, between two rows of a table or list. */
+.cutline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.cutline::before,
+.cutline::after {
+  content: '';
+  flex: 1;
+  border-top: var(--border-hairline) dashed currentColor;
+}
+
+/* Forced colours drops the queue's edge and the runsheet's divider (backgrounds): keep the edge, give each cell a border. */
+@media (forced-colors: active) {
+  .runsheet > li {
+    border: var(--border-hairline) solid CanvasText;
+  }
+
+  .queue > li::before {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}

@@ -1,10 +1,11 @@
 # Status — read this first
 
-_As of 2026-11-24, app version 4.29.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-26, app version 4.29.1, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
+- **Petrol night console tokens and parts** (4.29.1) is in a PR to `dev`; first consumer: the BTC night dashboard.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
@@ -17,7 +18,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
 - **Cloud database in sync (checked 2026-11-20):** all 128 migrations on `dev` are in the cloud project, none extra, including
   `seduh_throwdown_profile` (4.24.0), pushed after #529 merged.
-- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`, first adopter of the shared community chrome): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout to the Timer, Brew Planner and Guess the Bean organiser page (#521) and the share-preview fix (#520, 4.21.1) are released as **4.22.0** (minor: every tool now links to the others).
+- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout to the Timer, Brew Planner and Guess the Bean organiser page (#521) and the share-preview fix (#520, 4.21.1) are released as **4.22.0** (minor: every tool now links to the others).
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
@@ -63,6 +64,6 @@ Moved verbatim to [`docs/archive/status/handover-2026-11-08.md`](docs/archive/st
 
 ## Keeping the hot files short
 
-New deferred findings go to the area's file in `docs/backlog/`, not `ROADMAP.md`. When `CHANGELOG.md` passes about 200 KB,
+Deferred findings go to `docs/backlog/`, not `ROADMAP.md`. When `CHANGELOG.md` passes about 200 KB,
 move its oldest entries verbatim to `docs/archive/changelog/<period>.md` and add one line each to `CHANGELOG-INDEX.md`.
 `npm run check:docs` fails CI on a blown budget, a broken link, or an indexed heading missing from its archive file.

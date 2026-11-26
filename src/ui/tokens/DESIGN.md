@@ -484,6 +484,31 @@ tap. The 44px floor holds. Checked and left unchanged: Cup Taster's timing scree
 control (a wrong time is corrected through the manual-time editor, which already confirms), and BTC and Throwdown have no
 timer controls of this kind.
 
+## Night console and console parts (2026-11-26)
+
+From the BTC event dashboard concept (an organiser console at night, built on Petrol), four additions and one rule. No existing
+screen changed; the BTC dashboard thread is the first consumer.
+
+- **`--color-chrome`** (with ramp step `--clr-petrol-975`, `#070a0b`): the ground of the console's side menu and top bar. Stage:
+  one step under the canvas, so the frame is the outermost layer at night. Paper: the surface step. Text, secondary, muted and
+  accent hold 4.5:1 on it in both modes (`consoleChrome.test.js`). Nothing else reads `--clr-petrol-975`.
+- **The organiser console at night is `data-surface="stage"`**, not a third mode. Before this, stage meant the projector and the
+  audience; it now also serves a hand-held console in a dark hall. The 360px stacked tables and compact density apply as before.
+- **`--tracking-caps`** (`0.14em`) and **`.eyebrow`**: the mono uppercase muted label above a heading, a table head, a stat or a
+  section (`--text-2xs`, so 12px, not the concept's 11px). `.page-hero-kicker` and `.ok-next-kicker` stay as they are.
+- **`.queue`**: the "needs you" list. `<li>` = a 4px severity edge, `.queue-title` and `.queue-detail`, one `.btn.btn-outline`.
+  Default edge is the accent; `data-severity="attention"` is the warning colour and the item must also carry a `.status` mark with its word (the edge is colour only, and forced colours flattens it). **No gold**: the concept drew a tie in gold, but
+  gold is ceremonial, so it is dropped. The edge is a background, so forced-colours keeps it with `CanvasText`.
+- **`.runsheet`**: an `<ol>` of phase cells, each an `.eyebrow` (with the state in words), `.runsheet-title`, a `.meter` and
+  `.runsheet-detail`. The current cell is `aria-current="step"` and takes the selected tint. The sibling of `.steps` for a phase
+  with its own progress; cells reflow with `auto-fit`.
+- **`.cutline`**: a labelled dashed rule in the accent between two ranks (the cut to the top 8).
+
+Not taken from the concept: the faint grid behind the hero (decorative), a per-viewer accent picker (`data-brand` already
+exists), cut-corner buttons (`.btn-bevel` on the primary only, as before), and a small button (`.btn` already keeps 44px; there is
+no `.btn-sm` and the concept's `.sm` is not added). All pairings above are in `consoleChrome.test.js`; the live preview has a
+"Console parts" section in paper and stage.
+
 ## Drift guard
 
 A second check covers the public pages (`src/marketing/*.css`, `src/community/communityHub.css`). It is a heuristic,

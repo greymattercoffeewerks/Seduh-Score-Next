@@ -745,6 +745,134 @@
         }
       </script>
 
+      <h2 class="guide-heading">Console parts (night concept, 2026-11-26)</h2>
+      <p>
+        <code>.eyebrow</code>, <code>.queue</code>, <code>.runsheet</code> and
+        <code>.cutline</code>, on <code>--color-chrome</code> (the side menu and top bar). Paper on
+        the left, stage on the right. The queue edge is the severity; the default is the accent, and
+        <code>data-severity="attention"</code> is the warning colour. No gold: gold is ceremonial.
+      </p>
+      <style>
+        .pv-console {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+          gap: var(--space-3);
+        }
+        .pv-console-col {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-4);
+          min-width: 0;
+          padding: var(--space-4);
+          background: var(--color-canvas);
+          color: var(--color-text);
+        }
+        .pv-chrome {
+          padding: var(--space-3) var(--space-4);
+          background: var(--color-chrome);
+          border-bottom: var(--border-hairline) solid var(--color-border);
+        }
+        .pv-box {
+          background: var(--color-surface);
+          border: var(--border-hairline) solid var(--box-edge);
+          border-radius: var(--radius-box);
+        }
+      </style>
+      <div class="pv-console">
+        <div data-surface="paper" class="pv-console-col">
+          <div class="pv-chrome"><span class="eyebrow">Chrome · this event</span></div>
+          <div class="pv-box">
+            <ul class="queue">
+              <li data-severity="attention">
+                <div>
+                  <p class="queue-title">
+                    <span class="status" data-state="attention">Waiting</span> Judge 4 has not sent
+                    a sheet
+                  </p>
+                  <p class="queue-detail">Three of four are in.</p>
+                </div>
+                <button class="btn btn-outline" type="button">Check judges</button>
+              </li>
+              <li>
+                <div>
+                  <p class="queue-title">Check the cut</p>
+                  <p class="queue-detail">8th and 9th are 2.5 points apart.</p>
+                </div>
+                <button class="btn btn-outline" type="button">Open standings</button>
+              </li>
+            </ul>
+          </div>
+          <ol class="runsheet">
+            <li data-state="done">
+              <span class="eyebrow">01 · Done</span><span class="runsheet-title">Setup</span>
+              <div class="meter"><span class="meter-fill" style="width: 100%"></span></div>
+              <span class="runsheet-detail">16 teams</span>
+            </li>
+            <li aria-current="step">
+              <span class="eyebrow">02 · Now</span><span class="runsheet-title">Round 2</span>
+              <div class="meter"><span class="meter-fill" style="width: 60%"></span></div>
+              <span class="runsheet-detail">5 of 8</span>
+            </li>
+            <li data-state="upcoming">
+              <span class="eyebrow">03 · Upcoming</span><span class="runsheet-title">The cut</span>
+              <div class="meter"></div>
+              <span class="runsheet-detail">Top 8</span>
+            </li>
+          </ol>
+          <div class="pv-box">
+            <div style="padding: var(--space-3) var(--space-4)">8 · Ember Street</div>
+            <div class="cutline">The cut · top 8 go through</div>
+            <div style="padding: var(--space-3) var(--space-4)">9 · Paddy Field Espresso</div>
+          </div>
+        </div>
+        <div data-surface="stage" class="pv-console-col">
+          <div class="pv-chrome"><span class="eyebrow">Chrome · this event</span></div>
+          <div class="pv-box">
+            <ul class="queue">
+              <li data-severity="attention">
+                <div>
+                  <p class="queue-title">
+                    <span class="status" data-state="attention">Waiting</span> Judge 4 has not sent
+                    a sheet
+                  </p>
+                  <p class="queue-detail">Three of four are in.</p>
+                </div>
+                <button class="btn btn-outline" type="button">Check judges</button>
+              </li>
+              <li>
+                <div>
+                  <p class="queue-title">Check the cut</p>
+                  <p class="queue-detail">8th and 9th are 2.5 points apart.</p>
+                </div>
+                <button class="btn btn-outline" type="button">Open standings</button>
+              </li>
+            </ul>
+          </div>
+          <ol class="runsheet">
+            <li data-state="done">
+              <span class="eyebrow">01 · Done</span><span class="runsheet-title">Setup</span>
+              <div class="meter"><span class="meter-fill" style="width: 100%"></span></div>
+              <span class="runsheet-detail">16 teams</span>
+            </li>
+            <li aria-current="step">
+              <span class="eyebrow">02 · Now</span><span class="runsheet-title">Round 2</span>
+              <div class="meter"><span class="meter-fill" style="width: 60%"></span></div>
+              <span class="runsheet-detail">5 of 8</span>
+            </li>
+            <li data-state="upcoming">
+              <span class="eyebrow">03 · Upcoming</span><span class="runsheet-title">The cut</span>
+              <div class="meter"></div>
+              <span class="runsheet-detail">Top 8</span>
+            </li>
+          </ol>
+          <div class="pv-box">
+            <div style="padding: var(--space-3) var(--space-4)">8 · Ember Street</div>
+            <div class="cutline">The cut · top 8 go through</div>
+            <div style="padding: var(--space-3) var(--space-4)">9 · Paddy Field Espresso</div>
+          </div>
+        </div>
+      </div>
+
       <h2 class="guide-heading">Token layers and density (Petrol Kaizen P6)</h2>
       <p>
         Three layers: the <em>ramp</em> (<code>--clr-teal-700</code>, <code>--radius-md</code>), the
