@@ -229,7 +229,7 @@ Deferred on purpose; the spec is `docs/specs/BTC-NIGHT-DASHBOARD-SPEC.md`.
 
 - **Live "On stage" hero** (teams, service clock, judge-sheet pips, up next): needs a read-only live feed first. Spec section "Phase 2". Owner: not now.
 - "Watching on phones" (a viewer count the audience screens do not report; a count only, no identities) and "running N min behind plan" (needs a stored schedule): separate, optional.
-- The phase cards are now folded under "All phases, with their actions" (4.30.1). Decide whether the strip replaces them for good (their per-phase actions and blocked reasons would need a home).
+- The phase cards are now folded under "All phases, with their actions" (4.30.2). Decide whether the strip replaces them for good (their per-phase actions and blocked reasons would need a home).
 - **Side menu from the concept** (event links in a left rail, `--color-chrome`): the app has a top header; a rail is an app-shell change for every screen. Owner to decide.
 - `core/needsYou.js` and `core/eventWarnings.js` draw the same data in two styles (Throwdown and the organiser home still use the older card). Pick one card with a presentation option.
 - A database rule for the committee's tie at the cut (shortest combined preliminary time goes through) would be a scoring change: `scoring-auditor` and a migration. Today the organiser records the order.
