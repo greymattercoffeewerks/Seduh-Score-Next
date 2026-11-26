@@ -69,6 +69,9 @@ renumbered here rather than left silently wrong (as it briefly was, between BTC'
 2026-09-23 ship and this correction) — exactly the "plan, not a commitment" caveat this
 paragraph existed to make.
 
+**Remark (owner, 2026-11-26):** bump the version when the Admin World console ships (default a minor, place stays
+Kiarong; ask the owner whether a major is wanted). Details: `docs/versioning.md`, "Planned bumps".
+
 Per handoff §14.
 
 | Task                     | Verifier          | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |

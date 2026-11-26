@@ -83,6 +83,13 @@ Seduh), Jerudong, Seria.
 
 The move tracks code shipping to the repo, not the separate deploy step.
 
+## Planned bumps (a reminder, not a place move)
+
+- **When the Admin World console ships** (the redesigned `/admin/`, stages W1 to W7 of the world console spec), bump
+  the version then. The default is a **minor**: it is a new platform capability for the operator, not a new format, so
+  the place stays Kiarong. The owner has not said whether a major is wanted instead; ask before bumping. Also add a
+  chapter for it to the Behind the Seduh page (below) in the same release.
+
 ## The Behind the Seduh page (`/bts/`)
 
 The page tells this history, so it must agree with the app. `src/marketing/btsPage.test.js` fails when the page's
