@@ -233,3 +233,4 @@ Deferred on purpose; the spec is `docs/specs/BTC-NIGHT-DASHBOARD-SPEC.md`.
 - The BTC screen finds the shell by the class `.app-shell-root` (owned by `main.js`). If that is renamed, night mode stops covering the header; give the shell a way to hand a surface target to a screen.
 - `core/needsYou.js` and `core/eventWarnings.js` draw the same data in two styles (Throwdown and the organiser home still use the older card). Pick one card with a presentation option.
 - A database rule for the committee's tie at the cut (shortest combined preliminary time goes through) would be a scoring change: `scoring-auditor` and a migration. Today the organiser records the order.
+- The Night mode switch's CSS (`.console-surface-switch*`) is in `btc/eventDashboardScreen.css`. When a second format's screen takes the switch, move it to `src/ui/tokens` as a Petrol part (with its contrast rows in `consoleChrome.test.js`).
