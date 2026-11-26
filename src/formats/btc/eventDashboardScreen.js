@@ -27,6 +27,7 @@ import { buildRecordsCard } from '../../core/recordsCard.js';
 import { renderStatusBand } from '../../core/statusBand.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { loadDashboardData } from './dashboardData.js';
+import { buildDashboardStandings } from './dashboardStandings.js';
 import { btcLinks, currentPhaseLabel, deriveBtcPhases, deriveBtcWarnings } from './runSheet.js';
 import { publishBtcLive } from './liveSession.js';
 import { loadScoresTables } from './scoresExportData.js';
@@ -289,6 +290,11 @@ export async function mountBtcEventDashboardScreen(
       el('div', { className: 'ok-dashboard' }, [
         el('div', { className: 'ok-dashboard-main' }, [
           runSection,
+          buildDashboardStandings({
+            teams: data.teams,
+            seedingRows: data.seedingRows,
+            href: links.standings,
+          }),
           buildHomepageListingCard(event, { client }),
         ]),
         el('div', { className: 'ok-dashboard-rail' }, [
