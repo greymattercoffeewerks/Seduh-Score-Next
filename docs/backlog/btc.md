@@ -222,3 +222,14 @@ Shared organiser-dashboard work, found while copying BTC's dashboard for Throwdo
 - Extract the dashboard shell (loading, error and Retry, live check, take-over read-back, links row, layout) from `btc/eventDashboardScreen.js` and `throwdown/eventDashboardScreen.js` into one `core/` primitive taking the per-format callbacks.
 - `core/errors.js` `describeError`: any error with a `.code` reads "Something went wrong saving that", so a missing event and a lost connection on a load show save wording and Retry can never succeed for a missing event. Needs a load-specific wording.
 - Move the CSV formula guard (`safeText` in throwdown `recordsExport.js`, near-copy in btc `scoresExport.js`) and the file-name slug helper (three copies) to `core/`.
+
+## From the night dashboard, Phase 1 (2026-11-26)
+
+Deferred on purpose; the spec is `docs/specs/BTC-NIGHT-DASHBOARD-SPEC.md`.
+
+- **Live "On stage" hero** (teams, service clock, judge-sheet pips, up next): needs a read-only live feed first. Spec section "Phase 2". Owner: not now.
+- "Watching on phones" (a viewer count the audience screens do not report; a count only, no identities) and "running N min behind plan" (needs a stored schedule): separate, optional.
+- The phase cards still sit under the new run-sheet strip, so the page says each phase twice. Decide whether the strip replaces them (their per-phase actions and blocked reasons would need a home).
+- The BTC screen finds the shell by the class `.app-shell-root` (owned by `main.js`). If that is renamed, night mode stops covering the header; give the shell a way to hand a surface target to a screen.
+- `core/needsYou.js` and `core/eventWarnings.js` draw the same data in two styles (Throwdown and the organiser home still use the older card). Pick one card with a presentation option.
+- A database rule for the committee's tie at the cut (shortest combined preliminary time goes through) would be a scoring change: `scoring-auditor` and a migration. Today the organiser records the order.

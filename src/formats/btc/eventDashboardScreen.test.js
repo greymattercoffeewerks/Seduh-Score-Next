@@ -78,7 +78,47 @@ describe('mountBtcEventDashboardScreen', () => {
     downloadCsv.mockReset();
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     root.remove();
+  });
+
+  it('draws the run-sheet strip with the current phase marked', async () => {
+    await mount(root, {});
+    const cells = root.querySelectorAll('.runsheet > li');
+    expect(cells).toHaveLength(6);
+    expect(root.querySelectorAll('.runsheet [aria-current="step"]')).toHaveLength(1);
+    expect(cells[0].getAttribute('aria-current')).toBe('step');
+  });
+
+  it('night mode flips the surface on the shell, and unmount puts it back', async () => {
+    localStorage.removeItem('seduh.consoleSurface');
+    const shell = document.createElement('div');
+    shell.className = 'app-shell-root';
+    shell.appendChild(root);
+    document.body.appendChild(shell);
+    const screen = await mount(root, {});
+    expect(shell.hasAttribute('data-surface')).toBe(false);
+    const toggle = root.querySelector('.console-surface-switch');
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    toggle.click();
+    expect(shell.getAttribute('data-surface')).toBe('stage');
+    expect(localStorage.getItem('seduh.consoleSurface')).toBe('night');
+    screen.unmount();
+    expect(shell.hasAttribute('data-surface')).toBe(false);
+    localStorage.removeItem('seduh.consoleSurface');
+    shell.remove();
+  });
+
+  it('shows quiet Updated time, then a Connection lost alert when the device goes offline', async () => {
+    const screen = await mount(root, {});
+    expect(root.querySelector('.viewer-freshness').dataset.kind).toBe('fresh');
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    window.dispatchEvent(new Event('offline'));
+    const bar = root.querySelector('.viewer-freshness');
+    expect(bar.dataset.kind).toBe('lost');
+    expect(bar.getAttribute('role')).toBe('alert');
+    expect(bar.textContent).toContain('Connection lost');
+    screen.unmount();
   });
 
   it('shows the event name as the heading, with a meta line, and focuses it', async () => {
@@ -154,7 +194,7 @@ describe('mountBtcEventDashboardScreen', () => {
         error: null,
       },
     });
-    expect(root.querySelector('.ok-warn').textContent).toContain('no finish times');
+    expect(root.querySelector('.needs-you').textContent).toContain('no finish times');
   });
 
   it('warns about confirms queued on this device for this event only', async () => {
@@ -174,7 +214,7 @@ describe('mountBtcEventDashboardScreen', () => {
         ],
       },
     );
-    expect(root.querySelector('.ok-warn').textContent).toContain(
+    expect(root.querySelector('.needs-you').textContent).toContain(
       '1 confirm is saved on this device',
     );
   });
@@ -182,7 +222,7 @@ describe('mountBtcEventDashboardScreen', () => {
   it('opens even when the outbox cannot be read', async () => {
     await mount(root, {}, { listQueued: async () => Promise.reject(new Error('idb')) });
     expect(root.querySelector('h1').textContent).toBe('Regional Bracket');
-    expect(root.querySelector('.ok-warn').textContent).toContain('Nothing needs attention');
+    expect(root.querySelector('.needs-you').textContent).toContain('Nothing needs you');
   });
 
   describe('live card', () => {
