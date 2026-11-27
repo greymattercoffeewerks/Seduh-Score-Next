@@ -186,6 +186,10 @@ The classes that apply it are `.is-selected` / `.selectable` (see "Component sta
 
 `--clr-gold-100` (paper) and `--clr-gold-900` (stage) feed `--color-gold-tint`, the ground of a ceremonial highlight card (the country page's best finish; a champion). `--color-gold` is the label that sits on it and `--color-text` the body, in both modes (rows in the contrast table above). Same symmetry rule as the accent tint: paper tint is light, stage tint is dark. Gold stays fill and label, never a long run of text.
 
+## Gold on the live bar (2026-11-27)
+
+The landing page's "live now" bar is gold: a gold-tint ground, a 2px gold edge, a gold stamp ("Live now:") and a gold fill Watch button with `--color-gold-contrast` text, and the shared live dot recoloured to gold. Owner decision (Firdaus): a live competition is the one moment the public page wants to stand out from the teal, and gold is the warm, non-alert hue in the system (coral is danger, violet is `is_test`, amber is a state). It is still a fill and a short label, never a run of text, and corners are the token radius, not cut. Do not use gold for any other live-state surface without the same decision.
+
 ## `is_test` is violet, and only violet is `is_test` — unchanged
 
 `--color-test` (`#6b21c9`) is untouched by this rework, in either surface mode, for the
