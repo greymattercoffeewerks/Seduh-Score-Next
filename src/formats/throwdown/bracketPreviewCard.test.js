@@ -101,6 +101,9 @@ describe('the card', () => {
     count.value = '99';
     count.dispatchEvent(new Event('change'));
     expect(shown.calls[1]).toEqual({ entrants: 64 });
+    count.value = '';
+    count.dispatchEvent(new Event('change'));
+    expect(shown.calls[2]).toEqual({ entrants: null });
   });
   it('under two brewers it says so instead of a plan', () => {
     const { node } = card({ rosterCount: 1, plan: { ...closed, open: true } });

@@ -105,7 +105,8 @@ export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChan
       },
     });
     count.addEventListener('change', () => {
-      const n = Math.trunc(Number(count.value));
+      // an empty or non-numeric box goes back to the roster's count; a number is kept within 0 to 64
+      const n = count.value.trim() === '' ? NaN : Math.trunc(Number(count.value));
       onChange({
         entrants: Number.isFinite(n) ? Math.min(Math.max(n, 0), MAX_PREVIEW_ENTRANTS) : null,
       });
