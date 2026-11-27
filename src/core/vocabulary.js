@@ -92,3 +92,111 @@ export function buildStat({ label, value, unit, sub, tone = null, className = ''
   if (sub) tile.append(el('div', { className: 'stat-sub', text: sub }));
   return tile;
 }
+
+/**
+ * A decided match as a scoreboard (`.result-row`, 2026-11-27): the winner is a tinted band with the winner's score as
+ * a big number, the loser sits below in a plain row with theirs. Full names wrap, never cut. The words "Winner" and the
+ * two numbers carry the result as well as the tint. A walkover or a bye has no scores: pass `note` ("Walkover") and
+ * it stands where the numbers would.
+ * @param {{ winner: { name: string, score?: string|number|null }, loser?: { name: string, score?: string|number|null }|null, note?: string|null, className?: string }} o
+ */
+export function buildResultRow({ winner, loser, note = null, className = '' }) {
+  const score = (value, fallback) => {
+    const text = value ?? fallback;
+    if (text === null || text === undefined) return null;
+    // a word ("Walkover") stands in the number's place, smaller so a long name keeps its room
+    return el('span', {
+      className: 'result-row-score tabular-nums',
+      text: String(text),
+      attrs: value === null || value === undefined ? { 'data-word': 'true' } : {},
+    });
+  };
+  const winnerLine = el(
+    'div',
+    { className: 'result-row-line result-row-win' },
+    [
+      el('span', { className: 'result-row-name' }, [
+        el('span', { className: 'eyebrow', text: 'Winner' }),
+        el('span', { className: 'result-row-text', text: winner.name }),
+      ]),
+      score(winner.score, note),
+    ].filter(Boolean),
+  );
+  // a bye has no opponent: the winner band says so ("Bye" in the score's place) and there is no loser row
+  if (!loser) {
+    return el('div', { className: ['result-row', className].filter(Boolean).join(' ') }, [
+      winnerLine,
+    ]);
+  }
+  const loserLine = el(
+    'div',
+    { className: 'result-row-line result-row-lose' },
+    [
+      el('span', { className: 'result-row-name', text: loser.name }),
+      note ? null : score(loser.score, null),
+    ].filter(Boolean),
+  );
+  return el('div', { className: ['result-row', className].filter(Boolean).join(' ') }, [
+    winnerLine,
+    loserLine,
+  ]);
+}
+
+/**
+ * A match that has no result yet (`.match-block`): one competitor per line with "vs" between, then a note in words
+ * ("Being decided", "Judges scoring"). Names wrap in full.
+ * @param {{ names: string[], note?: string|null, className?: string }} o
+ */
+export function buildMatchBlock({ names, note = null, className = '' }) {
+  const children = [];
+  names.forEach((name, i) => {
+    if (i > 0) children.push(el('p', { className: 'match-block-vs', text: 'vs' }));
+    children.push(el('p', { className: 'match-block-name', text: name }));
+  });
+  if (note) children.push(el('p', { className: 'match-block-note', text: note }));
+  return el('div', { className: ['match-block', className].filter(Boolean).join(' ') }, children);
+}
+
+/**
+ * A collapsible section with a header that tells one round (or stage, or day) from the next (`.round`). A native
+ * <details>, so the keyboard, a screen reader and the browser's own find-in-page all work with no script. The summary
+ * is the header: a mono eyebrow ("Round 2 · Done"), the title, and a count on the right.
+ * `onToggle(open)` lets a live screen that rebuilds itself on every update remember what the person closed.
+ * @param {{ eyebrow: string, title: string, count?: string|null, open?: boolean, onToggle?: (open: boolean) => void, children: (Node|null)[], className?: string }} o
+ */
+export function buildRound({
+  eyebrow,
+  title,
+  count = null,
+  open = true,
+  onToggle,
+  children,
+  className = '',
+}) {
+  const head = el(
+    'summary',
+    { className: 'round-head' },
+    [
+      el('span', { className: 'round-head-text' }, [
+        el('span', { className: 'eyebrow', text: eyebrow }),
+        el('span', { className: 'round-title', text: title }),
+      ]),
+      count ? el('span', { className: 'round-count tabular-nums', text: count }) : null,
+    ].filter(Boolean),
+  );
+  const section = el('details', { className: ['round', className].filter(Boolean).join(' ') }, [
+    head,
+    el('div', { className: 'round-body' }, children.filter(Boolean)),
+  ]);
+  if (open) section.open = true;
+  // Setting `open` here queues a `toggle` event of its own; report only a real change, so a default is never taken for the
+  // person's choice.
+  let last = section.open;
+  if (onToggle)
+    section.addEventListener('toggle', () => {
+      if (section.open === last) return;
+      last = section.open;
+      onToggle(section.open);
+    });
+  return section;
+}

@@ -19,6 +19,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown phone: scoreboard results and collapsible rounds · 4.31.1 · 2026-11-27
+
+- **Why.** After 4.30.5 the owner found the phone view still too condensed to read. Of three roomier mock-ups (`design/td-phone-results/roomy-*.png` in the project files) they chose R3, the scoreboard rows, and asked for a header that tells the rounds apart and lets them be collapsed, and for it to be a Petrol pattern other formats can use.
+- **What.** New shared parts, `.result-row`, `.match-block` and `.round` (`vocabulary.css`, built by `buildResultRow`, `buildMatchBlock`, `buildRound` in `core/vocabulary.js`). Throwdown's phone body uses them: each decided match is a winner band (name, big number) over a loser row; Now playing is one name per line with "vs"; each round is a collapsible card headed "Round 2 · Now" / "Quarter-finals" / "1 of 2". The newest round starts open, earlier ones closed, and what the person opens or closes is kept across live updates. Latest results and Now playing stay first. The old `.td-phone-result*` and `.td-phone-score` styles are gone.
+- **Not changed.** The payload, the database, the projector. Scoresheet rounds still show no numbers (the test now checks the match blocks, since a round header's "2 of 4" counts matches). Names are set as text.
+- **Version.** Patch on 4.31.0: a layout change to an existing screen plus groundwork for the other formats. The collapsible header is the one new interaction, so a minor is arguable; if the Instagram share (4.32.0) releases first, this becomes 4.32.1.
+- **Reviews.** `code-reviewer`: one important (a default-open round was recorded as the person's own choice, because setting `open` queues a `toggle` event, so a newer round never closed the older one); fixed in `buildRound`, with two tests that fail without the fix. `ui-accessibility-reviewer`: none blocking, three nits: a bye lost its "Bye" word (real regression, fixed, tested), the round count had no noun (now "1 of 2 decided"), and keyboard focus on a round header is lost when a live update rebuilds the body (left open: the shell rebuilds the whole body, owner to decide). `module-boundary-checker`: clean. `vitest` for `src` passes (7717), including the token drift guard; checked by eye at 360px, day and night, open and collapsed.
+
+---
+
 ## The left side menu (rail), app-wide · 4.31.0 · 2026-11-27
 
 **Status: released together with the demo-people entry below as one 4.31.0 (release PR, merge held until after the 27 Nov Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and a green CI run of `organiser-flow.spec.js`, whose header tests were rewritten for the rail and drawer (1023/1024px) but not run locally (they need the local database).

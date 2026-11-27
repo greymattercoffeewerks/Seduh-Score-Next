@@ -59,16 +59,16 @@ describe('the phone body', () => {
     expect(body.hasContent({})).toBe(false);
     expect(body.hasContent(null)).toBe(false);
   });
-  it('says results in words: who wins, the count, Walkover, and what is still being decided', () => {
+  it('says results in words: the Winner label, both counts, Walkover, and what is still being decided', () => {
     const root = document.createElement('div');
     body.renderBody(root, live);
     const text = root.textContent;
-    expect(text).toContain('Ana wins · 2 to 1');
-    expect(text).toContain('Citra wins · Walkover');
+    expect(text).toContain('Winner');
+    expect(text).toContain('Walkover');
     expect(text).toContain('Being decided');
     expect(text).toContain('Now playing');
   });
-  it('Latest results come before Now playing and read winner first: name, score badge, "beat" the loser', () => {
+  it('Latest results come before Now playing and read as a scoreboard: winner first with their count, then the loser', () => {
     const root = document.createElement('div');
     const [m1, m2] = live.rounds[0].matches;
     body.renderBody(root, {
@@ -79,14 +79,90 @@ describe('the phone body', () => {
     const heads = [...root.querySelectorAll('.td-phone-card > h2')].map((h) => h.textContent);
     expect(heads.indexOf('Latest results')).toBeGreaterThanOrEqual(0);
     expect(heads.indexOf('Latest results')).toBeLessThan(heads.indexOf('Now playing'));
-    const rows = root.querySelectorAll('.td-phone-result');
+    const latest = root.querySelector('.td-phone-card');
+    const rows = latest.querySelectorAll('.result-row');
     expect(rows).toHaveLength(2);
-    expect(rows[0].querySelector('.td-phone-result-winner').textContent).toBe('Ana');
-    expect(rows[0].querySelector('.td-phone-score').textContent).toBe('2\u20131');
-    expect(rows[0].querySelector('.td-phone-score').getAttribute('aria-label')).toBe('2 to 1');
-    expect(rows[0].querySelector('.td-phone-result-loser').textContent).toBe('beat Bima');
+    const [win, lose] = rows[0].querySelectorAll('.result-row-line');
+    expect(win.querySelector('.result-row-text').textContent).toBe('Ana');
+    expect(win.querySelector('.result-row-score').textContent).toBe('2');
+    expect(lose.querySelector('.result-row-name').textContent).toBe('Bima');
+    expect(lose.querySelector('.result-row-score').textContent).toBe('1');
     expect(rows[0].textContent).not.toContain('wins');
-    expect(rows[1].querySelector('.td-phone-score').textContent).toBe('Walkover');
+    expect(rows[1].querySelector('.result-row-win .result-row-score').textContent).toBe('Walkover');
+    expect(rows[1].querySelectorAll('.result-row-score')).toHaveLength(1);
+  });
+  it('shows each round under a header that can be collapsed; the newest is open, and a choice survives a live update', () => {
+    const rounds = [
+      {
+        id: 'r1',
+        label: 'Round 1',
+        roundLabel: 'Quarter-finals',
+        phase: 'main',
+        matches: live.rounds[0].matches.slice(0, 2),
+      },
+      {
+        id: 'r2',
+        label: 'Round 2',
+        roundLabel: 'Semi-finals',
+        phase: 'main',
+        matches: live.rounds[0].matches.slice(2),
+      },
+    ];
+    const mount = () => document.createElement('div');
+    const first = mount();
+    body.renderBody(first, { ...live, rounds });
+    let sections = first.querySelectorAll('details.round');
+    expect([...sections].map((d) => d.querySelector('.round-title').textContent)).toEqual([
+      'Semi-finals',
+      'Quarter-finals',
+    ]);
+    expect([...sections].map((d) => d.open)).toEqual([true, false]);
+    expect(sections[0].querySelector('.eyebrow').textContent).toBe('Round 2 \u00b7 Now');
+    expect(sections[1].querySelector('.eyebrow').textContent).toBe('Round 1 \u00b7 Done');
+    expect(sections[1].querySelector('.round-count').textContent).toBe('2 of 2 decided');
+    // the person opens Quarter-finals and closes Semi-finals; the shell then rebuilds the body from a new payload
+    sections[1].open = true;
+    sections[1].dispatchEvent(new Event('toggle'));
+    sections[0].open = false;
+    sections[0].dispatchEvent(new Event('toggle'));
+    const second = mount();
+    body.renderBody(second, { ...live, rounds });
+    sections = second.querySelectorAll('details.round');
+    expect([...sections].map((d) => d.open)).toEqual([false, true]);
+  });
+  it('does not take the default open round for a choice: when a newer round arrives, the older one closes', async () => {
+    const r1 = {
+      id: 'r1',
+      label: 'Round 1',
+      roundLabel: 'Quarter-finals',
+      phase: 'main',
+      matches: live.rounds[0].matches.slice(0, 2),
+    };
+    const r2 = {
+      id: 'r2',
+      label: 'Round 2',
+      roundLabel: 'Semi-finals',
+      phase: 'main',
+      matches: live.rounds[0].matches.slice(2),
+    };
+    const fresh = createThrowdownViewerBody(); // its own memory of what a person opened
+    const first = document.createElement('div');
+    fresh.renderBody(first, { ...live, rounds: [r1] });
+    await new Promise((resolve) => setTimeout(resolve, 20)); // the browser's own toggle event for the default
+    const second = document.createElement('div');
+    fresh.renderBody(second, { ...live, rounds: [r1, r2] });
+    expect([...second.querySelectorAll('details.round')].map((d) => d.open)).toEqual([true, false]);
+  });
+  it('says "Bye" for a bye: the winner band with the word, no opponent row', () => {
+    const root = document.createElement('div');
+    body.renderBody(root, {
+      ...live,
+      recent: [{ id: 'b1', decided: true, resultKind: 'bye', sides: [side('Gita', null, true)] }],
+    });
+    const row = root.querySelector('.result-row');
+    expect(row.querySelector('.result-row-text').textContent).toBe('Gita');
+    expect(row.querySelector('.result-row-score').textContent).toBe('Bye');
+    expect(row.querySelectorAll('.result-row-line')).toHaveLength(1);
   });
   it('sets names as text, never markup', () => {
     const root = document.createElement('div');
@@ -195,20 +271,25 @@ describe('a match decided by scoresheets, on the phone and the projector', () =>
     const read = [...stage.querySelectorAll('.stage-main, .stage-footer-start')]
       .map((n) => n.textContent)
       .join(' ');
-    return { phone: phone.textContent, stage: read };
+    // the phone's match blocks and scoreboards (a round header's "2 of 4 decided" is a count of matches, not a score)
+    const matches = [...phone.querySelectorAll('.result-row, .match-block')]
+      .map((n) => n.textContent)
+      .join(' ');
+    return { phone: phone.textContent, matches, stage: read };
   };
 
   it('says "Judges scoring" while it runs, and names no number', () => {
-    const { phone, stage } = render(payload(judging));
+    const { phone, matches, stage } = render(payload(judging));
     expect(phone).toContain('Judges scoring');
     expect(stage).toContain('Judging');
-    expect(phone + stage).not.toMatch(/\d/);
+    expect(matches + stage).not.toMatch(/\d/);
   });
   it('names the winner only once decided: no score, count or rule', () => {
-    const { phone, stage } = render(payload(done));
-    expect(phone).toContain('Bima wins');
+    const { matches, stage } = render(payload(done));
+    expect(matches).toContain('WinnerBima');
+    expect(matches).toContain('Ana');
     expect(stage).toContain('Wins');
-    expect(phone + stage).not.toMatch(/\d|judges|total|point/i);
+    expect(matches + stage).not.toMatch(/\d|judges|total|point/i);
   });
   it('never says "Judges scoring" for a match that is not judged (module off)', () => {
     const plain = { ...judging, judging: undefined };

@@ -2,7 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  buildMatchBlock,
   buildMeter,
+  buildResultRow,
+  buildRound,
   buildStat,
   kitState,
   meterSegments,
@@ -84,5 +87,84 @@ describe('buildStat', () => {
     expect(tile.querySelector('.stat-unit').textContent.trim()).toBe('/ 8');
     expect(tile.querySelector('.stat-sub').textContent).toBe('3 to go');
     expect(buildStat({ label: 'a', value: '1' }).hasAttribute('data-tone')).toBe(false);
+  });
+});
+
+describe('the audience match list parts', () => {
+  it('a result row labels the winner and shows both scores', () => {
+    const row = buildResultRow({
+      winner: { name: 'Ana', score: 2 },
+      loser: { name: 'Bima', score: 1 },
+    });
+    const [win, lose] = row.querySelectorAll('.result-row-line');
+    expect(win.textContent).toContain('Winner');
+    expect(win.querySelector('.result-row-score').textContent).toBe('2');
+    expect(lose.querySelector('.result-row-score').textContent).toBe('1');
+  });
+  it('a note stands where the scores would, and the loser then shows no number', () => {
+    const row = buildResultRow({
+      winner: { name: 'Ana' },
+      loser: { name: 'Bima' },
+      note: 'Walkover',
+    });
+    expect(row.querySelectorAll('.result-row-score')).toHaveLength(1);
+    expect(row.querySelector('.result-row-score').textContent).toBe('Walkover');
+  });
+  it('a result with no opponent (a bye) is the winner band alone', () => {
+    const row = buildResultRow({ winner: { name: 'Ana' }, loser: null, note: 'Bye' });
+    expect(row.querySelectorAll('.result-row-line')).toHaveLength(1);
+    expect(row.querySelector('.result-row-score').textContent).toBe('Bye');
+  });
+  it('sets names as text, never markup', () => {
+    const row = buildResultRow({
+      winner: { name: '<b>x</b>', score: 1 },
+      loser: { name: '<i>y</i>', score: 0 },
+    });
+    expect(row.querySelector('b')).toBeNull();
+    expect(row.querySelector('i')).toBeNull();
+    const block = buildMatchBlock({ names: ['<b>a</b>', 'c'] });
+    expect(block.querySelector('b')).toBeNull();
+  });
+  it('a match block puts "vs" between the names and the note last', () => {
+    const block = buildMatchBlock({ names: ['A', 'B'], note: 'Being decided' });
+    expect([...block.children].map((c) => c.textContent)).toEqual([
+      'A',
+      'vs',
+      'B',
+      'Being decided',
+    ]);
+  });
+  it('a round is a native details whose summary is the header, open on request, reporting each toggle', () => {
+    const seen = [];
+    const round = buildRound({
+      eyebrow: 'Round 1',
+      title: 'Quarter-finals',
+      count: '2 of 4',
+      open: false,
+      onToggle: (o) => seen.push(o),
+      children: [buildMatchBlock({ names: ['A', 'B'] })],
+    });
+    expect(round.tagName).toBe('DETAILS');
+    expect(round.open).toBe(false);
+    expect(round.querySelector('summary.round-head .round-title').textContent).toBe(
+      'Quarter-finals',
+    );
+    expect(round.querySelector('.round-body .match-block')).not.toBeNull();
+    round.open = true;
+    round.dispatchEvent(new Event('toggle'));
+    expect(seen).toEqual([true]);
+    expect(buildRound({ eyebrow: 'e', title: 't', children: [] }).open).toBe(true);
+  });
+  it('does not report its own default as a choice (the browser queues a toggle event when open is set)', async () => {
+    const seen = [];
+    buildRound({
+      eyebrow: 'e',
+      title: 't',
+      open: true,
+      onToggle: (o) => seen.push(o),
+      children: [],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(seen).toEqual([]);
   });
 });
