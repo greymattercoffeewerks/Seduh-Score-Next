@@ -5,7 +5,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 
 ## Where we are
 
-- **Share result to a story** (4.32.0, on `dev`): Results page Share button. Owed: phone check.
+- **Share result to a story** (4.32.0, released): Results page Share button. Owed: phone check.
 - **Left side menu (rail)** (4.31.0, on `dev`): rail from 1024px, drawer below. Owed: device check (CHANGELOG 4.31.0).
 - **Demo people** (4.31.0, on `dev`): test events add 8 fake-phone people. Migration `20261130100000` not in the cloud yet. Both go to `main` as one release, held until after 27 Nov.
 - **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Its Petrol tokens (4.29.1) are in a PR to `dev`.
