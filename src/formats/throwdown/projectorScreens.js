@@ -106,7 +106,10 @@ function matchBox(match, index, { upNextId, numbered = true } = {}) {
       { className: 'td-stage-aside' },
       [
         numbered
-          ? el('span', { className: 'td-stage-num', text: `Match ${numberOf(match, index)}` })
+          ? el('span', {
+              className: 'td-stage-num',
+              text: `${match.pool ? 'Group' : 'Match'} ${numberOf(match, index)}`,
+            })
           : null,
         status ? el('span', { className: 'td-stage-note', text: status }) : null,
       ].filter(Boolean),
@@ -178,9 +181,38 @@ function sideCard(side) {
   return renderSide({ label: side.route ?? null, name: nameOf(side) });
 }
 
+// A redemption group is not a duel: its brewers are listed, none "versus" another.
+function groupUpNextPage(payload, match) {
+  const kicker = [
+    'Up next',
+    match.roundLabel,
+    match.roundSize > 1 ? `Group ${match.number} of ${match.roundSize}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return {
+    kind: 'next',
+    label: 'Up next',
+    footer: 'Up next',
+    render: () => [
+      stageKicker(kicker),
+      el(
+        'ul',
+        { className: 'td-stage-roster' },
+        match.sides.map((side) =>
+          el('li', { className: 'td-stage-roster-name' }, [
+            el('span', { className: 'td-stage-roster-text', text: nameOf(side) }),
+          ]),
+        ),
+      ),
+    ],
+  };
+}
+
 function upNextPage(payload) {
   const match = payload.upNext;
   if (!match || (match.sides ?? []).length < 2) return null;
+  if (match.pool) return groupUpNextPage(payload, match);
   const [a, b] = match.sides;
   const kicker = [
     'Up next',
@@ -189,7 +221,8 @@ function upNextPage(payload) {
   ]
     .filter(Boolean)
     .join(' · ');
-  const then = payload.thenNext?.sides?.length === 2 ? payload.thenNext.sides : null;
+  const then =
+    payload.thenNext?.sides?.length === 2 && !payload.thenNext.pool ? payload.thenNext.sides : null;
   return {
     kind: 'next',
     label: 'Up next',
@@ -224,7 +257,9 @@ function roundPages(payload) {
         kind: 'round',
         label: `${name}${suffix}`,
         render: () => [
-          stageKicker(`${name}${suffix}`),
+          stageKicker(
+            round.phase === 'redemption' ? `${name} · the groups${suffix}` : `${name}${suffix}`,
+          ),
           el(
             'ul',
             { className: 'td-stage-list' },
@@ -350,7 +385,7 @@ function pathPage(payload) {
 }
 
 function latestPage(payload) {
-  const recent = (payload.recent ?? []).filter((m) => m.sides?.length === 2);
+  const recent = (payload.recent ?? []).filter((m) => m.pool || m.sides?.length === 2);
   if (recent.length === 0) return null;
   return {
     kind: 'latest',
@@ -364,13 +399,17 @@ function latestPage(payload) {
           const winner = match.sides.find((s) => s.winner);
           const loser = match.sides.find((s) => !s.winner);
           const split = matchStatus(match);
+          // a group has no single "beaten" side: its winner is named, then how the votes fell
+          const text = match.pool
+            ? `${nameOf(winner)} won Group ${match.number}${split ? ` · ${split}` : ''}`
+            : `${nameOf(winner)} beat ${nameOf(loser)}${split ? ` · ${split}` : ''}`;
           return el(
             'li',
             { className: 'td-stage-latest-row' },
             [
               el('span', {
                 className: 'td-stage-latest-line',
-                text: `${nameOf(winner)} beat ${nameOf(loser)}${split ? ` · ${split}` : ''}`,
+                text,
               }),
               match.roundLabel
                 ? el('span', { className: 'td-stage-latest-round', text: match.roundLabel })
@@ -427,7 +466,7 @@ const loopScreen = createLoopScreen({
   footerFor(page, _index, payload) {
     if (page.footer) return page.footer;
     const next = payload.upNext?.sides;
-    return next?.length === 2 && page.kind !== 'next'
+    return next?.length === 2 && !payload.upNext?.pool && page.kind !== 'next'
       ? `${page.label} · Up next: ${nameOf(next[0])} vs ${nameOf(next[1])}`
       : page.label;
   },

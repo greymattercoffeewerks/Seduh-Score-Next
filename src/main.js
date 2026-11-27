@@ -64,6 +64,7 @@ import {
 import { mountThrowdownEventScreen } from './formats/throwdown/eventScreen.js';
 import { mountThrowdownEventDashboardScreen } from './formats/throwdown/eventDashboardScreen.js';
 import { mountThrowdownResultsScreen } from './formats/throwdown/resultsScreen.js';
+import { mountThrowdownRedemptionScreen } from './formats/throwdown/redemptionScreen.js';
 import { trackInputModality } from './core/inputModality.js';
 
 // Same "unreliable venue wifi" holding-state pattern this project already
@@ -1014,6 +1015,14 @@ export function buildRoutes({
             signal,
             handlers: allOutboxHandlers(client),
           }),
+        auth,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/throwdown/redemption',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountThrowdownRedemptionScreen(outlet, { eventId, client, signal }),
         auth,
       ),
     },

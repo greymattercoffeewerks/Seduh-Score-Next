@@ -180,8 +180,8 @@ select t072.contains(t072.as_user(t072.u(1), format('select public.td_save_setti
   '%td_judge_count_invalid%', 'a judge count of zero is refused');
 select t072.contains(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 3, true, ''dice'', ''{}'')', t072.u(100), t072.u(110))),
   '%td_seeding_invalid%', 'an unknown seeding mode is refused');
-select t072.contains(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 3, true, ''random'', ''{"redemption": true}'')', t072.u(100), t072.u(110))),
-  '%td_module_unknown%', 'no module exists in TD.1: enabling any key is refused with a reason, not ignored');
+select t072.contains(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 3, true, ''random'', ''{"lucky_loser": true}'')', t072.u(100), t072.u(110))),
+  '%td_module_unknown%', 'a module that does not exist yet (lucky_loser, TD.4) is refused with a reason, not ignored');
 select is(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 5, false, ''random'', ''{"redemption": false}'')', t072.u(100), t072.u(110))), 'ok',
   'a module toggled OFF is accepted...');
 select is((select modules::text from td_settings where event_id = t072.u(110)), '{}', '...and leaves no trace in the stored setup');

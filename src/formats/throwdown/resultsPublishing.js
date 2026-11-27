@@ -63,24 +63,39 @@ function tiersOf(bracket) {
   const finalMatch = main[main.length - 1].matches[0];
   const ids = (sides) => sides.map((s) => s.entryId);
 
+  // A competitor is placed by the LAST main round they lost in. A brewer brought back by a redemption round lost an early
+  // round and then played on, so that early loss is not where they finish: they are placed in the tier of the later round
+  // they lost in (or the podium), never twice. `playedLater` is who appears in any main round after round i.
+  const playedLater = (i) =>
+    new Set(
+      main
+        .slice(i + 1)
+        .flatMap((r) => r.matches.flatMap((m) => m.sides.map((s) => s.entryId)))
+        .filter(Boolean),
+    );
+  const lostFor = (i) => {
+    const later = playedLater(i);
+    return ids(main[i].matches.flatMap(losersOf)).filter((id) => !later.has(id));
+  };
+
   const tiers = [ids(winnersOf(finalMatch)), ids(losersOf(finalMatch))];
   const semiRound = main.length >= 2 ? main[main.length - 2] : null;
   if (third?.decided) {
     tiers.push(ids(winnersOf(third)), ids(losersOf(third)));
   } else if (semiRound) {
-    tiers.push(ids(semiRound.matches.flatMap(losersOf)));
+    tiers.push(lostFor(main.length - 2));
   }
   // every earlier main round, latest first; the semi-final losers were placed above
   for (let i = main.length - 3; i >= 0; i -= 1) {
-    tiers.push(ids(main[i].matches.flatMap(losersOf)));
+    tiers.push(lostFor(i));
   }
   return tiers.filter((t) => t.length > 0);
 }
 
 // The matches that were actually PLAYED, for the Seduh ID knockout record (owner decision 2026-11-20: a walkover is not
 // counted, a 3rd place match is). A match counts when it is decided by votes or scores and has exactly two competitors in
-// it, one the winner. No byes, walkovers, undecided matches, pools (more than two slots), redemption rounds (not built yet; decide
-// their rule when they ship) or scores; names and cafés only, as
+// it, one the winner. No byes, walkovers, undecided matches, pools (more than two slots), redemption rounds (a group is not a
+// duel: its place on a profile is for the owner to decide) or scores; names and cafés only, as
 // everywhere else in this payload. Same name and café the standings use, so a reader can match them to the roster.
 function playedMatches(bracket, entryById, listedIds) {
   const out = [];

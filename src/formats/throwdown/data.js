@@ -118,7 +118,10 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
     reopens: [...reopens].sort((a, b) =>
       String(a.reopened_at).localeCompare(String(b.reopened_at)),
     ),
-    bracket: deriveBracket(rows),
+    bracket: deriveBracket({
+      ...rows,
+      redemptionRounds: settings.data?.modules?.redemption?.feed?.length ?? 0,
+    }),
   };
 }
 

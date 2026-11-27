@@ -15,24 +15,29 @@ function sideLine(match) {
   if (match.resultKind === 'walkover') return 'Walkover';
   if (match.resultKind === 'bye') return 'Bye';
   const counts = match.sides.map((s) => s.votes);
-  return counts.every((n) => typeof n === 'number') ? counts.join(' to ') : null;
+  if (!counts.every((n) => typeof n === 'number')) return null;
+  // a group: every brewer's votes, most first ("2 to 1 to 0"); a pair: in side order, as the console shows it
+  return (match.pool ? [...counts].sort((a, b) => b - a) : counts).join(' to ');
 }
 
 function matchItem(match) {
   const winner = match.sides.find((s) => s.winner);
+  // a group lists its brewers ("Group 2: A, B, C"): none is "versus" another
+  const between = match.pool ? ', ' : ' vs ';
   const line = el(
     'p',
     { className: 'td-phone-vs' },
-    match.sides
-      .flatMap((side, i) => [
-        i > 0 ? document.createTextNode(' vs ') : null,
+    [
+      match.pool ? document.createTextNode(`Group ${match.number}: `) : null,
+      ...match.sides.flatMap((side, i) => [
+        i > 0 ? document.createTextNode(between) : null,
         el('span', {
           className: 'td-phone-name',
           text: side.name ?? 'To be decided',
           attrs: side.winner ? { 'data-winner': 'true' } : {},
         }),
-      ])
-      .filter(Boolean),
+      ]),
+    ].filter(Boolean),
   );
   const detail = match.decided
     ? `${winner ? `${winner.name} wins` : 'Decided'}${sideLine(match) ? ` · ${sideLine(match)}` : ''}`

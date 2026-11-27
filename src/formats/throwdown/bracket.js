@@ -6,10 +6,18 @@
 import { tallyVotes } from './votes.js';
 
 // Round names come from the structure that exists, not from a plan: one match is the Final, two are the
-// Semi-finals, four the Quarter-finals; any other size is "Round n" (n = the main round's place in the event).
-export function roundLabel(round, matchCount, mainIndex) {
+// Semi-finals, four the Quarter-finals; any other size is "Round n" (n = the main round's place in the event). A
+// redemption round is "Redemption", or "Redemption 1", "Redemption 2" when the event can have more than one.
+export function roundLabel(
+  round,
+  matchCount,
+  mainIndex,
+  redemption = { index: 1, numbered: false },
+) {
   if (round.phase === 'third_place') return '3rd place';
-  if (round.phase === 'redemption') return 'Redemption';
+  if (round.phase === 'redemption') {
+    return redemption.numbered ? `Redemption ${redemption.index}` : 'Redemption';
+  }
   if (matchCount === 1) return 'Final';
   if (matchCount === 2) return 'Semi-finals';
   if (matchCount === 4) return 'Quarter-finals';
@@ -39,6 +47,8 @@ export function deriveBracket({
   votes,
   entries,
   scoreWinners = new Map(),
+  // how many feeding rounds the event's redemption setup names (so a first round is "Redemption 1" when a second can follow)
+  redemptionRounds = 0,
 }) {
   const entryById = new Map(entries.map((e) => [e.id, e]));
   const slotsByMatch = new Map();
@@ -56,8 +66,10 @@ export function deriveBracket({
 
   const sortedRounds = [...rounds].sort((a, b) => a.position - b.position);
   let mainIndex = 0;
+  let redemptionIndex = 0;
   const outRounds = sortedRounds.map((round) => {
     if (round.phase === 'main') mainIndex += 1;
+    if (round.phase === 'redemption') redemptionIndex += 1;
     const own = matches
       .filter((m) => m.round_id === round.id)
       .sort((a, b) => a.position - b.position);
@@ -87,6 +99,8 @@ export function deriveBracket({
         // what the round is, so a module can tell whether this match is one of its own (roundRole.js)
         roundPhase: round.phase,
         roundSize: own.length,
+        // a redemption group: a pool match (2 to 4 brewers, one winner); `position` is the group's number
+        isPool: round.kind === 'pool',
         position: m.position,
         resultKind: m.result_kind ?? null,
         decided,
@@ -103,7 +117,10 @@ export function deriveBracket({
       position: round.position,
       kind: round.kind,
       phase: round.phase,
-      label: roundLabel(round, builtMatches.length, mainIndex),
+      label: roundLabel(round, builtMatches.length, mainIndex, {
+        index: redemptionIndex,
+        numbered: redemptionRounds > 1 || redemptionIndex > 1,
+      }),
       matches: builtMatches,
     };
   });
