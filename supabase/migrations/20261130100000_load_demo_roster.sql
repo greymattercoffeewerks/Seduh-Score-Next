@@ -62,7 +62,7 @@ declare
 begin
   -- Same org check and not-found shape as the other demo and event RPCs: for a non-member RLS hides the events
   -- row, so "not found" and "not yours" are indistinguishable.
-  if p_org_id is distinct from app.org_id_for_event(p_event_id) then
+  if p_org_id is null or p_org_id is distinct from app.org_id_for_event(p_event_id) then
     raise exception 'load_demo_roster: event not found' using hint = 'demo_event_not_found';
   end if;
 
