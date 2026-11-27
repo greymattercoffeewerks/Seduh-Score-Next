@@ -799,13 +799,17 @@ a {
   font-weight: 600;
 }
 
-/* ---- Live now bar (2026-10-29) ----
-   Inserted above the nav only when a listed competition is live (landingScreen.js liveBar). Wraps at 360px, never
-   animates; every interactive part is at least 44px tall. */
+/* ---- Live now bar (2026-10-29; gold "on air" treatment 2026-11-27) ----
+   Inserted above the nav only when a listed competition is live (landingScreen.js liveBar). Gold is the one warm
+   colour in the Petrol system, so a live event stands out from the teal page (DESIGN.md, "Gold on the live bar").
+   Gold fills and a short stamp only, never a run of text. The shared live dot breathes only when motion is allowed
+   (tokens/base.css). Wraps at 360px; every interactive part is at least 44px tall. */
 .petrol-live-bar {
-  background: var(--clr-petrol-700, var(--clr-petrol-800));
-  border-bottom: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 12%, transparent);
-  padding: 4px clamp(20px, 4vw, 40px);
+  --color-accent: var(--color-gold);
+  background: linear-gradient(90deg, var(--color-gold-tint), var(--clr-petrol-800) 60%);
+  border-bottom: 2px solid var(--color-gold);
+  box-shadow: 0 6px 32px color-mix(in srgb, var(--color-gold) 22%, transparent);
+  padding: 12px clamp(20px, 4vw, 40px);
   font-size: var(--text-sm);
   color: var(--color-text);
 }
@@ -813,29 +817,51 @@ a {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0 12px;
+  gap: 8px 16px;
   max-width: 1360px;
   margin: 0 auto;
 }
-/* The dot is the shared .status-live-dot (tokens/base.css). */
+/* The dot is the shared .status-live-dot (tokens/base.css); it reads --color-accent, which the bar sets to gold. */
 .petrol-live-bar-dot {
   flex: none;
 }
 .petrol-live-bar-text {
-  flex: 1 1 calc(100% - 24px);
+  flex: 1 1 16rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin: 8px 0 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 .petrol-live-bar-label {
+  display: inline-block;
+  margin-right: 8px;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-hairline) solid var(--color-gold);
+  border-radius: var(--radius-selector);
+  background: color-mix(in srgb, var(--color-gold) 14%, transparent);
   font-family: var(--font-mono);
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
-  color: var(--color-accent);
+  color: var(--color-gold);
+  vertical-align: middle;
+}
+.petrol-live-bar-main > .petrol-live-bar-link {
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-selector);
+  background: var(--color-gold);
+  color: var(--color-gold-contrast);
+  font-family: var(--font-display);
+  text-decoration: none;
 }
 .petrol-live-bar-link,
 .petrol-live-bar-more-toggle {
@@ -843,7 +869,7 @@ a {
   align-items: center;
   min-height: 44px;
   padding: 0 4px;
-  color: var(--color-accent);
+  color: var(--color-gold);
   font: inherit;
   font-weight: 600;
   background: none;
@@ -856,6 +882,11 @@ a {
 .petrol-live-bar-more-toggle:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .petrol-live-bar-main > .petrol-live-bar-link {
+    flex: 1 1 100%;
+  }
 }
 .petrol-live-bar-more {
   list-style: none;

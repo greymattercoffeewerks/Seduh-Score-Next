@@ -7,6 +7,17 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Homepage live bar in gold · 4.30.3 · 2026-11-27
+
+- **Why.** The owner saw the "live now" bar on the homepage and found it not eye-catching enough. Option B of three mock-ups, in gold, with square corners (owner's choice).
+- **What.** `.petrol-live-bar` in `landing.css`: gold-tint band with a gold edge and soft glow, a gold "Live now:" stamp, a larger event name and a gold Watch button (full width at 360px); the shared live dot takes the bar's gold through a local `--color-accent`. DESIGN.md has a "Gold on the live bar" note: gold's one new role, owner-approved.
+- **Not changed.** Markup, the database door and every test. The "Updated N min ago" and format tags in the mock-up are not built (they need `last_activity_at` passed through).
+- **Shipped as a hotfix.** Cut from `main` so it does not carry the held 4.31.0 work (side menu, demo roster) while a Throwdown is running; `dev` takes it back through a merge of `main`.
+- **Version.** Patch: a visual polish of an existing element.
+- **Reviews.** No reviewer run: CSS and a design note only. `vitest` for `src/marketing` and `src/ui/tokens` (809) pass, including the token-drift guard; checked by eye at 1440 and 360.
+
+---
+
 ## BTC dashboard night mode, fix against the concept · 4.30.2 · 2026-11-26
 
 **Status: NOT FINAL.** The owner opened 4.30.0 in production and found it incomplete (screenshot): only the cards went dark, text on them was unreadable, and the layout was far from the concept. This is the fix. Owed: the owner's check on the real tablet and phone, a keyboard and screen-reader pass, and a decision on the side menu (below).
