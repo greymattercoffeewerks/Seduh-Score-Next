@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { previewShape, comparePreviews } from './bracketPreview.js';
 
@@ -176,5 +178,40 @@ describe('comparePreviews', () => {
       { key: 'repeatByes', from: 2, to: 0 },
     ]);
     expect(comparePreviews(a, a)).toEqual([]);
+  });
+});
+
+// The fixture the database test (pgTAP 096) plays the real engine against. It is held equal to this preview here, and the
+// copy embedded in the SQL file is held equal to the fixture, so neither side can drift alone.
+describe('the shared parity fixture', () => {
+  const root = process.cwd();
+  const fixtureText = readFileSync(
+    join(root, 'supabase', 'tests', 'fixtures', 'td-bracket-preview-parity.json'),
+    'utf8',
+  );
+  const fixture = JSON.parse(fixtureText);
+  it('is what previewShape returns for each case', () => {
+    for (const c of fixture.cases) {
+      const p = previewShape({ entrants: c.n, thirdPlace: c.third });
+      expect(
+        {
+          n: c.n,
+          third: c.third,
+          rounds: p.rounds.map((r) => [r.enter, r.matches, r.byes, r.through]),
+          thirdPlayed: p.thirdPlace.played,
+          matches: p.totals.matches,
+        },
+        `n=${c.n} third=${c.third}`,
+      ).toEqual(c);
+    }
+  });
+  it('is embedded unchanged in pgTAP 096', () => {
+    const sql = readFileSync(
+      join(root, 'supabase', 'tests', '096_td_bracket_preview_parity.sql'),
+      'utf8',
+    );
+    const embedded = sql.split('-- parity-fixture:begin')[1].split('-- parity-fixture:end')[0];
+    const json = embedded.split('$fx$')[1];
+    expect(JSON.parse(json)).toEqual(fixture);
   });
 });
