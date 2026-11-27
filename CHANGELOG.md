@@ -7,6 +7,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Share a result to an Instagram story, on the Results page · 4.32.0 · 2026-11-27
+
+**Status: on `dev`, not released (a live Throwdown runs on 27 Nov; the owner decides when it ships).** The Latest result card on `/results/` has a **Share** button. It draws a 1080 x 1920 picture of the podium and opens the phone's share sheet (Instagram, then Story); where the browser cannot share a file it saves the picture. Owed: the owner's check on a real phone.
+
+- **The card.** Light "paper" look over the Petrol grid-lines backdrop (the public page heroes' own, fading toward the foot). The event name, a gold-edged winner box (name, cafe), the next places as ruled rows, then **Venue** and **Date** on lines of their own, and the page address as text. Square corners; no QR code, on purpose (nobody scans a code off the phone they are holding). Layout chosen by the owner from three mockups (`/mnt/project-files/design/ig-story-share/`).
+- **Every format.** It reads only the published payload (`eventName`, `format`, `venue`, `city`, `eventDate`, `podium`), so Throwdown, Cup Taster and BTC all get it. No winner means no button. A tie for third shows as two rows with the same place; at most three rows under the winner are drawn. A long event name steps down in size, then takes a third line; the rows give way before the venue block is pushed off.
+- **How.** `core/resultsStoryCard.js` (`drawResultsStoryCard`, `paperStoryTheme`: format-agnostic, pure drawing), `marketing/resultsStory.js` (pure content), `marketing/resultsShare.js` (the dialog, same pipeline as the person card: drawn when the dialog opens, never on the share tap). `core/storyCard.js` `renderStoryCard` gained a `draw` option, so there is still one render and share pipeline. No migration, no network, nothing leaves the device.
+- **Not built:** a Share button on archive rows (older events), or on the printable results sheet.
+- **Reviews.** `code-reviewer`: no important findings; one nit, left (a tie for FIRST would show the second co-winner as a row labelled 1 under "Champion"; no format publishes one today). `ui-accessibility-reviewer`: no important findings; two nits fixed (keyboard focus returns to the button after Try again; the backdrop uses `--clr-black`). `module-boundary-checker`: clean; two cosmetic nits left (the header comment names formats; a one-line `font` helper is duplicated). No real-phone or browser run of the dialog yet (jsdom has no canvas): the card itself was drawn in Chromium at 1080 x 1920 and checked by eye.
+
+---
+
 ## The left side menu (rail), app-wide · 4.31.0 · 2026-11-27
 
 **Status: released together with the demo-people entry below as one 4.31.0 (release PR, merge held until after the 27 Nov Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and a green CI run of `organiser-flow.spec.js`, whose header tests were rewritten for the rail and drawer (1023/1024px) but not run locally (they need the local database).

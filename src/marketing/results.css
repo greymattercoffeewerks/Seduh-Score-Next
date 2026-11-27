@@ -603,3 +603,65 @@ body {
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
+
+/* ---- Share to story (resultsShare.js) ------------------------------------------------------------------------
+   The dialog is the one the Seduh ID person page uses (profile.css `.profile-share-*`), restated here because this page
+   does not load that sheet. Tokens only; tap targets at the token minimum. */
+.results-share {
+  margin-top: var(--space-3);
+}
+.results-share .action,
+.results-share-dialog .action {
+  min-block-size: var(--tap-target-min);
+}
+.results-share-dialog {
+  inline-size: min(92vw, 28rem);
+  max-block-size: 92dvh;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-box);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.results-share-dialog::backdrop {
+  background: color-mix(in srgb, var(--clr-black) 65%, transparent);
+}
+.results-share-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+.results-share-slot {
+  /* the room the preview will take, so the dialog does not jump when it arrives */
+  min-block-size: calc(min(26rem, 40dvh) + var(--space-3) * 2);
+}
+.results-share-dialog .action:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+.results-share-preview {
+  display: block;
+  block-size: min(26rem, 40dvh);
+  inline-size: auto;
+  max-inline-size: 100%;
+  aspect-ratio: 9 / 16;
+  margin: var(--space-3) auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-box);
+}
+.results-share-how,
+.results-share-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.results-share-note {
+  min-block-size: 1.5em;
+}
+.results-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
