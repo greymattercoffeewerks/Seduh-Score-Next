@@ -9,6 +9,12 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { findEvent } from '../../core/events.js';
 import {
+  loadDemoRoster,
+  describeDemoRosterError,
+  describeDemoRosterLoaded,
+  renderDemoRosterCard,
+} from '../../core/demoRoster.js';
+import {
   setEntryWithdrawn,
   listPeopleByIds,
   updateRosterEntry,
@@ -700,7 +706,24 @@ export async function mountThrowdownEventScreen(
               text: 'The draw has started. Edit corrects a name, phone or café or team, and the bracket uses the new name. Withdrawing a competitor does not change the bracket: record a walkover on their match.',
             })
           : form,
-      ],
+        // Test events only (the database refuses a real event regardless): eight made-up competitors, no typing.
+        !locked && state.event.is_test
+          ? renderDemoRosterCard({
+              idPrefix: 'td',
+              noun: 'competitors',
+              busy: state.busy,
+              onLoad: () =>
+                act(async () => {
+                  try {
+                    const loaded = await loadDemoRoster(state.event.org_id, eventId, client);
+                    state.feedback = { tone: 'success', text: describeDemoRosterLoaded(loaded) };
+                  } catch (err) {
+                    state.feedback = { tone: 'error', text: describeDemoRosterError(err) };
+                  }
+                }),
+            })
+          : null,
+      ].filter(Boolean),
     );
   }
 

@@ -84,6 +84,7 @@ const NOT_FOR_THE_CONSOLE = {
   demo_event_not_found: 'BTC format',
   demo_not_btc: 'BTC format',
   demo_not_test: 'BTC format',
+  demo_roster_format: 'BTC format',
   btc_match_round_invalid: 'BTC format',
   btc_prior_round_open: 'BTC format',
   btc_redraw_blocked: 'BTC format',

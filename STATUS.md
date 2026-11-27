@@ -5,7 +5,9 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 
 ## Where we are
 
-- **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Owed: the owner's tablet and phone check (CHANGELOG 4.30.0). Its Petrol tokens (4.29.1) are in a PR to `dev`.
+- **Left side menu (rail)** (4.31.0, on `dev`): rail from 1024px, drawer below. Owed: device check (CHANGELOG 4.31.0).
+- **Demo people** (4.31.0, on `dev`): test events add 8 fake-phone people. Migration `20261130100000` not in the cloud yet. Both go to `main` as one release, held until after 27 Nov.
+- **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Its Petrol tokens (4.29.1) are in a PR to `dev`.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
@@ -18,7 +20,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
 - **Cloud database in sync (checked 2026-11-20):** all 128 migrations on `dev` are in the cloud project, none extra, including
   `seduh_throwdown_profile` (4.24.0), pushed after #529 merged.
-- **Random Selector Tier 1 redesign** (split-flap edition, `/tools/random-selector/`): merged to `dev` in #518, released as **4.21.0** (minor: a visible redesign). Owed: the owner's check of Present on a real 16:9 screen and Fullscreen on a tablet (CHANGELOG 4.21.0). The shared-chrome rollout and share-preview fix are released as **4.22.0** (minor: every tool links to the others).
+- **Random Selector redesign** released as **4.21.0**, shared chrome as **4.22.0**. Owed: the owner's 16:9 screen and tablet check (CHANGELOG 4.21.0).
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
