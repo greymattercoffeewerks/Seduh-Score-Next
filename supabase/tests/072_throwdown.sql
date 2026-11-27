@@ -16,7 +16,7 @@
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(160);
+select plan(161);
 
 create schema t072;
 grant usage on schema t072 to anon, authenticated;
