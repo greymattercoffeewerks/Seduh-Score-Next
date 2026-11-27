@@ -68,6 +68,26 @@ describe('the phone body', () => {
     expect(text).toContain('Being decided');
     expect(text).toContain('Now playing');
   });
+  it('Latest results come before Now playing and read winner first: name, score badge, "beat" the loser', () => {
+    const root = document.createElement('div');
+    const [m1, m2] = live.rounds[0].matches;
+    body.renderBody(root, {
+      ...live,
+      // the sides are in bracket order: the loser is listed first, so the old line said "0 to 1"
+      recent: [{ ...m1, sides: [side('Bima', 1, false), side('Ana', 2, true)] }, m2],
+    });
+    const heads = [...root.querySelectorAll('.td-phone-card > h2')].map((h) => h.textContent);
+    expect(heads.indexOf('Latest results')).toBeGreaterThanOrEqual(0);
+    expect(heads.indexOf('Latest results')).toBeLessThan(heads.indexOf('Now playing'));
+    const rows = root.querySelectorAll('.td-phone-result');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.td-phone-result-winner').textContent).toBe('Ana');
+    expect(rows[0].querySelector('.td-phone-score').textContent).toBe('2\u20131');
+    expect(rows[0].querySelector('.td-phone-score').getAttribute('aria-label')).toBe('2 to 1');
+    expect(rows[0].querySelector('.td-phone-result-loser').textContent).toBe('beat Bima');
+    expect(rows[0].textContent).not.toContain('wins');
+    expect(rows[1].querySelector('.td-phone-score').textContent).toBe('Walkover');
+  });
   it('sets names as text, never markup', () => {
     const root = document.createElement('div');
     body.renderBody(root, {
