@@ -809,15 +809,17 @@ a {
   background: linear-gradient(90deg, var(--color-gold-tint), var(--clr-petrol-800) 60%);
   border-bottom: 2px solid var(--color-gold);
   box-shadow: 0 6px 32px color-mix(in srgb, var(--color-gold) 22%, transparent);
-  padding: 12px clamp(20px, 4vw, 40px);
   font-size: var(--text-sm);
   color: var(--color-text);
 }
+/* Same box as .petrol-nav-bar (max-width 1360px INCLUDING its side padding), so the Watch button and the stamp line
+   up with the Start free button and the logo at every width. The padding sits on the inner box, not on the band. */
 .petrol-live-bar-main {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 16px;
+  padding: 12px clamp(20px, 4vw, 40px);
   max-width: 1360px;
   margin: 0 auto;
 }
@@ -891,7 +893,7 @@ a {
 .petrol-live-bar-more {
   list-style: none;
   margin: 0 auto;
-  padding: 0;
+  padding: 0 clamp(20px, 4vw, 40px) 8px;
   max-width: 1360px;
 }
 .petrol-live-bar-more[hidden] {

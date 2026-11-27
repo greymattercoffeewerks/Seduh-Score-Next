@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Homepage live bar aligned with the header · 4.30.6 · 2026-11-27
+
+- **Why.** On desktop the gold bar's Watch button sat well right of the nav's Start free button, and its left edge did not meet the logo (owner screenshot, 4.30.3).
+- **Cause.** The bar put its side padding on the full-width band and capped the inner box at 1360px of content, while `.petrol-nav-bar` caps at 1360px INCLUDING its padding. Inside the band the bar was 80px wider at 1440 and above.
+- **Fix.** `landing.css`: the padding moves to `.petrol-live-bar-main` (and the "+N more" list), the same box as the nav bar. Measured in a harness: at 1440, 1920 and 1100 the Watch button's right edge equals Start free's, and the dot's left edge equals the logo's, to the pixel.
+- **Version.** 4.30.6, after 4.30.4 (#571) and 4.30.5 (#572) on separate hotfix PRs; rebase `package.json`, the lock, CHANGELOG and STATUS on whichever lands first.
+- **Reviews.** No reviewer run: one CSS box change. `vitest` for `src/marketing` and `src/ui/tokens` (809) pass.
+
+---
+
 ## Throwdown phone: results first, readable at a glance · 4.30.5 · 2026-11-27
 
 - **Why.** During Throwdown Vol 3 the owner found the phone view hard to scan: Latest results sat under Now playing and each result printed both full names twice, then "X wins · 0 to 1". Option A of three mock-ups (`design/td-phone-results/`, project files), chosen by the owner.
