@@ -214,6 +214,8 @@ minDwellMs = 60000 })`, `paint(payload) -> { name, scoreLine?, podiumLine?, foot
 5. Words not colour; the TEST banner is the shell's; nothing in core names a format. BTC and Cup Taster still keep their
    own idle loops (a tidy-up for later: they can move to `createLoopScreen` unedited).
 
+`resultsStoryCard` (2026-11-27, 4.32.0) — the results story card: `drawResultsStoryCard(ctx, spec, { theme })` draws a finished competition's podium (winner box, next places as rows, Venue and Date on their own lines, the page address as text, no QR) on the light paper surface over the Petrol grid-lines backdrop; `paperStoryTheme(document.documentElement)` reads the paper tokens (+ `--color-gold-tint`). Format-agnostic like `storyCard.js`, whose size, `wrapLines` and render/share pipeline it uses (`renderStoryCard(spec, { draw })` takes the layout). The content and the Share dialog are in `src/marketing/` (`resultsStory.js`, `resultsShare.js`). A spec field is called `place`, not `rank`, because `no-derived-storage` rejects `rank:`.
+
 ## `main.js` (composition root)
 
 Not physically under `core/`, but its conventions live here since it's the wiring that
