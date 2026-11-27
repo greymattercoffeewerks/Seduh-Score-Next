@@ -129,11 +129,14 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
         const card = page
           .locator('article.td-match')
           .filter({ has: page.locator('h3', { hasText: title }) });
-        await card
-          .getByRole('button', { name: /^Vote / })
-          .first()
-          .click();
-        await expect(card.locator('.td-count').first()).toHaveText('1 vote');
+        // Confirm needs every judge (3), so the first competitor takes all three taps
+        const vote = card.getByRole('button', { name: /^Vote / }).first();
+        for (let tap = 1; tap <= 3; tap += 1) {
+          await vote.click();
+          await expect(card.locator('.td-count').first()).toHaveText(
+            `${tap} ${tap === 1 ? 'vote' : 'votes'}`,
+          );
+        }
         await card.getByRole('button', { name: /^Confirm: / }).click();
         await expect(card).toBeHidden();
       }
