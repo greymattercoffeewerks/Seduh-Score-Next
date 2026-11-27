@@ -41,19 +41,33 @@ describe('leadOf and canConfirm', () => {
     expect(lead()).toMatchObject({ leaderSlotId: null, level: true, total: 0 });
   });
 
-  it('enables confirm only while there is a strict leader', () => {
-    const can = (...ids) => canConfirm(tallyVotes(slots, taps(...ids)));
-    expect(can()).toBe(false);
-    expect(can('s1', 's2')).toBe(false);
-    expect(can('s1')).toBe(true);
-    expect(can('s1', 's2', 's2')).toBe(true);
+  it('enables confirm only while there is a strict leader and every judge has voted', () => {
+    const can = (judges, ...ids) => canConfirm(tallyVotes(slots, taps(...ids)), judges);
+    expect(can(3)).toBe(false);
+    expect(can(3, 's1', 's2')).toBe(false);
+    expect(can(3, 's1', 's1', 's2')).toBe(true);
+    expect(can(3, 's1', 's1', 's1')).toBe(true);
     // an even panel that splits and is then broken by one extra tap
-    expect(can('s1', 's1', 's2', 's2')).toBe(false);
-    expect(can('s1', 's1', 's2', 's2', 's1')).toBe(true);
+    expect(can(2, 's1', 's1')).toBe(true);
+    expect(can(2, 's1', 's2')).toBe(false);
+    expect(can(2, 's1', 's1', 's2', 's2')).toBe(false);
+    expect(can(4, 's1', 's1', 's2', 's2', 's1')).toBe(true);
+  });
+
+  it('refuses a leader who has fewer votes in than there are judges (one tap of three was recorded 1-0)', () => {
+    const can = (judges, ...ids) => canConfirm(tallyVotes(slots, taps(...ids)), judges);
+    expect(can(3, 's1')).toBe(false);
+    expect(can(3, 's1', 's1')).toBe(false);
+    expect(can(1, 's1')).toBe(true);
+  });
+
+  it('refuses everything when the judge count is not known', () => {
+    expect(canConfirm(tallyVotes(slots, taps('s1', 's1', 's2')))).toBe(false);
+    expect(canConfirm(tallyVotes(slots, taps('s1', 's1', 's2')), '3')).toBe(false);
   });
 
   it('cannot confirm a match with fewer than two competitors', () => {
-    expect(canConfirm(tallyVotes([slots[0]], taps('s1')))).toBe(false);
+    expect(canConfirm(tallyVotes([slots[0]], taps('s1')), 1)).toBe(false);
   });
 });
 
