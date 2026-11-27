@@ -117,6 +117,8 @@ export function deriveBracket({
       position: round.position,
       kind: round.kind,
       phase: round.phase,
+      // the code a redemption draw was made from (null for every other round)
+      drawSeed: round.draw_seed ?? null,
       label: roundLabel(round, builtMatches.length, mainIndex, {
         index: redemptionIndex,
         numbered: redemptionRounds > 1 || redemptionIndex > 1,

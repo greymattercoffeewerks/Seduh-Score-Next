@@ -2,9 +2,9 @@ import { test, expect as baseExpect } from '@playwright/test';
 import { createTenant } from './support/tenants.js';
 
 // T-TD.3 acceptance: a Throwdown TEST event with the redemption module on, against the real app and a real local Supabase
-// stack. 12 competitors, groups of 3 fed by Round 1. The organiser's console does everything (setup, draw, Round 1 by judges'
-// taps) and the losers are then drawn into two GROUPS: a Redemption page lists who is in, a phone and a projector show the
-// groups, one group is tied 1-1-1 and settled by the tie-break vote, the other by a majority, and the group winners rejoin
+// stack. 12 competitors, 1 v 1 groups fed by Round 1. The organiser's console does everything (setup, draw, Round 1 by judges'
+// taps) and the losers are then drawn into three GROUPS of two: a Redemption page lists who is in, a phone and a projector show the
+// groups, each group is voted by the judges, and the group winners rejoin
 // the bracket beside Round 1's winners (6 + 2 = 8 brewers: the quarter-finals). Nothing is shortcut through the database.
 
 const expect = baseExpect.configure({ timeout: 15000 });
@@ -88,11 +88,12 @@ test.describe('Throwdown redemption, a 12-competitor test event (real app, real 
     }
     await expect(page.getByRole('heading', { name: 'Competitors (12)' })).toBeVisible();
 
-    // ---- setup: redemption on (groups of 3, fed by Round 1, no cap), then the draw
+    // ---- setup: redemption on (pairs, fed by Round 1, no cap), then the draw
     const toggle = page.getByLabel(/Redemption round \(competitors who lose/);
     await toggle.check();
-    await expect(page.getByLabel('Brewers per redemption group')).toHaveValue('3');
-    await expect(page.getByLabel(/Most brewers who can come back/)).toHaveValue('0');
+    // 1 v 1 first: there is no group-size choice yet
+    await expect(page.getByLabel(/Groups of/)).toHaveCount(0);
+    await expect(page.getByLabel(/At most this many come back/)).toHaveValue('0');
     await expect(page.getByLabel('After Round 1')).toBeChecked();
     await page.getByRole('button', { name: 'Draw the bracket' }).click();
     await expect(page.locator('.td-preview li')).toHaveCount(6);
@@ -126,24 +127,25 @@ test.describe('Throwdown redemption, a 12-competitor test event (real app, real 
       await expect(same).toBeHidden();
     }
 
-    // ---- the redemption round exists: two groups of three, and a page that shows who is in
+    // ---- the redemption round exists: three pairs, and a page that shows who is in
     const groups = page.locator('article.td-match');
-    await expect(groups).toHaveCount(2);
+    await expect(groups).toHaveCount(3);
     await expect(groups.first().locator('h3')).toContainText('Group 1:');
-    await expect(groups.first().locator('.td-vote')).toHaveCount(3);
-    await expect(groups.nth(1).locator('.td-vote')).toHaveCount(3);
+    await expect(groups.first().locator('.td-vote')).toHaveCount(2);
+    await expect(groups.nth(2).locator('.td-vote')).toHaveCount(2);
     await page.getByRole('link', { name: 'Redemption round: who is in' }).click();
     await expect(page).toHaveURL(new RegExp(`#/events/${event.id}/throwdown/redemption$`));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Redemption round');
     await expect(page.getByRole('heading', { name: 'Who is in (6)' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Group 1' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Group 2' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Group 3' })).toBeVisible();
+    await expect(page.getByText(/Draw code: /)).toBeVisible();
     await expect(page.locator('.td-red-roster li')).toHaveCount(6);
     // the six are exactly the six who lost: every one is a name on the roster
     const inRoster = await page.locator('.td-red-roster li').allTextContents();
     for (const name of inRoster) expect(NAMES).toContain(name);
     await page.getByRole('link', { name: 'Open the matches to vote' }).click();
-    await expect(page.locator('article.td-match')).toHaveCount(2);
+    await expect(page.locator('article.td-match')).toHaveCount(3);
 
     // the audience sees groups, not duels
     await expect(phone.locator('.td-phone')).toContainText('Redemption', { timeout: 45000 });
@@ -154,50 +156,49 @@ test.describe('Throwdown redemption, a 12-competitor test event (real app, real 
       timeout: 40000,
     });
 
-    // ---- group 1: 1-1-1 is level; the tie-break vote settles it
-    const g1 = page
-      .locator('article.td-match')
-      .filter({ has: page.locator('h3', { hasText: 'Group 1:' }) });
+    // ---- group 1: 1-1 is level (Confirm stays off), a second vote settles it; groups 2 and 3 by a majority
+    const group = (n) =>
+      page
+        .locator('article.td-match')
+        .filter({ has: page.locator('h3', { hasText: `Group ${n}:` }) });
+    const g1 = group(1);
     await tap(g1, 0, 1);
     await tap(g1, 1, 1);
-    await tap(g1, 2, 1);
     await expect(g1.getByRole('button', { name: 'Confirm result' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    await expect(g1).toContainText('tie-break');
     await tap(g1, 1, 2);
     await g1.getByRole('button', { name: /^Confirm:/ }).click();
     await expect(g1).toBeHidden();
+    for (const [n, winner] of [
+      [2, 0],
+      [3, 1],
+    ]) {
+      const g = group(n);
+      await tap(g, winner, 1);
+      await tap(g, winner, 2);
+      await tap(g, 1 - winner, 1);
+      await g.getByRole('button', { name: /^Confirm:/ }).click();
+      await expect(g).toBeHidden();
+    }
 
-    // ---- group 2: a majority
-    const g2 = page.locator('article.td-match');
-    await expect(g2).toHaveCount(1);
-    await tap(g2, 2, 1);
-    await tap(g2, 2, 2);
-    await tap(g2, 0, 1);
-    await g2.getByRole('button', { name: /^Confirm:/ }).click();
-
-    // ---- the winners rejoin: 6 winners + 2 revived = 8 brewers, four quarter-final matches
+    // ---- the winners rejoin: 6 winners + 3 revived = 9 brewers, five matches (a bye among them)
     await expect(page.locator('article.td-match')).toHaveCount(4);
-    await expect(page.locator('.td-round h3')).toContainText([
-      'Round 1',
-      'Redemption',
-      'Quarter-finals',
-    ]);
-    // a group is undoable while the quarter-finals have not started: the button is offered on its row
+    await expect(page.locator('.td-round h3')).toContainText(['Round 1', 'Redemption', 'Round 2']);
+    // a group is undoable while the next round has not started: the button is offered on its row
     await expect(
       page
         .locator('.td-round', { has: page.locator('h3', { hasText: /^Redemption$/ }) })
         .getByRole('button', { name: /^Undo result/ }),
-    ).toHaveCount(2);
+    ).toHaveCount(3);
 
     // ---- the results page names each group as a group, with every brewer's votes
     await page.getByRole('link', { name: 'Results and match log' }).click();
     const redemption = page.getByRole('region', { name: 'Redemption' });
     await expect(redemption).toContainText('Group 1:');
-    await expect(redemption).toContainText('Group 2:');
-    await expect(redemption).toContainText('to');
+    await expect(redemption).toContainText('Group 3:');
+    await expect(redemption).toContainText(/\d+ to \d+/);
     await expect(page.locator('body')).not.toContainText('undefined');
   });
 });

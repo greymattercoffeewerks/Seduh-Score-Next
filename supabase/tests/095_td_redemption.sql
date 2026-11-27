@@ -13,9 +13,9 @@
 --   * td_advance is idempotent, and is not callable by an API role;
 --   * undo: a main match before a redemption round, and a redemption match, remove the rounds after them while none has
 --     started, and are refused once a later round has a tap;
---   * a walkover in a group names its winner; a pair round still refuses a third slot.
+--   * a walkover in a group names its winner; a withdrawn loser is left out of the draw.
 begin;
-select plan(123);
+select plan(131);
 
 create schema t095;
 grant usage on schema t095 to anon, authenticated;
@@ -55,10 +55,10 @@ insert into org_members (org_id, user_id, role) values (t095.u(3), t095.u(1), 'o
 -- 14 = 8 (too few winners); 15 = 12 (module off); 16 = 12 (undo); 17 = 12 (walkover in a group)
 insert into events (id, org_id, format, name)
 select t095.u(e.ev), t095.u(3), 'throwdown', 'Redemption ' || e.ev
-  from (values (10), (11), (12), (13), (14), (15), (16), (17)) e(ev);
+  from (values (10), (11), (12), (13), (14), (15), (16), (17), (18)) e(ev);
 insert into event_entries (id, event_id, display_name)
 select t095.u(e.ev * 100 + n), t095.u(e.ev), 'P' || lpad(n::text, 2, '0')
-  from (values (10, 12), (11, 16), (12, 16), (13, 16), (14, 8), (15, 12), (16, 12), (17, 12)) e(ev, cnt),
+  from (values (10, 12), (11, 16), (12, 16), (13, 16), (14, 8), (15, 12), (16, 12), (17, 12), (18, 12)) e(ev, cnt),
        generate_series(1, 16) n
  where n <= e.cnt;
 
@@ -210,6 +210,17 @@ select is((select count(*)::int from td_slots s join td_matches m on m.id = s.ma
             where r.event_id = t095.u(10) and r.position = 2 and s.feeder_match_id is not null), 6, 'each entrant records the match they lost');
 select is((select count(*)::int from td_matches m join td_rounds r on r.id = m.round_id
             where r.event_id = t095.u(10) and r.position = 2 and m.result_kind is not null), 0, 'no group is decided yet');
+-- the draw is recorded: the round carries its draw code, and the groups are exactly the losers ordered by md5(code || id)
+select is((select length(draw_seed) > 8 from td_rounds where event_id = t095.u(10) and position = 2), true, 'the redemption round records its draw code');
+select is((select count(*)::int from td_rounds where event_id = t095.u(10) and draw_seed is not null), 1, 'and no other round carries one');
+select is((select string_agg(s.entry_id::text, ',' order by m.position, s.position)
+             from td_matches m join td_slots s on s.match_id = m.id
+            where m.round_id = (select id from td_rounds where event_id = t095.u(10) and position = 2)),
+  (select string_agg(l.entry_id::text, ',' order by md5((select draw_seed from td_rounds where event_id = t095.u(10) and position = 2) || l.entry_id::text))
+     from td_matches m join td_match_results x on x.match_id = m.id
+     join td_slots l on l.match_id = m.id and l.id <> x.winner_slot_id and l.entry_id is not null
+     join td_rounds r on r.id = m.round_id and r.event_id = t095.u(10) and r.position = 1),
+  'the groups can be replayed from the draw code and the losers');
 -- idempotent: advancing again changes nothing
 select app.td_advance(t095.u(10));
 select app.td_advance(t095.u(10));
@@ -284,18 +295,18 @@ select is(t095.decide_round(12, 1, 1), 'ok', 'Round 1 is decided');
 select is(t095.sizes(12, 2), '2,2,2,2', 'the 8 losers make four groups of 2');
 select is(t095.decide_match(t095.m(12, 2, 1), 1, 2, 1), 'ok', 'group 1 is won 2-1');
 select is(t095.decide_match(t095.m(12, 2, 2), 1, 2, 1), 'ok', 'group 2 is won 2-1');
-select is(t095.decide_match(t095.m(12, 2, 3), 1, 3, 0), 'ok', 'group 3 is won 3-0');
+select is(t095.decide_match(t095.m(12, 2, 3), 1, 2, 1), 'ok', 'group 3 is won 2-1');
 select is(t095.rounds(12), '1:main:8 2:redemption:4', 'three groups decided: the round is not complete');
-select is(t095.decide_match(t095.m(12, 2, 4), 1, 2, 1), 'ok', 'group 4 is won 2-1');
+select is(t095.decide_match(t095.m(12, 2, 4), 1, 3, 0), 'ok', 'group 4 is won 3-0 (the last group, the most votes)');
 select is(t095.rounds(12), '1:main:8 2:redemption:4 3:main:6', 'the next round holds 8 winners and only 3 returning brewers: 11, six matches');
 select is((select count(*)::int from td_slots s join td_matches m on m.id = s.match_id join td_rounds r on r.id = m.round_id
             where r.event_id = t095.u(12) and r.position = 3 and s.entry_id is not null), 11, '11 brewers in it');
 select is((select count(*)::int from td_slots s join td_matches m on m.id = s.match_id join td_rounds r on r.id = m.round_id
             where r.event_id = t095.u(12) and r.position = 3 and s.feeder_match_id in (select mm.id from td_matches mm where mm.round_id = (select id from td_rounds where event_id = t095.u(12) and position = 2))), 3, 'three of them came from groups');
 select is((select count(*)::int from td_slots s join td_matches m on m.id = s.match_id join td_rounds r on r.id = m.round_id
-            where r.event_id = t095.u(12) and r.position = 3 and s.feeder_match_id = t095.m(12, 2, 4)), 0, 'the group-4 winner (fewest votes, last) is the one left out');
+            where r.event_id = t095.u(12) and r.position = 3 and s.feeder_match_id = t095.m(12, 2, 3)), 0, 'the group-3 winner (2 votes, a later group than 1 and 2) is the one left out');
 select is((select count(*)::int from td_slots s join td_matches m on m.id = s.match_id join td_rounds r on r.id = m.round_id
-            where r.event_id = t095.u(12) and r.position = 3 and s.feeder_match_id = t095.m(12, 2, 3)), 1, 'the 3-0 winner returns');
+            where r.event_id = t095.u(12) and r.position = 3 and s.feeder_match_id = t095.m(12, 2, 4)), 1, 'the 3-0 winner of the LAST group returns: the cap ranks by votes, not by group order');
 
 -- ============ event 13: the tie-break vote goes only to a brewer in the tie ============
 select is(t095.settings(13, 4, '{"redemption": {"group_size": 4, "cap": 0, "feed": [1]}}'), 'ok', 'event 13: four judges, groups of 4');
@@ -334,6 +345,15 @@ select is(t095.as_user(t095.u(1), format('select public.td_record_walkover(gen_r
 select is((select winner_slot_id from td_match_results where match_id = t095.m(17, 2, 1)), t095.s(17, 2, 1, 2), 'the walkover names its winner (brewer 2)');
 select is(t095.decide_match(t095.m(17, 2, 2), 3), 'ok', 'group 2 is decided');
 select is(t095.rounds(17), '1:main:6 2:redemption:2 3:main:4', 'the walkover winner and the group-2 winner return');
+
+-- ============ event 18: a withdrawn loser is left out of the draw ============
+select is(t095.settings(18, 3, '{"redemption": {"group_size": 3, "cap": 0, "feed": [1]}}') || t095.start(18, 12), 'okok', 'event 18 starts with redemption on');
+select is(t095.decide_match(t095.m(18, 1, 1), 1) || t095.decide_match(t095.m(18, 1, 2), 1) || t095.decide_match(t095.m(18, 1, 3), 1)
+          || t095.decide_match(t095.m(18, 1, 4), 1) || t095.decide_match(t095.m(18, 1, 5), 1), 'okokokokok', 'five Round 1 matches are decided');
+update event_entries set withdrawn = true where id = t095.u(18 * 100 + 12);
+select is(t095.decide_match(t095.m(18, 1, 6), 1), 'ok', 'P12 withdrew; the last match, which P12 lost, is decided');
+select is(t095.sizes(18, 2), '3,2', 'only the 5 active losers are drawn: a group of 3 and a group of 2');
+select is(t095.round_names(18, 2) like '%P12%', false, 'the withdrawn loser is in no group');
 
 -- ============ shapes and rights ============
 select t095.contains(t095.as_user(t095.u(1), format('insert into td_slots (event_id, match_id, position, entry_id) values (%L, %L, 3, null)', t095.u(10), t095.m(10, 1, 1))),

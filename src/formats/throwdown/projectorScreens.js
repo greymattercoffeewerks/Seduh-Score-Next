@@ -245,12 +245,35 @@ function roundsUnderWay(payload) {
   return (payload.rounds ?? []).filter((round) => matchesOf(round).some((m) => !m.decided));
 }
 
+// A page of redemption groups holds at most this many brewers in all: a group of four is twice the height of a duel, so
+// paging by match count would push a third row of cards off a 16:9 stage.
+export const BREWERS_PER_PAGE = 12;
+
+function pagesOf(round) {
+  if (round.phase !== 'redemption') return paginate(matchesOf(round), MATCHES_PER_PAGE);
+  const pages = [];
+  let current = [];
+  let size = 0;
+  for (const match of matchesOf(round)) {
+    const n = match.sides?.length ?? 0;
+    if (current.length && size + n > BREWERS_PER_PAGE) {
+      pages.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(match);
+    size += n;
+  }
+  if (current.length) pages.push(current);
+  return pages;
+}
+
 function roundPages(payload) {
   const upNextId = payload.upNext?.id ?? null;
   return roundsUnderWay(payload).flatMap((round) => {
-    const pages = paginate(matchesOf(round), MATCHES_PER_PAGE);
+    const pages = pagesOf(round);
     return pages.map((page, i) => {
-      const offset = i * MATCHES_PER_PAGE;
+      const offset = pages.slice(0, i).reduce((sum, earlier) => sum + earlier.length, 0);
       const name = roundName(round);
       const suffix = pages.length > 1 ? ` · page ${i + 1} of ${pages.length}` : '';
       return {

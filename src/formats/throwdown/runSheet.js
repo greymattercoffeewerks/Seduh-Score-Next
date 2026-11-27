@@ -111,7 +111,9 @@ function roundsToComePhase(rounds, waitingOn = null) {
     id: 'rounds-to-come',
     label: 'Rounds to come',
     status: 'waiting',
-    count: `${plural(more, 'more round', 'more rounds')}`,
+    count: waitingOn
+      ? 'More rounds after the redemption round'
+      : `${plural(more, 'more round', 'more rounds')}`,
     nextAction: null,
     blockedReason: `Starts when the ${waitingOn?.label ?? latest.label} is decided.`,
   };

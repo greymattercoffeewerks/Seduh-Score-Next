@@ -28,7 +28,7 @@ function groupCard(group, revived) {
     el('h4', { text: `Group ${group.number}` }),
     el(
       'ul',
-      { className: 'td-red-brewers' },
+      { className: 'td-red-brewers', attrs: { role: 'list' } },
       group.brewers.map((b) => {
         const back = revived.get(b.entryId) ?? 0;
         return el(
@@ -36,7 +36,9 @@ function groupCard(group, revived) {
           { className: 'td-red-brewer' },
           [
             el('span', { className: 'td-red-name', text: b.name }),
-            group.decided && b.winner ? el('span', { className: 'td-red-winner', text: 'Winner' }) : null,
+            group.decided && b.winner
+              ? el('span', { className: 'td-red-winner', text: 'Winner' })
+              : null,
             group.decided && typeof b.votes === 'number'
               ? el('span', {
                   className: 'td-red-votes',
@@ -96,16 +98,24 @@ export function buildRedemptionView(event, data) {
             : 'The brewers who lost.',
         }),
         el('p', { text: redemptionRoundWords(round) }),
+        ...(round.drawSeed
+          ? [
+              el('p', {
+                className: 'td-note',
+                text: `Draw code: ${round.drawSeed}. The groups follow from the code and the names.`,
+              }),
+            ]
+          : []),
         el('h3', { text: `Who is in (${round.entrants.length})` }),
         el(
           'ul',
-          { className: 'td-red-roster' },
+          { className: 'td-red-roster', attrs: { role: 'list' } },
           round.entrants.map((name) => el('li', { text: name })),
         ),
         el('h3', { text: 'The groups' }),
         el(
           'ol',
-          { className: 'td-red-groups' },
+          { className: 'td-red-groups', attrs: { role: 'list' } },
           round.groups.map((g) => groupCard(g, before)),
         ),
       ],

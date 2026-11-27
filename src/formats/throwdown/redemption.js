@@ -12,8 +12,12 @@
 // A redemption round follows a feeding round only while MORE THAN FOUR winners remain (so the brewers who come back
 // rejoin at the quarter-finals at the latest) and only when at least two brewers lost in it.
 
+import { partition } from '../../core/partition.js';
+
 export const GROUP_SIZES = Object.freeze([2, 3, 4]);
-export const DEFAULT_GROUP_SIZE = 3;
+// Owner, 2026-11-27: build redemption for 1 v 1 first. The setup offers groups of two only; the database and these helpers
+// still know sizes 2 to 4 (tested), so larger groups come later without a migration.
+export const DEFAULT_GROUP_SIZE = 2;
 export const MAX_FEED_ROUND = 4;
 export const MAX_CAP = 99;
 // A redemption round follows a main round only when strictly more than this many winners are left in it.
@@ -24,10 +28,8 @@ export const MIN_WINNERS_FOR_REDEMPTION = 4;
 // cases (redemption.test.js and pgTAP 095).
 export function groupSizes(pool, groupSize) {
   if (!Number.isInteger(pool) || pool < 2 || !GROUP_SIZES.includes(groupSize)) return [];
-  const groups = Math.max(1, Math.min(Math.ceil(pool / groupSize), Math.floor(pool / 2)));
-  const base = Math.floor(pool / groups);
-  const extra = pool % groups;
-  return Array.from({ length: groups }, (_, i) => base + (i < extra ? 1 : 0));
+  // the same arithmetic as core's heat sizing (fewest groups that hit the target, sizes within 1, never below 2)
+  return partition(pool, { target: groupSize, min: 2 });
 }
 
 // ---------- setup ----------
@@ -130,6 +132,7 @@ export function redemptionRounds(bracket) {
         label: round.label,
         position: round.position,
         feedLabel: before?.label ?? null,
+        drawSeed: round.drawSeed ?? null,
         entrants: groups
           .flatMap((g) => g.brewers.map((b) => b.name))
           .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),

@@ -52,8 +52,8 @@ describe('group sizes (the same cases as pgTAP 095, app.td_group_sizes)', () => 
 });
 
 describe('the setup form', () => {
-  it('starts off, with groups of 3, no cap and Round 1 feeding it', () => {
-    expect(redemptionForm(null)).toEqual({ on: false, groupSize: 3, cap: 0, feed: [1] });
+  it('starts off, with pairs (1 v 1), no cap and Round 1 feeding it', () => {
+    expect(redemptionForm(null)).toEqual({ on: false, groupSize: 2, cap: 0, feed: [1] });
   });
   it('reads what is saved', () => {
     expect(redemptionForm({ group_size: 4, cap: 2, feed: [1, 2] })).toEqual({

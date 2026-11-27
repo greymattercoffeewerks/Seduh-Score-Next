@@ -24,9 +24,9 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
-- **Throwdown vote cap** (4.25.1, on `dev`, not released): a match takes no more taps than judges, plus one tie-break vote when level. Migration in the cloud (CHANGELOG 4.25.1).
-- **Throwdown competitor Edit** (4.25.0) and **projector on the shared kit** (4.26.0): owner's tablet and TV checks owed.
-- **Throwdown dashboard, Phases B and C** (4.28.0, stacked on #544/#543): routed; votes on Matches.
+- **Throwdown vote cap** (4.25.1): a match takes no more taps than judges, plus one tie-break vote when level. In the cloud.
+- **Throwdown competitor Edit** (4.25.0), **projector on the shared kit** (4.26.0), **dashboard B and C** (4.28.0): tablet and TV checks owed.
+- **Throwdown redemption (TD.3, 4.32.0):** on `claude/td3-redemption`, not merged, migration `20261201100000` unpushed (CHANGELOG 4.32.0).
 - **Throwdown undo and offline vote screen** (4.27.0): undo a confirmed match; the event screen survives a dropped connection. Migration in the cloud. Owed: the owner's tablet check before 27 Nov.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started. Organiser branding
   BR-E1 merged in #297 (2026-10-22) and is on `main`, but the database door (BR-B1) is KIV, so no brand shows.

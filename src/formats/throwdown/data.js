@@ -73,7 +73,7 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
   const [settings, draw, rounds, matches, slots, votes, entries, reopens] = await Promise.all([
     client.from('td_settings').select('*').eq('event_id', eventId).maybeSingle(),
     client.from('td_draws').select('*').eq('event_id', eventId).maybeSingle(),
-    readAll(client, 'td_rounds', 'id, position, kind, phase', eventId),
+    readAll(client, 'td_rounds', 'id, position, kind, phase, draw_seed', eventId),
     readAll(
       client,
       'td_matches',

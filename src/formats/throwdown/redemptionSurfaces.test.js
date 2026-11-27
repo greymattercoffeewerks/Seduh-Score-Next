@@ -203,3 +203,45 @@ describe('with the module off, nothing of it appears anywhere', () => {
     expect(textOf(view)).toContain('This event has no redemption round.');
   });
 });
+
+describe('the projector pages a long redemption round by brewers, not by groups', () => {
+  it('puts no more than 12 brewers on a page, and numbers groups across pages', () => {
+    const groups = Array.from({ length: 5 }, (_, i) => ({
+      sides: [1, 2, 3, 4].map((n) => `G${i + 1}B${n}`),
+    }));
+    const payload = payloadFor({
+      names: namesUpTo(4),
+      rounds: [{ phase: 'redemption', kind: 'pool', matches: groups }],
+    });
+    const pages = throwdownPages(payload).filter((p) => p.label.startsWith('Redemption'));
+    expect(pages).toHaveLength(2);
+    const text = pages.map(pageText);
+    expect(text[0]).toContain('Group 3');
+    expect(text[0]).not.toContain('Group 4');
+    expect(text[1]).toContain('Group 4');
+    expect(text[1]).toContain('Group 5');
+  });
+});
+
+describe('the match log with a group of four', () => {
+  it('names the fourth brewer and their votes', () => {
+    const bracket = deriveBracket(
+      bracketRows({
+        names: namesUpTo(4),
+        rounds: [
+          {
+            phase: 'redemption',
+            kind: 'pool',
+            matches: [{ sides: ['P1', 'P2', 'P3', 'P4'], result: [2, 1, 0, 1] }],
+          },
+        ],
+      }),
+    );
+    const lines = matchLogCsv(bracket).split(String.fromCharCode(10));
+    const header = lines.find((l) => l.includes('Competitor A')).split(',');
+    const row = lines.find((l) => l.startsWith('Redemption,')).split(',');
+    expect(row[header.indexOf('Competitor D')]).toBe('P4');
+    expect(row[header.indexOf('Votes D')]).toBe('1');
+    expect(row[header.indexOf('Winner')]).toBe('P1');
+  });
+});

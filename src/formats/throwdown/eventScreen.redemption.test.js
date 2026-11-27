@@ -58,7 +58,9 @@ describe('setting up redemption', () => {
     expect(root.querySelector('[data-focus-key="td-red-cap"]')).toBeNull();
     toggle.checked = true;
     toggle.dispatchEvent(new Event('change'));
-    expect(root.querySelector('[data-focus-key="td-red-size"]').value).toBe('3');
+    // 1 v 1 first (owner, 27 Nov): there is no group-size control yet
+    expect(root.querySelector('[data-focus-key="td-red-size"]')).toBeNull();
+    expect(root.textContent).toContain('into pairs (1 v 1');
     expect(root.querySelector('[data-focus-key="td-red-cap"]').value).toBe('0');
     expect(root.querySelector('[data-focus-key="td-red-feed-1"]').checked).toBe(true);
     expect(root.querySelector('[data-focus-key="td-red-feed-2"]').checked).toBe(false);
@@ -78,7 +80,6 @@ describe('setting up redemption', () => {
       ],
     });
     expect(root.querySelector('[data-focus-key="td-redemption-on"]').checked).toBe(true);
-    expect(root.querySelector('[data-focus-key="td-red-size"]').value).toBe('4');
     expect(root.querySelector('[data-focus-key="td-red-cap"]').value).toBe('2');
     expect(root.querySelector('[data-focus-key="td-red-feed-2"]').checked).toBe(true);
   });

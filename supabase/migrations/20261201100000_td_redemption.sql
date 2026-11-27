@@ -7,8 +7,9 @@
 -- a round with kind 'pool' and phase 'redemption' (already allowed), a group is a match with up to four slots.
 --
 -- Owner decisions built here:
---   * groups are drawn randomly (the pool is shuffled in the database; the groups are written as rows, so the draw is
---     recorded by the rows themselves, and whether to also store a seed is still spec Q4);
+--   * groups are drawn randomly, and the draw is RECORDED (owner, 2026-11-27: store the seed): the database makes a draw
+--     code (td_rounds.draw_seed) and orders the pool by md5(draw code || competitor id), so anyone can replay the draw
+--     from the code and the losers; the groups are also written as rows;
 --   * several redemption rounds are allowed (one after each feeding round the organiser ticked) and a brewer can be
 --     revived more than once: each redemption round draws from the losers of ITS feeding round, nothing blocks a
 --     returning brewer, so no "one redemption per competitor" rule exists (spec Q3b, superseded);
@@ -34,6 +35,8 @@
 -- rollback: re-run the create-or-replace statements of the functions this file replaces, from the migrations that last
 -- defined them, then drop what this file adds:
 --   alter table td_settings drop constraint if exists td_settings_redemption_valid;
+--   alter table td_rounds drop constraint if exists td_rounds_draw_seed_phase;
+--   alter table td_rounds drop column if exists draw_seed;
 --   -- td_module_registry, td_save_settings: 20261127100000_td_scoresheet_registry.sql
 --   -- td_advance:                           20261103140000_throwdown_third_place_walkover.sql
 --   -- td_cast_vote:                         20261128100000_td_vote_cap.sql
@@ -42,7 +45,14 @@
 --   drop function if exists app.td_redemption_config_valid(jsonb);
 --   drop function if exists app.td_add_pool_match(uuid, uuid, int, uuid[], uuid[]);
 --   drop function if exists app.td_group_sizes(int, int);
---   (any td_settings row that stored a redemption module must be edited out first, or the registry check refuses)
+--   restore td_advance BEFORE dropping td_add_pool_match and td_group_sizes (the new td_advance calls them).
+--   First delete every td_rounds row with phase 'redemption' (their pool matches go with them) and edit any stored
+--   td_settings.modules 'redemption' key out: the old registry and the old td_advance refuse or mishandle them.
+
+-- ============ the recorded draw code ============
+-- A redemption round carries the code its draw was made from. Null for every other round (and for any row made before this).
+alter table td_rounds add column draw_seed text;
+alter table td_rounds add constraint td_rounds_draw_seed_phase check (draw_seed is null or phase = 'redemption');
 
 -- ============ pure helpers ============
 
@@ -297,6 +307,7 @@ declare
   v_pool        uuid[];
   v_pool_from   uuid[];
   v_sizes       int[];
+  v_seed        text;
   v_revived     uuid[];
   v_rev_from    uuid[];
   v_cap         int;
@@ -339,9 +350,11 @@ begin
         v_main_index := (select count(*) from public.td_rounds r
                           where r.event_id = p_event_id and r.phase = 'main' and r.position <= v_round.position);
         if (v_cfg -> 'feed') @> to_jsonb(v_main_index) then
+          -- the draw code: the pool is ordered by md5(code || competitor id), so the draw can be replayed from the code
+          v_seed := gen_random_uuid()::text;
           select array_agg(t.entry_id order by t.rnd), array_agg(t.match_id order by t.rnd)
             into v_pool, v_pool_from
-            from (select l.entry_id, m.id as match_id, random() as rnd
+            from (select l.entry_id, m.id as match_id, md5(v_seed || l.entry_id::text) as rnd
                     from public.td_matches m
                     join public.td_match_results r on r.match_id = m.id
                     join public.td_slots l on l.match_id = m.id and l.id <> r.winner_slot_id and l.entry_id is not null
@@ -349,8 +362,8 @@ begin
                    where m.round_id = v_round.id) t;
           if coalesce(array_length(v_pool, 1), 0) >= 2 then
             v_sizes := app.td_group_sizes(array_length(v_pool, 1), (v_cfg ->> 'group_size')::int);
-            insert into public.td_rounds (event_id, position, kind, phase)
-              values (p_event_id, v_round.position + 1, 'pool', 'redemption') returning id into v_new_round;
+            insert into public.td_rounds (event_id, position, kind, phase, draw_seed)
+              values (p_event_id, v_round.position + 1, 'pool', 'redemption', v_seed) returning id into v_new_round;
             v_at := 1;
             for v_group in 1 .. array_length(v_sizes, 1) loop
               perform app.td_add_pool_match(

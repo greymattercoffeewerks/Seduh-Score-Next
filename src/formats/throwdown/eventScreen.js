@@ -48,7 +48,6 @@ import {
 import { reopenState, reopenWords, matchesAwaitingUndo } from './reopen.js';
 import { tallyVotes, leadOf, canConfirm, voteState, tiedSlotIds } from './votes.js';
 import {
-  GROUP_SIZES,
   MAX_FEED_ROUND,
   PROBLEM_WORDS as REDEMPTION_PROBLEM_WORDS,
   hasRedemptionRound,
@@ -882,18 +881,6 @@ export async function mountThrowdownEventScreen(
       ]),
     ];
     if (!red.on) return block;
-    const size = el(
-      'select',
-      {
-        className: 'field-input',
-        attrs: { 'aria-label': 'Brewers per redemption group', 'data-focus-key': 'td-red-size' },
-      },
-      GROUP_SIZES.map((n) => el('option', { text: `${n} brewers`, attrs: { value: String(n) } })),
-    );
-    size.value = String(red.groupSize);
-    size.addEventListener('change', () => {
-      red.groupSize = Number(size.value);
-    });
     const cap = el('input', {
       className: 'field-input',
       attrs: {
@@ -902,7 +889,6 @@ export async function mountThrowdownEventScreen(
         max: '99',
         step: '1',
         inputmode: 'numeric',
-        'aria-label': 'Most brewers who can come back (0 is no limit)',
         'data-focus-key': 'td-red-cap',
       },
     });
@@ -924,7 +910,6 @@ export async function mountThrowdownEventScreen(
       ]);
     });
     block.push(
-      el('label', { className: 'td-choice' }, [document.createTextNode('Groups of '), size]),
       el('label', { className: 'td-choice' }, [
         document.createTextNode('At most this many come back (0 = no limit) '),
         cap,
@@ -934,7 +919,7 @@ export async function mountThrowdownEventScreen(
         ...rounds,
         el('p', {
           className: 'td-note',
-          text: 'Groups are drawn at random. Each group votes for one winner, who goes back into the bracket. A redemption round only follows a round that leaves more than four winners, and only with at least two brewers to draw. The same brewer can come back more than once.',
+          text: 'Losers are drawn at random into pairs (1 v 1; with an odd number, one group has three). Each group votes for one winner, who goes back into the bracket. A redemption round only follows a round that leaves more than four winners, and only with at least two brewers to draw. The same brewer can come back more than once.',
         }),
       ]),
     );
@@ -1218,7 +1203,19 @@ export async function mountThrowdownEventScreen(
         judges,
       );
       const afterWords = after.tieBreakOpen
-        ? ' Level with every judge in: the tie-break judge casts one more vote.'
+        ? match.isPool
+          ? ` Level with every judge in: the tie-break judge casts one more vote, for ${listWords(
+              match.sides
+                .filter((s2) =>
+                  tiedSlotIds(
+                    tallies.map((t) =>
+                      t.slotId === side.slotId ? { ...t, votes: t.votes + 1 } : t,
+                    ),
+                  ).includes(s2.slotId),
+                )
+                .map((s2) => s2.name),
+            )}.`
+          : ' Level with every judge in: the tie-break judge casts one more vote.'
         : after.open
           ? ''
           : ' Every judge has voted.';
