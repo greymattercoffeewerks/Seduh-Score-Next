@@ -245,6 +245,8 @@ No new Petrol identity release is recorded after Kaizen P6; the 4.29.0 muted ste
 
 ---
 
+- **Audience match list, 4.31.1 · 2026-11-27:** from the Throwdown phone view (4.30.5 first made results winner-first; the owner then found it too condensed and picked the scoreboard layout, R3). New in `vocabulary.css` with builders in `core/vocabulary.js`: `.result-row` (winner band with a big number, loser row below), `.match-block` (an undecided match, one name per line) and `.round` (a collapsible round header with an eyebrow, title, count and chevron, a native `<details>`). Additive: no token changed. First consumer Throwdown; Cup Taster and BTC phone and projector views can take them. Rules in `DESIGN.md` "Audience match list"; tested in `core/vocabulary.test.js`.
+
 ## Gaps in the record
 
 - No entry for a Kaizen P1 to P3 (or the fourth Kaizen item beyond P4 to P6).
