@@ -727,6 +727,7 @@ export async function mountThrowdownEventScreen(
     third.checked = f.thirdPlace;
     third.addEventListener('change', () => {
       f.thirdPlace = third.checked;
+      render(); // the What will happen card reads this choice
     });
     const mode = (value, label) => {
       const input = el('input', {

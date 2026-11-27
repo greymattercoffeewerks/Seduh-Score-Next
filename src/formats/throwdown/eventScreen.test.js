@@ -541,6 +541,17 @@ describe('the Throwdown organiser screen', () => {
     expect(after.querySelector('#td-preview-h')).toBeNull();
   });
 
+  it('the card follows the setup: ticking 3rd place off is reflected at once', async () => {
+    const root = await mount({ event_entries: entries });
+    expect(root.textContent).toContain(
+      'With 2 brewers: 1 round, 1 match, no byes. No 3rd place match.',
+    );
+    const box = root.querySelector('[data-focus-key="td-third"]');
+    box.checked = false;
+    box.dispatchEvent(new Event('change'));
+    expect(root.textContent).toContain('3rd place is off.');
+  });
+
   it('opens the plan from the card and plans for a different brewer count without saving it', async () => {
     const root = await mount({ event_entries: entries });
     const open = root.querySelector('[data-focus-key="td-plan-toggle"]');

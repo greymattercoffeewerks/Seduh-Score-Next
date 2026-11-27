@@ -203,6 +203,9 @@ export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChan
       );
     }
     children.push(el('div', { id: 'td-plan', className: 'td-plan' }, panel));
+  } else {
+    // kept in the page, hidden, so the button's aria-controls always names something
+    children.push(el('div', { id: 'td-plan', className: 'td-plan', attrs: { hidden: '' } }));
   }
   return el(
     'section',

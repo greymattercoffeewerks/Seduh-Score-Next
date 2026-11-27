@@ -58,7 +58,7 @@ describe('the card', () => {
     const { node } = card();
     expect(node.textContent).toContain('With 21 brewers');
     expect(node.textContent).toContain('3 things to check.');
-    expect(node.querySelector('#td-plan')).toBeNull();
+    expect(node.querySelector('#td-plan').hidden).toBe(true);
     expect(node.querySelector('[aria-expanded]').getAttribute('aria-expanded')).toBe('false');
   });
   it('open: every round, the flags, and the other choice for 3rd place', () => {
