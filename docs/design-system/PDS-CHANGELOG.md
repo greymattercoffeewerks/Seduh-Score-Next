@@ -233,6 +233,14 @@ Design-system-relevant entries in `CHANGELOG.md` after P6, to current dev (4.29.
 
 - **Night console parts, 4.29.1 · 2026-11-26:** from the BTC dashboard concept (the first design made as a Petrol concept before code): `--clr-petrol-975` and `--color-chrome` for the console's side menu and top bar, `--tracking-caps`, and the parts `.eyebrow`, `.queue`, `.runsheet` and `.cutline` in `vocabulary.css`. Additive. First consumer: the BTC event dashboard, 4.30.0 (#557; Night mode switch, run-sheet strip, Needs you, standings with the cut line). The organiser console at night is the existing stage surface. Concept ideas not taken: the hero grid, a per-viewer accent, cut-corner buttons, gold on a tie. Rules in `DESIGN.md` "Night console and console parts"; tested in `consoleChrome.test.js`.
 
+- **Share card pattern, 4.32.0 · 2026-11-27:** the Results page's story card (a 1080 x 1920 picture for Instagram) is the
+  first Petrol piece drawn on a canvas in the **paper** look: `--color-canvas` ground, the `.page-hero-grid` lines
+  (72px cells, fading toward the foot), a `--color-gold-tint` box with a 2px-style `--color-gold` edge for the winner,
+  ruled rows in `--color-border`, mono small-caps labels (Venue, Date) over body-face values, display face for names.
+  Square corners; no QR. Colours and fonts are read from the live tokens (`core/resultsStoryCard.js`
+  `paperStoryTheme`), never typed. Any later share or print card (a team card, a certificate) should reuse this look.
+  Not a token change.
+
 No new Petrol identity release is recorded after Kaizen P6; the 4.29.0 muted step is a token correction inside it.
 
 ---

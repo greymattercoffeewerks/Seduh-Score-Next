@@ -993,6 +993,16 @@ A "Share" button on the person page draws a 1080 x 1920 picture on a canvas and 
 - **Photo:** the door's relative path made absolute by `photoSrc` and loaded with `crossOrigin = 'anonymous'` so the canvas is not tainted (a server without CORS makes the load fail, which shows the initials). Nothing about the person leaves the device: the card is made in the browser.
 - **The share tap must stay a gesture:** the picture is drawn when the dialog opens or the style changes, never on the share tap.
 
+### The results story card (4.32.0)
+
+A "Share" button on the Latest result card of `/results/` draws a 1080 x 1920 podium picture and shares it (`navigator.share` with the file where `canShare` accepts it, else a download). No migration, no Instagram API, nothing leaves the device. What a later change must keep:
+
+- **One render and share pipeline.** `core/storyCard.js` `renderStoryCard(spec, { draw })` and `shareStoryCard`; the results layout is `core/resultsStoryCard.js` `drawResultsStoryCard`. Do not fork the pipeline or hand-draw a second card elsewhere.
+- **Content is the published payload only** (`marketing/resultsStory.js`, pure): event name, format label, winner (name, cafe), the next places, venue (with city, once), date, the page address. No winner means no button. It must work for every format that publishes a podium.
+- **Look:** paper surface (tokens read from the document root, never typed), the page-hero grid-lines backdrop, square corners, **no QR code** (owner decision: nobody scans a code off the phone they are holding). Venue and date are separate labelled lines.
+- **The share tap must stay a gesture:** the picture is drawn when the dialog opens, never on the tap.
+- Spec fields use `place`, not `rank` (the `no-derived-storage` rule rejects `rank:`).
+
 ### Seduh ID: the profile photo (T-ID2.C2, 20261123100000, 4.14.0)
 
 A claimed person may add one photo. Spec section 5; the design choices are in the migration header. What a later change must keep:
