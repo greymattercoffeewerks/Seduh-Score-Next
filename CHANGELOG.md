@@ -9,7 +9,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## The left side menu (rail), app-wide · 4.31.0 · 2026-11-27
 
-**Status: released together with the demo-people entry below as one 4.31.0 (release PR #567, merged to `main` 27 Nov after the Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and a green CI run of `organiser-flow.spec.js`, whose header tests were rewritten for the rail and drawer (1023/1024px) but not run locally (they need the local database).
+**Status: released together with the demo-people entry below as one 4.31.0 (release PR #567, merged to `main` 27 Nov after the Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. The owner's device check passed on 27 Nov, and `organiser-flow.spec.js` (header tests rewritten for the rail and drawer, 1023/1024px) is green in CI.
 
 - **What.** From 1024px the console header is a left rail (15rem): brand, organisation, event name and sync chip, the links with the current one marked by the accent edge, and the account (email, Change password, Sign out) at the foot. Below 1024px the header stays a slim top bar and the same panel opens as a drawer from the left over a dimmed page (tap the dim area, Escape or the Menu button to close).
 - **360px, no scroll bar.** The concept's phone strip scrolled sideways. Here nothing is wider than the screen: the drawer is `min(18rem, 100vw - 4.5rem)` so the Menu button stays in view as the way to close it, and the drawer scrolls only vertically inside itself (measured at 360px: page width 360, drawer width = its client width).

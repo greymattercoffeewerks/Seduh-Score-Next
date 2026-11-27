@@ -5,7 +5,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 
 ## Where we are
 
-- **Left side menu (rail)** (4.31.0, on `main` 27 Nov): rail from 1024px, drawer below. Owed: device check (CHANGELOG 4.31.0).
+- **Left side menu (rail)** (4.31.0, on `main` 27 Nov): rail from 1024px, drawer below. Device check done by the owner, 27 Nov.
 - **Demo people** (4.31.0, on `main` 27 Nov): test events add 8 fake-phone people. Migration `20261130100000` not in the cloud yet (demo-people thread pushes it).
 - **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Its Petrol tokens (4.29.1) are in a PR to `dev`.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
