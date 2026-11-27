@@ -8,12 +8,9 @@
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { findEvent } from '../../core/events.js';
-import {
-  loadDemoRoster,
-  describeDemoRosterError,
-  describeDemoRosterLoaded,
-  renderDemoRosterCard,
-} from '../../core/demoRoster.js';
+import { DEMO_CLEARED, renderDemoDataCard } from '../../core/demoData.js';
+import { loadDemo, clearDemo, describeLoaded, DEMO_INTRO, DEMO_WARNING } from './demo.js';
+import { confirmDialog } from '../../core/feedback.js';
 import {
   setEntryWithdrawn,
   listPeopleByIds,
@@ -241,9 +238,53 @@ export async function mountThrowdownEventScreen(
       state.feedback = { tone: 'error', text: describeThrowdownError(err) };
     }
     state.busy = false;
+    state.demoAction = null;
     state.deciding = false;
     if (publish && !state.feedback) state.focusTarget = 'td-now-h';
     await refreshSoon();
+  }
+
+  async function handleLoadDemo() {
+    if (state.busy) return;
+    if (
+      (state.data.bracket.started || state.data.entries.length > 0) &&
+      !(await confirmDialog({
+        title: 'Replace this test event with the demo?',
+        body: DEMO_WARNING,
+        confirmLabel: 'Erase and load demo',
+        isTest: true,
+      }))
+    ) {
+      return;
+    }
+    state.demoAction = 'load';
+    // A refusal throws out of the work, so act() shows it and does not publish.
+    await act(
+      async () => {
+        const reply = await loadDemo(state.event.org_id, eventId, client);
+        state.feedback = { tone: 'success', text: describeLoaded(reply) };
+      },
+      { publish: true },
+    );
+  }
+
+  async function handleClearDemo() {
+    if (state.busy) return;
+    if (
+      !(await confirmDialog({
+        title: 'Clear the demo from this test event?',
+        body: DEMO_WARNING,
+        confirmLabel: 'Erase demo',
+        isTest: true,
+      }))
+    ) {
+      return;
+    }
+    state.demoAction = 'clear';
+    await act(async () => {
+      await clearDemo(state.event.org_id, eventId, client);
+      state.feedback = { tone: 'success', text: DEMO_CLEARED };
+    });
   }
 
   // ---------- pieces ----------
@@ -706,21 +747,17 @@ export async function mountThrowdownEventScreen(
               text: 'The draw has started. Edit corrects a name, phone or café or team, and the bracket uses the new name. Withdrawing a competitor does not change the bracket: record a walkover on their match.',
             })
           : form,
-        // Test events only (the database refuses a real event regardless): eight made-up competitors, no typing.
-        !locked && state.event.is_test
-          ? renderDemoRosterCard({
+        // Test events only (the database refuses a real event regardless): a part-played bracket, no typing. Offered
+        // even after the draw has started, so it can be cleared and reloaded.
+        state.event.is_test
+          ? renderDemoDataCard({
               idPrefix: 'td',
-              noun: 'competitors',
+              intro: DEMO_INTRO,
               busy: state.busy,
-              onLoad: () =>
-                act(async () => {
-                  try {
-                    const loaded = await loadDemoRoster(state.event.org_id, eventId, client);
-                    state.feedback = { tone: 'success', text: describeDemoRosterLoaded(loaded) };
-                  } catch (err) {
-                    state.feedback = { tone: 'error', text: describeDemoRosterError(err) };
-                  }
-                }),
+              busyWith: state.demoAction,
+              hasData: locked || rows.length > 0,
+              onLoad: handleLoadDemo,
+              onClear: handleClearDemo,
             })
           : null,
       ].filter(Boolean),

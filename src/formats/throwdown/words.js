@@ -51,6 +51,10 @@ const REFUSALS = {
   td_draw_shape: 'The draw is not in pairs.',
   td_module_invalid: 'The module choices are not valid.',
   event_window_locked: 'This event is closed.',
+  demo_not_test: 'Demo data loads only into a test event.',
+  demo_wrong_format: 'This demo belongs to a different format. Reload the page.',
+  demo_event_not_found: 'We could not find this event. Reload the page.',
+  demo_roster_failed: 'The demo people could not be added. Try again.',
 };
 
 export function describeThrowdownError(err) {

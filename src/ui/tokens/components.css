@@ -1365,3 +1365,10 @@
 [data-density='compact'] .ok-cut-rail {
   gap: var(--density-gap);
 }
+
+/* Demo data card (core/demoData.js): the two buttons sit side by side and wrap at 360px. */
+.demo-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 0.5rem);
+}

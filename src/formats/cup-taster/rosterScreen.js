@@ -50,12 +50,9 @@ import {
   phoneWillChange,
 } from '../../core/registry.js';
 import { DEFAULT_COUNTRY } from '../../core/phone.js';
-import {
-  loadDemoRoster,
-  describeDemoRosterError,
-  describeDemoRosterLoaded,
-  renderDemoRosterCard,
-} from '../../core/demoRoster.js';
+import { describeDemoDataError, DEMO_CLEARED, renderDemoDataCard } from '../../core/demoData.js';
+import { loadDemo, clearDemo, describeLoaded, DEMO_INTRO, DEMO_WARNING } from './demo.js';
+import { confirmDialog } from '../../core/feedback.js';
 import { phoneCountrySelect, phoneRow } from '../../core/phoneField.js';
 import {
   REGISTRATION_LIMITS,
@@ -542,6 +539,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
   let savedNote = null;
   let draft = blankDraft();
   let busy = false;
+  let demoAction = null;
   let pendingError = null;
   let pendingSuccess = null;
   let focusAfterRender = null;
@@ -719,14 +717,18 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     form.addEventListener('submit', handleRegister);
     container.appendChild(form);
 
-    // Test events only (the database refuses a real event regardless): eight made-up cuppers, no typing.
+    // Test events only (the database refuses a real event regardless): a scored demo event, no typing.
     if (event?.is_test) {
       container.appendChild(
-        renderDemoRosterCard({
+        renderDemoDataCard({
           idPrefix: 'roster',
-          noun: 'cuppers',
+          intro: DEMO_INTRO,
           busy,
-          onLoad: handleLoadDemoRoster,
+          busyWith: demoAction,
+          // Stages can exist with no entries (setup makes them first), so Clear is always offered.
+          hasData: true,
+          onLoad: handleLoadDemo,
+          onClear: handleClearDemo,
         }),
       );
     }
@@ -815,25 +817,61 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     render();
   }
 
-  async function handleLoadDemoRoster() {
-    if (busy) return;
+  // Runs one demo call (load or clear) and refreshes the screen. A load or clear replaces the whole test event, so it
+  // asks first when there is something to lose.
+  async function runDemo(work, successText, action) {
     savedNote = null;
+    demoAction = action;
     busy = true;
     render();
     try {
-      const loaded = await loadDemoRoster(event.org_id, eventId, client);
+      const reply = await work();
       try {
         applyPersisted(await loadPersisted());
-        pendingSuccess = describeDemoRosterLoaded(loaded);
+        pendingSuccess = successText(reply);
       } catch {
-        pendingSuccess =
-          'Demo people loaded, but the screen could not refresh — reload to see the roster.';
+        pendingSuccess = 'Done, but the screen could not refresh — reload to see the roster.';
       }
     } catch (err) {
-      pendingError = describeDemoRosterError(err);
+      pendingError = describeDemoDataError(err);
     }
     busy = false;
+    demoAction = null;
     render();
+  }
+
+  async function handleLoadDemo() {
+    if (busy) return;
+    if (
+      !(await confirmDialog({
+        title: 'Replace this test event with the demo?',
+        body: DEMO_WARNING,
+        confirmLabel: 'Erase and load demo',
+        isTest: true,
+      }))
+    ) {
+      return;
+    }
+    await runDemo(() => loadDemo(event.org_id, eventId, client), describeLoaded, 'load');
+  }
+
+  async function handleClearDemo() {
+    if (busy) return;
+    if (
+      !(await confirmDialog({
+        title: 'Clear the demo from this test event?',
+        body: DEMO_WARNING,
+        confirmLabel: 'Erase demo',
+        isTest: true,
+      }))
+    ) {
+      return;
+    }
+    await runDemo(
+      () => clearDemo(event.org_id, eventId, client),
+      () => DEMO_CLEARED,
+      'clear',
+    );
   }
 
   async function handleToggleWithdrawn(entry) {

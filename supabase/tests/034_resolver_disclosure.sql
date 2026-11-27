@@ -465,16 +465,16 @@ select is(
     where p.pronamespace = 'public'::regnamespace
       and 'p_org_id' = any (p.proargnames)
       and p.prosrc ~ 'app\.org_id_for_'),
-  25,
-  'twenty-five public RPCs take p_org_id and check it against a resolver (load_demo_roster, and the nineteen of T-TEN.B6, link_person_identity, T-ID.B2, stage_archive_payload, T-ARC.2, set_archive_listing, T-ARC.3, create_btc_round, Build B, and redraw_btc_round, Build B part 3)'
+  29,
+  'twenty-nine public RPCs take p_org_id and check it against a resolver (the four demo loaders and clearers, load_ct_demo, clear_ct_demo, load_td_demo and clear_td_demo, load_demo_roster, and the nineteen of T-TEN.B6, link_person_identity, T-ID.B2, stage_archive_payload, T-ARC.2, set_archive_listing, T-ARC.3, create_btc_round, Build B, and redraw_btc_round, Build B part 3)'
 );
 select is(
   (select count(*)::int from pg_proc p
     where p.pronamespace = 'public'::regnamespace
       and 'p_org_id' = any (p.proargnames)
       and p.prosrc ~ 'p_org_id is null or p_org_id is distinct from app\.org_id_for_'),
-  22,
-  'and the twenty-two of them other than link_person_identity carry the p_org_id NULL guard (link_person_identity opens with app.refuse_non_member instead, which refuses a NULL organisation as a non-member: 062 pins it)'
+  26,
+  'and the twenty-six of them other than link_person_identity carry the p_org_id NULL guard (link_person_identity opens with app.refuse_non_member instead, which refuses a NULL organisation as a non-member: 062 pins it)'
 );
 
 -- ============ the public resolvers keep their shape ============

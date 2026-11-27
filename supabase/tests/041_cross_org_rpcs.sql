@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(108);
+select plan(116);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -126,6 +126,10 @@ insert into e1.rpc (name, sql, org_only) values
   ('create_btc_bracket_match', 'select public.create_btc_bracket_match(e1.u(''@'',100), e1.u(''%'',14), array[e1.u(''%'',11)])', false),
   ('load_btc_demo', 'select public.load_btc_demo(e1.u(''@'',100), e1.u(''%'',50), true)', false),
   ('load_demo_roster', 'select public.load_demo_roster(e1.u(''@'',100), e1.u(''%'',50))', false),
+  ('load_ct_demo', 'select public.load_ct_demo(e1.u(''@'',100), e1.u(''%'',50))', false),
+  ('clear_ct_demo', 'select public.clear_ct_demo(e1.u(''@'',100), e1.u(''%'',50))', false),
+  ('load_td_demo', 'select public.load_td_demo(e1.u(''@'',100), e1.u(''%'',50))', false),
+  ('clear_td_demo', 'select public.clear_td_demo(e1.u(''@'',100), e1.u(''%'',50))', false),
   ('create_btc_round', 'select public.create_btc_round(e1.u(''@'',100), e1.u(''%'',1), 1::smallint, ''random'', ''seed'', jsonb_build_array(jsonb_build_object(''team1_id'', e1.u(''%'',9), ''team2_id'', e1.u(''%'',10), ''judge_ids'', jsonb_build_array(e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)))))', false),
   ('redraw_btc_round', 'select public.redraw_btc_round(e1.u(''@'',100), e1.u(''%'',1), 1::smallint)', false),
   ('create_btc_match', 'select public.create_btc_match(e1.u(''%'',1), ''preliminary'', e1.u(''%'',9), e1.u(''%'',10), array[e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)])', false),
@@ -171,10 +175,14 @@ update e1.rpc set own_expect = case name
   when 'td_save_score_sheet'         then 'P0001: td_save_score_sheet: this match is decided by taps, not by scoresheets'
   when 'td_confirm_scored_match'     then 'P0001: td_confirm_scored_match: this match is decided by taps, not by scoresheets'
   when 'load_demo_roster'            then 'P0001: load_demo_roster: demo roster is only available for Cup Taster and Throwdown events'
+  when 'load_ct_demo'                then 'P0001: load_ct_demo: this demo is only available for Cup Taster events'
+  when 'clear_ct_demo'               then 'P0001: clear_ct_demo: this demo is only available for Cup Taster events'
+  when 'load_td_demo'                then 'P0001: load_td_demo: this demo is only available for Throwdown events'
+  when 'clear_td_demo'               then 'P0001: clear_td_demo: this demo is only available for Throwdown events'
   when 'issue_seduh_claim_link'      then 'P0001: This person has no Seduh ID yet'
   when 'revoke_seduh_claim_link'     then 'P0001: There is no open claim link for this person'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 45, 'the matrix covers 45 RPCs');
+select is((select count(*)::int from e1.rpc), 49, 'the matrix covers 49 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),

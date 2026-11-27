@@ -7,6 +7,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Demo data for Cup Taster and Throwdown: Load and Clear, like BTC · unreleased (next minor) · 2026-11-27
+
+**Status: PR to `dev`, migration NOT pushed to the cloud.** Firdaus wanted the BTC kind of demo, not just fake people: one click loads a pre-arranged event, one click clears it. This replaces the "Add demo people" card (4.31.0) with a "Demo data" card, on test events only, with Load demo and Clear demo.
+
+- **Cup Taster.** `load_ct_demo` makes 8 demo cuppers, a completed Prelims (two confirmed heats, 4 sets, scored with counts of correct cups), the top 4 advanced to a Finals with one pending heat. `clear_ct_demo` removes the stages and entries.
+- **Throwdown.** `load_td_demo` makes 8 competitors, a random 3-judge draw, the four quarter-finals and one semi-final decided by votes, and the other semi-final open with one vote. It goes through the real `td_save_settings`, `td_start_event`, `td_cast_vote` and `td_confirm_match`. `clear_td_demo` (SECURITY DEFINER, own org and member check, honours the event window lock) removes the bracket, draw, settings and entries. The card is offered after the draw has started so it can be cleared and reloaded.
+- **Safety.** Same rails as `load_btc_demo`: refused unless the event is the caller's, the right format and `is_test` (hints `demo_event_not_found`, `demo_wrong_format`, `demo_not_test`). Loading erases the test event's data, so the screen asks first when there is any. Demo people reuse `load_demo_roster` (Ofcom drama phones, no Seduh ID). Registration cap is the normal one.
+- **Code.** `src/core/demoData.js` (generic call, wording and card) replaces `demoRoster.js`; each format's `demo.js` holds its function names and wording. Tests: pgTAP `095`, `041` (49 RPCs), `034` (29/26), vitest `demoData.test.js` and the two screens.
+- **Reviews.** `security-reviewer`: 0 blocking; nit: `clear_ct_demo` on a window-locked event deletes nothing and reports success (invoker RLS; intentional, left). `schema-guardian`: clean (rollback run, repeat load at an enforced cap of 8 verified). `code-reviewer`: failed Throwdown load still published live (fixed: errors now throw out of `act`), format logic in core (fixed: moved to per-format `demo.js`), Cup Taster stages without entries (fixed: Load always confirms, Clear always offered). `ui-accessibility-reviewer`: 0 blocking; fixed missing button-row CSS, Clear firing when empty, busy labels. Not run in the container: pgTAP (no extension); the 095 logic was run through an equivalent shim, CI runs it.
+
+---
+
 ## The left side menu (rail), app-wide · 4.31.0 · 2026-11-27
 
 **Status: released together with the demo-people entry below as one 4.31.0 (release PR, merge held until after the 27 Nov Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and a green CI run of `organiser-flow.spec.js`, whose header tests were rewritten for the rail and drawer (1023/1024px) but not run locally (they need the local database).
