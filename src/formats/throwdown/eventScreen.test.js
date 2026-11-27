@@ -564,6 +564,20 @@ describe('the Throwdown organiser screen', () => {
       expect(root.textContent).toContain('The votes are level. Take another vote');
     });
 
+    it('keeps Confirm off until every judge has voted, even with a clear leader (1 of 3 was recorded 1-0)', async () => {
+      const confirmOff = (root) =>
+        [...root.querySelectorAll('button')]
+          .filter((b) => /^Confirm/.test(b.textContent))
+          .map((b) => b.getAttribute('aria-disabled') === 'true');
+      let root = await mount(panel(3, ['s1']));
+      expect(confirmOff(root)).toEqual([true]);
+      expect(root.textContent).toContain(
+        '1 of 3 votes in. Confirm opens when every judge has voted.',
+      );
+      root = await mount(panel(3, ['s1', 's1', 's2']));
+      expect(confirmOff(root)).toEqual([false]);
+    });
+
     it('stops Vote once every judge of an odd panel has voted, and says so; Undo stays on', async () => {
       const root = await mount(panel(3, ['s1', 's1', 's2']));
       expect(voteOff(root)).toEqual([true, true]);
