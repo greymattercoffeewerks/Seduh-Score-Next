@@ -15,6 +15,9 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Rollout.** Migration pushed to the cloud by hand (merging does not do it), after the event break.
 - **Tests.** vitest: `canConfirm` cases (1 of 3, 2 of 3, 3 of 3, even panel, unknown judge count), the Confirm button on the event screen, the refusal wording. pgTAP 072: refused at 1-0 and 2-0 of three judges, accepted at 2-1, accepted at 2-0 of two judges; the one older fixture that confirmed on two of three taps now has all three.
 - **Reviews.** Pending (see PR).
+
+---
+
 ## Homepage live bar in gold · 4.30.3 · 2026-11-27
 
 - **Why.** The owner saw the "live now" bar on the homepage and found it not eye-catching enough. Option B of three mock-ups, in gold, with square corners (owner's choice).
