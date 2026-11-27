@@ -786,7 +786,8 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await toggle.click();
     const layout = await page.evaluate(async () => {
       // The drawer slides in: measure it where it comes to rest, not part-way.
-      await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {})));
+      const panelNode = document.querySelector('.app-shell-nav-panel');
+      await Promise.all(panelNode.getAnimations().map((a) => a.finished.catch(() => {})));
       const rects = [...document.querySelectorAll('.app-shell-nav a')].map((a) =>
         a.getBoundingClientRect(),
       );
