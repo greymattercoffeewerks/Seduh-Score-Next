@@ -5,8 +5,9 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 
 ## Where we are
 
-- **Demo people** (4.31.0, on `dev`, not released): test events add 8 fake-phone people. Migration `20261130100000` not in the cloud yet.
-- **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Owed: the owner's tablet and phone check (CHANGELOG 4.30.0). Its Petrol tokens (4.29.1) are in a PR to `dev`.
+- **Left side menu (rail)** (4.31.0, on `dev`): rail from 1024px, drawer below. Owed: device check (CHANGELOG 4.31.0).
+- **Demo people** (4.31.0, on `dev`): test events add 8 fake-phone people. Migration `20261130100000` not in the cloud yet. Both go to `main` as one release, held until after 27 Nov.
+- **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Its Petrol tokens (4.29.1) are in a PR to `dev`.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
