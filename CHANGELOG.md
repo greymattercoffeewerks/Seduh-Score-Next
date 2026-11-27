@@ -17,6 +17,28 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown phone: results first, readable at a glance · 4.30.5 · 2026-11-27
+
+- **Why.** During Throwdown Vol 3 the owner found the phone view hard to scan: Latest results sat under Now playing and each result printed both full names twice, then "X wins · 0 to 1". Option A of three mock-ups (`design/td-phone-results/`, project files), chosen by the owner.
+- **What.** `viewerBody.js`: Latest results now comes before Now playing. Each result is the winner's name (large, up to two lines), a score (winner first, so "2\u20131" not "1 to 2"; "Walkover" or "Bye" for those) and one muted line "beat <loser>" cut with an ellipsis. Styles in `audience.css`, tokens only, so day and night both work. The bracket round cards and Now playing are unchanged.
+- **Not changed.** The payload, the database, the projector. The winner's name is still set as text.
+- **Shipped as a hotfix.** Cut from `main` (not `dev`, which holds the unreleased side menu and demo data) for the 12 to 2 PM break; it follows the all-judges Confirm hotfix (4.30.4).
+- **Version.** Patch: polish of an existing screen.
+- **Reviews.** CSS and one render function: `vitest` for `src/formats/throwdown` passes with a new test for the order, the winner-first badge and the walkover; checked by eye at 360px, day and night.
+
+---
+
+## Throwdown: Confirm needs every judge · 4.30.4 · 2026-11-27
+
+- **Why.** At the first live Throwdown (BSRC Latte Art Throwdown Vol 3, three judges) a match was confirmed on a single tap and recorded 1-0. Confirm only asked for a strict leader, not for all the judges' votes.
+- **What.** Confirm stays off until at least `judge_count` votes are in (an even panel that was level has one more, the tie-break), in the screen (`votes.js` `canConfirm(tallies, judgeCount)`; the card says "1 of 3 votes in. Confirm opens when every judge has voted.") and in the database (`td_confirm_match`, new hint `td_votes_incomplete`, migration `20261201100000_td_confirm_needs_all_judges.sql` with a rollback block). Level votes are still refused first (`td_votes_level`). Scored matches already needed every sheet; walkovers are unchanged.
+- **Not changed.** Results already confirmed stay as they are; correcting them is a separate, manual step.
+- **Rollout.** Migration pushed to the cloud by hand (merging does not do it), after the event break.
+- **Tests.** vitest: `canConfirm` cases (1 of 3, 2 of 3, 3 of 3, even panel, unknown judge count), the Confirm button on the event screen, the refusal wording. pgTAP 072: refused at 1-0 and 2-0 of three judges, accepted at 2-1, accepted at 2-0 of two judges; the one older fixture that confirmed on two of three taps now has all three.
+- **Reviews.** Pending (see PR).
+
+---
+
 ## Homepage live bar in gold · 4.30.3 · 2026-11-27
 
 - **Why.** The owner saw the "live now" bar on the homepage and found it not eye-catching enough. Option B of three mock-ups, in gold, with square corners (owner's choice).
