@@ -42,6 +42,56 @@
   font-weight: var(--font-weight-bold);
 }
 
+.td-phone-result {
+  padding: var(--space-3) 0;
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.td-phone-result:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.td-phone-result-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.td-phone-result-winner {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-lg);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.td-phone-score {
+  flex: none;
+  padding: 2px var(--space-2);
+  border: var(--border-hairline) solid var(--color-accent);
+  border-radius: var(--radius-field);
+  background: var(--color-accent-tint);
+  color: var(--color-accent-tint-text);
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.td-phone-result-loser {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
 .td-phone-champion {
   border: var(--border-strong) solid var(--color-accent);
   text-align: center;
