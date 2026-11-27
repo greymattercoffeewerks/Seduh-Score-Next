@@ -1,4 +1,4 @@
--- Throwdown TD.3: the redemption module (migration 20261201100000; owner decisions 2026-11-03 and 2026-11-27).
+-- Throwdown TD.3: the redemption module (migration 20261201110000; owner decisions 2026-11-03 and 2026-11-27).
 -- Proves, as the REAL roles through RLS and the SECURITY DEFINER functions:
 --   * setup: the module is stored as exactly { group_size, cap, feed }; bad values are refused with td_redemption_invalid;
 --     a module that is off leaves no trace; the registry holds two modules;

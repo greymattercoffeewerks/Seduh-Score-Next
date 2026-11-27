@@ -1286,7 +1286,7 @@ export async function mountThrowdownEventScreen(
               : cap.tieBreakUsed
                 ? `${judges} of ${judges} votes in, plus the tie-break vote. Every judge has voted.`
                 : cap.open
-                  ? `${cap.total} of ${judges} votes in.`
+                  ? `${cap.total} of ${judges} votes in. Confirm opens when every judge has voted.`
                   : `${cap.total} of ${judges} votes in. Every judge has voted.`;
     const winnerName = lead.leaderSlotId
       ? match.sides.find((s) => s.slotId === lead.leaderSlotId)?.name
@@ -1320,7 +1320,7 @@ export async function mountThrowdownEventScreen(
           {
             className: 'btn btn-primary tap-target',
             key: `td-confirm-${match.id}`,
-            disabled: decisionQueued || !canConfirm(tallies),
+            disabled: decisionQueued || !canConfirm(tallies, judges),
           },
         ),
         walkoverRow(match, decisionQueued),

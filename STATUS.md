@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-26, app version 4.30.2, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-26, app version 4.30.6, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -26,7 +26,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
 - **Throwdown vote cap** (4.25.1): a match takes no more taps than judges, plus one tie-break vote when level. In the cloud.
 - **Throwdown competitor Edit** (4.25.0), **projector on the shared kit** (4.26.0), **dashboard B and C** (4.28.0): tablet and TV checks owed.
-- **Throwdown redemption (TD.3, 4.32.0):** on `claude/td3-redemption`, not merged, migration `20261201100000` unpushed (CHANGELOG 4.32.0).
+- **Throwdown redemption (TD.3, 4.33.0):** on `claude/td3-redemption`, not merged, migration `20261201110000` unpushed (CHANGELOG 4.33.0).
 - **Throwdown undo and offline vote screen** (4.27.0): undo a confirmed match; the event screen survives a dropped connection. Migration in the cloud. Owed: the owner's tablet check before 27 Nov.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started. Organiser branding
   BR-E1 merged in #297 (2026-10-22) and is on `main`, but the database door (BR-B1) is KIV, so no brand shows.

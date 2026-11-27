@@ -1,5 +1,5 @@
 // The redemption module (TD.3), pure: its setup, the group arithmetic and the page model. Nothing here decides a winner or
-// draws a group: the database does both (migration 20261201100000), and `deriveBracket` turns its rows into rounds,
+// draws a group: the database does both (migration 20261201110000), and `deriveBracket` turns its rows into rounds,
 // groups (pool matches) and winners. This file only names things and does the sums a screen needs.
 //
 // The module in one paragraph (owner decisions 2026-11-03 and 2026-11-27): after a main round the organiser chose as a

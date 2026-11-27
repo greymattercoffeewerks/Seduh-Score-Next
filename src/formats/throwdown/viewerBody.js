@@ -1,6 +1,6 @@
 // Throwdown's phone body (the audience view): what core/viewer-shell.js mounts once a Throwdown live session has
-// content. A single column of cards, 360px first: the champion (when decided), what is being played now, the latest
-// results and the bracket by round. Reads only the live payload (liveSession.js). The TEST banner is the shell's
+// content. A single column of cards, 360px first: the champion (when decided), the latest results, what is being played now
+// and the bracket by round. Reads only the live payload (liveSession.js). The TEST banner is the shell's
 // (it is told isTest by the live row), so it is on this surface from the first publish.
 //
 // Words, never colour alone: the winner says "Wins", a walkover says "Walkover", a bye says "Bye". Names are set as
@@ -50,6 +50,47 @@ function matchItem(match) {
   ]);
 }
 
+// A decided match in "Latest results": the winner is the headline, the score is a badge, the loser is one muted line
+// ("beat ..."), so a result reads at a glance. The score is winner first (the sides are listed in bracket order, which
+// is why the old line could say "0 to 1"). Words carry it as well as weight: "beat", and the badge says what it is.
+function resultItem(match) {
+  const winner = match.sides.find((s) => s.winner);
+  const loser = match.sides.find((s) => !s.winner);
+  if (!match.decided || !winner || !loser) return matchItem(match);
+  let badge = null;
+  if (match.resultKind === 'walkover') badge = { text: 'Walkover', label: 'Walkover' };
+  else if (match.resultKind === 'bye') badge = { text: 'Bye', label: 'Bye' };
+  else if (typeof winner.votes === 'number' && typeof loser.votes === 'number') {
+    badge = {
+      text: `${winner.votes}\u2013${loser.votes}`,
+      label: `${winner.votes} to ${loser.votes}`,
+    };
+  }
+  return el('li', { className: 'td-phone-result' }, [
+    el(
+      'div',
+      { className: 'td-phone-result-top' },
+      [
+        el('p', {
+          className: 'td-phone-result-winner',
+          text: winner.name ?? 'To be decided',
+        }),
+        badge
+          ? el('span', {
+              className: 'td-phone-score',
+              text: badge.text,
+              attrs: { 'aria-label': badge.label },
+            })
+          : null,
+      ].filter(Boolean),
+    ),
+    el('p', {
+      className: 'td-phone-detail td-phone-result-loser',
+      text: `beat ${loser.name ?? 'To be decided'}`,
+    }),
+  ]);
+}
+
 function card(title, children) {
   return el('section', { className: 'card td-phone-card' }, [
     el('h2', { text: title }),
@@ -87,17 +128,17 @@ export function createThrowdownViewerBody() {
         ]),
       );
     }
+    if (payload.recent?.length) {
+      cards.push(
+        card('Latest results', [
+          el('ul', { className: 'td-phone-list' }, payload.recent.map(resultItem)),
+        ]),
+      );
+    }
     if (payload.nowPlaying?.length) {
       cards.push(
         card('Now playing', [
           el('ul', { className: 'td-phone-list' }, payload.nowPlaying.map(matchItem)),
-        ]),
-      );
-    }
-    if (payload.recent?.length) {
-      cards.push(
-        card('Latest results', [
-          el('ul', { className: 'td-phone-list' }, payload.recent.map(matchItem)),
         ]),
       );
     }

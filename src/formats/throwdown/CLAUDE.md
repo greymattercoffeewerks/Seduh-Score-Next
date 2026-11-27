@@ -19,8 +19,8 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
   `bracket.js`, and in SQL `td_match_results`); the only stored result facts are
   `td_matches.result_kind` (`votes | walkover | bye | scores`), `confirmed_at` and, for a walkover, the
   explicit winner's slot position. A walkover is never a tally.
-- **Confirm is disabled while votes are level**, in the UI (`canConfirm`) and in the database
-  (`td_votes_level`). `td_confirm_match` also takes the slot the organiser saw leading
+- **Confirm is disabled while votes are level, and until every judge has voted** (4.30.4), in the UI
+  (`canConfirm(tallies, judgeCount)`) and in the database (`td_votes_level`, `td_votes_incomplete`). `td_confirm_match` also takes the slot the organiser saw leading
   (`td_leader_changed` if the votes moved since).
 - **Nothing is projected.** A round exists only once the previous main round is fully decided
   (`app.td_advance`, in the same transaction as the result; idempotent, so a second Continue
@@ -75,7 +75,7 @@ archive write, any lift of the Random Selector engine.
 
 ## Redemption (TD.3, 2026-11-27)
 
-Spec (local only): `Handoffs and Specs/THROWDOWN-SPEC-DRAFT.md` sections 8.1 and 14. Migration `20261201100000`, pgTAP `095`.
+Spec (local only): `Handoffs and Specs/THROWDOWN-SPEC-DRAFT.md` sections 8.1 and 14. Migration `20261201110000`, pgTAP `095`.
 
 - **1 v 1 first (owner, 27 Nov):** the setup offers pairs only; sizes 2 to 4 still exist in the database and `redemption.js`.
 - **Setup**: module `redemption` (key `throwdown_redemption`), stored exactly `{ group_size 2..4, cap, feed }` (`redemption.js` form helpers; `td_save_settings` rebuilds it). Off stores nothing.

@@ -7,9 +7,9 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
-## Throwdown redemption round (TD.3) · 4.32.0 · 2026-11-27
+## Throwdown redemption round (TD.3) · 4.33.0 · 2026-11-27
 
-**Status: built on `claude/td3-redemption`, NOT merged and NOT in the cloud (a live Throwdown ran on 27 Nov: no deploy, no cloud database change).** Migration `20261201100000_td_redemption.sql` is new and unpushed. Owner decisions of 27 Nov are spec section 14 (local): groups drawn randomly, several redemption rounds, a brewer can come back more than once, a new page shows the redemption competitors.
+**Status: built on `claude/td3-redemption`, NOT merged and NOT in the cloud (a live Throwdown ran on 27 Nov: no deploy, no cloud database change).** Migration `20261201110000_td_redemption.sql` is new and unpushed. Owner decisions of 27 Nov are spec section 14 (local): groups drawn randomly, several redemption rounds, a brewer can come back more than once, a new page shows the redemption competitors.
 
 - **The module** (`redemption`, key `throwdown_redemption`, Per-event and up, in the registry on both sides): setup is exactly `{ group_size 2..4 (3), cap (0 = none), feed [main round numbers 1..4] }`, stored by `td_save_settings`; off stores nothing. After a main round the organiser ticked, the losers (active only; a bye has no loser) are drawn at random in the database into groups (`app.td_group_sizes`: ceil(pool / size) groups, as even as possible, never one brewer alone, so with groups of 2 and an odd pool one group is a three). Each group is a pool match (the 2..4 slots TD.1 reserved); nothing in the match, slot or vote tables changed shape. A round only follows a main round that leaves MORE THAN FOUR winners, and only with two brewers to draw; otherwise the bracket goes straight on (no trace).
 - **Voting.** A group is the same table, view and functions as a pair: strictly the most votes wins. When every judge is in and the top is shared (a three-way 1-1-1 included), ONE tie-break vote opens and `td_cast_vote` refuses it for a brewer who is not in the tie (`td_tiebreak_slot`; a pair is unchanged). The console disables Vote for the others.
@@ -45,6 +45,47 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Client:** `src/core/demoRoster.js` (call, wording, the shared card), used by `rosterScreen.js` and Throwdown's `eventScreen.js`.
 - **Not done:** scored Cup Taster or Throwdown demo data (stages, heats, matches); only the roster. The demo people stay in the organisation's People list after the event (named Demo); there is no bulk delete.
 - **Reviews:** see the PR (security-reviewer on the migration). Tests: `demoRoster.test.js`, the Throwdown screen test, pgTAP `094` and `041` (not run in the cloud container: no local Supabase stack there; CI runs them).
+
+## Homepage live bar aligned with the header · 4.30.6 · 2026-11-27
+
+- **Why.** On desktop the gold bar's Watch button sat well right of the nav's Start free button, and its left edge did not meet the logo (owner screenshot, 4.30.3).
+- **Cause.** The bar put its side padding on the full-width band and capped the inner box at 1360px of content, while `.petrol-nav-bar` caps at 1360px INCLUDING its padding. Inside the band the bar was 80px wider at 1440 and above.
+- **Fix.** `landing.css`: the padding moves to `.petrol-live-bar-main` (and the "+N more" list), the same box as the nav bar. Measured in a harness: at 1440, 1920 and 1100 the Watch button's right edge equals Start free's, and the dot's left edge equals the logo's, to the pixel.
+- **Version.** 4.30.6, after 4.30.4 (#571) and 4.30.5 (#572) on separate hotfix PRs; rebase `package.json`, the lock, CHANGELOG and STATUS on whichever lands first.
+- **Reviews.** No reviewer run: one CSS box change. `vitest` for `src/marketing` and `src/ui/tokens` (809) pass.
+
+---
+
+## Throwdown phone: results first, readable at a glance · 4.30.5 · 2026-11-27
+
+- **Why.** During Throwdown Vol 3 the owner found the phone view hard to scan: Latest results sat under Now playing and each result printed both full names twice, then "X wins · 0 to 1". Option A of three mock-ups (`design/td-phone-results/`, project files), chosen by the owner.
+- **What.** `viewerBody.js`: Latest results now comes before Now playing. Each result is the winner's name (large, up to two lines), a score (winner first, so "2\u20131" not "1 to 2"; "Walkover" or "Bye" for those) and one muted line "beat <loser>" cut with an ellipsis. Styles in `audience.css`, tokens only, so day and night both work. The bracket round cards and Now playing are unchanged.
+- **Not changed.** The payload, the database, the projector. The winner's name is still set as text.
+- **Shipped as a hotfix.** Cut from `main` (not `dev`, which holds the unreleased side menu and demo data) for the 12 to 2 PM break; it follows the all-judges Confirm hotfix (4.30.4).
+- **Version.** Patch: polish of an existing screen.
+- **Reviews.** CSS and one render function: `vitest` for `src/formats/throwdown` passes with a new test for the order, the winner-first badge and the walkover; checked by eye at 360px, day and night.
+
+---
+
+## Throwdown: Confirm needs every judge · 4.30.4 · 2026-11-27
+
+- **Why.** At the first live Throwdown (BSRC Latte Art Throwdown Vol 3, three judges) a match was confirmed on a single tap and recorded 1-0. Confirm only asked for a strict leader, not for all the judges' votes.
+- **What.** Confirm stays off until at least `judge_count` votes are in (an even panel that was level has one more, the tie-break), in the screen (`votes.js` `canConfirm(tallies, judgeCount)`; the card says "1 of 3 votes in. Confirm opens when every judge has voted.") and in the database (`td_confirm_match`, new hint `td_votes_incomplete`, migration `20261201100000_td_confirm_needs_all_judges.sql` with a rollback block). Level votes are still refused first (`td_votes_level`). Scored matches already needed every sheet; walkovers are unchanged.
+- **Not changed.** Results already confirmed stay as they are; correcting them is a separate, manual step.
+- **Rollout.** Migration pushed to the cloud by hand (merging does not do it), after the event break.
+- **Tests.** vitest: `canConfirm` cases (1 of 3, 2 of 3, 3 of 3, even panel, unknown judge count), the Confirm button on the event screen, the refusal wording. pgTAP 072: refused at 1-0 and 2-0 of three judges, accepted at 2-1, accepted at 2-0 of two judges; the one older fixture that confirmed on two of three taps now has all three.
+- **Reviews.** Pending (see PR).
+
+---
+
+## Homepage live bar in gold · 4.30.3 · 2026-11-27
+
+- **Why.** The owner saw the "live now" bar on the homepage and found it not eye-catching enough. Option B of three mock-ups, in gold, with square corners (owner's choice).
+- **What.** `.petrol-live-bar` in `landing.css`: gold-tint band with a gold edge and soft glow, a gold "Live now:" stamp, a larger event name and a gold Watch button (full width at 360px); the shared live dot takes the bar's gold through a local `--color-accent`. DESIGN.md has a "Gold on the live bar" note: gold's one new role, owner-approved.
+- **Not changed.** Markup, the database door and every test. The "Updated N min ago" and format tags in the mock-up are not built (they need `last_activity_at` passed through).
+- **Shipped as a hotfix.** Cut from `main` so it does not carry the held 4.31.0 work (side menu, demo roster) while a Throwdown is running; `dev` takes it back through a merge of `main`.
+- **Version.** Patch: a visual polish of an existing element.
+- **Reviews.** No reviewer run: CSS and a design note only. `vitest` for `src/marketing` and `src/ui/tokens` (809) pass, including the token-drift guard; checked by eye at 1440 and 360.
 
 ---
 

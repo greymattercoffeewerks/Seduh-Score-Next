@@ -16,7 +16,7 @@
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(156);
+select plan(161);
 
 create schema t072;
 grant usage on schema t072 to anon, authenticated;
@@ -89,11 +89,12 @@ insert into events (id, org_id, format, name) values
   (t072.u(204), t072.u(100), 'throwdown', 'Throwdown two walkovers'),
   (t072.u(206), t072.u(100), 'throwdown', 'Throwdown even panel'),
   (t072.u(207), t072.u(100), 'throwdown', 'Throwdown even panel not level'),
-  (t072.u(208), t072.u(100), 'throwdown', 'Throwdown over the cap');
+  (t072.u(208), t072.u(100), 'throwdown', 'Throwdown over the cap'),
+  (t072.u(209), t072.u(100), 'throwdown', 'Throwdown confirm needs every judge');
 -- competitors: event 110 -> entries 1..8 (ids 1101..1108), 120 -> 5, 130 -> 6, 140 -> 4, 210 -> 2
 insert into event_entries (id, event_id, display_name)
 select t072.u(e.ev * 10 + n), t072.u(e.ev), 'P' || n
-  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (202, 4), (203, 4), (204, 4), (206, 2), (207, 2), (208, 2), (210, 2)) e(ev, cnt), generate_series(1, 8) n
+  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (202, 4), (203, 4), (204, 4), (206, 2), (207, 2), (208, 2), (209, 2), (210, 2)) e(ev, cnt), generate_series(1, 8) n
  where n <= e.cnt;
 
 -- reads the winner's display name of a match by position (null while undecided)
@@ -395,6 +396,7 @@ select is(t072.as_user(t072.u(1), format('select public.td_undo_vote(%L, %L, %L,
   'the same undo operation replayed...');
 select is((select count(*)::int from td_votes where slot_id = t072.s(180, 1, 1, 1)), 1, '...takes back one vote, not two');
 select t072.tap(180, 1, 1, 1, 1);
+select t072.tap(180, 1, 1, 1, 1);
 select t072.contains(t072.as_user(t072.u(1), format('select public.td_confirm_match(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(180, 1, 1), t072.s(180, 1, 1, 2))),
   '%td_leader_changed%', 'a confirm that expected the other competitor to lead is refused');
 select is(t072.as_user(t072.u(1), format('select public.td_confirm_match(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(180, 1, 1), t072.s(180, 1, 1, 1))), 'ok',
@@ -457,6 +459,18 @@ select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(
 select is(t072.as_user(t072.u(1), format('select public.td_save_settings(%L, %L, 2, true, ''random'', ''{}'')', t072.u(100), t072.u(208))), 'ok',
   'a third two-judge panel');
 select is(t072.start(208, 'random', 'seed-208', array[1,2]), 'ok', 'and its event starts');
+-- two judges in at 2-0 is every judge, so that confirm is allowed
+select is(t072.confirm(207, 1, 1), 'ok', 'a two-judge match with both judges in (2-0) can be confirmed');
+
+-- ============ Confirm needs every judge (a match was confirmed 1-0 on one tap of three, 2026-11-27) ============
+select is(t072.start(209, 'random', 'seed-209', array[1,2]), 'ok', 'a three-judge event starts');
+select t072.tap(209, 1, 1, 1, 1);
+select t072.contains(t072.confirm(209, 1, 1), '%td_votes_incomplete%', 'one tap of three judges is not enough to confirm (1-0)');
+select t072.tap(209, 1, 1, 1, 1);
+select t072.contains(t072.confirm(209, 1, 1), '%td_votes_incomplete%', 'two taps of three judges is still not enough (2-0)');
+select t072.tap(209, 1, 1, 2, 1);
+select is(t072.confirm(209, 1, 1), 'ok', 'with all three judges in (2-1) the match confirms');
+
 -- four votes written past every check, as rows from before the cap would be (2-2 on a two-judge panel)
 set local session_replication_role = replica;
 insert into td_votes (event_id, match_id, slot_id)

@@ -4,6 +4,7 @@ import { describeError } from '../../core/errors.js';
 
 const REFUSALS = {
   td_votes_level: 'The votes are level. Take another vote before confirming.',
+  td_votes_incomplete: 'Not every judge has voted yet. Confirm once all the judges are in.',
   td_match_decided: 'That match has already been decided.',
   td_match_bye: 'A bye has no result to undo.',
   td_next_round_started:

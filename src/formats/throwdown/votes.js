@@ -29,14 +29,17 @@ export function leadOf(tallies) {
   };
 }
 
-// The brewers sharing the top count (the ones the tie-break vote may go to). Empty before the first vote.
-export function tiedSlotIds(tallies) {
-  const top = tallies.reduce((max, t) => Math.max(max, t.votes), 0);
-  return top === 0 ? [] : tallies.filter((t) => t.votes === top).map((t) => t.slotId);
-}
-
-export function canConfirm(tallies) {
-  return tallies.length >= 2 && leadOf(tallies).leaderSlotId !== null;
+// Confirm needs two things: a strict leader, and every judge's vote in (at least `judgeCount` taps; an even panel that
+// was level has one more, the tie-break). A match confirmed on one tap of three used to show 1-0. The database holds
+// the same rule (td_confirm_match, hint td_votes_incomplete). `judgeCount` is required: without it nothing confirms.
+export function canConfirm(tallies, judgeCount) {
+  const lead = leadOf(tallies);
+  return (
+    tallies.length >= 2 &&
+    lead.leaderSlotId !== null &&
+    Number.isInteger(judgeCount) &&
+    lead.total >= judgeCount
+  );
 }
 
 // Whether a match can take another tap. One tap is one judge's vote, so a match takes taps while fewer than `judgeCount`
