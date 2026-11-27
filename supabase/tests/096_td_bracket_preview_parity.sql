@@ -13,7 +13,7 @@ create schema t096;
 grant usage on schema t096 to anon, authenticated;
 
 create function t096.u(n int) returns uuid language sql immutable as $$
-  select ('00000000-0000-0000-0000-00009600' || lpad(n::text, 4, '0'))::uuid
+  select ('00000000-0000-0000-0000-00096' || lpad(n::text, 7, '0'))::uuid
 $$;
 
 insert into auth.users (id, email) values (t096.u(1), 't096@test.seduh-next');
@@ -1550,12 +1550,12 @@ begin
             from public.td_rounds rd where rd.event_id = ev and rd.phase = 'main') r;
   select exists (select 1 from public.td_rounds rd where rd.event_id = ev and rd.phase = 'third_place') into has3;
   select count(*) into total from public.td_matches mm where mm.event_id = ev and mm.result_kind is distinct from 'bye';
-  return format('[%s] third=%s matches=%s', rounds, has3, total);
+  return format('[%s] third=%s matches=%s', rounds, has3::text, total);
 end $$;
 
 create function t096.expected(i int) returns text language sql stable as $$
   select format('[%s] third=%s matches=%s',
-           (select string_agg(r::text, ',' order by o) from jsonb_array_elements(c -> 'rounds') with ordinality as t(r, o)),
+           (select string_agg(replace(r::text, ' ', ''), ',' order by o) from jsonb_array_elements(c -> 'rounds') with ordinality as t(r, o)),
            c ->> 'thirdPlayed', c ->> 'matches')
     from (select j -> 'cases' -> i as c from t096.fx) q
 $$;
