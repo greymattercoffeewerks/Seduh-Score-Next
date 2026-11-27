@@ -73,6 +73,22 @@ TD.1 (2026-11-03): schema `20261103111000`, functions `20261103120000`, keys and
 Out of TD.1 by design: redemption, lucky loser, revival draw, latte art, formatted PDF report,
 archive write, any lift of the Random Selector engine.
 
+## Bracket preview ("What will happen", 2026-11-27)
+
+A plan card on the setup screen before the draw: from the brewer count and the 3rd place choice it shows the rounds, matches, byes,
+whether a 3rd place match is played, and any repeat bye (a bye straight after a bye is certain, because the bye winner is always the last
+brewer in order). Read-only, nothing saved or sent.
+
+- **Pure**: `bracketPreview.js` (`previewShape`, `comparePreviews`) mirrors `app.td_advance`'s shape rule; it already models redemption
+  (feed rounds, group size, cap) for when that module lands. It is held to the engine twice: `bracketPreview.test.js` plays a real bracket out
+  for 2 to 64 brewers and every setup, and pgTAP `096` plays the real engine against
+  `supabase/tests/fixtures/td-bracket-preview-parity.json` (embedded in the SQL; a unit test holds the copies equal). Change `td_advance`'s
+  shape and one of them fails.
+- **Card**: `bracketPreviewCard.js` (words and DOM), used by `eventScreen.js`; its what-if (`state.plan`) is never saved. "Plan the event" opens
+  a panel with a what-if brewer count (2 to 64) and 3rd place, the flags, the rounds, and what flipping 3rd place would change.
+- **Not built yet**: the redemption compare (the card passes no redemption setup until that module's setup is on this branch), lock rules,
+  bye style, a 3-way final.
+
 ## Scoresheet module (stage 1, 2026-11-19)
 
 Rounds decided by judges' paper scoresheets that a scorekeeper types in (spec, local only:

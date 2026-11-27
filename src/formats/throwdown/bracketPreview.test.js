@@ -136,6 +136,24 @@ describe('the Vol 3 and example scenarios (hand-checked against the engine rules
   });
 });
 
+describe('round names', () => {
+  it('follow the console: a match plus a bye is a semi-final round', () => {
+    expect(previewShape({ entrants: 21 }).rounds.map((r) => r.label)).toEqual([
+      'Round 1',
+      'Round 2',
+      'Round 3',
+      'Semi-finals',
+      'Final',
+    ]);
+    expect(previewShape({ entrants: 16 }).rounds.map((r) => r.label)).toEqual([
+      'Round 1',
+      'Quarter-finals',
+      'Semi-finals',
+      'Final',
+    ]);
+  });
+});
+
 describe('edges', () => {
   it('refuses fewer than two brewers', () => {
     expect(previewShape({ entrants: 1 })).toEqual({ problem: 'too_few' });

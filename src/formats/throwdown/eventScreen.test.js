@@ -528,9 +528,33 @@ describe('the Throwdown organiser screen', () => {
   it('before the draw offers competitors, setup and the draw, and no module controls', async () => {
     const root = await mount({ event_entries: entries });
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Competitors (2)', 'Setup', 'Draw']);
+    expect(headings).toEqual(['Competitors (2)', 'Setup', 'What will happen', 'Draw']);
     expect(root.textContent).toContain('Setup is locked as soon as Round 1 starts.');
     expect(root.textContent).not.toMatch(/module/i);
+  });
+
+  it('shows how the bracket will play out before the draw, and nothing once it has started', async () => {
+    const before = await mount({ event_entries: entries });
+    expect(before.querySelector('#td-preview-h')).not.toBeNull();
+    expect(before.textContent).toContain('With 2 brewers: 1 round, 1 match, no byes.');
+    const after = await mount(started);
+    expect(after.querySelector('#td-preview-h')).toBeNull();
+  });
+
+  it('opens the plan from the card and plans for a different brewer count without saving it', async () => {
+    const root = await mount({ event_entries: entries });
+    const open = root.querySelector('[data-focus-key="td-plan-toggle"]');
+    expect(open.getAttribute('aria-expanded')).toBe('false');
+    open.click();
+    const count = root.querySelector('[data-focus-key="td-plan-count"]');
+    expect(count.value).toBe('2');
+    count.value = '21';
+    count.dispatchEvent(new Event('change'));
+    expect(root.textContent).toContain('With 21 brewers: 5 rounds, 20 matches, 3 byes.');
+    expect(root.textContent).toContain('No 3rd place match');
+    // the roster and the setup are untouched
+    expect(root.textContent).toContain('Competitors (2)');
+    expect(root.querySelector('[data-focus-key="td-judges"]').value).toBe('3');
   });
 
   it('after the draw shows the match with Confirm disabled while the votes are level, and no setup', async () => {

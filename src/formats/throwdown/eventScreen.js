@@ -56,6 +56,7 @@ import { ROUND_ROLES } from './roundRole.js';
 import { scoringContext, scoredView, cupsForMatch, auditRule } from './scoredMatch.js';
 import { buildAudit } from './scoreAudit.js';
 import { createScoreEntry } from './scoreEntry.js';
+import { createBracketPreviewCard } from './bracketPreviewCard.js';
 import {
   blankCompetitorDraft,
   validateCompetitorDraft,
@@ -94,6 +95,7 @@ export async function mountThrowdownEventScreen(
     busy: false,
     addDraft: blankCompetitorDraft(), // the Add a competitor form's typed values
     addError: null, // { field, message } from validating that form
+    plan: { open: false, entrants: null, thirdPlace: null }, // the What will happen card's what-if (never saved)
     edit: null, // the one open competitor edit: { entryId, linked, storedPhone, inPublishedResults, draft, error }
   };
 
@@ -1440,7 +1442,20 @@ export async function mountThrowdownEventScreen(
       const banner = championBanner();
       if (banner) container.appendChild(banner);
       if (!state.data.bracket.started) {
-        container.append(competitorsCard(), setupCard(), drawCard());
+        container.append(
+          competitorsCard(),
+          setupCard(),
+          createBracketPreviewCard({
+            rosterCount: activeEntries().length,
+            thirdPlace: state.form.thirdPlace,
+            plan: state.plan,
+            onChange: (patch) => {
+              state.plan = { ...state.plan, ...patch };
+              render();
+            },
+          }),
+          drawCard(),
+        );
       } else {
         const awaitingUndo = matchesAwaitingUndo(state.data.bracket, state.pending);
         const playable = state.data.bracket.playableMatches.filter((m) => !awaitingUndo.has(m.id));

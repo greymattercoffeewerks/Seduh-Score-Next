@@ -55,7 +55,7 @@ export function previewShape({ entrants, thirdPlace = true, redemption = null } 
     const matches = Math.floor(enter / 2);
     const byes = enter % 2;
     const through = matches + byes;
-    const row = { number, label: roundName(number, matches), enter, matches, byes, through };
+    const row = { number, label: roundName(number, matches + byes), enter, matches, byes, through };
 
     // repeat byes: the bye winner is last in the next round, so a bye straight after a bye is certain; after a gap the
     // same seat only gets it back if it won the last match of each round in between (one in two per round).
