@@ -19,8 +19,8 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
   `bracket.js`, and in SQL `td_match_results`); the only stored result facts are
   `td_matches.result_kind` (`votes | walkover | bye | scores`), `confirmed_at` and, for a walkover, the
   explicit winner's slot position. A walkover is never a tally.
-- **Confirm is disabled while votes are level**, in the UI (`canConfirm`) and in the database
-  (`td_votes_level`). `td_confirm_match` also takes the slot the organiser saw leading
+- **Confirm is disabled while votes are level, and until every judge has voted** (4.30.4), in the UI
+  (`canConfirm(tallies, judgeCount)`) and in the database (`td_votes_level`, `td_votes_incomplete`). `td_confirm_match` also takes the slot the organiser saw leading
   (`td_leader_changed` if the votes moved since).
 - **Nothing is projected.** A round exists only once the previous main round is fully decided
   (`app.td_advance`, in the same transaction as the result; idempotent, so a second Continue
