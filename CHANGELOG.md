@@ -7,6 +7,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Demo people for Cup Taster and Throwdown test events · 4.31.0 · 2026-11-26
+
+**Status: on `dev`, not released** (a live Throwdown runs on production today). Since Seduh ID, every cupper and competitor needs a unique phone, so a rehearsal meant typing eight made-up numbers. A test event's Roster (Cup Taster) and Competitors (Throwdown, before the draw) now have an "Add demo people" card. BTC keeps its own demo loader (`load_btc_demo`).
+
+- **`public.load_demo_roster(org, event)`** (migration `20261130100000`, pgTAP `094`, row in matrix `041`): SECURITY INVOKER, refused unless the event is a Cup Taster or Throwdown TEST event (hints `demo_not_test`, `demo_roster_format`, `demo_event_not_found`). Adds 8 people named "Demo ...", café "Demo Cafe A..H", notes "Demo data (test events only)", phones +44 7700 900101 to 900108 (Ofcom's drama range, never a real subscriber). **Additive and repeatable: nothing is deleted**, an existing entry is left alone, a withdrawn one is reinstated. People are reused by phone, so Cup Taster and Throwdown test events in one organisation share the same 8.
+- **Seduh ID safety.** It never calls `link_person_identity`, so no demo person has a Seduh ID; a demo phone cannot be claimed (claiming sends a code to the phone); test-event results already never reach the feed, discovery, a person page or a country page. The Community cap (8) still applies through the normal entry trigger: a test event with a typed entry already on it is refused with the standard cap message once it would pass 8.
+- **Client:** `src/core/demoRoster.js` (call, wording, the shared card), used by `rosterScreen.js` and Throwdown's `eventScreen.js`.
+- **Not done:** scored Cup Taster or Throwdown demo data (stages, heats, matches); only the roster. The demo people stay in the organisation's People list after the event (named Demo); there is no bulk delete.
+- **Reviews:** see the PR (security-reviewer on the migration). Tests: `demoRoster.test.js`, the Throwdown screen test, pgTAP `094` and `041` (not run in the cloud container: no local Supabase stack there; CI runs them).
+
+---
+
 ## BTC dashboard night mode, fix against the concept · 4.30.2 · 2026-11-26
 
 **Status: NOT FINAL.** The owner opened 4.30.0 in production and found it incomplete (screenshot): only the cards went dark, text on them was unreadable, and the layout was far from the concept. This is the fix. Owed: the owner's check on the real tablet and phone, a keyboard and screen-reader pass, and a decision on the side menu (below).
