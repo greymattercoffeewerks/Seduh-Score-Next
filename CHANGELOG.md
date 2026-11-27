@@ -7,6 +7,39 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown phone: scoreboard results and collapsible rounds · 4.31.1 · 2026-11-27
+
+- **Why.** After 4.30.5 the owner found the phone view still too condensed to read. Of three roomier mock-ups (`design/td-phone-results/roomy-*.png` in the project files) they chose R3, the scoreboard rows, and asked for a header that tells the rounds apart and lets them be collapsed, and for it to be a Petrol pattern other formats can use.
+- **What.** New shared parts, `.result-row`, `.match-block` and `.round` (`vocabulary.css`, built by `buildResultRow`, `buildMatchBlock`, `buildRound` in `core/vocabulary.js`). Throwdown's phone body uses them: each decided match is a winner band (name, big number) over a loser row; Now playing is one name per line with "vs"; each round is a collapsible card headed "Round 2 · Now" / "Quarter-finals" / "1 of 2". The newest round starts open, earlier ones closed, and what the person opens or closes is kept across live updates. Latest results and Now playing stay first. The old `.td-phone-result*` and `.td-phone-score` styles are gone.
+- **Not changed.** The payload, the database, the projector. Scoresheet rounds still show no numbers (the test now checks the match blocks, since a round header's "2 of 4" counts matches). Names are set as text.
+- **Version.** Patch on 4.31.0: a layout change to an existing screen plus groundwork for the other formats. The collapsible header is the one new interaction, so a minor is arguable; if the Instagram share (4.32.0) releases first, this becomes 4.32.1.
+- **Reviews.** `code-reviewer`: one important (a default-open round was recorded as the person's own choice, because setting `open` queues a `toggle` event, so a newer round never closed the older one); fixed in `buildRound`, with two tests that fail without the fix. `ui-accessibility-reviewer`: none blocking, three nits: a bye lost its "Bye" word (real regression, fixed, tested), the round count had no noun (now "1 of 2 decided"), and keyboard focus on a round header is lost when a live update rebuilds the body (left open: the shell rebuilds the whole body, owner to decide). `module-boundary-checker`: clean. `vitest` for `src` passes (7717), including the token drift guard; checked by eye at 360px, day and night, open and collapsed.
+
+---
+
+## The left side menu (rail), app-wide · 4.31.0 · 2026-11-27
+
+**Status: released together with the demo-people entry below as one 4.31.0 (release PR, merge held until after the 27 Nov Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and a green CI run of `organiser-flow.spec.js`, whose header tests were rewritten for the rail and drawer (1023/1024px) but not run locally (they need the local database).
+
+- **What.** From 1024px the console header is a left rail (15rem): brand, organisation, event name and sync chip, the links with the current one marked by the accent edge, and the account (email, Change password, Sign out) at the foot. Below 1024px the header stays a slim top bar and the same panel opens as a drawer from the left over a dimmed page (tap the dim area, Escape or the Menu button to close).
+- **360px, no scroll bar.** The concept's phone strip scrolled sideways. Here nothing is wider than the screen: the drawer is `min(18rem, 100vw - 4.5rem)` so the Menu button stays in view as the way to close it, and the drawer scrolls only vertically inside itself (measured at 360px: page width 360, drawer width = its client width).
+- **How.** CSS in `appShell.css` plus a scrim node and the breakpoint `INLINE_NAV_QUERY` moved 1366px to 1024px in `appShell.js`. The rail is the root grid (`.app-shell-root`); the header's height variable is 0 in the rail because the header is beside the page, not above it. The notices (organisation, sync) open beside the rail.
+- **Not changed.** Routes, nav content, `main.js`, the sync/organisation/sign-out logic. Screens that carry their own inner dashboard grid (BTC) keep it.
+- **Screens.** `/mnt/project-files/design/left-rail/` (1440 and 360, day and night, drawer open).
+- **Reviews.** `ui-accessibility-reviewer`: rail link focus rings were clipped sideways (fixed with side padding); notices could open under the drawer (fixed, z-index above it); a dead selector removed; two nits left (Escape only works while focus is in the menu; sync chip below 44px, pre-existing). `code-reviewer`: same notice finding (fixed), stale 1366px comments (fixed), and the `organiser-flow.spec.js` header tests that assumed the 1366px bar (rewritten, see above).
+
+---
+
+## Demo people for Cup Taster and Throwdown test events · 4.31.0 · 2026-11-26
+
+**Status: released with the left side menu above as one 4.31.0; its migration is pushed to the cloud after the release merges.** (A live Throwdown runs on production on 27 Nov.) Since Seduh ID, every cupper and competitor needs a unique phone, so a rehearsal meant typing eight made-up numbers. A test event's Roster (Cup Taster) and Competitors (Throwdown, before the draw) now have an "Add demo people" card. BTC keeps its own demo loader (`load_btc_demo`).
+
+- **`public.load_demo_roster(org, event)`** (migration `20261130100000`, pgTAP `094`, row in matrix `041`): SECURITY INVOKER, refused unless the event is a Cup Taster or Throwdown TEST event (hints `demo_not_test`, `demo_roster_format`, `demo_event_not_found`). Adds 8 people named "Demo ...", café "Demo Cafe A..H", notes "Demo data (test events only)", phones +44 7700 900101 to 900108 (Ofcom's drama range, never a real subscriber). **Additive and repeatable: nothing is deleted**, an existing entry is left alone, a withdrawn one is reinstated. People are reused by phone, so Cup Taster and Throwdown test events in one organisation share the same 8.
+- **Seduh ID safety.** It never calls `link_person_identity`, so no demo person has a Seduh ID; a demo phone cannot be claimed (claiming sends a code to the phone); test-event results already never reach the feed, discovery, a person page or a country page. The Community cap (8) still applies through the normal entry trigger: a test event with a typed entry already on it is refused with the standard cap message once it would pass 8.
+- **Client:** `src/core/demoRoster.js` (call, wording, the shared card), used by `rosterScreen.js` and Throwdown's `eventScreen.js`.
+- **Not done:** scored Cup Taster or Throwdown demo data (stages, heats, matches); only the roster. The demo people stay in the organisation's People list after the event (named Demo); there is no bulk delete.
+- **Reviews:** see the PR (security-reviewer on the migration). Tests: `demoRoster.test.js`, the Throwdown screen test, pgTAP `094` and `041` (not run in the cloud container: no local Supabase stack there; CI runs them).
+
 ## Homepage live bar aligned with the header · 4.30.6 · 2026-11-27
 
 - **Why.** On desktop the gold bar's Watch button sat well right of the nav's Start free button, and its left edge did not meet the logo (owner screenshot, 4.30.3).
@@ -14,16 +47,6 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Fix.** `landing.css`: the padding moves to `.petrol-live-bar-main` (and the "+N more" list), the same box as the nav bar. Measured in a harness: at 1440, 1920 and 1100 the Watch button's right edge equals Start free's, and the dot's left edge equals the logo's, to the pixel.
 - **Version.** 4.30.6, after 4.30.4 (#571) and 4.30.5 (#572) on separate hotfix PRs; rebase `package.json`, the lock, CHANGELOG and STATUS on whichever lands first.
 - **Reviews.** No reviewer run: one CSS box change. `vitest` for `src/marketing` and `src/ui/tokens` (809) pass.
-
----
-
-## Throwdown phone: scoreboard results and collapsible rounds · 4.30.7 · 2026-11-27
-
-- **Why.** After 4.30.5 the owner found the phone view still too condensed to read. Of three roomier mock-ups (`design/td-phone-results/roomy-*.png` in the project files) they chose R3, the scoreboard rows, and asked for a header that tells the rounds apart and lets them be collapsed, and for it to be a Petrol pattern other formats can use.
-- **What.** New shared parts, `.result-row`, `.match-block` and `.round` (`vocabulary.css`, built by `buildResultRow`, `buildMatchBlock`, `buildRound` in `core/vocabulary.js`). Throwdown's phone body uses them: each decided match is a winner band (name, big number) over a loser row; Now playing is one name per line with "vs"; each round is a collapsible card headed "Round 2 · Now" / "Quarter-finals" / "1 of 2". The newest round starts open, earlier ones closed, and what the person opens or closes is kept across live updates. Latest results and Now playing stay first. The old `.td-phone-result*` and `.td-phone-score` styles are gone.
-- **Not changed.** The payload, the database, the projector. Scoresheet rounds still show no numbers (the test now checks the match blocks, since a round header's "2 of 4" counts matches). Names are set as text.
-- **Version.** Patch: a layout change to an existing screen and groundwork for the other formats; the collapsible header is the only new interaction. Raise to a minor if the owner prefers (the held 4.31.0 on `dev` is the next minor).
-- **Reviews.** `code-reviewer`: one important (a default-open round was recorded as the person's own choice, because setting `open` queues a `toggle` event, so a newer round never closed the older one); fixed in `buildRound`, with two tests that fail without the fix. `ui-accessibility-reviewer`: none blocking, three nits: a bye lost its "Bye" word (real regression, fixed, tested), the round count had no noun (now "1 of 2 decided"), and keyboard focus on a round header is lost when a live update rebuilds the body (left open: the shell rebuilds the whole body, owner to decide). `module-boundary-checker`: clean. `vitest` for `src` passes (7717), including the token drift guard; checked by eye at 360px, day and night, open and collapsed.
 
 ---
 

@@ -90,7 +90,7 @@
    picker, and a long name must not make the sticky header taller. */
 .app-shell-org {
   /* Twice the share of the event name beside it (flex-grow 2 against its 1): the name of the organisation is
-     who you are acting as, while the event name is repeated by the page's own heading. Measured at 1366px,
+     who you are acting as, while the event name is repeated by the page's own heading. Measured at 1024px,
      with the inline nav and a real event, an equal share left the slot 83px wide. */
   flex: 2 1 0;
   min-width: 0;
@@ -98,7 +98,7 @@
 }
 
 /* The full active organisation name, at the top of the menu, for where the slot truncates it (below
-   1366px; from there the slot has the room and the menu is not collapsed). Wraps instead of truncating. */
+   1024px; from there the slot has the room and the menu is not collapsed). Wraps instead of truncating. */
 .app-shell-org-full {
   flex: 1 1 100%;
   color: var(--color-text-muted);
@@ -191,18 +191,18 @@
 }
 
 /* Hamburger toggle — mobile-first: visible by default, hidden once the nav
-   fits inline (see the min-width:1366px block below). Found in production UI/UX
+   fits inline (see the min-width:1024px (rail) block below). Found in production UI/UX
    feedback: several nav links plus the auth control used to force the header
    onto 2-3 wrapped rows on a phone viewport before any real screen content
    appeared, and the last link ("Phone view") got clipped by the viewport edge
    rather than wrapping.
-   The cut-over is 1366px, not the 640px the roster/setup screens use for
+   The cut-over is 1024px, not the 640px the roster/setup screens use for
    their own layout: signed in, the brand + four links + email + Sign out are
    ~930px wide before an event-name breadcrumb adds another ~150-220px, so at
    640-1100px they wrapped into three left-aligned rows (2026-09-29, user-
    reported in the 731px browser pane). Measured with a 32-character event
-   name and a 54-character email: still one row at 1366px, but wrapped to a
-   second row at 1280px. Tablets and small laptops get the hamburger; 1366px
+   name and a 54-character email: still one row at 1024px, but wrapped to a
+   second row at 1280px. Tablets and small laptops get the hamburger; 1024px
    and up (the common laptop width) gets the inline row. */
 .app-shell-nav-toggle {
   /* A button's UA default text colour and font aren't the tokens', so set them
@@ -344,7 +344,7 @@
    when non-empty (renderAuth() below leaves this node childless while
    signed out), so no floating gap shows with nothing to its right/below.
    Top margin at rest (the mobile stack — this sits BELOW the nav links in
-   that layout); the min-width:640px and min-width:1366px blocks below
+   that layout); the min-width:640px and min-width:1024px (rail) blocks below
    override it (and must stay AFTER this rule: same specificity, so source
    order decides) once auth sits in a row instead. */
 .app-shell-auth:not(:empty) {
@@ -392,53 +392,13 @@
 
 /* From 640px up to 1439px the account cluster is two lines, the email above Change password and Sign out, instead of
    one line of three. One line is 373px wide, which no longer fits: at 900px it dropped below the five links and the
-   open hamburger panel grew past its compact layout, and at 1366px (inline nav) it squeezed the organisation name to
+   open hamburger panel grew past its compact layout, and at 1024px (inline nav) it squeezed the organisation name to
    17px (organiser-flow.spec.js, both tests). Two lines are about as wide as the old email + Sign out pair. From
    1440px (the width the header-height test runs at) there is room for the one-line cluster. */
 @media (min-width: 640px) and (max-width: 1439px) {
   .app-shell-auth {
     max-width: 15rem;
     justify-content: flex-end;
-  }
-}
-
-/* 1366px: keep in sync with INLINE_NAV_QUERY in appShell.js (media queries can't
-   read a variable, so the value is written in both places). */
-@media (min-width: 1366px) {
-  .app-shell-nav-toggle {
-    display: none;
-  }
-
-  /* The slot has the room here (and the panel is not collapsed): no second copy of the name. */
-  .app-shell-org-full {
-    display: none;
-  }
-
-  /* Always visible at this width — the open/closed class becomes moot once
-     the toggle itself is hidden above. Lays the nav links and the auth
-     control out as one inline row instead of the mobile stack. */
-  .app-shell-nav-panel {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-3);
-    order: 0;
-    width: auto;
-    padding-top: 0;
-    border-top: none;
-    margin-left: auto;
-  }
-
-  .app-shell-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-  }
-
-  .app-shell-auth:not(:empty) {
-    margin-top: 0;
-    margin-left: var(--space-3);
   }
 }
 
@@ -794,4 +754,233 @@
 .event-bar-section[aria-current='page'] {
   background: var(--color-surface-sunken);
   font-weight: var(--font-weight-bold);
+}
+
+/* ---- The side menu (rail), 2026-11-27 ----
+   From 1024px the header is a left rail (brand, organisation, event name and sync chip, links, then the account
+   at the foot); below it the header stays a slim top bar and the same panel opens as a drawer from the left.
+   Keep 1024px in sync with INLINE_NAV_QUERY in appShell.js. The rules sit at the end so they win over the
+   top-bar rules above at equal specificity. The panel scrolls inside itself, never the header, so the notice
+   overlays (absolutely positioned from the header) are not clipped. */
+.app-shell-scrim {
+  display: none;
+}
+
+/* Drawer, below 1024px. Narrower than the screen by 4.5rem so the Menu button (above the scrim) stays in
+   view as the way to close it; the panel scrolls on its own, vertically only, so nothing scrolls sideways at
+   360px. */
+@media (max-width: 1023.98px) {
+  .app-shell-nav-toggle {
+    position: relative;
+    z-index: 3;
+  }
+
+  .app-shell-nav-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    width: min(18rem, calc(100vw - 4.5rem));
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-3) var(--space-4);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--color-chrome);
+    border-top: 0;
+    border-right: var(--border-hairline) solid var(--color-border);
+  }
+
+  .app-shell-nav-panel.app-shell-nav-panel-open {
+    animation-name: app-shell-drawer-in;
+  }
+
+  /* Its base rule gives it a full-width flex basis (a wrapped row at tablet width); in a column that would
+     make it fill the drawer's height. */
+  /* Above the drawer and its scrim: the sign-out warning opens while the drawer stays open, and must be read. */
+  .app-shell-org-notice.app-shell-org-notice-open,
+  .app-shell-sync.app-shell-sync-open {
+    z-index: 4;
+  }
+
+  .app-shell-nav-panel .app-shell-org-full {
+    flex: none;
+  }
+
+  .app-shell-nav-panel .app-shell-nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .app-shell-nav-panel .app-shell-link-active {
+    background: var(--selected-bg);
+    color: var(--selected-fg);
+    border-color: transparent;
+    box-shadow: inset 3px 0 0 var(--selected-edge);
+  }
+
+  .app-shell-nav-panel .app-shell-auth:not(:empty) {
+    margin: auto 0 0;
+    max-width: none;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Present only while the drawer is open (appShell.js toggles -open on the panel; the scrim follows it). */
+  .app-shell-nav-panel-open ~ .app-shell-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--clr-petrol-950) 72%, transparent);
+  }
+}
+
+@keyframes app-shell-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Rail, from 1024px. */
+@media (min-width: 1024px) {
+  .app-shell-root:not([hidden]) {
+    --app-shell-rail-width: 15rem;
+    display: grid;
+    grid-template-columns: var(--app-shell-rail-width) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    min-height: 100dvh;
+  }
+
+  .app-shell-root > .app-shell-header {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+
+  .app-shell-root > .app-shell-event-bar {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .app-shell-root > .app-shell-outlet {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .app-shell-root > .app-shell-footer {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .app-shell-header {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    align-self: start;
+    gap: var(--space-4);
+    height: 100dvh;
+    padding: var(--space-5) var(--space-3) var(--space-4);
+    border-bottom: 0;
+    border-right: var(--border-hairline) solid var(--color-border);
+  }
+
+  .app-shell-nav-toggle,
+  .app-shell-org-full {
+    display: none;
+  }
+
+  .app-shell-org {
+    flex: none;
+    max-width: none;
+  }
+
+  .app-shell-org-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .app-shell-context:not(.app-shell-context-idle) {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    min-height: 0;
+  }
+
+  .app-shell-breadcrumb {
+    flex: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .app-shell-nav-panel,
+  .app-shell-nav-panel.app-shell-nav-panel-open {
+    position: static;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    order: 0;
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    /* Side padding: the panel clips sideways, and a focus ring sits outside its link's box. */
+    padding: var(--space-3) var(--space-1) 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: transparent;
+    border-top: var(--border-hairline) solid var(--color-border);
+    border-right: 0;
+    animation: none;
+  }
+
+  .app-shell-nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .app-shell-link {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .app-shell-link-active {
+    background: var(--selected-bg);
+    color: var(--selected-fg);
+    border-color: transparent;
+    box-shadow: inset 3px 0 0 var(--selected-edge);
+  }
+
+  .app-shell-auth:not(:empty) {
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: none;
+    margin: auto 0 0;
+    padding-top: var(--space-3);
+  }
+
+  /* The notices open beside the rail, over the page, not below a header that is now the full height. */
+  .app-shell-org-notice.app-shell-org-notice-open,
+  .app-shell-sync.app-shell-sync-open {
+    top: var(--space-4);
+    right: auto;
+    left: calc(100% + var(--space-2));
+    width: min(28rem, calc(100vw - var(--app-shell-rail-width) - 2 * var(--space-4)));
+  }
 }
