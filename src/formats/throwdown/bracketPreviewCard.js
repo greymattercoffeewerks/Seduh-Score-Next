@@ -236,7 +236,7 @@ export function createBracketPreviewCard({
           [
             ['Rounds', shape.totals.rounds],
             ['Matches', shape.totals.matches],
-            ['Byes', shape.totals.byes],
+            [shape.totals.byes === 1 ? 'Bye' : 'Byes', shape.totals.byes],
             ['Final', `${shape.totals.finalSize} brewers`],
             ['3rd place', shape.thirdPlace.played ? 'Played' : 'No'],
           ].map(([label, value]) =>

@@ -68,6 +68,9 @@ export default defineConfig({
         toolsRandomSelector: fileURLToPath(
           new URL('./tools/random-selector/index.html', import.meta.url),
         ),
+        toolsThrowdownPlanner: fileURLToPath(
+          new URL('./tools/throwdown-planner/index.html', import.meta.url),
+        ),
         guessTheBean: fileURLToPath(new URL('./guess-the-bean/index.html', import.meta.url)),
         guessTheBeanPlay: fileURLToPath(
           new URL('./guess-the-bean/play/index.html', import.meta.url),

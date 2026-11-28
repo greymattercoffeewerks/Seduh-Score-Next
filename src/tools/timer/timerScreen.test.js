@@ -48,7 +48,7 @@ describe('mountTimer', () => {
     mountTimer(root, { storage, now });
     expect(root.querySelector('.public-header')).not.toBeNull();
     expect(root.querySelector('.ct-crumb-current').textContent).toBe('Competition Timer');
-    expect(root.querySelectorAll('.ct-tool-title')).toHaveLength(3);
+    expect(root.querySelectorAll('.ct-tool-title')).toHaveLength(4);
     expect(root.querySelector('.timer-brand-link')).toBeNull();
     const header = root.querySelector('.ct-header');
     const strip = root.querySelector('.ct-strip');

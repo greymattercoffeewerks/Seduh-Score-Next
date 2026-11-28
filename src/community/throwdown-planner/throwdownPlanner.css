@@ -1,0 +1,145 @@
+/* Throwdown Bracket Planner: a standalone community tool. Tokens only, its own classes (`tp-`), paper surface,
+   one column at 360px, two columns from 52rem. The frame (header, breadcrumb, More tools strip, footer) is
+   src/community/toolChrome.css. */
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+button,
+input {
+  font: inherit;
+}
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
+.tp {
+  max-width: var(--max-width-content);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.tp-header h1 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+}
+.tp-intro {
+  margin: 0;
+  max-width: 44rem;
+  color: var(--color-text-secondary);
+}
+
+.tp-layout {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 52rem) {
+  .tp-layout {
+    grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
+  }
+}
+
+.tp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-hairline) solid var(--color-border-card);
+  background: var(--color-surface);
+}
+.tp-panel h2,
+.tp-panel h3 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+.tp-panel h2 {
+  font-size: var(--text-lg);
+}
+.tp-panel h3 {
+  font-size: var(--text-base);
+  padding-block-start: var(--space-2);
+}
+
+.tp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-weight: var(--font-weight-bold);
+}
+.tp-input {
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-3);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.tp-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+}
+.tp-check input {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.tp-group {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-hairline) solid var(--color-border);
+}
+.tp-group legend {
+  padding: 0 var(--space-1);
+  font-weight: var(--font-weight-bold);
+}
+
+.tp-summary {
+  margin: 0;
+}
+.tp-stats,
+.tp-flags,
+.tp-rounds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tp-stats {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.tp-flag {
+  border-inline-start: var(--border-strong) solid var(--color-warning);
+  background: var(--color-surface-sunken);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+.tp-round {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-hairline) solid var(--color-border);
+}
+.tp-note {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}

@@ -1293,6 +1293,7 @@ describe('random selector: the community frame', () => {
       'Competition Timer',
       'Guess the Bean',
       'Brew Planner',
+      'Throwdown Bracket Planner',
     ]);
     expect(strip.querySelector('.ct-strip-all').getAttribute('href')).toBe('/community/');
     expect(root.querySelector('.ct-footer').textContent).toContain(

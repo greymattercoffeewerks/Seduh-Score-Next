@@ -215,7 +215,11 @@ test.describe('Throwdown scoresheet rounds (real app, real local Supabase)', () 
     }
     await expect(projector.locator('.stage-champion-name')).toBeVisible({ timeout: 60000 });
     for (const surface of [phone, projector]) {
-      const text = await surface.locator('body').innerText();
+      // The phone's "Updated 05:24" clock time would match \b24\b at minute 24, so it is taken out before the check.
+      const text = (await surface.locator('body').innerText()).replace(
+        /Updated \d{1,2}:\d{2}/g,
+        '',
+      );
       expect(text).not.toMatch(LEAK);
       expect(text).not.toContain('Judges scoring');
     }
