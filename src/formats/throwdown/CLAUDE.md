@@ -85,6 +85,23 @@ Spec (local only): `Handoffs and Specs/THROWDOWN-SPEC-DRAFT.md` sections 8.1 and
 - **Surfaces** (every one tested with a group and with the module off, `redemptionSurfaces.test.js`): console Redemption page (`redemptionScreen.js`, no event-bar tab, linked from Matches only when a redemption round exists), group vote cards in `eventScreen.js`, run sheet, phone, projector, results page, match-log CSV (extra columns only when a group exists), published places (a revived brewer once, by the last main round lost). The live payload marks a group `pool: true`; no such key exists without the module. A group is not in the published knockout record (owner to decide).
 - **Rule for the next module**: a surface that destructures two sides (`[a, b] = sides`) or joins "A vs B" is a defect for a group; use `match.isPool` / `pool`.
 
+## Bracket preview ("What will happen", 2026-11-27)
+
+A plan card on the setup screen before the draw: from the brewer count and the 3rd place choice it shows the rounds, matches, byes,
+whether a 3rd place match is played, and any repeat bye (a bye straight after a bye is certain, because the bye winner is always the last
+brewer in order). Read-only, nothing saved or sent.
+
+- **Pure**: `bracketPreview.js` (`previewShape`, `comparePreviews`) mirrors `app.td_advance`'s shape rule, redemption included
+  (feed rounds, group size, cap). It is held to the engine twice: `bracketPreview.test.js` plays a real bracket out
+  for 2 to 64 brewers and every setup, and pgTAP `096` plays the real engine against
+  `supabase/tests/fixtures/td-bracket-preview-parity.json` (embedded in the SQL; a unit test holds the copies equal). Change `td_advance`'s
+  shape and one of them fails.
+- **Card**: `bracketPreviewCard.js` (words and DOM), used by `eventScreen.js`; its what-if (`state.plan`) is never saved. "Plan the event" opens
+  a panel with a what-if brewer count (2 to 64), 3rd place and redemption (feed rounds, cap), the flags, the rounds (a redemption round shows
+  its losers, groups and returners), and what flipping redemption or 3rd place would change. The card follows the Setup card's own redemption
+  choice. Fixture cases with a redemption setup are played out by pgTAP `096`, groups included (slot 1 wins each).
+- **Not built yet**: lock rules, bye style, a 3-way final.
+
 ## Scoresheet module (stage 1, 2026-11-19)
 
 Rounds decided by judges' paper scoresheets that a scorekeeper types in (spec, local only:

@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown bracket preview, "Plan the event" · 4.34.0 · 2026-11-28
+
+**Status: released as 4.34.0 (PR #582, owner approved 28 Nov). No migration; nothing to push to the cloud.** A new card on the Throwdown setup screen, before the draw, shows how the bracket will play out for the roster: rounds, byes, who rests twice in a row, whether 3rd place is played, the final's size, and what redemption does.
+
+- **The card.** `bracketPreview.js` (pure, from counts only) and `bracketPreviewCard.js`. Closed it shows a summary and "N things to check"; "Plan the event" opens a what-if (brewer count 2 to 64, 3rd place, redemption with feed rounds and cap) that is never saved. Redemption is included from the start. It follows the Setup ticks live and disappears once the draw is made.
+- **Drift guard.** A vitest plays a real bracket for 2 to 64 brewers and many setups; pgTAP `096` plays the real engine against 80 fixture cases (`supabase/tests/fixtures/td-bracket-preview-parity.json`, embedded in the SQL, kept equal by a unit test). 80/80 on the owner's PC.
+- **Not built yet:** rule lock (P3), bye style, a 3-way final. Spec: local post-mortem notes.
+- **Version:** minor (a new capability organisers can use).
+- **Reviews:** one real finding fixed (the Setup 3rd place tick did not refresh the card), plus round-label and focus nits. Browser check at 360px owed.
+
 ## Throwdown redemption round (TD.3) · 4.33.0 · 2026-11-27
 
 **Status: released as 4.33.0 (PR #579 into `dev`, release #583 to `main`, 27 Nov, after the live Throwdown).** Migration `20261201110000_td_redemption.sql` is in the cloud (applied 28 Nov as `td_redemption`). Owner decisions of 27 Nov are spec section 14 (local): groups drawn randomly, several redemption rounds, a brewer can come back more than once, a new page shows the redemption competitors.

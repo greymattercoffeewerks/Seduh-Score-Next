@@ -1,14 +1,15 @@
 # Status — read this first
 
-_As of 2026-11-28, app version 4.33.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-28, app version 4.34.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
+- **Throwdown bracket preview** (4.34.0, live): "Plan the event" card on setup, redemption included. Owed: 360px check.
 - **Throwdown redemption round (TD.3)** (4.33.0, live 27 Nov): losers drawn into groups and back into the bracket. Migration in the cloud.
 - **Share result to a story** (4.32.0, live): Results page Share button. Owed: phone check.
 - **Phone results** (4.31.1), **left side menu** (4.31.0, device check passed) and **demo people** (4.31.0, migration in the cloud) are live.
-- **In flight:** PR #580 demo data for Cup Taster and Throwdown test events (Load and Clear; its new migration `20261202100000` is NOT in the cloud, push only with the owner's OK); draft PR #582 Throwdown "What will happen" bracket preview on setup (no migration).
+- **In flight:** PR #580 demo data for Cup Taster and Throwdown test events (Load and Clear; its new migration `20261202100000` is NOT in the cloud, push only with the owner's OK).
 - **BTC night dashboard, Phase 1** (4.30.0, live): night switch, Needs you list, run strip, standings draft preview.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
