@@ -166,6 +166,37 @@ describe('mountThrowdownEventDashboardScreen', () => {
     expect(root.querySelector('.ok-phase')).toBeNull();
   });
 
+  describe('bracket planner', () => {
+    it('is on the dashboard before the draw, closed, with what the saved setup will do', async () => {
+      await mount(beforeDraw());
+      const card = root.querySelector('#td-preview-h');
+      expect(card).not.toBeNull();
+      expect(root.textContent).toContain('Plan the event');
+      expect(root.querySelector('#td-plan').hidden).toBe(true);
+      // The Matches link beside it names where the setup is changed.
+      expect(root.querySelector('.td-plan-setup-link a').getAttribute('href')).toBe(
+        '#/events/ev1/throwdown/matches',
+      );
+    });
+
+    it('opens, and a what-if brewer count changes the shape without saving anything', async () => {
+      await mount(beforeDraw());
+      root.querySelector('[aria-controls="td-plan"]').click();
+      expect(root.querySelector('#td-plan').hidden).toBe(false);
+      const box = root.querySelector('[data-focus-key="td-plan-count"]');
+      box.value = '21';
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(root.textContent).toContain('21');
+      expect(publishThrowdownLive).not.toHaveBeenCalled();
+    });
+
+    it('is gone once the draw is made', async () => {
+      await mount(midEvent());
+      expect(root.querySelector('#td-preview-h')).toBeNull();
+      expect(root.querySelector('.td-plan-setup-link')).toBeNull();
+    });
+  });
+
   describe('live card', () => {
     const links = {
       phone: 'https://x.test/#/live/o/phone',

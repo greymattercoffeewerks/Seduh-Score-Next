@@ -100,6 +100,7 @@ brewer in order). Read-only, nothing saved or sent.
   a panel with a what-if brewer count (2 to 64), 3rd place and redemption (feed rounds, cap), the flags, the rounds (a redemption round shows
   its losers, groups and returners), and what flipping redemption or 3rd place would change. The card follows the Setup card's own redemption
   choice. Fixture cases with a redemption setup are played out by pgTAP `096`, groups included (slot 1 wins each).
+- **Also on the event dashboard** (4.34.2): the same card, built from the saved settings, under the Next step card until the draw; it passes `setupHint: ''` and links to Matches.
 - **Not built yet**: lock rules, bye style, a 3-way final.
 
 ## Scoresheet module (stage 1, 2026-11-19)
