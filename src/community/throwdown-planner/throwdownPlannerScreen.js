@@ -263,7 +263,7 @@ export function mountThrowdownPlanner(root) {
             el('h1', { text: 'Throwdown Bracket Planner' }),
             el('p', {
               className: 'tp-intro',
-              text: 'How many brewers are you expecting? See how a Throwdown knockout plays out before you run it: rounds, byes, the 3rd place match and the Final. Nothing is saved, and no account is needed.',
+              text: 'How many brewers are you expecting? See how a Throwdown knockout plays out before you run it: rounds, byes, the 3rd place match and the Final. Nothing is saved, and no account is needed. This is a plan only: the real bracket is drawn when your event starts and may differ.',
             }),
           ]),
           el('div', { className: 'tp-layout' }, [controls(), result(shape)]),
