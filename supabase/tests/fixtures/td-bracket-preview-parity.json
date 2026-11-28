@@ -1,0 +1,1272 @@
+{
+  "note": "Shape of a Throwdown event when slot 1 always wins. Source of truth: previewShape (bracketPreview.js), checked against the real engine by pgTAP 096. Rounds are [brewers in, matches, byes, through] of each main round; matches is the whole event including redemption groups and the 3rd place match. redemption is the stored module setup, or null.",
+  "cases": [
+    {
+      "n": 2,
+      "third": true,
+      "redemption": null,
+      "rounds": [[2, 1, 0, 1]],
+      "thirdPlayed": false,
+      "matches": 1
+    },
+    {
+      "n": 3,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 2
+    },
+    {
+      "n": 4,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 4
+    },
+    {
+      "n": 5,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 4
+    },
+    {
+      "n": 6,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 5
+    },
+    {
+      "n": 7,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 7
+    },
+    {
+      "n": 8,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 8
+    },
+    {
+      "n": 9,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 8
+    },
+    {
+      "n": 10,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 9
+    },
+    {
+      "n": 11,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 10
+    },
+    {
+      "n": 12,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 11
+    },
+    {
+      "n": 13,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [13, 6, 1, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 13
+    },
+    {
+      "n": 14,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [14, 7, 0, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 14
+    },
+    {
+      "n": 15,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [15, 7, 1, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 15
+    },
+    {
+      "n": 16,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 16
+    },
+    {
+      "n": 17,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [17, 8, 1, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 16
+    },
+    {
+      "n": 18,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [18, 9, 0, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 17
+    },
+    {
+      "n": 19,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [19, 9, 1, 10],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 18
+    },
+    {
+      "n": 20,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [20, 10, 0, 10],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 19
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [21, 10, 1, 11],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 20
+    },
+    {
+      "n": 22,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [22, 11, 0, 11],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 21
+    },
+    {
+      "n": 23,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [23, 11, 1, 12],
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 22
+    },
+    {
+      "n": 24,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [24, 12, 0, 12],
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 23
+    },
+    {
+      "n": 25,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [25, 12, 1, 13],
+        [13, 6, 1, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 25
+    },
+    {
+      "n": 26,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [26, 13, 0, 13],
+        [13, 6, 1, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 26
+    },
+    {
+      "n": 27,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [27, 13, 1, 14],
+        [14, 7, 0, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 27
+    },
+    {
+      "n": 28,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [28, 14, 0, 14],
+        [14, 7, 0, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 28
+    },
+    {
+      "n": 29,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [29, 14, 1, 15],
+        [15, 7, 1, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 29
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [30, 15, 0, 15],
+        [15, 7, 1, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 30
+    },
+    {
+      "n": 31,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [31, 15, 1, 16],
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 31
+    },
+    {
+      "n": 32,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [32, 16, 0, 16],
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 32
+    },
+    {
+      "n": 33,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [33, 16, 1, 17],
+        [17, 8, 1, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 32
+    },
+    {
+      "n": 34,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [34, 17, 0, 17],
+        [17, 8, 1, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 33
+    },
+    {
+      "n": 35,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [35, 17, 1, 18],
+        [18, 9, 0, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 34
+    },
+    {
+      "n": 36,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [36, 18, 0, 18],
+        [18, 9, 0, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 35
+    },
+    {
+      "n": 37,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [37, 18, 1, 19],
+        [19, 9, 1, 10],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 36
+    },
+    {
+      "n": 38,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [38, 19, 0, 19],
+        [19, 9, 1, 10],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 37
+    },
+    {
+      "n": 39,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [39, 19, 1, 20],
+        [20, 10, 0, 10],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 38
+    },
+    {
+      "n": 40,
+      "third": true,
+      "redemption": null,
+      "rounds": [
+        [40, 20, 0, 20],
+        [20, 10, 0, 10],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 39
+    },
+    {
+      "n": 8,
+      "third": false,
+      "redemption": null,
+      "rounds": [
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 7
+    },
+    {
+      "n": 16,
+      "third": false,
+      "redemption": null,
+      "rounds": [
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 15
+    },
+    {
+      "n": 21,
+      "third": false,
+      "redemption": null,
+      "rounds": [
+        [21, 10, 1, 11],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 20
+    },
+    {
+      "n": 12,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [12, 6, 0, 6],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 17
+    },
+    {
+      "n": 12,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [12, 6, 0, 6],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 17
+    },
+    {
+      "n": 12,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 11
+    },
+    {
+      "n": 12,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 11
+    },
+    {
+      "n": 12,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [12, 6, 0, 6],
+        [9, 4, 1, 5],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 22
+    },
+    {
+      "n": 12,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [12, 6, 0, 6],
+        [9, 4, 1, 5],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 22
+    },
+    {
+      "n": 16,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [16, 8, 0, 8],
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 23
+    },
+    {
+      "n": 16,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [16, 8, 0, 8],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 22
+    },
+    {
+      "n": 16,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 16
+    },
+    {
+      "n": 16,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 16
+    },
+    {
+      "n": 16,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [16, 8, 0, 8],
+        [12, 6, 0, 6],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 29
+    },
+    {
+      "n": 16,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [16, 8, 0, 8],
+        [11, 5, 1, 6],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 27
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [21, 10, 1, 11],
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 31
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [21, 10, 1, 11],
+        [14, 7, 0, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 29
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [21, 10, 1, 11],
+        [11, 5, 1, 6],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 25
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [21, 10, 1, 11],
+        [11, 5, 1, 6],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 25
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [21, 10, 1, 11],
+        [16, 8, 0, 8],
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 38
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [21, 10, 1, 11],
+        [14, 7, 0, 7],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 34
+    },
+    {
+      "n": 24,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [24, 12, 0, 12],
+        [18, 9, 0, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 35
+    },
+    {
+      "n": 24,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [24, 12, 0, 12],
+        [15, 7, 1, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 33
+    },
+    {
+      "n": 24,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [24, 12, 0, 12],
+        [12, 6, 0, 6],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 29
+    },
+    {
+      "n": 24,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [24, 12, 0, 12],
+        [12, 6, 0, 6],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 29
+    },
+    {
+      "n": 24,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [24, 12, 0, 12],
+        [18, 9, 0, 9],
+        [13, 6, 1, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 44
+    },
+    {
+      "n": 24,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [24, 12, 0, 12],
+        [15, 7, 1, 8],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 38
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [30, 15, 0, 15],
+        [22, 11, 0, 11],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 43
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [30, 15, 0, 15],
+        [18, 9, 0, 9],
+        [9, 4, 1, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 39
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [30, 15, 0, 15],
+        [15, 7, 1, 8],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 35
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [30, 15, 0, 15],
+        [15, 7, 1, 8],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 35
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [30, 15, 0, 15],
+        [22, 11, 0, 11],
+        [16, 8, 0, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 54
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [30, 15, 0, 15],
+        [18, 9, 0, 9],
+        [12, 6, 0, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 46
+    },
+    {
+      "n": 37,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [37, 18, 1, 19],
+        [28, 14, 0, 14],
+        [14, 7, 0, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 55
+    },
+    {
+      "n": 37,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [37, 18, 1, 19],
+        [22, 11, 0, 11],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 48
+    },
+    {
+      "n": 37,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [37, 18, 1, 19],
+        [19, 9, 1, 10],
+        [14, 7, 0, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 45
+    },
+    {
+      "n": 37,
+      "third": true,
+      "redemption": {
+        "feed": [2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [37, 18, 1, 19],
+        [19, 9, 1, 10],
+        [13, 6, 1, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 44
+    },
+    {
+      "n": 37,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 0
+      },
+      "rounds": [
+        [37, 18, 1, 19],
+        [28, 14, 0, 14],
+        [21, 10, 1, 11],
+        [11, 5, 1, 6],
+        [6, 3, 0, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 68
+    },
+    {
+      "n": 37,
+      "third": true,
+      "redemption": {
+        "feed": [1, 2],
+        "group_size": 2,
+        "cap": 3
+      },
+      "rounds": [
+        [37, 18, 1, 19],
+        [22, 11, 0, 11],
+        [14, 7, 0, 7],
+        [7, 3, 1, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 57
+    },
+    {
+      "n": 21,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 3,
+        "cap": 0
+      },
+      "rounds": [
+        [21, 10, 1, 11],
+        [15, 7, 1, 8],
+        [8, 4, 0, 4],
+        [4, 2, 0, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": true,
+      "matches": 29
+    },
+    {
+      "n": 30,
+      "third": true,
+      "redemption": {
+        "feed": [1],
+        "group_size": 3,
+        "cap": 0
+      },
+      "rounds": [
+        [30, 15, 0, 15],
+        [20, 10, 0, 10],
+        [10, 5, 0, 5],
+        [5, 2, 1, 3],
+        [3, 1, 1, 2],
+        [2, 1, 0, 1]
+      ],
+      "thirdPlayed": false,
+      "matches": 39
+    }
+  ]
+}
