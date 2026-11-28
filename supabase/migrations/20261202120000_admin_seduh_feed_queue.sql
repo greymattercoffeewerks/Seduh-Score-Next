@@ -227,6 +227,11 @@ begin
   end if;
 
   v_one := app.seduh_feed_apply(array[p_result_id], 'admin');
+  -- a reject that committed between the read above and the locked re-check inside apply leaves nothing processed: say so, audit nothing
+  if (v_one ->> 'processed')::integer = 0 then
+    raise exception 'admin_seduh_feed_approve: nothing waiting for that result'
+      using errcode = '22023', hint = 'feed_not_queued';
+  end if;
 
   perform app.admin_audit('seduh_feed.approve', v_org, null, jsonb_build_object(
     'result_id', p_result_id,
