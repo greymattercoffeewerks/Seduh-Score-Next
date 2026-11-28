@@ -14,10 +14,11 @@ import { isGateRefusal, SLOW_MESSAGE } from './gate.js';
 import { formatDateTime } from './format.js';
 import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
+import { mountFeedQueue } from './feedQueue.js';
 
 export const READ_FAILED = 'The Seduh ID numbers could not be read. Try again.';
 export const EXPLANATION =
-  'Numbers only: this screen never shows a name, a phone number or an organisation. Merges and unlinks are done by the owner in SQL.';
+  'The numbers on this screen are counts only. The queue below shows the names on podiums waiting for review, never a phone number. Merges and unlinks are done by the owner in SQL.';
 export const NO_IDENTITIES = 'There are no Seduh ID identities yet.';
 
 // The fourteen figures, in the order the function documents them.
@@ -132,6 +133,7 @@ export function mountSeduhIdPanel(host, ctx) {
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
   const content = el('div', { className: 'adm-panel-body' });
+  const queue = mountFeedQueue(ctx);
   const footer = el('div', { className: 'adm-panel-body' });
   const refresh = el('button', {
     className: 'btn btn-outline tap-target',
@@ -142,7 +144,7 @@ export function mountSeduhIdPanel(host, ctx) {
     asked = true;
     load();
   });
-  const body = el('div', { className: 'adm-panel-body' }, [content, footer]);
+  const body = el('div', { className: 'adm-panel-body' }, [content, queue.element, footer]);
   host.replaceChildren(title, intro, feedback, status, body);
 
   const mayTakeFocus = () => focusAllowed(host);
@@ -178,8 +180,15 @@ export function mountSeduhIdPanel(host, ctx) {
     setBusyDisabled(refresh, true);
     // Numbers already on screen stay until the new ones arrive.
     footer.replaceChildren(el('p', { className: 'adm-muted', text: 'Loading…' }));
-    const answer = await askAdmin(ctx, 'admin_seduh_id_counts', {});
+    const [answer, queueOutcome] = await Promise.all([
+      askAdmin(ctx, 'admin_seduh_id_counts', {}),
+      queue.load(),
+    ]);
     if (disposed) return;
+    if (queueOutcome === 'gate') {
+      loading = false;
+      return stepAside();
+    }
     loading = false;
     footer.replaceChildren();
     setBusyDisabled(refresh, false);
@@ -209,6 +218,7 @@ export function mountSeduhIdPanel(host, ctx) {
   return {
     unmount() {
       disposed = true;
+      queue.unmount();
       host.replaceChildren();
     },
   };
