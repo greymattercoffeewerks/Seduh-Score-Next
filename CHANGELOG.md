@@ -7,6 +7,15 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Tidy up the People list: remove people who are in no event · 4.36.0 · 2026-11-28
+
+**Status: PR into `dev`, not released. Migration `20261202110000` is NOT in the cloud; push only with the owner's OK.** Deleting a test event removes its entries but not the names, because a person belongs to the organisation. A real organisation (BSRC) kept throwaway names this way, and only SQL could remove them.
+
+- **What it does.** People screen, "Tidy up" at the bottom: "Find people not in any event" lists who is safe to remove, the organiser ticks names, a confirmation asks, then they go. Nothing is offered or removed for anyone with an entry on any event (a withdrawn entry counts), a Seduh ID link, or a staff or affiliate role (past or present).
+- **Database.** `public.list_unused_people(org)` and `public.remove_unused_people(org, ids)`, both SECURITY DEFINER with the shared rule in `app.unused_person_ids(org)` so the list and the delete cannot disagree. Membership first through `app.refuse_non_member`; every named person must belong to the organisation, else the one standard 42501 (another organisation's person and a missing id look alike); at most 200 per call (hint `too_many_people`). Rollback block in the migration. pgTAP `097`; added to the cross-organisation matrices `041` (47 RPCs) and `034` (26 RPCs that check `p_org_id`).
+- **Reviews.** security-reviewer: 0 Important; Nit fixed (a person who is the kept side of a merge is now kept, so no merge record is erased); `pg_temp.attempt` under the `authenticated` role in pgTAP `097` is unverified until the first `db:test`. code-reviewer: 2 Important (focus lost on each tick; focus target without `tabindex`), 2 Nits ("Saving…" shown for a search; a failed refresh after a good removal read as a failed removal), all fixed and covered by tests; the independent re-check of the two Important findings was not run.
+- **Not done.** pgTAP and Playwright have NOT been run (this session had no Docker); run `npm run db:test` and the e2e suite on the PC before merging.
+
 ## Admin Seduh ID queue: names view, Reject, Approve built but off · unreleased · 2026-11-28
 
 **Status: PR into `dev`, not released; version not bumped here (the tidy-up PR holds 4.36.0). Migration `20261202120000` is NOT in the cloud; push only with the owner's OK.** Owner decisions 2026-11-28: the platform admin may see the names on the feed queue (an amendment of D-A4), Reject from the console, and build Approve but do not surface it (the owner will harden the console via Cloudflare first).
