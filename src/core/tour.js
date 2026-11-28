@@ -1,7 +1,7 @@
 // A guided tour: dim the page, spotlight one area with a short tip, Next / Back / Skip. Any screen declares its steps
 // and starts the tour; nothing here knows which screen or format it is on (module boundary: no format imports).
 //
-//   const tour = startTour({ id: 'throwdown-setup', steps: [{ target: '[data-tour="x"]', title, body }, ...] });
+//   const tour = startTour({ id: 'example-tour', steps: [{ target: '[data-tour="x"]', title, body }, ...] });
 //
 // A step is { target?, title, body }. `target` is a CSS selector, looked up again every time the page changes, so a
 // screen that re-renders does not leave the spotlight on a deleted node. A step with no `target` is a centred card (a
@@ -58,7 +58,7 @@ export function forgetTourSeen(id, storage) {
   }
 }
 
-// Bump the id (`throwdown-setup.v2`) when a tour changes enough that people who saw the old one should see it again.
+// Bump the id (`example-tour.v2`) when a tour changes enough that people who saw the old one should see it again.
 export const shouldAutoStart = (id, storage) => !hasSeenTour(id, storage);
 
 // ---- geometry (pure, so a test can check it without a layout engine) ----

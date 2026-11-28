@@ -155,6 +155,10 @@ describe('startTour', () => {
     expect(tipText()).toBe('Welcome');
     endActiveTour();
     expect(document.activeElement).toBe(a);
+    a.focus();
+    startTour({ id: 't', steps: STEPS, storage: memory() });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(document.activeElement).toBe(a);
   });
 
   it('ends when the screen that started it is left (its signal aborts), and restores the page', () => {
@@ -169,6 +173,22 @@ describe('startTour', () => {
     // a signal that is already aborted never starts one
     startTour({ id: 't', steps: STEPS, storage: memory(), signal: ctl.signal });
     expect(document.querySelector('.tour')).toBeNull();
+  });
+
+  it('Tab wraps inside the tip, both ways', () => {
+    page();
+    startTour({ id: 't', steps: STEPS, storage: memory() });
+    document.querySelector('[data-tour-action="next"]').click(); // step 2: Back, Next, Skip all show
+    const buttons = [...document.querySelectorAll('.tour-tip button:not([hidden])')];
+    const key = (shiftKey) =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }),
+      );
+    buttons.at(-1).focus();
+    key(false);
+    expect(document.activeElement).toBe(buttons[0]);
+    key(true);
+    expect(document.activeElement).toBe(buttons.at(-1));
   });
 
   it('starts nothing when no step applies, and replaces a running tour', () => {
