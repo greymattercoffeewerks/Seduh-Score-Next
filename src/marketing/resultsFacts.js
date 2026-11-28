@@ -57,3 +57,13 @@ export function highlightFactFor(event) {
 
   return null;
 }
+
+// A short note the organiser attached to a published result (for example, a final that was played differently from the
+// format's usual shape). Plain text only, drawn as text, never as markup; anything that is not a non-empty string is no
+// note, and a long one is cut so a bad row cannot flood the page.
+const NOTE_MAX = 300;
+
+export function organiserNoteFor(event) {
+  const text = typeof event?.organiserNote === 'string' ? event.organiserNote.trim() : '';
+  return text === '' ? null : text.slice(0, NOTE_MAX);
+}

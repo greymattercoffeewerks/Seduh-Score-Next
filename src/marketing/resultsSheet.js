@@ -12,7 +12,7 @@
 // never innerHTML.
 import { el, withSrExpansion } from '../core/dom.js';
 import { formatDuration, formatDurationLong } from '../core/duration.js';
-import { finiteNumber, highlightFactFor } from './resultsFacts.js';
+import { finiteNumber, highlightFactFor, organiserNoteFor } from './resultsFacts.js';
 import { findPublishedResultForEvent, publishedOrgName } from '../core/publicResults.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { linkClaimedNames } from '../core/seduhDiscovery.js';
@@ -179,6 +179,7 @@ export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PU
   const competitors = finiteNumber(event.competitors);
   const rounds = finiteNumber(event.rounds);
   const highlight = highlightFactFor(event);
+  const note = organiserNoteFor(event);
   if (competitors != null) {
     facts.push(
       el('li', {}, [
@@ -268,6 +269,9 @@ export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PU
                   'reached. Score is correct answers out of the sets scored in that round' +
                   (content.kind === 'standings' ? '; time is their total time in it.' : '.'),
           }),
+      note
+        ? el('p', { className: 'results-sheet-note', text: `Note from the organisers: ${note}` })
+        : null,
       el('p', {
         className: 'results-sheet-note results-sheet-published',
         text:

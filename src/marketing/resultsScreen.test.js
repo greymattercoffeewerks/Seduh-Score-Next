@@ -192,6 +192,21 @@ describe('mountResultsScreen', () => {
     expect(await mount(samplePayload())).toMatch(/winning time/);
   });
 
+  it('shows the organiser note as plain text on the latest result, and nothing without one', async () => {
+    const mount = async (payload) => {
+      const client = fakeClient({
+        data: [{ event_id: 'ev1', payload, published_at: '2026-11-27T00:00:00Z' }],
+        error: null,
+      });
+      await mountResultsScreen(root, { client });
+      return root.querySelector('.results-organiser-note');
+    };
+    const note = await mount(samplePayload({ organiserNote: '<b>Final</b> was a 3-way.' }));
+    expect(note.textContent).toBe('Note from the organisers: <b>Final</b> was a 3-way.');
+    expect(note.querySelector('b')).toBeNull();
+    expect(await mount(samplePayload())).toBeNull();
+  });
+
   it('falls back to a generic label, not a crash, when a row has no format at all (e.g. published before this field existed)', async () => {
     const rows = [
       {

@@ -16,7 +16,7 @@ import { buildPublicHeader } from './publicHeader.js';
 import { buildScoringRecord } from './scoringRecord.js';
 import { buildCountryChip } from '../core/countryChip.js';
 import { buildResultsShareControl } from './resultsShare.js';
-import { highlightFactFor } from './resultsFacts.js';
+import { highlightFactFor, organiserNoteFor } from './resultsFacts.js';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -182,6 +182,7 @@ function buildSheetLink(event, { withName = false } = {}) {
 
 function buildLatestResult(event, client, chipFor) {
   const highlight = highlightFactFor(event);
+  const note = organiserNoteFor(event);
   // eventDate is nullable (resultsPublishing.js's own payload falls back to
   // null when the event has none recorded) — formatDate() itself throws on
   // null (Intl.DateTimeFormat.format rejects an Invalid Date), so it's only
@@ -246,8 +247,14 @@ function buildLatestResult(event, client, chipFor) {
           event.podium.map((entry) => podiumRow(entry, chipFor)),
         ),
       ]),
+      note
+        ? el('p', {
+            className: 'results-organiser-note',
+            text: `Note from the organisers: ${note}`,
+          })
+        : null,
       buildScoringRecord(event.eventId, { client, title: event.eventName }),
-    ],
+    ].filter(Boolean),
   );
 }
 

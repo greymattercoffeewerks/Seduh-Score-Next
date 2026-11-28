@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { highlightFactFor } from './resultsFacts.js';
+import { highlightFactFor, organiserNoteFor } from './resultsFacts.js';
 
 describe('highlightFactFor', () => {
   it('Cup Taster shows the winning time', () => {
@@ -40,5 +40,20 @@ describe('highlightFactFor', () => {
 
   it('a row with no format keeps the old winning-time behaviour', () => {
     expect(highlightFactFor({ winningTimeSecs: 60 })?.value).toBe('1:00');
+  });
+});
+
+describe('organiserNoteFor', () => {
+  it('returns trimmed text, and nothing for anything that is not text', () => {
+    expect(organiserNoteFor({ organiserNote: '  Final played as a 3-way.  ' })).toBe(
+      'Final played as a 3-way.',
+    );
+    for (const bad of [undefined, null, '', '   ', 5, {}, ['x']]) {
+      expect(organiserNoteFor({ organiserNote: bad })).toBeNull();
+    }
+  });
+
+  it('cuts a very long note', () => {
+    expect(organiserNoteFor({ organiserNote: 'a'.repeat(1000) })).toHaveLength(300);
   });
 });
