@@ -84,6 +84,7 @@ const NOT_FOR_THE_CONSOLE = {
   demo_event_not_found: 'BTC format',
   demo_not_btc: 'BTC format',
   demo_not_test: 'BTC format',
+  demo_roster_format: 'BTC format',
   btc_match_round_invalid: 'BTC format',
   btc_prior_round_open: 'BTC format',
   btc_redraw_blocked: 'BTC format',
@@ -150,6 +151,8 @@ const NOT_FOR_THE_CONSOLE = {
   td_organiser_pick_required: 'Throwdown scoresheet',
   td_organiser_pick_unneeded: 'Throwdown scoresheet',
   td_leader_changed: 'Throwdown format',
+  td_tiebreak_slot: 'Throwdown format',
+  td_redemption_invalid: 'Throwdown redemption',
   // Seduh ID claiming (T-ID2.B3a): the organiser's and the competitor's own screens (B3b); never an admin console call.
   no_identity: 'Seduh ID claim',
   identity_unavailable: 'Seduh ID claim',

@@ -269,7 +269,7 @@ create function t091.strong() returns jsonb language sql immutable as $$ select 
 select is((select kind || '/' || coalesce(min_tier, 'any') || '/' || enforced from app.entitlement_keys where key = 'throwdown_scoresheet'),
   'flag/any/false', 'the throwdown_scoresheet key is a free flag, seeded unenforced');
 select is((select string_agg(module || ':' || coalesce(array_to_string(requires, ','), '') || ':' || entitlement_key, ',') from app.td_module_registry()),
-  'scoresheet::throwdown_scoresheet', 'the registry holds the scoresheet module, with no dependencies');
+  'scoresheet::throwdown_scoresheet,redemption::throwdown_redemption', 'the registry holds the scoresheet and redemption modules, with no dependencies');
 select is(t091.settings(110, 3, '{"scoresheet": {"preset": "latte_art_v1", "lines": [{"key": "x", "label": "client wrote this", "max": 99}], "cups": {"final": 2, "third_place": 1}}}'), 'ok',
   'the organiser turns the module on (final 2 cups, 3rd place 1 cup)');
 select is((select modules -> 'scoresheet' -> 'lines' = app.td_scoresheet_preset_lines('latte_art_v1') from td_settings where event_id = t091.u(110)), true,

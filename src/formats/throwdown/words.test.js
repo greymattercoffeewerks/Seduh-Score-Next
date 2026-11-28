@@ -9,7 +9,9 @@ const DIR = join(import.meta.dirname, '../../../supabase/migrations');
 function throwdownHints() {
   const found = new Set();
   for (const f of readdirSync(DIR).filter(
-    (n) => (n.includes('throwdown') || n.includes('td_score')) && !n.includes('entitlement'),
+    (n) =>
+      (n.includes('throwdown') || n.includes('td_score') || n.includes('td_redemption')) &&
+      !n.includes('entitlement'),
   )) {
     const sql = readFileSync(join(DIR, f), 'utf8').replace(/--[^\n]*/g, '');
     for (const m of sql.matchAll(/hint\s*=\s*'([a-z_]+)'/g)) found.add(m[1]);

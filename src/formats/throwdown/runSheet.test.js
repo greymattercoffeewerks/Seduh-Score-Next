@@ -28,7 +28,7 @@ const semis = (matches, opts = {}) => {
 };
 
 describe('throwdownLinks', () => {
-  it('names the three places and encodes the id', () => {
+  it('names the places and encodes the id', () => {
     expect(L).toEqual({
       home: '#/events/ev1',
       matches: '#/events/ev1/throwdown/matches',

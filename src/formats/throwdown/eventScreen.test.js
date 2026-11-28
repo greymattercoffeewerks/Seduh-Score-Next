@@ -87,6 +87,17 @@ describe('the Throwdown organiser screen', () => {
     expect(root.querySelector('.is-test-banner')).toBeNull();
   });
 
+  it('offers demo people on a test event before the draw, and never on a real event', async () => {
+    const test = await mount({ event_entries: entries });
+    expect(test.textContent).toContain('Add demo people');
+    document.body.innerHTML = '';
+    const real = await mount({ event_entries: entries }, { ...EVENT, is_test: false });
+    expect(real.textContent).not.toContain('Add demo people');
+    document.body.innerHTML = '';
+    const drawn = await mount(started);
+    expect(drawn.textContent).not.toContain('Add demo people');
+  });
+
   it('closes voting on a match whose result is waiting to sync', async () => {
     const { enqueueOperation } = await import('../../core/outbox.js');
     await enqueueOperation('td_confirm_match', {
@@ -528,7 +539,7 @@ describe('the Throwdown organiser screen', () => {
   it('before the draw offers competitors, setup and the draw, and no module controls', async () => {
     const root = await mount({ event_entries: entries });
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Competitors (2)', 'Setup', 'What will happen', 'Draw']);
+    expect(headings).toEqual(['Competitors (2)', 'Demo people', 'Setup', 'What will happen', 'Draw']);
     expect(root.textContent).toContain('Setup is locked as soon as Round 1 starts.');
     expect(root.textContent).not.toMatch(/module/i);
   });

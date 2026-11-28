@@ -73,7 +73,7 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
   const [settings, draw, rounds, matches, slots, votes, entries, reopens] = await Promise.all([
     client.from('td_settings').select('*').eq('event_id', eventId).maybeSingle(),
     client.from('td_draws').select('*').eq('event_id', eventId).maybeSingle(),
-    readAll(client, 'td_rounds', 'id, position, kind, phase', eventId),
+    readAll(client, 'td_rounds', 'id, position, kind, phase, draw_seed', eventId),
     readAll(
       client,
       'td_matches',
@@ -118,7 +118,10 @@ export async function loadThrowdown(eventId, client = getSupabase()) {
     reopens: [...reopens].sort((a, b) =>
       String(a.reopened_at).localeCompare(String(b.reopened_at)),
     ),
-    bracket: deriveBracket(rows),
+    bracket: deriveBracket({
+      ...rows,
+      redemptionRounds: settings.data?.modules?.redemption?.feed?.length ?? 0,
+    }),
   };
 }
 

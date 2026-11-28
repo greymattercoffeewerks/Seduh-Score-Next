@@ -29,6 +29,12 @@ export function leadOf(tallies) {
   };
 }
 
+// The brewers sharing the top count (the ones the tie-break vote may go to). Empty before the first vote.
+export function tiedSlotIds(tallies) {
+  const top = tallies.reduce((max, t) => Math.max(max, t.votes), 0);
+  return top === 0 ? [] : tallies.filter((t) => t.votes === top).map((t) => t.slotId);
+}
+
 // Confirm needs two things: a strict leader, and every judge's vote in (at least `judgeCount` taps; an even panel that
 // was level has one more, the tie-break). A match confirmed on one tap of three used to show 1-0. The database holds
 // the same rule (td_confirm_match, hint td_votes_incomplete). `judgeCount` is required: without it nothing confirms.
@@ -49,11 +55,18 @@ export function canConfirm(tallies, judgeCount) {
 //   tieBreakOpen:  every judge is in and it is level, so the one tie-break vote is open
 //   tieBreakUsed:  the count is the judges plus the tie-break vote (an even panel that was level, then one more)
 //   over:          more taps than the rule allows (taps still waiting to sync that will be refused, or older data)
+//
+// A pool match (a redemption group of 3 or 4) follows the same rule, with one difference the database also holds
+// (td_cast_vote, hint td_tiebreak_slot): the tie-break vote can go only to a brewer who is IN the tie, so `tiedSlotIds`
+// names who. In a pair both sides are always in the tie. After the tie-break vote there is exactly one more vote than
+// judges, whatever the panel size, because a pool's tie can happen with an odd panel too (1-1-1 with three judges).
 export function voteState(tallies, judgeCount) {
   const lead = leadOf(tallies);
   const tieBreakOpen = lead.total === judgeCount && lead.level;
-  const tieBreakUsed =
-    judgeCount % 2 === 0 && lead.total === judgeCount + 1 && lead.top === judgeCount / 2 + 1;
+  const pool = tallies.length > 2;
+  const tieBreakUsed = pool
+    ? lead.total === judgeCount + 1 && !lead.level
+    : judgeCount % 2 === 0 && lead.total === judgeCount + 1 && lead.top === judgeCount / 2 + 1;
   return {
     total: lead.total,
     open: lead.total < judgeCount || tieBreakOpen,

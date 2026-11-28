@@ -173,6 +173,8 @@ The sync status in the header (T-HARDEN.header-sync-chip, 2026-10-08) is a short
 
 **Display lifecycle (T-BTC.display-lifecycle, 2026-10-09)** — a display belongs to ONE event's session. `viewer-shell` tells `hasContent` and `renderBody` the live row's `eventId` as well as its `format`, and calls its optional `onNoContent(phase)` (idempotently; a throwing callback is logged) when it paints "no live session" (`noEvent`, `notStarted`; not `connecting`, not a lost connection, not `pending`). `formatBody` keys its one live body on format AND event id, so moving to another event, with or without a gap, destroys the old body and builds a fresh one, and `release()` destroys it when the session goes away (not final; `destroy()` is). `stageBody` builds its display on first use and has its own `release()`, so a body used without `formatBody` honours the same contract. `mountStageSurface` and `mountPhone` call `body.release` from `onNoContent`. The point is that a display compares each payload with the previous one to find what just happened, and that must never cross two events.
 
+**The side menu (2026-11-27, 4.31.0)** — `appShell`'s header is a left rail from 1024px (`INLINE_NAV_QUERY`, kept equal to the `min-width: 1024px` block at the end of `appShell.css`) and a top bar with a left drawer below it (a `.app-shell-scrim` node closes it). The panel scrolls inside itself; the header never has `overflow` set, so the notice overlays are not clipped. Never let the drawer or any menu part be wider than the viewport (no sideways scroll at 360px). See CHANGELOG.md.
+
 **Wordmark home link (2026-09-16)** — the header mark and name are now one root-relative
 `/` link with the accessible name “Seduh Score home.” The organiser app is served from
 `/app/`, so this keeps an explicit exit route available even at sign-in; do not split the
@@ -211,6 +213,8 @@ minDwellMs = 60000 })`, `paint(payload) -> { name, scoreLine?, podiumLine?, foot
    how the owner checks it at 1920x1080 and 360 px (jsdom has no layout).
 5. Words not colour; the TEST banner is the shell's; nothing in core names a format. BTC and Cup Taster still keep their
    own idle loops (a tidy-up for later: they can move to `createLoopScreen` unedited).
+
+`resultsStoryCard` (2026-11-27, 4.32.0) — the results story card: `drawResultsStoryCard(ctx, spec, { theme })` draws a finished competition's podium (winner box, next places as rows, Venue and Date on their own lines, the page address as text, no QR) on the light paper surface over the Petrol grid-lines backdrop; `paperStoryTheme(document.documentElement)` reads the paper tokens (+ `--color-gold-tint`). Format-agnostic like `storyCard.js`, whose size, `wrapLines` and render/share pipeline it uses (`renderStoryCard(spec, { draw })` takes the layout). The content and the Share dialog are in `src/marketing/` (`resultsStory.js`, `resultsShare.js`). A spec field is called `place`, not `rank`, because `no-derived-storage` rejects `rank:`.
 
 ## `main.js` (composition root)
 

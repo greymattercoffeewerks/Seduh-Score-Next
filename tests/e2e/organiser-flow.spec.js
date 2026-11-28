@@ -215,9 +215,9 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     const headerHeight = () =>
       page.locator('.app-shell-header').evaluate((el) => el.getBoundingClientRect().height);
     const syncedHeaderHeight = await headerHeight();
-    // ...and that height is one row (brand, event name, status and nav on a single line), not the
-    // two rows the old full-width status row made it.
-    expect(syncedHeaderHeight).toBeLessThan(80);
+    // ...and at this width the header is the left rail, which is the viewport's height (it sits beside the page,
+    // so a status change cannot push the Start/Stop buttons down).
+    expect(syncedHeaderHeight).toBe(page.viewportSize().height);
     await expect(page.getByText('Synced', { exact: true }).first()).toBeVisible();
 
     await page.context().setOffline(true);
@@ -687,20 +687,19 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.getByRole('link', { name: 'Back to events' })).toBeVisible();
   });
 
-  test('the organiser header collapses into the hamburger below 1366px and is one inline row from 1366px up', async ({
+  test('the organiser menu is a drawer below 1024px and the left rail from 1024px up', async ({
     page,
   }) => {
     // media queries can't be evaluated by the jsdom unit tests, so nothing
-    // else guards this cut-over. Signed in, the brand + four links + email +
-    // Sign out used to wrap into three left-aligned rows at 640-1100px.
+    // else guards this cut-over.
     await signIn(page);
     await expect(page.locator('#events-heading')).toBeVisible();
     const toggle = page.getByRole('button', { name: 'Menu', exact: true });
 
-    for (const width of [360, 731, 1365]) {
+    for (const width of [360, 731, 1023]) {
       await page.setViewportSize({ width, height: 800 });
       await expect(toggle).toBeVisible();
-      // Collapsed by default — the nav links stay out of reach until opened.
+      // Collapsed by default: the nav links stay out of reach until opened.
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
       await expect(page.getByRole('link', { name: 'Splash screen' })).toBeHidden();
       expect(
@@ -711,36 +710,62 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await expect(page.getByRole('link', { name: 'Splash screen' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+      // The drawer leaves the Menu button uncovered (to close it), never scrolls sideways, and the page
+      // behind it does not either.
+      const drawer = await page.evaluate(() => {
+        const panel = document.querySelector('.app-shell-nav-panel');
+        const box = panel.getBoundingClientRect();
+        return {
+          width: box.width,
+          right: box.right,
+          sideways: panel.scrollWidth - panel.clientWidth,
+          page: document.documentElement.scrollWidth - innerWidth,
+        };
+      });
+      expect(drawer.sideways, `drawer scrolls sideways at ${width}px`).toBeLessThanOrEqual(0);
+      expect(
+        drawer.page,
+        `page scrolls sideways with the drawer open at ${width}px`,
+      ).toBeLessThanOrEqual(0);
+      expect(drawer.right, `drawer covers the Menu button at ${width}px`).toBeLessThanOrEqual(
+        width - 72,
+      );
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     }
 
-    await page.setViewportSize({ width: 1366, height: 800 });
+    await page.setViewportSize({ width: 1024, height: 800 });
     await expect(toggle).toBeHidden();
     await expect(page.getByRole('link', { name: 'Splash screen' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
-    const rows = await page.evaluate(() => {
-      const top = (sel) => document.querySelector(sel).getBoundingClientRect().top;
-      const auth = document.querySelector('.app-shell-auth').getBoundingClientRect();
+    const rail = await page.evaluate(() => {
+      const header = document.querySelector('.app-shell-header').getBoundingClientRect();
       const nav = document.querySelector('.app-shell-nav').getBoundingClientRect();
+      const auth = document.querySelector('.app-shell-auth').getBoundingClientRect();
+      const outlet = document.querySelector('.app-shell-outlet').getBoundingClientRect();
       return {
-        // brand, nav and auth all start on the same row (a wrapped auth
-        // cluster would sit a whole row lower)
-        authBelowBrand: top('.app-shell-auth') - top('.app-shell-brand'),
-        // Vertically centred against the links: a stray margin-top on the
-        // auth cluster (a later same-specificity rule beat the 1366px
-        // override) sat it 4px low.
-        authOffCentre: Math.abs(auth.top + auth.height / 2 - (nav.top + nav.height / 2)),
-        authRight: auth.right,
-        innerWidth,
+        headerLeft: header.left,
+        headerWidth: header.width,
+        headerHeight: header.height,
+        navLeft: nav.left,
+        authBottom: auth.bottom,
+        authAboveNavBottom: auth.top < nav.bottom,
+        outletLeft: outlet.left,
+        overflow: document.documentElement.scrollWidth - innerWidth,
+        innerHeight,
       };
     });
-    expect(rows.authBelowBrand).toBeLessThan(20);
-    expect(rows.authOffCentre).toBeLessThan(2);
-    expect(rows.authRight).toBeLessThanOrEqual(rows.innerWidth);
+    // A column on the left, the page beside it (not under it), the account at its foot.
+    expect(rail.headerLeft).toBe(0);
+    expect(rail.headerWidth).toBeLessThan(300);
+    expect(rail.headerHeight).toBe(rail.innerHeight);
+    expect(rail.outletLeft).toBeGreaterThanOrEqual(rail.headerWidth - 1);
+    expect(rail.authAboveNavBottom).toBe(false);
+    expect(rail.authBottom).toBeLessThanOrEqual(rail.innerHeight);
+    expect(rail.overflow).toBeLessThanOrEqual(0);
   });
 
-  test('the hamburger menu at tablet widths shows a "Menu" label and opens as a compact row, and keyboard focus survives crossing the 1366px breakpoint', async ({
+  test('the menu at tablet widths shows a "Menu" label and opens as a left drawer, and keyboard focus survives crossing the 1024px breakpoint', async ({
     page,
   }) => {
     await signIn(page);
@@ -756,52 +781,50 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(label).toBeVisible();
     await expect(label).toHaveText('Menu');
 
-    // The open panel at 900px is a wrapping row (links left, auth right), not
-    // a tall full-width stack of one item per line. Relative to one link's own
-    // height, so it holds across fonts and email lengths: the links sit on one
-    // row (tops within half a link height of each other) and the whole panel
-    // is under three link-heights tall, where a stacked column of the links
-    // plus the auth cluster would be six or more.
+    // The open panel at 900px is a drawer on the left: the links are one column (the same left edge, one under
+    // another), it is as tall as the screen, and no wider than 18rem (288px).
     await toggle.click();
-    const layout = await page.evaluate(() => {
+    const layout = await page.evaluate(async () => {
+      // The drawer slides in: measure it where it comes to rest, not part-way.
+      const panelNode = document.querySelector('.app-shell-nav-panel');
+      await Promise.all(panelNode.getAnimations().map((a) => a.finished.catch(() => {})));
       const rects = [...document.querySelectorAll('.app-shell-nav a')].map((a) =>
         a.getBoundingClientRect(),
       );
-      const tops = rects.map((r) => r.top);
+      const panel = document.querySelector('.app-shell-nav-panel').getBoundingClientRect();
+      const auth = document.querySelector('.app-shell-auth').getBoundingClientRect();
       return {
         linkCount: rects.length,
-        linkHeight: rects[0].height,
-        topSpread: Math.max(...tops) - Math.min(...tops),
-        panelHeight: document.querySelector('.app-shell-nav-panel').getBoundingClientRect().height,
-        // The account cluster (email, Change password, Sign out): two lines at tablet widths, beside the links.
-        auth: (() => {
-          const a = document.querySelector('.app-shell-auth').getBoundingClientRect();
-          return { width: a.width, top: a.top, bottom: a.bottom };
-        })(),
-        linkTop: rects[0].top,
-        linkBottom: rects[0].bottom,
+        leftSpread: Math.max(...rects.map((r) => r.left)) - Math.min(...rects.map((r) => r.left)),
+        stacked: rects.every((r, i) => i === 0 || r.top >= rects[i - 1].bottom - 1),
+        panelLeft: panel.left,
+        panelWidth: panel.width,
+        panelHeight: panel.height,
+        authTop: auth.top,
+        lastLinkBottom: rects[rects.length - 1].bottom,
+        innerHeight,
       };
     });
     expect(layout.linkCount).toBeGreaterThan(1);
-    expect(layout.topSpread).toBeLessThan(layout.linkHeight / 2);
-    expect(layout.panelHeight).toBeLessThan(layout.linkHeight * 3);
-    // The account cluster sits BESIDE the links, not on a row of its own below them (that was the layout that
-    // made the panel too tall once Change password joined it), and stays within its 15rem (240px) cap.
-    expect(layout.auth.width).toBeLessThanOrEqual(241);
-    expect(layout.auth.top).toBeLessThan(layout.linkBottom);
-    expect(layout.auth.bottom).toBeGreaterThan(layout.linkTop);
+    expect(layout.leftSpread).toBeLessThan(2);
+    expect(layout.stacked).toBe(true);
+    expect(layout.panelLeft).toBe(0);
+    expect(layout.panelWidth).toBeLessThanOrEqual(289);
+    expect(layout.panelHeight).toBe(layout.innerHeight);
+    // The account sits under the links, at the foot.
+    expect(layout.authTop).toBeGreaterThanOrEqual(layout.lastLinkBottom);
     await toggle.click();
 
-    // Focus on the toggle when the nav goes inline lands on the first link…
-    await page.setViewportSize({ width: 1365, height: 800 });
+    // Focus on the toggle when the rail appears lands on the first link...
+    await page.setViewportSize({ width: 1023, height: 800 });
     await toggle.click();
     await expect(toggle).toBeFocused();
-    await page.setViewportSize({ width: 1366, height: 800 });
+    await page.setViewportSize({ width: 1024, height: 800 });
     await expect(toggle).toBeHidden();
     await expect(page.locator('.app-shell-nav a').first()).toBeFocused();
 
-    // …and focus on a nav link when it collapses returns to the toggle.
-    await page.setViewportSize({ width: 1365, height: 800 });
+    // ...and focus on a nav link when it collapses returns to the toggle.
+    await page.setViewportSize({ width: 1023, height: 800 });
     await expect(toggle).toBeVisible();
     await expect(toggle).toBeFocused();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -850,6 +873,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
       const slot = document.querySelector('.app-shell-org').getBoundingClientRect();
       return {
         header: Math.round(header.height),
+        topBar: window.innerWidth < 1024,
         chip: chipBox ? [Math.round(chipBox.left), Math.round(chipBox.top)] : null,
         slotWidth: Math.round(slot.width),
         overflow: document.documentElement.scrollWidth - window.innerWidth,
@@ -862,7 +886,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     const withoutSlot = await measureHeader(page);
     await page.locator('.app-shell-org').evaluate((node) => node.style.removeProperty('display'));
     expect(withSlot.header, `header height ${where}`).toBe(withoutSlot.header);
-    expect(withSlot.chip, `sync chip position ${where}`).toEqual(withoutSlot.chip);
+    // In the rail the slot is a row above the chip (a column), so only the top bar keeps the chip in place.
+    if (withSlot.topBar) {
+      expect(withSlot.chip, `sync chip position ${where}`).toEqual(withoutSlot.chip);
+    }
     expect(withSlot.overflow, `sideways scroll ${where}`).toBeLessThanOrEqual(0);
     if (minSlotWidth) {
       expect(withSlot.slotWidth, `organisation slot width ${where}`).toBeGreaterThanOrEqual(
@@ -875,7 +902,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     ['the events list', '#/events'],
     ['an event', '#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01'],
   ];
-  const WIDTHS = [360, 639, 640, 900, 1365, 1366];
+  const WIDTHS = [360, 639, 640, 900, 1023, 1024, 1440];
 
   for (const [label, extra] of [
     ['one organisation', []],
@@ -1005,7 +1032,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
       await outbox.enqueueOperation('layout_probe', {});
     });
     await expect(page.locator('.app-shell-sync-chip-pending')).toBeVisible({ timeout: 8000 });
-    const WARNING_WIDTHS = [320, 360, 640, 900, 1365, 1366, 1600];
+    const WARNING_WIDTHS = [320, 360, 640, 900, 1023, 1024, 1600];
     for (const width of WARNING_WIDTHS) {
       await page.setViewportSize({ width, height: 800 });
       const toggle = page.locator('.app-shell-nav-toggle');

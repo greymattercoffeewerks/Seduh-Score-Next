@@ -24,7 +24,7 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   reporter: 'list',
-  // A desktop-width default, above the organiser header's 1366px hamburger
+  // A desktop-width default, above the organiser menu's 1024px rail
   // cut-over (appShell.css): Playwright's own 1280x720 default would put the
   // nav links behind the hamburger and break every test that clicks one.
   // organiser-flow.spec.js's header test sets its own widths on both sides.
@@ -175,7 +175,7 @@ export default defineConfig({
       // throwdown-event.spec.js (T-TD.1): a full 8-competitor Throwdown test event, console plus a projector and a phone,
       // against the real local stack. Last, for the same shared-backend reason as the projects above.
       name: 'dev-throwdown',
-      testMatch: /throwdown-(event|scoresheet)\.spec\.js/,
+      testMatch: /throwdown-(event|scoresheet|redemption)\.spec\.js/,
       dependencies: ['dev-archive-ui'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
