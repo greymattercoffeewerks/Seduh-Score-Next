@@ -199,3 +199,11 @@ Built: the "Forgot password?" request screen, the screen a recovery link opens, 
 - **The admin field hint sits before its input.** `DESIGN.md` says the hint goes after the input, so the sibling selector that hides the error can reach it. Not changed in P4 (`ui-accessibility-reviewer`, Not fixed). Move the hint and keep the selector.
 - **The admin plan panel's errors land in a polite status region** (pre-existing, `planParts.js`). An error should be assertive or sit inline by its cause.
 - **The leave-screen and sign-out warning stays a native dialog on purpose** (a one-time password cannot be recovered). Recorded so nobody "fixes" it into an undoable panel; the owner can overrule.
+
+## Known open items from the admin Seduh ID queue and People tidy-up (4.36.0, 2026-11-28)
+
+- **Owner decision, not made: surface Approve and set `app.seduh_feed_mode.console_actions`.** Only on the owner's word, and after the owner's Cloudflare hardening of the admin console. Until then Approve is refused for everyone (`seduh_feed_console_off`) and no button shows. Source: CHANGELOG 4.36.0; `src/admin/CLAUDE.md`, "The queue".
+- **Pending, owner's own work: Cloudflare hardening of the admin console.** Not started in the repo; Approve waits for it.
+- **Root rule out of step.** `CLAUDE.md` (Platform administration) still says an admin sees no person (D-A4). The queue's names view is an owner amendment recorded only in `src/admin/CLAUDE.md`. The owner decides whether to amend the root rule.
+- **Reviews owed, not recorded (4.36.0).** `security-reviewer` and an independent check on the `p_via = 'admin'` path of `app.seduh_feed_apply`; `schema-guardian` on `20261202110000` and `20261202120000` (rollback run in a transaction); `module-boundary-checker`; `ui-accessibility-reviewer` at 360px; `test-auditor` on pgTAP `097` and `098`. Also not done: code-reviewer's independent re-check of the two Important findings on the People tidy-up.
+- **pgTAP and Playwright not run by the building session.** `npm run db:test` and the e2e suite (`npm run db:lock -- run -- npm run test:e2e`) on the owner's machine are still owed for `097`, `098` and both screens.

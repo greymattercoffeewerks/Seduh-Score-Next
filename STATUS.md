@@ -1,31 +1,31 @@
 # Status — read this first
 
-_As of 2026-11-28, app version 4.35.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-28, app version 4.36.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
-- **Throwdown Bracket Planner** (4.35.0, PR to `dev`): free Community tool, card 06; reads three pure Throwdown modules; shared pure logic allowed (owner, 28 Nov).
+- **Admin Seduh ID queue and People tidy-up** (4.36.0, live 2026-11-28): Reject on the queue; Approve built but OFF. **Throwdown Bracket Planner** (4.35.0, Community card 06) is live too.
 - **Throwdown bracket preview** (4.34.0, live; on the dashboard since 4.34.2): "Plan the event" card, redemption included. Owed: 360px check.
 - **Throwdown redemption (TD.3)** (4.33.0, live): migration in the cloud.
 - **Share result to a story** (4.32.0, live): Results page Share button. Owed: phone check.
-- **Phone results** (4.31.1), **left side menu** (4.31.0, device check passed) and **demo people** (4.31.0, migration in the cloud) are live.
+- **Phone results** (4.31.1), **left menu** (4.31.0) and **demo people** (4.31.0) are live.
 - **Guided tours** (PR #588): reusable tour, first on Throwdown setup.
-- **In flight:** PR #580 demo data for Cup Taster and Throwdown test events (Load and Clear; its new migration `20261202100000` is NOT in the cloud, push only with the owner's OK).
+- **In flight:** PR #580 demo data for test events; its migration `20261202100000` is NOT in the cloud (owner's OK first).
+- **Open owner decisions:** surface Approve and set `app.seduh_feed_mode.console_actions` (not yet; Cloudflare hardening first). 4.36.0 reviews incomplete (CHANGELOG).
 - **BTC night dashboard, Phase 1** (4.30.0, live): night switch, Needs you list, run strip, standings draft preview.
-- **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: venue and TV check.
+- **Petrol Figma review fixes** (4.29.0): stage text passes 4.5:1; a "Connection lost" bar keeps results on screen; Timer Reset asks first. Owed: venue and TV check.
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
-  `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0), discovery (4.17.3, behind its off switch), courses and certificates (4.19.0), "This isn't mine" on a recorded result (4.20.0), all live (the owner still to confirm the dispute policy, CHANGELOG 4.20.0, and the discovery search policy, 4.17.3); the archive feed (1b) is in `queue` mode and
+  `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0), discovery (4.17.3, behind its off switch), courses and certificates (4.19.0), "This isn't mine" on a recorded result (4.20.0), all live (owner to confirm the dispute and discovery search policies, CHANGELOG 4.20.0 and 4.17.3); the archive feed (1b) is in `queue` mode and
   has published nothing yet.
 - **Organiser home** (`#/events` rebuild): live as 4.17.0; its migration is in the cloud. Owner's real-device check owed.
 - **Country pages** (4.10.2): live, data in the cloud. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
 - **Petrol Kaizen P4 to P6** are live; tablet and iPad checks owed.
-- **Cloud database in sync (checked 2026-11-28):** every migration on `main` is in the cloud, the newest being
-  `td_redemption` and `load_demo_roster`.
+- **Cloud database:** every migration on `main` is in the cloud (owner-confirmed 2026-11-28, incl. `20261202110000` and `20261202120000`).
 - **Random Selector redesign** (4.21.0, 4.22.0). Owed: the owner's 16:9 and tablet check.
-- **Throwdown scoresheet rounds** (Final and 3rd place from judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): **4.23.0** (#524, #525) for the 27 Nov event. Owed: the owner's tablet test event.
+- **Throwdown scoresheet rounds** (Final and 3rd place from paper sheets typed in; scores never shown to the audience): **4.23.0** (#524, #525) for the 27 Nov event. Owed: the owner's tablet test event.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
 - **Throwdown vote cap** (4.25.1): a match takes no more taps than judges, plus one tie-break vote when level. In the cloud.
