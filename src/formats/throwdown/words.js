@@ -13,6 +13,10 @@ const REFUSALS = {
     'A semi-final loser was withdrawn or restored since this round ended, so undoing it would change the 3rd place match. Put the withdrawal back as it was first.',
   td_votes_full:
     'Every judge has voted in this match, and any tie-break vote is in. Undo a vote to change it.',
+  td_tiebreak_slot:
+    'The tie-break vote goes to one of the brewers who are tied. Choose one of them.',
+  td_redemption_invalid:
+    'Redemption needs groups of 2 to 4, a cap of 0 or more, and at least one round to feed it.',
   td_match_not_ready: 'That match does not have two competitors yet.',
   td_setup_locked: 'Setup is locked because Round 1 has started.',
   td_already_started: 'This event has already started.',
@@ -87,13 +91,28 @@ export function resultLine(match) {
   if (match.resultKind === 'bye') return RESULT_WORDS.bye;
   if (match.resultKind === 'scores') return RESULT_WORDS.scores;
   if (match.resultKind === 'votes') {
-    const [a, b] = match.sides.filter((s) => s.entryId);
+    const seated = match.sides.filter((s) => s.entryId);
+    // a group of three or four: every brewer's votes, most first ("2 to 1 to 0")
+    if (seated.length > 2)
+      return seated
+        .map((s) => s.votes)
+        .sort((a, b) => b - a)
+        .join(' to ');
+    const [a, b] = seated;
     return RESULT_WORDS.votes(a.votes, b.votes);
   }
   return null;
 }
 
+// The title of a match: "A vs B"; a redemption group is "Group 2: A, B and C" (a group is not a duel).
 export function matchTitle(match) {
   const names = match.sides.map((s) => s.name ?? (match.isBye ? 'Bye' : 'To be decided'));
+  if (match.isPool) return `Group ${match.position}: ${listWords(names)}`;
   return names.join(' vs ');
+}
+
+// "A", "A and B", "A, B and C".
+export function listWords(names) {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }

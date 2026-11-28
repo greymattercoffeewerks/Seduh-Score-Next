@@ -2,7 +2,7 @@
 // asks this whether to offer Undo, and the database applies the same rule again and has the last word.
 //
 // The rule, as in SQL: a decided match that is not a bye can be undone while nothing after it has started. Confirming the
-// last match of a main round creates every later round at once (the next main round, and from the semi-finals the 3rd
+// last match of a main or redemption round creates every later round at once (the next main round, and from the semi-finals the 3rd
 // place match with the Final), so undoing a main-round match removes those later rounds, and is refused once any of their
 // matches has a tap, a score sheet or a result other than a bye. A 3rd place match and the Final have nothing after them.
 // The console counts work still waiting in this device's outbox as started too (the database cannot see it yet).
@@ -21,7 +21,8 @@ export function reopenState(
   if (!match || !match.decided) return { allowed: false, reason: 'not_decided' };
   if (match.isBye) return { allowed: false, reason: 'bye' };
   if (pending.get(matchId)?.reopenQueued) return { allowed: false, reason: 'queued' };
-  if (round.phase !== 'main') return { allowed: true, later: [] };
+  // a 3rd place match has nothing after it; a main or a redemption round's results are followed by later rounds
+  if (round.phase !== 'main' && round.phase !== 'redemption') return { allowed: true, later: [] };
 
   const later = rounds.filter((r) => r.position > round.position);
   const sheeted = new Set(sheets.map((s) => s.match_id));
@@ -39,7 +40,7 @@ export function reopenState(
   if (started) return { allowed: false, reason: 'next_round_started' };
   // The rebuild re-reads withdrawals (the 3rd place match needs both semi-final losers active): if one was withdrawn or
   // restored since, undoing a semi-final would add or drop the 3rd place match, so it is refused (td_third_place_changed).
-  if (round.matches.length === 2 && later.length) {
+  if (round.phase === 'main' && round.matches.length === 2 && later.length) {
     const withdrawn = new Set(entries.filter((e) => e.withdrawn).map((e) => e.id));
     const losers = round.matches.map(
       (m) => m.sides.find((s) => s.entryId && !s.winner)?.entryId ?? null,
@@ -61,9 +62,11 @@ export function reopenWords(match, later, { scored = false } = {}) {
         ? 'The match goes back to open with its scoresheets kept. Fix the sheet, then confirm again.'
         : 'The match goes back to open with its votes kept. Undo the wrong vote, then confirm again.';
   const removed = later.length
-    ? later.some((r) => r.phase === 'third_place')
-      ? ' The 3rd place match and the Final are removed, and made again from the corrected result when you confirm.'
-      : ' The next round is removed, and made again from the corrected result when you confirm.'
+    ? later.some((r) => r.phase === 'redemption')
+      ? ' The redemption round is removed too, and drawn again at random when you confirm.'
+      : later.some((r) => r.phase === 'third_place')
+        ? ' The 3rd place match and the Final are removed, and made again from the corrected result when you confirm.'
+        : ' The next round is removed, and made again from the corrected result when you confirm.'
     : '';
   return {
     question: `Undo ${winner}’s win?`,
@@ -77,7 +80,11 @@ export function reopenWords(match, later, { scored = false } = {}) {
 export function matchesAwaitingUndo(bracket, pending = new Map()) {
   const rounds = bracket?.rounds ?? [];
   const firstUndone = rounds
-    .filter((r) => r.phase === 'main' && r.matches.some((m) => pending.get(m.id)?.reopenQueued))
+    .filter(
+      (r) =>
+        (r.phase === 'main' || r.phase === 'redemption') &&
+        r.matches.some((m) => pending.get(m.id)?.reopenQueued),
+    )
     .map((r) => r.position)
     .sort((a, b) => a - b)[0];
   if (firstUndone === undefined) return new Set();

@@ -16,6 +16,23 @@ export function hasThrowdownPublicContent(payload) {
 // the "vs" block with its status in words. The score is winner first (the sides are listed in bracket order, which is why
 // the old line could say "0 to 1"). A walkover or a bye has no counts: the word stands where the numbers would.
 function matchNode(match) {
+  // a redemption group lists its brewers ("Group 2: A, B, C"): none is "versus" another, and every brewer's votes are said
+  if (match.pool) {
+    const winner = match.sides.find((s) => s.winner);
+    const counts = match.sides.map((s) => s.votes);
+    const split = counts.every((n) => typeof n === 'number')
+      ? ` · ${[...counts].sort((a, b) => b - a).join(' to ')}`
+      : '';
+    const note = match.decided
+      ? match.resultKind === 'walkover'
+        ? `${winner?.name ?? 'The winner'} wins · Walkover`
+        : `${winner ? `${winner.name} wins` : 'Decided'}${split}`
+      : match.judging
+        ? 'Judges scoring'
+        : 'Being decided';
+    const names = match.sides.map((s) => s.name ?? 'To be decided').join(', ');
+    return buildMatchBlock({ names: [`Group ${match.number}: ${names}`], note });
+  }
   const winner = match.sides.find((s) => s.winner);
   const loser = match.sides.find((s) => !s.winner);
   if (match.decided && winner) {

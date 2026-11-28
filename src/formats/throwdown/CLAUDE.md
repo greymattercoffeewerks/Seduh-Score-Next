@@ -73,6 +73,18 @@ TD.1 (2026-11-03): schema `20261103111000`, functions `20261103120000`, keys and
 Out of TD.1 by design: redemption, lucky loser, revival draw, latte art, formatted PDF report,
 archive write, any lift of the Random Selector engine.
 
+## Redemption (TD.3, 2026-11-27)
+
+Spec (local only): `Handoffs and Specs/THROWDOWN-SPEC-DRAFT.md` sections 8.1 and 14. Migration `20261201110000`, pgTAP `095`.
+
+- **1 v 1 first (owner, 27 Nov):** the setup offers pairs only; sizes 2 to 4 still exist in the database and `redemption.js`.
+- **Setup**: module `redemption` (key `throwdown_redemption`), stored exactly `{ group_size 2..4, cap, feed }` (`redemption.js` form helpers; `td_save_settings` rebuilds it). Off stores nothing.
+- **A group is a pool match** (2 to 4 slots; round `kind` pool, `phase` redemption). Votes, `td_match_results` and `td_confirm_match` are the pair's, unchanged: strictly the most votes wins. The ONE tie-break vote goes only to a brewer tied at the top (`td_cast_vote`, `td_tiebreak_slot`; `votes.js` `tiedSlotIds`, `voteState` for pools).
+- **Created by `app.td_advance`**, in the same transaction as the result that completes the feeding main round: the active losers, ordered by `md5(draw code || competitor id)` (the code is `td_rounds.draw_seed`, made in the database and shown on the Redemption page, so the draw is replayable), into `app.td_group_sizes(pool, size)` groups (JS twin `groupSizes`; shared cases). Only after a main round whose number is in `feed` AND that leaves MORE THAN FOUR winners AND with two or more brewers; else the bracket goes straight on. When the last group is decided the next main round is built from the feeding round's winners then the group winners (cap: most votes first, ties by group order).
+- **A brewer can come back more than once** (owner, 27 Nov): nothing blocks a returning brewer; history is derived (`revivedCounts`) and only shown.
+- **Surfaces** (every one tested with a group and with the module off, `redemptionSurfaces.test.js`): console Redemption page (`redemptionScreen.js`, no event-bar tab, linked from Matches only when a redemption round exists), group vote cards in `eventScreen.js`, run sheet, phone, projector, results page, match-log CSV (extra columns only when a group exists), published places (a revived brewer once, by the last main round lost). The live payload marks a group `pool: true`; no such key exists without the module. A group is not in the published knockout record (owner to decide).
+- **Rule for the next module**: a surface that destructures two sides (`[a, b] = sides`) or joins "A vs B" is a defect for a group; use `match.isPool` / `pool`.
+
 ## Scoresheet module (stage 1, 2026-11-19)
 
 Rounds decided by judges' paper scoresheets that a scorekeeper types in (spec, local only:

@@ -305,6 +305,50 @@ describe('buildThrowdownPayload: matches (the knockout record)', () => {
   });
 });
 
+describe('a redemption round in the published places', () => {
+  // 6 players: A, C and E win Round 1 (B, D and F lose), the group B, D, F is won by D (slot 1), D then wins a semi-final
+  // and loses the Final. D lost twice and played on, so D must be listed ONCE, as runner-up, not also among Round 1's losers.
+  function sixWithRedemption() {
+    const r = [
+      ['r1', 1],
+      ['r2', 2, 'redemption'],
+      ['r3', 3],
+      ['r4', 4],
+    ];
+    const m = [
+      ['a1', 'r1', 1, ['A', 'B'], 0],
+      ['a2', 'r1', 2, ['C', 'D'], 0],
+      ['a3', 'r1', 3, ['E', 'F'], 0],
+      ['p1', 'r2', 1, ['B', 'D', 'F'], 1],
+      ['s1', 'r3', 1, ['A', 'C'], 0],
+      ['s2', 'r3', 2, ['E', 'D'], 1],
+      ['f', 'r4', 1, ['A', 'D'], 0],
+    ];
+    return build(r, m, ['A', 'B', 'C', 'D', 'E', 'F']);
+  }
+
+  it('lists a brewer who was brought back once, in the place of the round they finally lost in', () => {
+    const { bracket, entries } = sixWithRedemption();
+    const p = buildThrowdownPayload({ event, bracket, entries, scope: 'full' });
+    const names = p.standings.map((s) => s.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.sort()).toEqual(['A', 'B', 'C', 'D', 'E', 'F']);
+    const place = (n) => p.standings.find((s) => s.name === n).place;
+    expect([place('A'), place('D')]).toEqual([1, 2]);
+    // no 3rd place match: the two semi-final losers share 3rd; the two who lost Round 1 for good share the place after
+    expect([place('C'), place('E')]).toEqual([3, 3]);
+    expect([place('B'), place('F')]).toEqual([5, 5]);
+    expect(p.competitors).toBe(6);
+  });
+
+  it('keeps a group out of the knockout record (a group is not a duel)', () => {
+    const { bracket, entries } = sixWithRedemption();
+    const p = buildThrowdownPayload({ event, bracket, entries, scope: 'full' });
+    expect(p.matches.map((x) => x.round)).not.toContain('Redemption');
+    expect(p.matches).toHaveLength(6);
+  });
+});
+
 describe('describePublishError', () => {
   it('says plainly that a test event is refused, chosen by the database’s own words', () => {
     expect(

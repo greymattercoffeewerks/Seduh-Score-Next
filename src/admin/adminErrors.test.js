@@ -151,6 +151,8 @@ const NOT_FOR_THE_CONSOLE = {
   td_organiser_pick_required: 'Throwdown scoresheet',
   td_organiser_pick_unneeded: 'Throwdown scoresheet',
   td_leader_changed: 'Throwdown format',
+  td_tiebreak_slot: 'Throwdown format',
+  td_redemption_invalid: 'Throwdown redemption',
   // Seduh ID claiming (T-ID2.B3a): the organiser's and the competitor's own screens (B3b); never an admin console call.
   no_identity: 'Seduh ID claim',
   identity_unavailable: 'Seduh ID claim',

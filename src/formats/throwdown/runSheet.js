@@ -94,15 +94,16 @@ function roundPhase(round, links) {
     id: `round-${round.position}`,
     label: round.label,
     status: open === 0 ? 'done' : 'in_progress',
-    count: `${decided} of ${total} decided`,
+    count: `${decided} of ${total} ${round.phase === 'redemption' ? 'groups ' : ''}decided`,
     progress: { done: decided, active, total },
     nextAction: open === 0 || !next ? null : { label: 'Open matches', href: links.matches },
     blockedReason: null,
   };
 }
 
-// Only while the Final does not exist. N is how many MORE rounds there will be, never a round's name.
-function roundsToComePhase(rounds) {
+// Only while the Final does not exist. N is how many MORE rounds there will be, never a round's name. While a redemption
+// round is still being voted, the next main round waits for it, and the sentence says so.
+function roundsToComePhase(rounds, waitingOn = null) {
   const latest = rounds[rounds.length - 1];
   if (!latest || latest.matches.length <= 1) return null;
   const more = Math.ceil(Math.log2(latest.matches.length));
@@ -110,9 +111,11 @@ function roundsToComePhase(rounds) {
     id: 'rounds-to-come',
     label: 'Rounds to come',
     status: 'waiting',
-    count: `${plural(more, 'more round', 'more rounds')}`,
+    count: waitingOn
+      ? 'More rounds after the redemption round'
+      : `${plural(more, 'more round', 'more rounds')}`,
     nextAction: null,
-    blockedReason: `Starts when the ${latest.label} is decided.`,
+    blockedReason: `Starts when the ${waitingOn?.label ?? latest.label} is decided.`,
   };
 }
 
@@ -173,9 +176,17 @@ export function deriveThrowdownPhases(data) {
   const rounds = mainRounds(data.bracket);
   const finalExists = rounds.length > 0 && rounds[rounds.length - 1].matches.length === 1;
   const phases = [setupPhase(data, links), drawPhase(data, links)];
-  for (const round of rounds) phases.push(roundPhase(round, links));
+  // a redemption round is a phase of its own, in play order (after the main round that feeds it)
+  const playedRounds = data.bracket.rounds.filter(
+    (r) => r.phase === 'main' || r.phase === 'redemption',
+  );
+  for (const round of playedRounds) phases.push(roundPhase(round, links));
   if (!finalExists) {
-    const toCome = roundsToComePhase(rounds);
+    const lastPlayed = playedRounds[playedRounds.length - 1];
+    const toCome = roundsToComePhase(
+      rounds,
+      lastPlayed?.phase === 'redemption' ? lastPlayed : null,
+    );
     if (toCome) phases.push(toCome);
   }
   if (data.settings.third_place) phases.push(thirdPlacePhase(data, links, rounds));

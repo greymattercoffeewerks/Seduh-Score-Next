@@ -12,6 +12,14 @@ export const MODULES = Object.freeze([
     requires: Object.freeze([]),
     entitlementKey: 'throwdown_scoresheet',
   }),
+  // A second chance: after a feeding round the losers are drawn into groups, each group votes for one brewer, and the
+  // group winners rejoin the bracket (redemption.js, migration 20261201110000). Per-event and up.
+  Object.freeze({
+    key: 'redemption',
+    label: 'Redemption round',
+    requires: Object.freeze([]),
+    entitlementKey: 'throwdown_redemption',
+  }),
 ]);
 
 export function moduleKeys(registry = MODULES) {
