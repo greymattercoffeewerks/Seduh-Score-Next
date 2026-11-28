@@ -7,6 +7,14 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Admin Seduh ID queue: names view, Reject, Approve built but off · unreleased · 2026-11-28
+
+**Status: PR into `dev`, not released; version not bumped here (the tidy-up PR holds 4.36.0). Migration `20261202120000` is NOT in the cloud; push only with the owner's OK.** Owner decisions 2026-11-28: the platform admin may see the names on the feed queue (an amendment of D-A4), Reject from the console, and build Approve but do not surface it (the owner will harden the console via Cloudflare first).
+
+- **What it does.** Admin, Seduh ID screen: "Waiting for review" lists each queued podium (event, organisation, date, queued time, places and names) with a Reject button after a confirmation. No phone, cafe or person id is returned or drawn (view columns pinned in pgTAP 098).
+- **Database.** `admin_seduh_feed_queue()`, `admin_seduh_feed_reject(id)`, `admin_seduh_feed_approve(id)`, all behind `app.require_platform_admin()`; audit `seduh_feed.reject` and `seduh_feed.approve` (ids and counts only). `app.seduh_feed_mode.console_actions` (default false) is the switch: Approve is refused for everyone (`seduh_feed_console_off`) until the owner sets it in SQL. `app.seduh_feed_apply` is redefined with ONE change, a third path `p_via = 'admin'` that needs the platform-admin gate AND the switch; it still has no grant to any API role. `processed_via` accepts 'admin'.
+- **Not done / to know.** No Approve button (by decision). pgTAP 098, the matrices `041` and `050`, and the adversarial list were updated but NOT run here (CI runs pgTAP). The loosened wall in `app.seduh_feed_apply` needs `security-reviewer` and the independent check before merge.
+
 ## Throwdown Bracket Planner, a free Community tool · 4.35.0 · 2026-11-28
 
 **Status: PR into `dev`, not released.** The owner asked for the planner as a Community Tools entry (works with no event, saves nothing, open to anyone). `/tools/throwdown-planner/`, card 06 on the hub and in every tool's "More free community tools" strip. No migration.
