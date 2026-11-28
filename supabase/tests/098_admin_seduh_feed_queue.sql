@@ -106,7 +106,7 @@ select is(
     where p.oid = 'public.admin_seduh_feed_queue()'::regprocedure and a.mode = 't'),
   'result_id,org_name,event_name,event_date,enqueued_at,podium,console_actions',
   'the view''s columns are pinned: names and places, no phone, no cafe, no person id');
-create temp table t098.seen on commit drop as select * from public.admin_seduh_feed_queue() where false;
+create table t098.seen as select * from public.admin_seduh_feed_queue() where false;
 grant all on t098.seen to authenticated;
 select set_config('role', 'authenticated', true);
 select t098.claims(t098.u(1), 'aal2', 10);
