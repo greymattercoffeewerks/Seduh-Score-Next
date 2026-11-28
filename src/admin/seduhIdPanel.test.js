@@ -33,15 +33,18 @@ const refused = (hint, extra = {}) => ({ data: null, error: { hint, ...extra } }
 
 let host;
 let handle;
-function mount(answer, { onGateRefused = vi.fn() } = {}) {
-  const callAdmin = vi.fn(async (name, args) =>
-    typeof answer === 'function' ? answer(args, name) : answer,
-  );
+function mount(answer, { onGateRefused = vi.fn(), queue = ok([]) } = {}) {
+  const callAdmin = vi.fn(async (name, args) => {
+    if (name === 'admin_seduh_feed_queue') return typeof queue === 'function' ? queue(args) : queue;
+    return typeof answer === 'function' ? answer(args, name) : answer;
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   handle = mountSeduhIdPanel(host, { callAdmin, onGateRefused });
   return { callAdmin, onGateRefused };
 }
+const countsCalls = (callAdmin) =>
+  callAdmin.mock.calls.filter(([name]) => name === 'admin_seduh_id_counts').length;
 const text = () => host.textContent;
 const button = (label) => [...host.querySelectorAll('button')].find((b) => b.textContent === label);
 const value = (label) =>
@@ -90,7 +93,7 @@ describe('the Seduh ID panel', () => {
     const { callAdmin } = mount(ok([COUNTS]));
     expect(text()).toContain('Loading…');
     await flush();
-    expect(callAdmin).toHaveBeenCalledTimes(1);
+    expect(countsCalls(callAdmin)).toBe(1);
     expect(callAdmin).toHaveBeenCalledWith('admin_seduh_id_counts', {});
     expect(host.querySelector('h1').textContent).toBe('Seduh ID');
     expect(text()).toContain(EXPLANATION);
@@ -112,8 +115,9 @@ describe('the Seduh ID panel', () => {
     expect(text()).not.toContain('Loading…');
   });
 
-  it('says in one line that it is numbers only and that merges and unlinks are SQL', () => {
-    expect(EXPLANATION).toMatch(/numbers only/i);
+  it('says in one line that the figures are counts, the queue shows names, and merges and unlinks are SQL', () => {
+    expect(EXPLANATION).toMatch(/counts only/i);
+    expect(EXPLANATION).toMatch(/never a phone number/i);
     expect(EXPLANATION).toMatch(/merges and unlinks/i);
     expect(EXPLANATION).toMatch(/SQL/);
   });
@@ -221,7 +225,7 @@ describe('the Seduh ID panel', () => {
     expect(value('Identities in total')).toBe('17');
     button('Refresh numbers').click();
     await flush();
-    expect(callAdmin).toHaveBeenCalledTimes(2);
+    expect(countsCalls(callAdmin)).toBe(2);
     expect(value('Identities in total')).toBe('18');
     expect(document.activeElement).toBe(button('Refresh numbers'));
   });
@@ -262,7 +266,7 @@ describe('the Seduh ID panel', () => {
         }),
     );
     await flush();
-    expect(callAdmin).toHaveBeenCalledTimes(1);
+    expect(countsCalls(callAdmin)).toBe(1);
     release();
     await flush();
     const refresh = button('Refresh numbers');
@@ -270,7 +274,7 @@ describe('the Seduh ID panel', () => {
     // a press that reaches the handler while loading (a disabled button would swallow a real click)
     refresh.dispatchEvent(new Event('click'));
     await flush();
-    expect(callAdmin).toHaveBeenCalledTimes(2);
+    expect(countsCalls(callAdmin)).toBe(2);
     release();
   });
 

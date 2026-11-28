@@ -39,6 +39,10 @@ export function describeAuditEntry(entry) {
       return 'Event’s plan raised';
     case 'event.release':
       return 'Open event released';
+    case 'seduh_feed.reject':
+      return 'Seduh ID queue: podium rejected';
+    case 'seduh_feed.approve':
+      return 'Seduh ID queue: podium approved';
     default:
       return String(entry?.action ?? 'Change');
   }

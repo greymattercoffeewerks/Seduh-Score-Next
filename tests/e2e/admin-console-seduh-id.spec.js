@@ -2,9 +2,9 @@ import { test } from '@playwright/test';
 import { createPlatformAdmin, removePlatformAdmin, sqlAsOwner } from './support/admins.js';
 import { expect, heading, signIn, enrol, expectFitsAndTappable } from './support/adminUi.js';
 
-// T-ID.C3: the Seduh ID screen (owner decision 7a: counts only) against the real page and the real local Supabase
+// T-ID.C3: the Seduh ID screen (owner decision 7a: the figures are counts only; the review queue below them lists podium names, never a phone) against the real page and the real local Supabase
 // stack. The numbers on screen come from the database's own function; a row added behind the page's back shows up on
-// Refresh; and the page and every admin response carry no name and no phone (D-A4).
+// Refresh; and the page and every admin response carry no phone and no name of an identity that is not queued.
 
 test.describe('the Seduh ID screen (real page, real local Supabase)', () => {
   test.describe.configure({ mode: 'serial' });
@@ -25,7 +25,7 @@ test.describe('the Seduh ID screen (real page, real local Supabase)', () => {
     if (admin) removePlatformAdmin(admin);
   });
 
-  test('the numbers are drawn at 360px, Refresh picks up a new identity, and no name or phone is ever on the page', async ({
+  test('the numbers are drawn at 360px, Refresh picks up a new identity, and no phone, and no name of an unqueued identity, is ever on the page', async ({
     page,
   }) => {
     test.setTimeout(90000);
@@ -40,7 +40,7 @@ test.describe('the Seduh ID screen (real page, real local Supabase)', () => {
 
     await page.locator('nav').getByRole('link', { name: 'Seduh ID' }).click();
     await expect(heading(page)).toHaveText('Seduh ID');
-    await expect(page.getByText(/Numbers only: this screen never shows a name/)).toBeVisible();
+    await expect(page.getByText(/The numbers on this screen are counts only/)).toBeVisible();
     await expect(page.getByText(/Merges and unlinks are done by the owner in SQL/)).toBeVisible();
     const total = page.locator('.adm-fact', { hasText: 'Identities in total' }).locator('dd');
     const people = page

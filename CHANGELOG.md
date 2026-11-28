@@ -16,6 +16,14 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Reviews.** security-reviewer: 0 Important; Nit fixed (a person who is the kept side of a merge is now kept, so no merge record is erased); `pg_temp.attempt` under the `authenticated` role in pgTAP `097` is unverified until the first `db:test`. code-reviewer: 2 Important (focus lost on each tick; focus target without `tabindex`), 2 Nits ("Saving…" shown for a search; a failed refresh after a good removal read as a failed removal), all fixed and covered by tests; the independent re-check of the two Important findings was not run.
 - **Not done.** pgTAP and Playwright have NOT been run (this session had no Docker); run `npm run db:test` and the e2e suite on the PC before merging.
 
+## Admin Seduh ID queue: names view, Reject, Approve built but off · unreleased · 2026-11-28
+
+**Status: PR into `dev`, not released; version not bumped here (the tidy-up PR holds 4.36.0). Migration `20261202120000` is NOT in the cloud; push only with the owner's OK.** Owner decisions 2026-11-28: the platform admin may see the names on the feed queue (an amendment of D-A4), Reject from the console, and build Approve but do not surface it (the owner will harden the console via Cloudflare first).
+
+- **What it does.** Admin, Seduh ID screen: "Waiting for review" lists each queued podium (event, organisation, date, queued time, places and names) with a Reject button after a confirmation. No phone, cafe or person id is returned or drawn (view columns pinned in pgTAP 098).
+- **Database.** `admin_seduh_feed_queue()`, `admin_seduh_feed_reject(id)`, `admin_seduh_feed_approve(id)`, all behind `app.require_platform_admin()`; audit `seduh_feed.reject` and `seduh_feed.approve` (ids and counts only). `app.seduh_feed_mode.console_actions` (default false) is the switch: Approve is refused for everyone (`seduh_feed_console_off`) until the owner sets it in SQL. `app.seduh_feed_apply` is redefined with ONE change, a third path `p_via = 'admin'` that needs the platform-admin gate AND the switch; it still has no grant to any API role. `processed_via` accepts 'admin'.
+- **Not done / to know.** No Approve button (by decision). pgTAP 098, the matrices `041` and `050`, and the adversarial list were updated but NOT run here (CI runs pgTAP). The loosened wall in `app.seduh_feed_apply` needs `security-reviewer` and the independent check before merge.
+
 ## Throwdown Bracket Planner, a free Community tool · 4.35.0 · 2026-11-28
 
 **Status: PR into `dev`, not released.** The owner asked for the planner as a Community Tools entry (works with no event, saves nothing, open to anyone). `/tools/throwdown-planner/`, card 06 on the hub and in every tool's "More free community tools" strip. No migration.
@@ -879,13 +887,3 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
   - `test-auditor`: no 🔴; 29 of 37 mutants killed. Gaps closed by new fixtures: closed, merged, opted-out and identity-hidden opponents, pool and level matches, wrong-cafe and duplicate-row results, a partial score. Not covered: the `limit 10` on opponents, a missing settings row, the payload-versus-live event name.
   - Guard `062` (functions touching the identity tables) needed the new door added: done.
 - **Guards:** `037` door list, `080` (door shape, privileges, no table access, every visibility setting, results from two organisations, unpublished/test/duplicate/renamed/BTC exclusions, knockout counts and opponent naming, identical empty shapes, JSON text scan for phone, email and uuid). `041` needs no entry (the door takes text).
-
-## CI: pin the Supabase CLI to 2.115.0 · 2026-11-15
-
-**Why:** the two CI jobs that start a local Supabase stack ("Playwright e2e" and "Migrations from scratch + pgTAP")
-installed the CLI with `supabase/setup-cli@v1` and `version: latest`. That asks GitHub's API for the newest release on
-every run, and on shared runners it failed twice on 2026-11-15 with "Failed to resolve latest Supabase CLI release: rate
-limit exceeded", before any test ran (PR #478). **Change:** both jobs now pin `version: 2.115.0`, the version
-`package-lock.json` already installs locally, so CI and local runs use the same CLI and no release lookup is made.
-Upgrading the CLI is now a deliberate one-line change in `.github/workflows/ci.yml`, kept in step with
-`package-lock.json`. CI configuration only; no app, database or version change.
