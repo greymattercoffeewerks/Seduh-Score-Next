@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Results page: per-format highlight line and organiser note · 4.34.1 · 2026-11-28
+
+**Status: PR #585, released as 4.34.1 on the owner's go-ahead (28 Nov). No migration.** The published Vol 3 Throwdown result showed "NaN:NaNNaN minutes NaN seconds winning time" on `/results/`: the Latest result card drew `winningTimeSecs` with no check, and a Throwdown payload has none.
+
+- **Per-format highlight** (`src/marketing/resultsFacts.js`, a lookup on the payload's `format`, no format imported): Cup Taster shows the winning time, Throwdown nothing, BTC the score between the two finalists (optional `finalScore: [{score},{score}]`; no BTC publisher exists yet, so nothing draws until one does). A value that is not a finite number is never drawn. The card and the printed sheet share it; a row with no format keeps the old behaviour.
+- **Organiser note:** a published payload may carry `organiserNote` (plain text, trimmed, 300 max), drawn as "Note from the organisers: ..." under the card and on the sheet. Set by SQL on the live Vol 3 row ("Final played as a 3-way, per the organisers."); a re-publish of that event would drop it. No organiser screen sets it yet.
+- **Not changed:** Vol 3 was published at podium scope, so its payload has no "Reached" field; the 3-way final is still recorded as a workaround (a proper 3-way final is on the wizard's later-stages list).
+- **Version:** patch (a fix plus a small display slot nobody sets from a screen).
+- **Reviews:** no reviewer agents run; the owner asked for a quick fix and release. Tests: new `resultsFacts.test.js` and two screen tests; `vitest src/marketing` 719 pass, eslint and prettier clean.
+
 ## Throwdown bracket preview, "Plan the event" · 4.34.0 · 2026-11-28
 
 **Status: released as 4.34.0 (PR #582, owner approved 28 Nov). No migration; nothing to push to the cloud.** A new card on the Throwdown setup screen, before the draw, shows how the bracket will play out for the roster: rounds, byes, who rests twice in a row, whether 3rd place is played, the final's size, and what redemption does.
