@@ -114,6 +114,8 @@ export async function mountSetupScreen(
     state.pendingFocus = 'toast';
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
+      // The screen may have been taken out of the page without unmount() (a router swap, a test's teardown).
+      if (signal?.aborted || !root.isConnected) return;
       state.toastMessage = null;
       render();
     }, 1500);

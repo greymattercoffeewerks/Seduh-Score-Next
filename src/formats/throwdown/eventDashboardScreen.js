@@ -26,6 +26,8 @@ import {
 import { matchLogCsv, matchLogFilename } from './recordsExport.js';
 import { publishThrowdownLive } from './liveSession.js';
 import { createBracketPreviewCard } from './bracketPreviewCard.js';
+import { scheduleTour, startTour, tourHelpButton } from '../../core/tour.js';
+import { DASHBOARD_TOUR_ID, dashboardTourSteps } from './tours.js';
 import { redemptionForm } from './redemption.js';
 
 const TAKE_OVER_WAIT_MS = 8000;
@@ -216,8 +218,16 @@ export async function mountThrowdownEventDashboardScreen(
       }),
     );
 
+    if (!data.bracket.started) {
+      container.appendChild(
+        tourHelpButton({
+          onClick: () => startTour({ id: DASHBOARD_TOUR_ID, steps: dashboardTourSteps, signal }),
+        }),
+      );
+    }
     const sheet = buildRunSheet(phases);
     const [nextCard, runSection] = [...sheet.children];
+    nextCard.setAttribute('data-tour', 'td-next');
     container.appendChild(nextCard);
     const planner = plannerCard();
     if (planner) {
@@ -270,6 +280,9 @@ export async function mountThrowdownEventDashboardScreen(
   }
 
   await attemptLoad();
+  if (data && !data.bracket.started) {
+    scheduleTour({ id: DASHBOARD_TOUR_ID, steps: dashboardTourSteps, signal });
+  }
 
   return {
     unmount() {

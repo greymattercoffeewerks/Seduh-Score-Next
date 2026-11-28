@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { endActiveTour } from '../../core/tour.js';
+import { setupTourSteps } from './tours.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { _clearAllForTests } from '../../core/db.js';
@@ -548,6 +550,26 @@ describe('the Throwdown organiser screen', () => {
     ]);
     expect(root.textContent).toContain('Setup is locked as soon as Round 1 starts.');
     expect(root.textContent).not.toMatch(/module/i);
+  });
+
+  describe('guided tour', () => {
+    const targets = (steps) => steps.filter((s) => s.target).map((s) => s.target);
+
+    it('has every anchor the setup tour points at', async () => {
+      const root = await mount({ event_entries: entries });
+      for (const target of targets(setupTourSteps)) {
+        expect(root.querySelector(target), target).not.toBeNull();
+      }
+    });
+
+    it('the Take the tour button starts it, and there is no button after the draw', async () => {
+      const root = await mount({ event_entries: entries });
+      root.querySelector('[data-tour-help]').click();
+      expect(document.querySelector('.tour-title').textContent).toBe(setupTourSteps[0].title);
+      endActiveTour();
+      const drawn = await mount(started);
+      expect(drawn.querySelector('[data-tour-help]')).toBeNull();
+    });
   });
 
   it('shows how the bracket will play out before the draw, and nothing once it has started', async () => {
