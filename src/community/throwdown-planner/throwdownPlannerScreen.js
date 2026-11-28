@@ -237,8 +237,8 @@ export function mountThrowdownPlanner(root) {
       el('p', {
         className: 'tp-note',
         text: state.redemption.on
-          ? `With redemption off: ${red.join(', ') || 'no change'}.`
-          : `With redemption after Round 1: ${red.join(', ') || 'no change'}.`,
+          ? `With redemption off: ${red.join(', ') || 'no change to rounds, matches or byes'}.`
+          : `With redemption after Round 1: ${red.join(', ') || 'no change to rounds, matches or byes'}.`,
       }),
       el('p', {
         className: 'tp-note',

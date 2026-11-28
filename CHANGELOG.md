@@ -15,7 +15,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Boundary (owner to confirm).** `src/tools/` may not import `src/formats/`, so the tool lives in `src/community/throwdown-planner/` and reads exactly three pure Throwdown modules (`bracketPreview.js`, the word helpers of `bracketPreviewCard.js`, `redemption.js` constants); a test pins that list. The alternative, moving the engine into `core/`, would put Throwdown rules in `core/`.
 - **Also.** "1 Byes" now reads "1 Bye" in both planners. The strip tests in the Timer, Brew Planner, Random Selector and toolChrome tests count four other tools.
 - **Not done:** prerender and a Playwright smoke test for the new page (the other tools have them); saving or sharing a link.
-- **Reviews:** see the PR.
+- **Reviews:** module-boundary-checker: clean (the exception stays inside three pure modules; a test pins the direct imports, a transitive import would not be caught). code-reviewer: no blocking bug; fixed: page was not prerendered (route and smoke row added), the "no change" what-if wording. Not fixed: a possible lost first click on a checkbox right after typing a brewer count (unverified, needs a real-browser check).
 
 ## Throwdown: the bracket planner moves to the event dashboard · 4.34.2 · 2026-11-28
 
