@@ -54,6 +54,15 @@ export const COMMUNITY_TOOLS = [
     href: '/tools/random-selector/',
     meta: 'No account needed',
   },
+  {
+    id: 'throwdown-planner',
+    number: '06',
+    title: 'Throwdown Bracket Planner',
+    eyebrow: 'For planning a knockout before the day',
+    body: 'Enter how many brewers you expect and see the rounds, byes, 3rd place match and Final, with or without a redemption round.',
+    href: '/tools/throwdown-planner/',
+    meta: 'No account needed',
+  },
 ];
 
 export const COMMUNITY_HUB_HREF = '/community/';

@@ -109,6 +109,9 @@ Every `dev-*` Playwright project (`dev-app`, `dev-audience`, `dev-tenancy`, `dev
 that stack must be running with the seed applied. `built-app` and `dev-harnesses` do not
 need it.
 
+**CI runs the e2e suite only on PRs into `main`.** Run it yourself before asking to merge into `dev`:
+`npm run db:lock -- run -- npm run test:e2e` (steps for Windows: [`docs/runbooks/local-e2e.md`](docs/runbooks/local-e2e.md)).
+
 ## Workflow
 
 - `dev` is the working branch. `main` is protected (direct pushes are rejected), so

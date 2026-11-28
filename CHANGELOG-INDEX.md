@@ -2,6 +2,7 @@
 
 One line per entry moved out of `CHANGELOG.md`: date, heading, file. The most recent entries are in [`CHANGELOG.md`](CHANGELOG.md).
 
+- Seduh ID Layer 2, A1: how `/id/<handle>/` is served (a Worker for `/id/*`) · 2026-11-15 → [`2026-11-H2-b`](docs/archive/changelog/2026-11-H2-b.md)
 - Seduh ID Layer 2, Phase A2: the schema for claimed Seduh IDs · 2026-11-15 → [`2026-11-H2-b`](docs/archive/changelog/2026-11-H2-b.md)
 - Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15 → [`2026-11-H2-b`](docs/archive/changelog/2026-11-H2-b.md)
 - Public site: three small backlog fixes · 2026-11-14 → [`2026-11-H1-d`](docs/archive/changelog/2026-11-H1-d.md)

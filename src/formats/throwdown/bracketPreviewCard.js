@@ -106,6 +106,7 @@ export function createBracketPreviewCard({
       'aria-expanded': String(plan.open),
       'aria-controls': 'td-plan',
       'data-focus-key': 'td-plan-toggle',
+      'data-tour': 'td-plan',
     },
   });
   toggle.addEventListener('click', () =>
@@ -235,7 +236,7 @@ export function createBracketPreviewCard({
           [
             ['Rounds', shape.totals.rounds],
             ['Matches', shape.totals.matches],
-            ['Byes', shape.totals.byes],
+            [shape.totals.byes === 1 ? 'Bye' : 'Byes', shape.totals.byes],
             ['Final', `${shape.totals.finalSize} brewers`],
             ['3rd place', shape.thirdPlace.played ? 'Played' : 'No'],
           ].map(([label, value]) =>
@@ -323,7 +324,10 @@ export function createBracketPreviewCard({
   }
   return el(
     'section',
-    { className: 'card td-card', attrs: { 'aria-labelledby': 'td-preview-h' } },
+    {
+      className: 'card td-card',
+      attrs: { 'aria-labelledby': 'td-preview-h', 'data-tour': 'td-preview' },
+    },
     children,
   );
 }

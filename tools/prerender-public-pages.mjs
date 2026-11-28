@@ -50,6 +50,12 @@ const ROUTES = [
     rootMarker: '<main class="random-selector"',
     marker: 'Split-flap edition',
   },
+  {
+    output: 'tools/throwdown-planner/index.html',
+    url: 'https://www.seduhscore.com/tools/throwdown-planner/',
+    rootMarker: '<main class="tp"',
+    marker: 'Knockout edition',
+  },
   // The trust pages share one entry module and pick their page from #app's data-page.
   ...[
     ['about', 'Scoring for coffee competitions'],
