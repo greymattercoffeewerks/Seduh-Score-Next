@@ -24,7 +24,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Petrol Kaizen P4 to P6** are live; tablet and iPad checks owed.
 - **Cloud database in sync (checked 2026-11-28):** every migration on `main` is in the cloud, the newest being
   `td_redemption` and `load_demo_roster`.
-- **Random Selector redesign** released as **4.21.0**, shared chrome as **4.22.0**. Owed: the owner's 16:9 screen and tablet check (CHANGELOG 4.21.0).
+- **Random Selector redesign** (4.21.0, 4.22.0). Owed: the owner's 16:9 and tablet check.
 - **Throwdown scoresheet rounds** (Final and 3rd place from judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): **4.23.0** (#524, #525) for the 27 Nov event. Owed: the owner's tablet test event.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
