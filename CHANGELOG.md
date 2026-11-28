@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown Bracket Planner, a free Community tool · 4.35.0 · 2026-11-28
+
+**Status: PR into `dev`, not released.** The owner asked for the planner as a Community Tools entry (works with no event, saves nothing, open to anyone). `/tools/throwdown-planner/`, card 06 on the hub and in every tool's "More free community tools" strip. No migration.
+
+- **What it does.** Type 2 to 64 brewers, choose 3rd place and redemption (feed rounds, cap); it shows the summary, rounds, matches, byes, the Final's size, repeat-bye flags, a round-by-round list, and what flipping redemption or 3rd place would change. Same engine and words as the in-event planner, so the two cannot disagree.
+- **Boundary rule widened (owner, 2026-11-28).** A tool or other surface may import a format's PURE logic module (read-only calculation: no database, network, auth, storage or side effects), never its data, RPC, outbox, live or screen code; the server stays the only authority on scores and results; `src/core` still never imports a format. Held by `src/formats/pureLogicBoundary.test.js`: an allowlist (the three Throwdown modules the planner reads) plus a check that each module's whole import chain is pure. Documented in `CONVENTIONS.md` and `src/tools/CLAUDE.md`.
+- **Also.** "1 Byes" now reads "1 Bye" in both planners. The strip tests in the Timer, Brew Planner, Random Selector and toolChrome tests count four other tools.
+- **Not done:** prerender and a Playwright smoke test for the new page (the other tools have them); saving or sharing a link.
+- **Reviews:** module-boundary-checker: clean (its gap, a transitive import not being caught, is closed by `pureLogicBoundary.test.js`). code-reviewer: no blocking bug; fixed: page was not prerendered (route and smoke row added), the "no change" what-if wording. security-reviewer (shared pure modules): no findings; nothing in the chain can reach live data, no XSS path; nit left: the standalone page has no explicit "a plan only" line. Not fixed: a possible lost first click on a checkbox right after typing a brewer count (unverified, needs a real-browser check).
+
 ## Throwdown: the bracket planner moves to the event dashboard · 4.34.2 · 2026-11-28
 
 **Status: PR into `dev`, not released.** The owner could not find the "What will happen" planner (it sat between Setup and Draw on the Matches page). It is now on the event dashboard, under the Next step card, until the draw is made, with a link to the Matches page where the real setup is changed. The Matches page keeps its own copy.

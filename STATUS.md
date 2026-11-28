@@ -1,19 +1,19 @@
 # Status — read this first
 
-_As of 2026-11-28, app version 4.34.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-28, app version 4.35.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
-- **Throwdown bracket preview** (4.34.0, live): "Plan the event" card on setup, redemption included. Owed: 360px check.
-- **Throwdown redemption round (TD.3)** (4.33.0, live 27 Nov): losers drawn into groups and back into the bracket. Migration in the cloud.
+- **Throwdown Bracket Planner** (4.35.0, PR to `dev`): free Community tool, card 06; reads three pure Throwdown modules; shared pure logic allowed (owner, 28 Nov).
+- **Throwdown bracket preview** (4.34.0, live; on the dashboard since 4.34.2): "Plan the event" card, redemption included. Owed: 360px check.
+- **Throwdown redemption (TD.3)** (4.33.0, live): migration in the cloud.
 - **Share result to a story** (4.32.0, live): Results page Share button. Owed: phone check.
 - **Phone results** (4.31.1), **left side menu** (4.31.0, device check passed) and **demo people** (4.31.0, migration in the cloud) are live.
 - **In flight:** PR #580 demo data for Cup Taster and Throwdown test events (Load and Clear; its new migration `20261202100000` is NOT in the cloud, push only with the owner's OK).
 - **BTC night dashboard, Phase 1** (4.30.0, live): night switch, Needs you list, run strip, standings draft preview.
-- **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
+- **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: venue and TV check.
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
-- **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
 - **Tenancy** (many organisations, one database) done 2026-10-14. **Admin console** live in the cloud since 2026-10-17.
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built, claim screens live, person page, `/id/me/`, photo and story card (4.16.0), discovery (4.17.3, behind its off switch), courses and certificates (4.19.0), "This isn't mine" on a recorded result (4.20.0), all live (the owner still to confirm the dispute policy, CHANGELOG 4.20.0, and the discovery search policy, 4.17.3); the archive feed (1b) is in `queue` mode and

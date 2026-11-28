@@ -70,6 +70,7 @@ describe('link previews', () => {
       'tools/random-selector/index.html',
       'tools/timer/index.html',
       'tools/brew-planner/index.html',
+      'tools/throwdown-planner/index.html',
       'community/index.html',
     ]) {
       expect(names).toContain(page);
