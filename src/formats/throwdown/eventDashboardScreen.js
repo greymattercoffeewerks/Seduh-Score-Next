@@ -221,7 +221,7 @@ export async function mountThrowdownEventDashboardScreen(
     if (!data.bracket.started) {
       container.appendChild(
         tourHelpButton({
-          onClick: () => startTour({ id: DASHBOARD_TOUR_ID, steps: dashboardTourSteps }),
+          onClick: () => startTour({ id: DASHBOARD_TOUR_ID, steps: dashboardTourSteps, signal }),
         }),
       );
     }

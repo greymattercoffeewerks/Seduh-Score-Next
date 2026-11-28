@@ -1585,7 +1585,7 @@ export async function mountThrowdownEventScreen(
       if (!state.data.bracket.started) {
         container.appendChild(
           tourHelpButton({
-            onClick: () => startTour({ id: SETUP_TOUR_ID, steps: setupTourSteps }),
+            onClick: () => startTour({ id: SETUP_TOUR_ID, steps: setupTourSteps, signal }),
           }),
         );
       }

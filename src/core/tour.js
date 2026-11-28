@@ -138,7 +138,7 @@ export function endActiveTour() {
   active?.end('closed');
 }
 
-// Starts a tour (ending any other one first). Returns { end, next, back, isActive }. Marks the tour as seen at once,
+// Starts a tour (ending any other one first). Pass the screen's `signal`: the tour ends when the screen is left. Returns { end, next, back, isActive }. Marks the tour as seen at once,
 // so closing the tab part-way does not bring it back at the next visit.
 export function startTour({
   id,
@@ -147,6 +147,7 @@ export function startTour({
   onEnd = () => {},
   labels = {},
   returnFocusTo = null,
+  signal,
 } = {}) {
   endActiveTour();
   const words = {
@@ -320,6 +321,8 @@ export function startTour({
     }
   }
 
+  const onAbort = () => end('closed');
+
   function end(how) {
     if (ended) return;
     ended = true;
@@ -328,6 +331,7 @@ export function startTour({
     document.removeEventListener('keydown', onKey, true);
     window.removeEventListener('resize', schedule);
     document.removeEventListener('scroll', schedule, true);
+    signal?.removeEventListener('abort', onAbort);
     for (const node of inerted) node.removeAttribute('inert');
     root.remove();
     if (active === handle) active = null;
@@ -354,6 +358,11 @@ export function startTour({
     }
   }
   document.body.appendChild(root);
+  if (signal?.aborted) {
+    end('closed');
+    return handle;
+  }
+  signal?.addEventListener('abort', onAbort, { once: true });
   document.addEventListener('keydown', onKey, true);
   window.addEventListener('resize', schedule);
   document.addEventListener('scroll', schedule, true);
@@ -381,7 +390,7 @@ export function scheduleTour({ id, steps, signal, storage, delayMs = 500, force 
   if (!force && (automated || !shouldAutoStart(id, storage))) return () => {};
   const timer = setTimeout(() => {
     if (signal?.aborted || isTourRunning()) return;
-    startTour({ id, steps, storage });
+    startTour({ id, steps, storage, signal });
   }, delayMs);
   const cancel = () => clearTimeout(timer);
   signal?.addEventListener('abort', cancel, { once: true });

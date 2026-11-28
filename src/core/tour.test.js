@@ -157,6 +157,20 @@ describe('startTour', () => {
     expect(document.activeElement).toBe(a);
   });
 
+  it('ends when the screen that started it is left (its signal aborts), and restores the page', () => {
+    page();
+    const ctl = new AbortController();
+    startTour({ id: 't', steps: STEPS, storage: memory(), signal: ctl.signal });
+    expect(isTourRunning()).toBe(true);
+    ctl.abort();
+    expect(isTourRunning()).toBe(false);
+    expect(document.querySelector('.tour')).toBeNull();
+    expect(document.getElementById('app').hasAttribute('inert')).toBe(false);
+    // a signal that is already aborted never starts one
+    startTour({ id: 't', steps: STEPS, storage: memory(), signal: ctl.signal });
+    expect(document.querySelector('.tour')).toBeNull();
+  });
+
   it('starts nothing when no step applies, and replaces a running tour', () => {
     page();
     startTour({ id: 't', steps: [STEPS[2]], storage: memory() });
