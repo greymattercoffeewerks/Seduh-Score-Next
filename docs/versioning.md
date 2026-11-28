@@ -54,6 +54,13 @@ settled, not that it stopped moving. A 6.0 needs a relaunch, for example:
    part moved and why. Read the CHANGELOG entries since the last release against the table above: if a minor-worthy
    change went out as patches, bump `minor` on `dev` before the release. Check that `package-lock.json` followed.
 
+### What CI runs where
+
+Feature PRs into `dev` run lint, unit tests, build and the database tests. The `Playwright e2e` job runs only on the
+release PR into `main` (and on pushes to `main`), so run the e2e suite locally before asking to merge into `dev`
+([local-e2e.md](runbooks/local-e2e.md)). PRs that change only documentation skip the slow jobs. A skipped job reports
+success, so required checks stay satisfiable.
+
 ### The CI gate
 
 CI's `Version bump` job (`tools/check-version-bump.mjs`) runs only on PRs into `main`. It fails when (1) a file the
