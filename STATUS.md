@@ -10,7 +10,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown redemption (TD.3)** (4.33.0, live): migration in the cloud.
 - **Share result to a story** (4.32.0, live): Results page Share button. Owed: phone check.
 - **Phone results** (4.31.1), **left side menu** (4.31.0, device check passed) and **demo people** (4.31.0, migration in the cloud) are live.
-- **Guided tours** (PR): reusable tour engine, first on Throwdown setup. Owed: owner's review.
+- **Guided tours** (PR #588): reusable tour, first on Throwdown setup.
 - **In flight:** PR #580 demo data for Cup Taster and Throwdown test events (Load and Clear; its new migration `20261202100000` is NOT in the cloud, push only with the owner's OK).
 - **BTC night dashboard, Phase 1** (4.30.0, live): night switch, Needs you list, run strip, standings draft preview.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: venue and TV check.
