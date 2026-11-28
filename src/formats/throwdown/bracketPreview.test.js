@@ -210,16 +210,23 @@ describe('the shared parity fixture', () => {
   const fixture = JSON.parse(fixtureText);
   it('is what previewShape returns for each case', () => {
     for (const c of fixture.cases) {
-      const p = previewShape({ entrants: c.n, thirdPlace: c.third });
+      const p = previewShape({
+        entrants: c.n,
+        thirdPlace: c.third,
+        redemption: c.redemption
+          ? { feed: c.redemption.feed, groupSize: c.redemption.group_size, cap: c.redemption.cap }
+          : null,
+      });
       expect(
         {
           n: c.n,
           third: c.third,
+          redemption: c.redemption,
           rounds: p.rounds.map((r) => [r.enter, r.matches, r.byes, r.through]),
           thirdPlayed: p.thirdPlace.played,
           matches: p.totals.matches,
         },
-        `n=${c.n} third=${c.third}`,
+        `n=${c.n} third=${c.third} ${JSON.stringify(c.redemption)}`,
       ).toEqual(c);
     }
   });

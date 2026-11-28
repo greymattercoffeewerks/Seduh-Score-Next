@@ -8,7 +8,7 @@ import {
 } from './bracketPreviewCard.js';
 import { previewShape } from './bracketPreview.js';
 
-const closed = { open: false, entrants: null, thirdPlace: null };
+const closed = { open: false, entrants: null, thirdPlace: null, redemption: null };
 const card = (over = {}) => {
   const calls = [];
   const node = createBracketPreviewCard({
@@ -96,7 +96,9 @@ describe('the card', () => {
     expect(open.calls).toEqual([{ open: true }]);
     const shown = card({ plan: { open: true, entrants: 12, thirdPlace: null } });
     shown.node.querySelector('[aria-expanded]').click();
-    expect(shown.calls).toEqual([{ open: false, entrants: null, thirdPlace: null }]);
+    expect(shown.calls).toEqual([
+      { open: false, entrants: null, thirdPlace: null, redemption: null },
+    ]);
     const count = shown.node.querySelector('[data-focus-key="td-plan-count"]');
     count.value = '99';
     count.dispatchEvent(new Event('change'));
@@ -109,5 +111,56 @@ describe('the card', () => {
     const { node } = card({ rosterCount: 1, plan: { ...closed, open: true } });
     expect(node.querySelectorAll('.td-plan-round')).toHaveLength(0);
     expect(node.textContent).toContain('at least two competitors');
+  });
+});
+
+describe('redemption in the plan', () => {
+  const setup = { on: true, groupSize: 2, cap: 0, feed: [1] };
+  it('follows the setup: 21 brewers with redemption after Round 1 is a clean 16', () => {
+    const { node } = card({ redemption: setup, plan: { ...closed, open: true } });
+    expect(node.textContent).toContain('Redemption brings back up to 5 brewers.');
+    expect(node.textContent).toContain('Redemption: 10 losers into 5 groups, 5 come back.');
+    expect(node.textContent).toContain('A 3rd place match is played.');
+    expect(node.textContent).toContain('If redemption were off: matches 31 to 20');
+  });
+  it('a setup with redemption off offers it as a what-if and says what it would change', () => {
+    const { node, calls } = card({ plan: { ...closed, open: true } });
+    expect(node.textContent).toContain('If redemption were on after Round 1: matches 20 to 31');
+    const box = node.querySelector('[data-focus-key="td-plan-red"]');
+    expect(box.checked).toBe(false);
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    expect(calls).toEqual([{ redemption: { on: true, feed: [1], cap: 0 } }]);
+  });
+  it('the what-if feed rounds and cap drive the plan, not the setup', () => {
+    const { node, calls } = card({
+      redemption: setup,
+      plan: { ...closed, open: true, redemption: { on: true, feed: [1], cap: 3 } },
+    });
+    expect(node.textContent).toContain('Redemption: 10 losers into 5 groups, 3 come back.');
+    const two = node.querySelector('[data-focus-key="td-plan-feed-2"]');
+    two.checked = true;
+    two.dispatchEvent(new Event('change'));
+    expect(calls[0]).toEqual({ redemption: { on: true, feed: [1, 2], cap: 3 } });
+    const cap = node.querySelector('[data-focus-key="td-plan-cap"]');
+    cap.value = '';
+    cap.dispatchEvent(new Event('change'));
+    expect(calls[1]).toEqual({ redemption: { on: true, feed: [1], cap: 0 } });
+  });
+  it('a what-if of off beats a setup that has it on', () => {
+    const { node } = card({
+      redemption: setup,
+      plan: { ...closed, open: true, redemption: { on: false, feed: [1], cap: 0 } },
+    });
+    expect(node.textContent).not.toContain('Redemption brings back');
+    expect(node.querySelector('[data-focus-key="td-plan-feed-1"]')).toBeNull();
+  });
+  it('flags a feeding round that does nothing', () => {
+    const { node } = card({
+      rosterCount: 6,
+      redemption: { on: true, groupSize: 2, cap: 0, feed: [1] },
+      plan: { ...closed, open: true },
+    });
+    expect(node.textContent).toContain('Redemption after Round 1 does nothing');
   });
 });

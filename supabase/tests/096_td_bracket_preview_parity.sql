@@ -1,13 +1,13 @@
 -- T-TD.PV: the bracket preview agrees with the real engine (src/formats/throwdown/bracketPreview.js).
--- Each fixture case builds a Throwdown event of n competitors with no modules, plays it out with slot 1 winning every match
+-- Each fixture case builds a Throwdown event of n competitors (with or without the redemption module), plays it out with slot 1 winning every match
 -- (as a walkover, so no votes are needed), and compares the rounds the engine made with the fixture: per main round
 -- [brewers in, matches, byes, through], whether a 3rd place match exists, and the total number of matches. The fixture is
 -- supabase/tests/fixtures/td-bracket-preview-parity.json, embedded below; bracketPreview.test.js holds the two copies equal
 -- and holds the fixture equal to what previewShape returns, so a change to app.td_advance's shape rule, or to the preview,
 -- fails one side.
--- Redemption cases are not here: that module is on its own branch (TD.3). They are added with it.
+-- Cases with a redemption setup play the redemption groups too (a group's winner is slot 1, as a walkover).
 begin;
-select plan(42);
+select plan(80);
 
 create schema t096;
 grant usage on schema t096 to anon, authenticated;
@@ -23,11 +23,12 @@ insert into org_members (org_id, user_id, role) values (t096.u(100), t096.u(1), 
 -- parity-fixture:begin
 create table t096.fx as select $fx$
 {
- "note": "Shape of a Throwdown event without modules when slot 1 always wins. Source of truth: previewShape (bracketPreview.js), checked against the real engine by pgTAP 096. Rounds are [brewers in, matches, byes, through] of each main round; matches is the whole event including the 3rd place match.",
+ "note": "Shape of a Throwdown event when slot 1 always wins. Source of truth: previewShape (bracketPreview.js), checked against the real engine by pgTAP 096. Rounds are [brewers in, matches, byes, through] of each main round; matches is the whole event including redemption groups and the 3rd place match. redemption is the stored module setup, or null.",
  "cases": [
   {
    "n": 2,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      2,
@@ -42,6 +43,7 @@ create table t096.fx as select $fx$
   {
    "n": 3,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      3,
@@ -62,6 +64,7 @@ create table t096.fx as select $fx$
   {
    "n": 4,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      4,
@@ -82,6 +85,7 @@ create table t096.fx as select $fx$
   {
    "n": 5,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      5,
@@ -108,6 +112,7 @@ create table t096.fx as select $fx$
   {
    "n": 6,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      6,
@@ -134,6 +139,7 @@ create table t096.fx as select $fx$
   {
    "n": 7,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      7,
@@ -160,6 +166,7 @@ create table t096.fx as select $fx$
   {
    "n": 8,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      8,
@@ -186,6 +193,7 @@ create table t096.fx as select $fx$
   {
    "n": 9,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      9,
@@ -218,6 +226,7 @@ create table t096.fx as select $fx$
   {
    "n": 10,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      10,
@@ -250,6 +259,7 @@ create table t096.fx as select $fx$
   {
    "n": 11,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      11,
@@ -282,6 +292,7 @@ create table t096.fx as select $fx$
   {
    "n": 12,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      12,
@@ -314,6 +325,7 @@ create table t096.fx as select $fx$
   {
    "n": 13,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      13,
@@ -346,6 +358,7 @@ create table t096.fx as select $fx$
   {
    "n": 14,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      14,
@@ -378,6 +391,7 @@ create table t096.fx as select $fx$
   {
    "n": 15,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      15,
@@ -410,6 +424,7 @@ create table t096.fx as select $fx$
   {
    "n": 16,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      16,
@@ -442,6 +457,7 @@ create table t096.fx as select $fx$
   {
    "n": 17,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      17,
@@ -480,6 +496,7 @@ create table t096.fx as select $fx$
   {
    "n": 18,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      18,
@@ -518,6 +535,7 @@ create table t096.fx as select $fx$
   {
    "n": 19,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      19,
@@ -556,6 +574,7 @@ create table t096.fx as select $fx$
   {
    "n": 20,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      20,
@@ -594,6 +613,7 @@ create table t096.fx as select $fx$
   {
    "n": 21,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      21,
@@ -632,6 +652,7 @@ create table t096.fx as select $fx$
   {
    "n": 22,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      22,
@@ -670,6 +691,7 @@ create table t096.fx as select $fx$
   {
    "n": 23,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      23,
@@ -708,6 +730,7 @@ create table t096.fx as select $fx$
   {
    "n": 24,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      24,
@@ -746,6 +769,7 @@ create table t096.fx as select $fx$
   {
    "n": 25,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      25,
@@ -784,6 +808,7 @@ create table t096.fx as select $fx$
   {
    "n": 26,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      26,
@@ -822,6 +847,7 @@ create table t096.fx as select $fx$
   {
    "n": 27,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      27,
@@ -860,6 +886,7 @@ create table t096.fx as select $fx$
   {
    "n": 28,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      28,
@@ -898,6 +925,7 @@ create table t096.fx as select $fx$
   {
    "n": 29,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      29,
@@ -936,6 +964,7 @@ create table t096.fx as select $fx$
   {
    "n": 30,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      30,
@@ -974,6 +1003,7 @@ create table t096.fx as select $fx$
   {
    "n": 31,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      31,
@@ -1012,6 +1042,7 @@ create table t096.fx as select $fx$
   {
    "n": 32,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      32,
@@ -1050,6 +1081,7 @@ create table t096.fx as select $fx$
   {
    "n": 33,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      33,
@@ -1094,6 +1126,7 @@ create table t096.fx as select $fx$
   {
    "n": 34,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      34,
@@ -1138,6 +1171,7 @@ create table t096.fx as select $fx$
   {
    "n": 35,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      35,
@@ -1182,6 +1216,7 @@ create table t096.fx as select $fx$
   {
    "n": 36,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      36,
@@ -1226,6 +1261,7 @@ create table t096.fx as select $fx$
   {
    "n": 37,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      37,
@@ -1270,6 +1306,7 @@ create table t096.fx as select $fx$
   {
    "n": 38,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      38,
@@ -1314,6 +1351,7 @@ create table t096.fx as select $fx$
   {
    "n": 39,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      39,
@@ -1358,6 +1396,7 @@ create table t096.fx as select $fx$
   {
    "n": 40,
    "third": true,
+   "redemption": null,
    "rounds": [
     [
      40,
@@ -1402,6 +1441,7 @@ create table t096.fx as select $fx$
   {
    "n": 8,
    "third": false,
+   "redemption": null,
    "rounds": [
     [
      8,
@@ -1428,6 +1468,7 @@ create table t096.fx as select $fx$
   {
    "n": 16,
    "third": false,
+   "redemption": null,
    "rounds": [
     [
      16,
@@ -1460,6 +1501,7 @@ create table t096.fx as select $fx$
   {
    "n": 21,
    "third": false,
+   "redemption": null,
    "rounds": [
     [
      21,
@@ -1494,6 +1536,1836 @@ create table t096.fx as select $fx$
    ],
    "thirdPlayed": false,
    "matches": 20
+  },
+  {
+   "n": 12,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 17
+  },
+  {
+   "n": 12,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 17
+  },
+  {
+   "n": 12,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 11
+  },
+  {
+   "n": 12,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 11
+  },
+  {
+   "n": 12,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 22
+  },
+  {
+   "n": 12,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 22
+  },
+  {
+   "n": 16,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 23
+  },
+  {
+   "n": 16,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 22
+  },
+  {
+   "n": 16,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 16
+  },
+  {
+   "n": 16,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 16
+  },
+  {
+   "n": 16,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 29
+  },
+  {
+   "n": 16,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 27
+  },
+  {
+   "n": 21,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 31
+  },
+  {
+   "n": 21,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     14,
+     7,
+     0,
+     7
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 29
+  },
+  {
+   "n": 21,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 25
+  },
+  {
+   "n": 21,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 25
+  },
+  {
+   "n": 21,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 38
+  },
+  {
+   "n": 21,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     14,
+     7,
+     0,
+     7
+    ],
+    [
+     10,
+     5,
+     0,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 34
+  },
+  {
+   "n": 24,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     24,
+     12,
+     0,
+     12
+    ],
+    [
+     18,
+     9,
+     0,
+     9
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 35
+  },
+  {
+   "n": 24,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     24,
+     12,
+     0,
+     12
+    ],
+    [
+     15,
+     7,
+     1,
+     8
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 33
+  },
+  {
+   "n": 24,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     24,
+     12,
+     0,
+     12
+    ],
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 29
+  },
+  {
+   "n": 24,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     24,
+     12,
+     0,
+     12
+    ],
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 29
+  },
+  {
+   "n": 24,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     24,
+     12,
+     0,
+     12
+    ],
+    [
+     18,
+     9,
+     0,
+     9
+    ],
+    [
+     13,
+     6,
+     1,
+     7
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 44
+  },
+  {
+   "n": 24,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     24,
+     12,
+     0,
+     12
+    ],
+    [
+     15,
+     7,
+     1,
+     8
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 38
+  },
+  {
+   "n": 30,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     30,
+     15,
+     0,
+     15
+    ],
+    [
+     22,
+     11,
+     0,
+     11
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 43
+  },
+  {
+   "n": 30,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     30,
+     15,
+     0,
+     15
+    ],
+    [
+     18,
+     9,
+     0,
+     9
+    ],
+    [
+     9,
+     4,
+     1,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 39
+  },
+  {
+   "n": 30,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     30,
+     15,
+     0,
+     15
+    ],
+    [
+     15,
+     7,
+     1,
+     8
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 35
+  },
+  {
+   "n": 30,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     30,
+     15,
+     0,
+     15
+    ],
+    [
+     15,
+     7,
+     1,
+     8
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 35
+  },
+  {
+   "n": 30,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     30,
+     15,
+     0,
+     15
+    ],
+    [
+     22,
+     11,
+     0,
+     11
+    ],
+    [
+     16,
+     8,
+     0,
+     8
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 54
+  },
+  {
+   "n": 30,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     30,
+     15,
+     0,
+     15
+    ],
+    [
+     18,
+     9,
+     0,
+     9
+    ],
+    [
+     12,
+     6,
+     0,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 46
+  },
+  {
+   "n": 37,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     37,
+     18,
+     1,
+     19
+    ],
+    [
+     28,
+     14,
+     0,
+     14
+    ],
+    [
+     14,
+     7,
+     0,
+     7
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 55
+  },
+  {
+   "n": 37,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     37,
+     18,
+     1,
+     19
+    ],
+    [
+     22,
+     11,
+     0,
+     11
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 48
+  },
+  {
+   "n": 37,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     37,
+     18,
+     1,
+     19
+    ],
+    [
+     19,
+     9,
+     1,
+     10
+    ],
+    [
+     14,
+     7,
+     0,
+     7
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 45
+  },
+  {
+   "n": 37,
+   "third": true,
+   "redemption": {
+    "feed": [
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     37,
+     18,
+     1,
+     19
+    ],
+    [
+     19,
+     9,
+     1,
+     10
+    ],
+    [
+     13,
+     6,
+     1,
+     7
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 44
+  },
+  {
+   "n": 37,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     37,
+     18,
+     1,
+     19
+    ],
+    [
+     28,
+     14,
+     0,
+     14
+    ],
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     11,
+     5,
+     1,
+     6
+    ],
+    [
+     6,
+     3,
+     0,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 68
+  },
+  {
+   "n": 37,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1,
+     2
+    ],
+    "group_size": 2,
+    "cap": 3
+   },
+   "rounds": [
+    [
+     37,
+     18,
+     1,
+     19
+    ],
+    [
+     22,
+     11,
+     0,
+     11
+    ],
+    [
+     14,
+     7,
+     0,
+     7
+    ],
+    [
+     7,
+     3,
+     1,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 57
+  },
+  {
+   "n": 21,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 3,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     21,
+     10,
+     1,
+     11
+    ],
+    [
+     15,
+     7,
+     1,
+     8
+    ],
+    [
+     8,
+     4,
+     0,
+     4
+    ],
+    [
+     4,
+     2,
+     0,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": true,
+   "matches": 29
+  },
+  {
+   "n": 30,
+   "third": true,
+   "redemption": {
+    "feed": [
+     1
+    ],
+    "group_size": 3,
+    "cap": 0
+   },
+   "rounds": [
+    [
+     30,
+     15,
+     0,
+     15
+    ],
+    [
+     20,
+     10,
+     0,
+     10
+    ],
+    [
+     10,
+     5,
+     0,
+     5
+    ],
+    [
+     5,
+     2,
+     1,
+     3
+    ],
+    [
+     3,
+     1,
+     1,
+     2
+    ],
+    [
+     2,
+     1,
+     0,
+     1
+    ]
+   ],
+   "thirdPlayed": false,
+   "matches": 39
   }
  ]
 }
@@ -1524,7 +3396,8 @@ begin
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'sub', t096.u(1))::text, true);
   perform set_config('request.jwt.claim.sub', t096.u(1)::text, true);
-  perform public.td_save_settings(org, ev, 3, third, 'manual', '{}'::jsonb);
+  perform public.td_save_settings(org, ev, 3, third, 'manual',
+    case when c -> 'redemption' = 'null'::jsonb then '{}'::jsonb else jsonb_build_object('redemption', c -> 'redemption') end);
   perform public.td_start_event(gen_random_uuid(), org, ev, 'manual', null, 2 * jsonb_array_length(pairs), pairs);
   -- play: while any match is undecided, slot 1 wins it (a walkover)
   loop
@@ -1562,7 +3435,7 @@ $$;
 
 select is(t096.actual(i), t096.expected(i),
           'case ' || i || ': ' || (select (j -> 'cases' -> i ->> 'n') || ' brewers, 3rd place ' || (j -> 'cases' -> i ->> 'third') from t096.fx))
-  from generate_series(0, 41) i;
+  from generate_series(0, 79) i;
 
 select * from finish();
 rollback;

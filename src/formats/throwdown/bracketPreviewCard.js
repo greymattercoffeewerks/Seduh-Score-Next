@@ -4,6 +4,7 @@
 // choice, and what a change would do. Nothing here is saved or sent; the real setup is the Setup card above.
 import { el } from '../../core/dom.js';
 import { previewShape, comparePreviews } from './bracketPreview.js';
+import { MAX_FEED_ROUND, MAX_CAP } from './redemption.js';
 
 export const MAX_PREVIEW_ENTRANTS = 64;
 
@@ -47,7 +48,10 @@ export function summaryWords(plan) {
     : plan.thirdPlace.setting
       ? 'No 3rd place match.'
       : '3rd place is off.';
-  return `With ${plural(plan.entrants, 'brewer')}: ${plural(rounds, 'round')}, ${plural(matches, 'match', 'matches')}, ${byes === 0 ? 'no byes' : plural(byes, 'bye')}. ${third}`;
+  const red = plan.rounds.filter((r) => r.redemption);
+  const back = red.reduce((n, r) => n + r.redemption.back, 0);
+  const redemption = red.length ? ` Redemption brings back up to ${plural(back, 'brewer')}.` : '';
+  return `With ${plural(plan.entrants, 'brewer')}: ${plural(rounds, 'round')}, ${plural(matches, 'match', 'matches')}, ${byes === 0 ? 'no byes' : plural(byes, 'bye')}. ${third}${redemption}`;
 }
 
 const DIFF_WORDS = {
@@ -59,11 +63,28 @@ const DIFF_WORDS = {
 };
 export const diffWords = (diffs) => diffs.map((d) => DIFF_WORDS[d.key](d));
 
-// plan = { open, entrants (what-if, or null for the roster's), thirdPlace (what-if, or null for the setup's) }
-export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChange }) {
+// plan = { open, entrants, thirdPlace, redemption }: the what-if, each null while the card follows the roster and the setup.
+// A redemption what-if is { on, feed, cap }; `redemption` (a prop) is the setup form's own { on, groupSize, cap, feed }.
+export function createBracketPreviewCard({
+  rosterCount,
+  thirdPlace,
+  redemption = null,
+  plan,
+  onChange,
+}) {
   const entrants = plan.entrants ?? rosterCount;
   const third = plan.thirdPlace ?? thirdPlace;
-  const shape = previewShape({ entrants, thirdPlace: plan.open ? third : thirdPlace });
+  const groupSize = redemption?.groupSize ?? 2;
+  const setupRed = redemption?.on
+    ? { feed: redemption.feed, groupSize, cap: redemption.cap }
+    : null;
+  const what = plan.open ? plan.redemption : null;
+  const effRed = what ? (what.on ? { feed: what.feed, groupSize, cap: what.cap } : null) : setupRed;
+  const shape = previewShape({
+    entrants,
+    thirdPlace: plan.open ? third : thirdPlace,
+    redemption: effRed,
+  });
   const children = [
     el('h2', { id: 'td-preview-h', text: 'What will happen' }),
     el('p', { className: 'td-note', text: summaryWords(shape), attrs: { 'aria-live': 'polite' } }),
@@ -87,7 +108,11 @@ export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChan
     },
   });
   toggle.addEventListener('click', () =>
-    onChange(plan.open ? { open: false, entrants: null, thirdPlace: null } : { open: true }),
+    onChange(
+      plan.open
+        ? { open: false, entrants: null, thirdPlace: null, redemption: null }
+        : { open: true },
+    ),
   );
   children.push(toggle);
 
@@ -116,6 +141,69 @@ export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChan
     });
     thirdBox.checked = third;
     thirdBox.addEventListener('change', () => onChange({ thirdPlace: thirdBox.checked }));
+    const redBox = el('input', { attrs: { type: 'checkbox', 'data-focus-key': 'td-plan-red' } });
+    redBox.checked = Boolean(effRed);
+    redBox.addEventListener('change', () =>
+      onChange({
+        redemption: {
+          on: redBox.checked,
+          feed: effRed?.feed?.length ? effRed.feed : [1],
+          cap: Number.isInteger(effRed?.cap) ? effRed.cap : 0,
+        },
+      }),
+    );
+    const redControls = [];
+    if (effRed) {
+      const setRed = (patch) =>
+        onChange({
+          redemption: {
+            on: true,
+            feed: effRed.feed,
+            cap: Number.isInteger(effRed.cap) ? effRed.cap : 0,
+            ...patch,
+          },
+        });
+      const capInput = el('input', {
+        className: 'field-input',
+        attrs: {
+          type: 'number',
+          min: '0',
+          max: String(MAX_CAP),
+          inputmode: 'numeric',
+          value: String(Number.isInteger(effRed.cap) ? effRed.cap : 0),
+          'aria-label': 'At most this many brewers come back (0 is no limit)',
+          'data-focus-key': 'td-plan-cap',
+        },
+      });
+      capInput.addEventListener('change', () => {
+        const n = capInput.value.trim() === '' ? 0 : Math.trunc(Number(capInput.value));
+        setRed({ cap: Number.isFinite(n) ? Math.min(Math.max(n, 0), MAX_CAP) : 0 });
+      });
+      redControls.push(
+        el('fieldset', { className: 'td-choice-group' }, [
+          el('legend', { text: 'Redemption after' }),
+          ...Array.from({ length: MAX_FEED_ROUND }, (_, i) => i + 1).map((n) => {
+            const box = el('input', {
+              attrs: { type: 'checkbox', 'data-focus-key': `td-plan-feed-${n}` },
+            });
+            box.checked = effRed.feed.includes(n);
+            box.addEventListener('change', () =>
+              setRed({
+                feed: box.checked ? [...effRed.feed, n] : effRed.feed.filter((x) => x !== n),
+              }),
+            );
+            return el('label', { className: 'td-choice' }, [
+              box,
+              document.createTextNode(` Round ${n}`),
+            ]);
+          }),
+        ]),
+        el('label', { className: 'td-choice' }, [
+          document.createTextNode('Most who come back (0 = no limit) '),
+          capInput,
+        ]),
+      );
+    }
     const panel = [
       el('p', {
         className: 'td-note',
@@ -130,6 +218,11 @@ export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChan
         thirdBox,
         document.createTextNode(' Play a 3rd place match'),
       ]),
+      el('label', { className: 'td-choice' }, [
+        redBox,
+        document.createTextNode(' Redemption rounds'),
+      ]),
+      ...redControls,
     ];
     if (shape.problem) {
       panel.push(el('p', { className: 'td-note', text: summaryWords(shape) }));
@@ -186,6 +279,12 @@ export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChan
                   })
                 : document.createTextNode(''),
               el('span', { className: 'td-note', text: ` ${r.through} through` }),
+              r.redemption
+                ? el('span', {
+                    className: 'td-note td-plan-redemption',
+                    text: `Redemption: ${plural(r.redemption.pool, 'loser')} into ${plural(r.redemption.groups, 'group')}, ${r.redemption.back} come back.`,
+                  })
+                : document.createTextNode(''),
             ]),
           ),
         ),
@@ -193,6 +292,20 @@ export function createBracketPreviewCard({ rosterCount, thirdPlace, plan, onChan
       // what a 3rd place change would do, against the other choice
       const other = previewShape({ entrants, thirdPlace: !third });
       const diffs = diffWords(comparePreviews(shape, other));
+      const flipRed = previewShape({
+        entrants,
+        thirdPlace: third,
+        redemption: effRed ? null : { feed: [1], groupSize, cap: 0 },
+      });
+      const redDiffs = diffWords(comparePreviews(shape, flipRed));
+      panel.push(
+        el('p', {
+          className: 'td-note',
+          text: effRed
+            ? `If redemption were off: ${redDiffs.join(', ') || 'no change'}.`
+            : `If redemption were on after Round 1: ${redDiffs.join(', ') || 'no change'}.`,
+        }),
+      );
       panel.push(
         el('p', {
           className: 'td-note',

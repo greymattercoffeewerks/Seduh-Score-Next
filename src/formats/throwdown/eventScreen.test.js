@@ -539,7 +539,13 @@ describe('the Throwdown organiser screen', () => {
   it('before the draw offers competitors, setup and the draw, and no module controls', async () => {
     const root = await mount({ event_entries: entries });
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Competitors (2)', 'Demo people', 'Setup', 'What will happen', 'Draw']);
+    expect(headings).toEqual([
+      'Competitors (2)',
+      'Demo people',
+      'Setup',
+      'What will happen',
+      'Draw',
+    ]);
     expect(root.textContent).toContain('Setup is locked as soon as Round 1 starts.');
     expect(root.textContent).not.toMatch(/module/i);
   });
@@ -561,6 +567,18 @@ describe('the Throwdown organiser screen', () => {
     box.checked = false;
     box.dispatchEvent(new Event('change'));
     expect(root.textContent).toContain('3rd place is off.');
+  });
+
+  it('the card follows the redemption setup', async () => {
+    const root = await mount({ event_entries: entries });
+    expect(root.textContent).not.toContain('Redemption brings back');
+    const on = root.querySelector('[data-focus-key="td-redemption-on"]');
+    on.checked = true;
+    on.dispatchEvent(new Event('change'));
+    // two brewers leave nothing to redeem: the feeding round is an extra thing to check (3rd place is the other)
+    expect(root.textContent).toContain('2 things to check.');
+    root.querySelector('[data-focus-key="td-plan-toggle"]').click();
+    expect(root.textContent).toContain('Redemption after Round 1 does nothing');
   });
 
   it('opens the plan from the card and plans for a different brewer count without saving it', async () => {

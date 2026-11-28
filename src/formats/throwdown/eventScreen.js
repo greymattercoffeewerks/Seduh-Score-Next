@@ -109,7 +109,7 @@ export async function mountThrowdownEventScreen(
     busy: false,
     addDraft: blankCompetitorDraft(), // the Add a competitor form's typed values
     addError: null, // { field, message } from validating that form
-    plan: { open: false, entrants: null, thirdPlace: null }, // the What will happen card's what-if (never saved)
+    plan: { open: false, entrants: null, thirdPlace: null, redemption: null }, // the What will happen card's what-if (never saved)
     edit: null, // the one open competitor edit: { entryId, linked, storedPhone, inPublishedResults, draft, error }
   };
 
@@ -898,6 +898,7 @@ export async function mountThrowdownEventScreen(
     cap.value = String(red.cap);
     cap.addEventListener('change', () => {
       red.cap = cap.value === '' ? Number.NaN : Number(cap.value);
+      render(); // the What will happen card reads this
     });
     const rounds = Array.from({ length: MAX_FEED_ROUND }, (_, i) => i + 1).map((n) => {
       const box = el('input', {
@@ -906,6 +907,7 @@ export async function mountThrowdownEventScreen(
       box.checked = red.feed.includes(n);
       box.addEventListener('change', () => {
         red.feed = box.checked ? [...red.feed, n] : red.feed.filter((x) => x !== n);
+        render(); // the What will happen card reads this
       });
       return el('label', { className: 'td-choice' }, [
         box,
@@ -1577,6 +1579,7 @@ export async function mountThrowdownEventScreen(
           createBracketPreviewCard({
             rosterCount: activeEntries().length,
             thirdPlace: state.form.thirdPlace,
+            redemption: state.form.redemption,
             plan: state.plan,
             onChange: (patch) => {
               state.plan = { ...state.plan, ...patch };
