@@ -405,7 +405,7 @@
   gap: var(--space-1);
   padding: var(--space-3);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-box);
   background: var(--color-surface);
 }
 
