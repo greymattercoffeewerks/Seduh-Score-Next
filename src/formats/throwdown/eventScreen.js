@@ -71,6 +71,8 @@ import { scoringContext, scoredView, cupsForMatch, auditRule } from './scoredMat
 import { buildAudit } from './scoreAudit.js';
 import { createScoreEntry } from './scoreEntry.js';
 import { createBracketPreviewCard } from './bracketPreviewCard.js';
+import { scheduleTour, startTour, tourHelpButton } from '../../core/tour.js';
+import { SETUP_TOUR_ID, setupTourSteps } from './tours.js';
 import {
   blankCompetitorDraft,
   validateCompetitorDraft,
@@ -705,7 +707,10 @@ export async function mountThrowdownEventScreen(
     });
     return el(
       'section',
-      { className: 'card td-card', attrs: { 'aria-labelledby': 'td-competitors-h' } },
+      {
+        className: 'card td-card',
+        attrs: { 'aria-labelledby': 'td-competitors-h', 'data-tour': 'td-competitors' },
+      },
       [
         el('h2', { id: 'td-competitors-h', text: `Competitors (${activeEntries().length})` }),
         rows.length
@@ -855,7 +860,10 @@ export async function mountThrowdownEventScreen(
     ];
     return el(
       'section',
-      { className: 'card td-card', attrs: { 'aria-labelledby': 'td-setup-h' } },
+      {
+        className: 'card td-card',
+        attrs: { 'aria-labelledby': 'td-setup-h', 'data-tour': 'td-setup' },
+      },
       [
         el('h2', { id: 'td-setup-h', text: 'Setup' }),
         ...blocks,
@@ -876,7 +884,7 @@ export async function mountThrowdownEventScreen(
       render();
     });
     const block = [
-      el('label', { className: 'td-choice' }, [
+      el('label', { className: 'td-choice', attrs: { 'data-tour': 'td-redemption' } }, [
         toggle,
         document.createTextNode(
           ' Redemption round (competitors who lose get a second chance in a group)',
@@ -1114,18 +1122,25 @@ export async function mountThrowdownEventScreen(
         }),
       );
     }
-    return el('section', { className: 'card td-card', attrs: { 'aria-labelledby': 'td-draw-h' } }, [
-      el('h2', { id: 'td-draw-h', text: 'Draw' }),
-      ...(state.startQueued
-        ? [
-            el('p', {
-              className: 'td-note',
-              text: 'The draw is waiting to sync. It starts when the connection is back.',
-            }),
-          ]
-        : []),
-      ...body,
-    ]);
+    return el(
+      'section',
+      {
+        className: 'card td-card',
+        attrs: { 'aria-labelledby': 'td-draw-h', 'data-tour': 'td-draw' },
+      },
+      [
+        el('h2', { id: 'td-draw-h', text: 'Draw' }),
+        ...(state.startQueued
+          ? [
+              el('p', {
+                className: 'td-note',
+                text: 'The draw is waiting to sync. It starts when the connection is back.',
+              }),
+            ]
+          : []),
+        ...body,
+      ],
+    );
   }
 
   function championBanner() {
@@ -1567,6 +1582,13 @@ export async function mountThrowdownEventScreen(
       container.appendChild(
         el('h1', { id: 'td-heading', text: state.event.name, attrs: { tabindex: '-1' } }),
       );
+      if (!state.data.bracket.started) {
+        container.appendChild(
+          tourHelpButton({
+            onClick: () => startTour({ id: SETUP_TOUR_ID, steps: setupTourSteps }),
+          }),
+        );
+      }
       const fb = feedbackNode();
       if (state.feedback?.tone) fb.dataset.tone = state.feedback.tone;
       container.appendChild(fb);
@@ -1648,6 +1670,10 @@ export async function mountThrowdownEventScreen(
 
   render();
   await refresh();
+  // First time on this screen before the draw: offer the tour (once per device).
+  if (state.data && !state.data.bracket.started) {
+    scheduleTour({ id: SETUP_TOUR_ID, steps: setupTourSteps, signal });
+  }
 
   return {
     unmount() {

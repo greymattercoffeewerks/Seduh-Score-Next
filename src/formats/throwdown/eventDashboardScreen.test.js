@@ -1,3 +1,5 @@
+import { endActiveTour } from '../../core/tour.js';
+import { dashboardTourSteps } from './tours.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const publishThrowdownLive = vi.fn();
@@ -164,6 +166,23 @@ describe('mountThrowdownEventDashboardScreen', () => {
     // The loading state is drawn before the load; the aborted render must not replace it with the dashboard.
     expect(root.querySelector('h1').textContent).toBe('Event');
     expect(root.querySelector('.ok-phase')).toBeNull();
+  });
+
+  describe('guided tour', () => {
+    it('has every anchor its tour points at, and the button starts it', async () => {
+      await mount(beforeDraw());
+      for (const step of dashboardTourSteps) {
+        expect(root.querySelector(step.target), step.target).not.toBeNull();
+      }
+      root.querySelector('[data-tour-help]').click();
+      expect(document.querySelector('.tour-title').textContent).toBe(dashboardTourSteps[0].title);
+      endActiveTour();
+    });
+
+    it('offers no tour once the draw is made', async () => {
+      await mount(midEvent());
+      expect(root.querySelector('[data-tour-help]')).toBeNull();
+    });
   });
 
   describe('bracket planner', () => {

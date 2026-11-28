@@ -216,6 +216,8 @@ minDwellMs = 60000 })`, `paint(payload) -> { name, scoreLine?, podiumLine?, foot
 
 `resultsStoryCard` (2026-11-27, 4.32.0) — the results story card: `drawResultsStoryCard(ctx, spec, { theme })` draws a finished competition's podium (winner box, next places as rows, Venue and Date on their own lines, the page address as text, no QR) on the light paper surface over the Petrol grid-lines backdrop; `paperStoryTheme(document.documentElement)` reads the paper tokens (+ `--color-gold-tint`). Format-agnostic like `storyCard.js`, whose size, `wrapLines` and render/share pipeline it uses (`renderStoryCard(spec, { draw })` takes the layout). The content and the Share dialog are in `src/marketing/` (`resultsStory.js`, `resultsShare.js`). A spec field is called `place`, not `rank`, because `no-derived-storage` rejects `rank:`.
 
+`tour` (2026-11-28) — a guided tour any screen can declare (`src/core/tour.js`, look in `src/ui/tokens/tour.css`). A screen gives steps `{ target (CSS selector, optional), title, body }` and calls `scheduleTour` (once per device, a moment after it draws) and `tourHelpButton` + `startTour` (by hand). The target is looked up again after every redraw, so a re-rendering screen is safe; a step whose target is missing is skipped, so a tour may name controls only some events have. The page is made `inert` while a tour runs (so `findTarget` must never treat `[inert]` as hidden). Never auto-starts under `navigator.webdriver` or vitest. Tour ids carry a `.vN`: bump it to show a changed tour again. Format words and anchors live in the format (`formats/throwdown/tours.js`); core knows no format.
+
 ## `main.js` (composition root)
 
 Not physically under `core/`, but its conventions live here since it's the wiring that

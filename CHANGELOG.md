@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Guided tours: a reusable tour, first on Throwdown setup · unreleased · 2026-11-28
+
+**Status: PR into `dev`, built on top of #587 (the planner on the dashboard); not released. No migration.** Dim the page, spotlight one area with a short tip, Next / Back / Skip. Any screen declares its steps.
+
+- **Engine:** `src/core/tour.js` (`startTour`, `scheduleTour`, `tourHelpButton`, pure `placeTip`/`spotBox`/`dimClip`) and `src/ui/tokens/tour.css` (in `index.css`, tokens only, no shadows: the hole is a `clip-path`). Steps are `{ target, title, body }`; a step with no target is a centred card; a step whose target is not on the page is skipped; the target is looked up again after every redraw.
+- **First run** is remembered per device (`localStorage`, wrapped; blocked storage just means it offers itself again). It never starts by itself in an automated browser (Playwright) or a unit test. **Not per user:** a person on a second device sees it once more.
+- **Accessible:** the tip is a labelled `role=dialog` that takes focus each step; the page behind is `inert`; Escape skips; arrow keys go back and on; focus returns to where it was; entrance motion only under `prefers-reduced-motion: no-preference`. Checked at 360px day and night (no sideways scroll, tip inside the screen).
+- **Throwdown:** `tours.js` has two tours. Setup (Matches page): welcome, competitors, setup, redemption, What will happen, Plan the event, Draw. Dashboard: next step, What will happen, Plan the event. Both have a "Take the tour" button before the draw, none after. Anchors are `data-tour="..."` attributes (the planner card and button carry theirs, so they follow the card wherever it sits).
+- **Reviews:** see the PR.
+
 ## Throwdown: the bracket planner moves to the event dashboard · 4.34.2 · 2026-11-28
 
 **Status: PR into `dev`, not released.** The owner could not find the "What will happen" planner (it sat between Setup and Draw on the Matches page). It is now on the event dashboard, under the Next step card, until the draw is made, with a link to the Matches page where the real setup is changed. The Matches page keeps its own copy.

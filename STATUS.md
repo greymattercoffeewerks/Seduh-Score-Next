@@ -9,6 +9,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Throwdown redemption round (TD.3)** (4.33.0, live 27 Nov): losers drawn into groups and back into the bracket. Migration in the cloud.
 - **Share result to a story** (4.32.0, live): Results page Share button. Owed: phone check.
 - **Phone results** (4.31.1), **left side menu** (4.31.0, device check passed) and **demo people** (4.31.0, migration in the cloud) are live.
+- **Guided tours** (PR): reusable tour engine, first on Throwdown setup. Owed: owner's review.
 - **In flight:** PR #580 demo data for Cup Taster and Throwdown test events (Load and Clear; its new migration `20261202100000` is NOT in the cloud, push only with the owner's OK).
 - **BTC night dashboard, Phase 1** (4.30.0, live): night switch, Needs you list, run strip, standings draft preview.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
@@ -20,7 +21,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
   has published nothing yet.
 - **Organiser home** (`#/events` rebuild): live as 4.17.0; its migration is in the cloud. Owner's real-device check owed.
 - **Country pages** (4.10.2): live, data in the cloud. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
-- **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
+- **Petrol Kaizen P4 to P6** are live; tablet and iPad checks owed.
 - **Cloud database in sync (checked 2026-11-28):** every migration on `main` is in the cloud, the newest being
   `td_redemption` and `load_demo_roster`.
 - **Random Selector redesign** released as **4.21.0**, shared chrome as **4.22.0**. Owed: the owner's 16:9 screen and tablet check (CHANGELOG 4.21.0).

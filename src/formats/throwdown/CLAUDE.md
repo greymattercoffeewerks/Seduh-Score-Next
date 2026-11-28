@@ -101,6 +101,7 @@ brewer in order). Read-only, nothing saved or sent.
   its losers, groups and returners), and what flipping redemption or 3rd place would change. The card follows the Setup card's own redemption
   choice. Fixture cases with a redemption setup are played out by pgTAP `096`, groups included (slot 1 wins each).
 - **Also on the event dashboard** (4.34.2): the same card, built from the saved settings, under the Next step card until the draw; it passes `setupHint: ''` and links to Matches.
+- **Guided tours** (2026-11-28): `tours.js` holds the words for the setup tour (Matches page) and the short dashboard tour; the engine is `core/tour.js`. A tour step points at a `data-tour` attribute: keep `td-preview` and `td-plan` on the planner card wherever it goes.
 - **Not built yet**: lock rules, bye style, a 3-way final.
 
 ## Scoresheet module (stage 1, 2026-11-19)

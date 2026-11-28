@@ -115,7 +115,7 @@ export function dimClip(box, view) {
 
 let active = null;
 
-const TARGET_HIDDEN = '[hidden], [inert]';
+const TARGET_HIDDEN = '[hidden]'; // not [inert]: the tour makes the page inert itself
 
 function findTarget(step) {
   if (!step.target) return null;
@@ -156,7 +156,8 @@ export function startTour({
     done: 'Done',
     ...labels,
   };
-  if (!Array.isArray(steps) || !steps.some(applies)) return { end() {}, next() {}, back() {}, isActive: () => false };
+  if (!Array.isArray(steps) || !steps.some(applies))
+    return { end() {}, next() {}, back() {}, isActive: () => false };
   if (id) markTourSeen(id, storage);
 
   const uid = `tour-${id ?? 'x'}`;
@@ -193,7 +194,12 @@ export function startTour({
         tabindex: '-1',
       },
     },
-    [count, title, body, el('div', { className: 'fb-actions tour-actions' }, [backBtn, nextBtn, skipBtn])],
+    [
+      count,
+      title,
+      body,
+      el('div', { className: 'fb-actions tour-actions' }, [backBtn, nextBtn, skipBtn]),
+    ],
   );
   const root = el('div', { className: 'tour', attrs: { 'data-tour-root': '' } }, [dim, ring, tip]);
 
@@ -206,7 +212,10 @@ export function startTour({
   function layout() {
     frame = 0;
     if (ended || !current) return;
-    const view = { width: document.documentElement.clientWidth || window.innerWidth, height: window.innerHeight };
+    const view = {
+      width: document.documentElement.clientWidth || window.innerWidth,
+      height: window.innerHeight,
+    };
     const node = findTarget(current);
     const rect = node?.getBoundingClientRect();
     const box = rect && (rect.width || rect.height) ? spotBox(rect, view) : null;
@@ -362,4 +371,19 @@ export function tourHelpButton({ onClick, label = 'Take the tour' } = {}) {
   });
   button.addEventListener('click', () => onClick?.());
   return button;
+}
+
+// Offers a tour on its own, once per device, a moment after a screen has drawn (so the layout has settled). Does
+// nothing for a person who has seen it, in an automated browser (a Playwright run's page would be locked behind the
+// tour) or in a unit test, unless `force` is set. Cancelled by the screen's `signal` or the returned function.
+export function scheduleTour({ id, steps, signal, storage, delayMs = 500, force = false } = {}) {
+  const automated = globalThis.navigator?.webdriver === true || import.meta.env?.MODE === 'test';
+  if (!force && (automated || !shouldAutoStart(id, storage))) return () => {};
+  const timer = setTimeout(() => {
+    if (signal?.aborted || isTourRunning()) return;
+    startTour({ id, steps, storage });
+  }, delayMs);
+  const cancel = () => clearTimeout(timer);
+  signal?.addEventListener('abort', cancel, { once: true });
+  return cancel;
 }
