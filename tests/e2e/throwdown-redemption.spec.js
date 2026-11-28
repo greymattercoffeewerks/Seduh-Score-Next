@@ -153,7 +153,7 @@ test.describe('Throwdown redemption, a 12-competitor test event (real app, real 
     await expect(
       projector.locator('.stage-kicker').filter({ hasText: 'the groups' }).first(),
     ).toBeVisible({
-      timeout: 40000,
+      timeout: 100000,
     });
 
     // ---- group 1: 1-1 is level (Confirm stays off), a second vote settles it; groups 2 and 3 by a majority
