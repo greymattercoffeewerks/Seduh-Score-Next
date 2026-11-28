@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Results page: per-format highlight line and organiser note · 4.34.1 · 2026-11-28
+
+**Status: PR #585, released as 4.34.1 on the owner's go-ahead (28 Nov). No migration.** The published Vol 3 Throwdown result showed "NaN:NaNNaN minutes NaN seconds winning time" on `/results/`: the Latest result card drew `winningTimeSecs` with no check, and a Throwdown payload has none.
+
+- **Per-format highlight** (`src/marketing/resultsFacts.js`, a lookup on the payload's `format`, no format imported): Cup Taster shows the winning time, Throwdown nothing, BTC the score between the two finalists (optional `finalScore: [{score},{score}]`; no BTC publisher exists yet, so nothing draws until one does). A value that is not a finite number is never drawn. The card and the printed sheet share it; a row with no format keeps the old behaviour.
+- **Organiser note:** a published payload may carry `organiserNote` (plain text, trimmed, 300 max), drawn as "Note from the organisers: ..." under the card and on the sheet. Set by SQL on the live Vol 3 row ("Final played as a 3-way, per the organisers."); a re-publish of that event would drop it. No organiser screen sets it yet.
+- **Not changed:** Vol 3 was published at podium scope, so its payload has no "Reached" field; the 3-way final is still recorded as a workaround (a proper 3-way final is on the wizard's later-stages list).
+- **Version:** patch (a fix plus a small display slot nobody sets from a screen).
+- **Reviews:** no reviewer agents run; the owner asked for a quick fix and release. Tests: new `resultsFacts.test.js` and two screen tests; `vitest src/marketing` 719 pass, eslint and prettier clean.
+
 ## Throwdown bracket preview, "Plan the event" · 4.34.0 · 2026-11-28
 
 **Status: released as 4.34.0 (PR #582, owner approved 28 Nov). No migration; nothing to push to the cloud.** A new card on the Throwdown setup screen, before the draw, shows how the bracket will play out for the roster: rounds, byes, who rests twice in a row, whether 3rd place is played, the final's size, and what redemption does.
@@ -19,7 +29,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## Throwdown redemption round (TD.3) · 4.33.0 · 2026-11-27
 
-**Status: built on `claude/td3-redemption`, NOT merged and NOT in the cloud (a live Throwdown ran on 27 Nov: no deploy, no cloud database change).** Migration `20261201110000_td_redemption.sql` is new and unpushed. Owner decisions of 27 Nov are spec section 14 (local): groups drawn randomly, several redemption rounds, a brewer can come back more than once, a new page shows the redemption competitors.
+**Status: released as 4.33.0 (PR #579 into `dev`, release #583 to `main`, 27 Nov, after the live Throwdown).** Migration `20261201110000_td_redemption.sql` is in the cloud (applied 28 Nov as `td_redemption`). Owner decisions of 27 Nov are spec section 14 (local): groups drawn randomly, several redemption rounds, a brewer can come back more than once, a new page shows the redemption competitors.
 
 - **The module** (`redemption`, key `throwdown_redemption`, Per-event and up, in the registry on both sides): setup is exactly `{ group_size 2..4 (3), cap (0 = none), feed [main round numbers 1..4] }`, stored by `td_save_settings`; off stores nothing. After a main round the organiser ticked, the losers (active only; a bye has no loser) are drawn at random in the database into groups (`app.td_group_sizes`: ceil(pool / size) groups, as even as possible, never one brewer alone, so with groups of 2 and an odd pool one group is a three). Each group is a pool match (the 2..4 slots TD.1 reserved); nothing in the match, slot or vote tables changed shape. A round only follows a main round that leaves MORE THAN FOUR winners, and only with two brewers to draw; otherwise the bracket goes straight on (no trace).
 - **Voting.** A group is the same table, view and functions as a pair: strictly the most votes wins. When every judge is in and the top is shared (a three-way 1-1-1 included), ONE tie-break vote opens and `td_cast_vote` refuses it for a brewer who is not in the tie (`td_tiebreak_slot`; a pair is unchanged). The console disables Vote for the others.
@@ -55,7 +65,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## The left side menu (rail), app-wide · 4.31.0 · 2026-11-27
 
-**Status: released together with the demo-people entry below as one 4.31.0 (release PR, merge held until after the 27 Nov Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. Owed: the owner's tablet and phone check, and a green CI run of `organiser-flow.spec.js`, whose header tests were rewritten for the rail and drawer (1023/1024px) but not run locally (they need the local database).
+**Status: released together with the demo-people entry below as one 4.31.0 (release PR #567, merged to `main` 27 Nov after the Throwdown).** Firdaus adopted the concept's left menu for every organiser screen. The owner's device check passed on 27 Nov, and `organiser-flow.spec.js` (header tests rewritten for the rail and drawer, 1023/1024px) is green in CI.
 
 - **What.** From 1024px the console header is a left rail (15rem): brand, organisation, event name and sync chip, the links with the current one marked by the accent edge, and the account (email, Change password, Sign out) at the foot. Below 1024px the header stays a slim top bar and the same panel opens as a drawer from the left over a dimmed page (tap the dim area, Escape or the Menu button to close).
 - **360px, no scroll bar.** The concept's phone strip scrolled sideways. Here nothing is wider than the screen: the drawer is `min(18rem, 100vw - 4.5rem)` so the Menu button stays in view as the way to close it, and the drawer scrolls only vertically inside itself (measured at 360px: page width 360, drawer width = its client width).
@@ -68,7 +78,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ## Demo people for Cup Taster and Throwdown test events · 4.31.0 · 2026-11-26
 
-**Status: released with the left side menu above as one 4.31.0; its migration is pushed to the cloud after the release merges.** (A live Throwdown runs on production on 27 Nov.) Since Seduh ID, every cupper and competitor needs a unique phone, so a rehearsal meant typing eight made-up numbers. A test event's Roster (Cup Taster) and Competitors (Throwdown, before the draw) now have an "Add demo people" card. BTC keeps its own demo loader (`load_btc_demo`).
+**Status: released with the left side menu above as one 4.31.0; its migration `load_demo_roster` is in the cloud (applied 28 Nov; release PR #567, 27 Nov).** Since Seduh ID, every cupper and competitor needs a unique phone, so a rehearsal meant typing eight made-up numbers. A test event's Roster (Cup Taster) and Competitors (Throwdown, before the draw) now have an "Add demo people" card. BTC keeps its own demo loader (`load_btc_demo`).
 
 - **`public.load_demo_roster(org, event)`** (migration `20261130100000`, pgTAP `094`, row in matrix `041`): SECURITY INVOKER, refused unless the event is a Cup Taster or Throwdown TEST event (hints `demo_not_test`, `demo_roster_format`, `demo_event_not_found`). Adds 8 people named "Demo ...", café "Demo Cafe A..H", notes "Demo data (test events only)", phones +44 7700 900101 to 900108 (Ofcom's drama range, never a real subscriber). **Additive and repeatable: nothing is deleted**, an existing entry is left alone, a withdrawn one is reinstated. People are reused by phone, so Cup Taster and Throwdown test events in one organisation share the same 8.
 - **Seduh ID safety.** It never calls `link_person_identity`, so no demo person has a Seduh ID; a demo phone cannot be claimed (claiming sends a code to the phone); test-event results already never reach the feed, discovery, a person page or a country page. The Community cap (8) still applies through the normal entry trigger: a test event with a typed entry already on it is refused with the standard cap message once it would pass 8.
@@ -878,18 +888,3 @@ Upgrading the CLI is now a deliberate one-line change in `.github/workflows/ci.y
   - `test-auditor`: 4 🔴 (all test gaps, each confirmed by reading and fixed; the auditor could not launch an independent checker and the mutations it named are each now caught): only 18 of the reserved words were tested (now the whole list, size pinned); the rollback block was a hand copy (now pinned by a unit test); the `service_role` check could pass on missing schema usage (usage granted in the test); the organisation-delete test had no committed link (now has one). Nits fixed: upper-case hash, frozen account facts, used-before-created, a real expired link, a vacuous-set guard on the function checks.
   - One full pass after the fixes: pgTAP (80 files), unit tests and lint pass.
 - **Design choices the spec left open:** handle on the account (not the identity); #0001 held by a sequence starting at 2 plus an explicit owner-only assignment behind a transaction setting; claim links treated as tenant data where it matters (frozen `org_id`) but kept in `app`, outside the `public` matrices.
-
-## Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15
-
-**Task:** three open items, picked as small and unblocked. Branch `claude/small-fixes-2` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
-
-- **`tools/check-doc-budgets.test.js` passes on Windows.** Its `exists` fixture matched `/real.md`, but `brokenLinks` builds paths with `path.resolve`, which gives backslashes on Windows, so a real file was reported broken. The fixture now normalises separators. Test-only; the checker is unchanged. (Follow-up from the "Public header links" entry, 2026-11-14.)
-- **Guess the Bean fields show the error edge.** GTB does not load `components.css`, so `.gtb-input[aria-invalid='true']` in `src/community/guess-the-bean/shared.css` now copies the kit's 2px `--field-edge-error` edge, giving 1px back in the side padding so the field does not grow. 8.0:1 against the input fill. The `.form-field-error` message (with its glyph) stays the non-colour cue.
-- **The shared header's phone menu closes on Escape from the toggle.** It already closed on Escape inside the panel; now Escape on the toggle closes it too, with focus left on the toggle, as the landing nav does (`src/marketing/publicHeader.js`).
-- **Tests.** `publicHeader.test.js`: Escape on the toggle closes the menu and keeps focus there; other keys do not. `sharedStyles.test.js` (new): the GTB error edge equals the kit's (`components.css`), so the copy cannot drift, and the padding gives back 1px. Reverting either fix fails its test.
-- **Not done:** no browser run.
-- **Reviews:**
-  - `code-reviewer`: clean.
-  - `module-boundary-checker`: no 🔴. Two nits: the GTB test did not compare against the kit (fixed: now a parity test); `guess-the-bean/CLAUDE.md` "Own CSS" does not list the error-edge copy (left for the owner: CLAUDE.md files are not edited on a reviewer's request). 🟣 The toggle and menu logic is duplicated between `landingScreen.js` and `publicHeader.js` (pre-existing, not logged as a task).
-  - `test-auditor`: no 🔴. Nits: no focus assertion (fixed); the "2px" test name (gone with the parity rewrite).
-  - `ui-accessibility-reviewer`: no 🔴. One nit, fixed: the padding compensation is now asserted. 🟣 The normal `.gtb-input` edge is 2.09:1 (under 3:1); logged in `docs/backlog/guess-the-bean.md`.

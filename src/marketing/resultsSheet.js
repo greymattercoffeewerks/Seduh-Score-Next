@@ -12,6 +12,7 @@
 // never innerHTML.
 import { el, withSrExpansion } from '../core/dom.js';
 import { formatDuration, formatDurationLong } from '../core/duration.js';
+import { finiteNumber, highlightFactFor, organiserNoteFor } from './resultsFacts.js';
 import { findPublishedResultForEvent, publishedOrgName } from '../core/publicResults.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { linkClaimedNames } from '../core/seduhDiscovery.js';
@@ -29,10 +30,6 @@ const PUBLISHED_FORMAT = new Intl.DateTimeFormat('en-GB', {
 
 function cleanText(value) {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function finiteNumber(value) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 // `formatDate` (the archive's own) throws on a value that is not a real date, so the check comes
@@ -181,7 +178,8 @@ export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PU
   const facts = [];
   const competitors = finiteNumber(event.competitors);
   const rounds = finiteNumber(event.rounds);
-  const winningTime = finiteNumber(event.winningTimeSecs);
+  const highlight = highlightFactFor(event);
+  const note = organiserNoteFor(event);
   if (competitors != null) {
     facts.push(
       el('li', {}, [
@@ -195,13 +193,13 @@ export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PU
       el('li', {}, [el('b', { text: String(rounds) }), document.createTextNode(' rounds')]),
     );
   }
-  if (winningTime != null) {
+  if (highlight) {
     facts.push(
       el('li', {}, [
         el('b', { className: 'tabular-nums' }, [
-          ...withSrExpansion(formatDuration(winningTime), formatDurationLong(winningTime)),
+          ...withSrExpansion(highlight.value, highlight.speakAs),
         ]),
-        document.createTextNode(' winning time'),
+        document.createTextNode(` ${highlight.label}`),
       ]),
     );
   }
@@ -271,6 +269,9 @@ export function buildResultsSheet(event, { countryPagesPublic = COUNTRY_PAGES_PU
                   'reached. Score is correct answers out of the sets scored in that round' +
                   (content.kind === 'standings' ? '; time is their total time in it.' : '.'),
           }),
+      note
+        ? el('p', { className: 'results-sheet-note', text: `Note from the organisers: ${note}` })
+        : null,
       el('p', {
         className: 'results-sheet-note results-sheet-published',
         text:
