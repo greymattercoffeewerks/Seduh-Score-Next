@@ -53,7 +53,10 @@ export async function approveQueued(ctx, resultId) {
 export function mountFeedQueue(ctx) {
   let disposed = false;
   let busy = false;
-  const heading = el('h2', { text: 'Waiting for review', attrs: { id: 'adm-feed-queue-heading' } });
+  const heading = el('h2', {
+    text: 'Waiting for review',
+    attrs: { id: 'adm-feed-queue-heading', tabindex: '-1' },
+  });
   const note = el('p', { className: 'adm-muted', text: QUEUE_NOTE });
   const feedback = feedbackRegion();
   const list = el('div', { className: 'adm-panel-body' });
@@ -78,7 +81,10 @@ export function mountFeedQueue(ctx) {
     const places = el(
       'ol',
       { className: 'adm-feed-podium' },
-      row.podium.map((place) => el('li', { text: place.name })),
+      row.podium.map((place) =>
+        // the stored place, not the position in the list: a blank name dropped before it must not renumber the rest
+        el('li', { text: place.name, attrs: { value: String(place.position) } }),
+      ),
     );
     const when = row.enqueuedAt ? ` · queued ${formatDateTime(row.enqueuedAt)}` : '';
     return el('li', { className: 'adm-feed-row' }, [
@@ -147,7 +153,11 @@ export function mountFeedQueue(ctx) {
       return;
     }
     const outcome = await load();
-    if (outcome === 'ok') setFeedback(feedback, 'Podium rejected.', 'success', { focus: false });
+    if (outcome === 'ok') {
+      setFeedback(feedback, 'Podium rejected.', 'success', { focus: false });
+      // the Reject button that had focus is gone: keep keyboard focus inside this section
+      heading.focus();
+    }
   }
 
   return {

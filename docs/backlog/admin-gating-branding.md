@@ -199,3 +199,11 @@ Built: the "Forgot password?" request screen, the screen a recovery link opens, 
 - **The admin field hint sits before its input.** `DESIGN.md` says the hint goes after the input, so the sibling selector that hides the error can reach it. Not changed in P4 (`ui-accessibility-reviewer`, Not fixed). Move the hint and keep the selector.
 - **The admin plan panel's errors land in a polite status region** (pre-existing, `planParts.js`). An error should be assertive or sit inline by its cause.
 - **The leave-screen and sign-out warning stays a native dialog on purpose** (a one-time password cannot be recovered). Recorded so nobody "fixes" it into an undoable panel; the owner can overrule.
+
+## Known open items from the admin Seduh ID queue and People tidy-up (4.36.0, 2026-11-28)
+
+- **Owner decision, not made: surface Approve and set `app.seduh_feed_mode.console_actions`.** Only on the owner's word, and after the owner's Cloudflare hardening of the admin console. Until then Approve is refused for everyone (`seduh_feed_console_off`) and no button shows. Source: CHANGELOG 4.36.0; `src/admin/CLAUDE.md`, "The queue".
+- **Pending, owner's own work: Cloudflare hardening of the admin console.** Not started in the repo; Approve waits for it.
+- **Root rule (done 2026-11-28).** `CLAUDE.md` now records the queue's names view as the one owner-approved exception to D-A4.
+- **Reviews (4.36.0), run 2026-11-28 after release.** `security-reviewer` on the approve wall: 0 Important (could not refute; static read only). `schema-guardian` on both migrations: clean (rollbacks checked by reading, not run). `module-boundary-checker`: clean. `ui-accessibility-reviewer`: see the CHANGELOG entry. Open nit: pgTAP `098` never exercises the `p_via = 'admin'` branch of `app.seduh_feed_apply` in isolation (line 142 fails at the grant first); add the test-071 pattern (grant execute to `authenticated` inside the transaction, then assert a non-admin, a stale TOTP and an admin with the switch off each get 42501). Needs a local DB run to write safely.
+- **pgTAP and Playwright not run by the building session.** `npm run db:test` and the e2e suite (`npm run db:lock -- run -- npm run test:e2e`) on the owner's machine are still owed for `097`, `098` and both screens.

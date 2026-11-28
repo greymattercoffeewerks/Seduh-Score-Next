@@ -272,7 +272,10 @@ functions"); the locked spec is `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (loca
   behind anything weaker, and never add one that skips it: `048`, `050` and the adversarial attack list fail CI for
   the shapes they can see.
 - **Metadata only, and no impersonation, on purpose.** An admin sees organisation names, link names, members
-  (email, role, joined), counts and dates, and no participant data: no event, score, entry or person (D-A4). There
+  (email, role, joined), counts and dates, and no participant data: no event, score, entry or person (D-A4), with ONE owner-approved exception (2026-11-28): the
+  Seduh ID review queue shows the NAMES and places of queued podiums (never a phone, cafe or person id; the column list is
+  pinned by pgTAP `098`). Its Approve step is built but switched off (`app.seduh_feed_mode.console_actions`) until the owner
+  hardens admin access. Any other participant data is still a D-A4 amendment, the owner's call. There
   is no "sign in as": attaching a person to an organisation gives THAT person its data, which is why the operator
   cannot target themselves (`admin_self_target`), why attaching an account whose one-time password someone else may
   know needs a deliberate tick (`member_password_unset`, D-A9: a gate and an audit trail, not a proof), and why

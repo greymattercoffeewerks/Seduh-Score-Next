@@ -121,6 +121,31 @@ describe('the queue section', () => {
     expect(host.textContent).toContain('Podium rejected.');
   });
 
+  it('draws the stored place of each name, not its position in the list', async () => {
+    mount({
+      admin_seduh_feed_queue: ok([{ ...ROW, podium: [{ position: 2, name: 'Budi Hassan' }] }]),
+    });
+    await queue.load();
+    const li = host.querySelector('.adm-feed-podium li');
+    expect(li.getAttribute('value')).toBe('2');
+  });
+
+  it('after a successful Reject, focus moves to the section heading, not to the page body', async () => {
+    confirmDialog.mockResolvedValue(true);
+    let rows = [ROW];
+    mount({
+      admin_seduh_feed_queue: () => ok(rows),
+      admin_seduh_feed_reject: () => {
+        rows = [];
+        return ok(null);
+      },
+    });
+    await queue.load();
+    button('Reject').click();
+    await flush();
+    expect(document.activeElement).toBe(host.querySelector('#adm-feed-queue-heading'));
+  });
+
   it('cancelling the confirmation rejects nothing', async () => {
     confirmDialog.mockResolvedValue(false);
     const callAdmin = mount({ admin_seduh_feed_queue: ok([ROW]) });

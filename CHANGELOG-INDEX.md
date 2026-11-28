@@ -2,6 +2,9 @@
 
 One line per entry moved out of `CHANGELOG.md`: date, heading, file. The most recent entries are in [`CHANGELOG.md`](CHANGELOG.md).
 
+- Seduh ID Layer 2, B3a: the claim backend (issue, redeem, #0001) · 2026-11-18 → [`2026-11-H2-c`](docs/archive/changelog/2026-11-H2-c.md)
+- Seduh ID Layer 2, B2: record coverage (the feed reads full standings) · 2026-11-17 → [`2026-11-H2-c`](docs/archive/changelog/2026-11-H2-c.md)
+- Seduh ID Layer 2, B1: the profile door `public_seduh_profile(handle)` · 2026-11-16 → [`2026-11-H2-c`](docs/archive/changelog/2026-11-H2-c.md)
 - CI: pin the Supabase CLI to 2.115.0 · 2026-11-15 → [`2026-11-H2-b`](docs/archive/changelog/2026-11-H2-b.md)
 - Seduh ID Layer 2, A1: how `/id/<handle>/` is served (a Worker for `/id/*`) · 2026-11-15 → [`2026-11-H2-b`](docs/archive/changelog/2026-11-H2-b.md)
 - Seduh ID Layer 2, Phase A2: the schema for claimed Seduh IDs · 2026-11-15 → [`2026-11-H2-b`](docs/archive/changelog/2026-11-H2-b.md)

@@ -404,6 +404,8 @@ also refuses an API session by name (as B4's does).
 - **`app.seduh_feed_mode`** (one row): `off` (the default; nothing is queued and the run is refused), `queue` (the first live mode) or `auto`
   (built, off), plus `org_daily_cap` (8) and `global_daily_cap` (40) for `auto`. Change it with owner SQL (`supabase/scripts/seduh_feed_mode.sql`)
   and record the change in the CHANGELOG or a note: nothing writes an audit row for it.
+  The switch `app.seduh_feed_mode.console_actions` (default false) gates the admin console's Approve: while off, `admin_seduh_feed_approve` and the
+  `p_via = 'admin'` path of `app.seduh_feed_apply` refuse everyone (`seduh_feed_console_off`). Owner SQL only; no screen calls Approve yet (CHANGELOG 4.36.0). For `p_via = 'admin'` the API-role-by-name refusal is replaced by `app.require_platform_admin()` plus this switch, so `seduh_feed_apply` must never be granted to an API role.
 - **`app.seduh_feed_queue`**: one row per published result of a non-test event that names people (a podium or full standings) (`result_id`, `org_id`, `state` = `queued` / `processed` /
   `rejected` / `undone`, times, and after a run the uuids of the identities created and the people linked). Ids only: no phone, name, cafe
   or free text (`last_error` is a SQLSTATE). A changed payload on a result already dealt with puts it back in the queue (the lists undo needs are kept);
