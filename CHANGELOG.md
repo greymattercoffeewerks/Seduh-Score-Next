@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Results page: per-format highlight line and organiser note · 4.34.1 · 2026-11-28
+
+**Status: PR #585, released as 4.34.1 on the owner's go-ahead (28 Nov). No migration.** The published Vol 3 Throwdown result showed "NaN:NaNNaN minutes NaN seconds winning time" on `/results/`: the Latest result card drew `winningTimeSecs` with no check, and a Throwdown payload has none.
+
+- **Per-format highlight** (`src/marketing/resultsFacts.js`, a lookup on the payload's `format`, no format imported): Cup Taster shows the winning time, Throwdown nothing, BTC the score between the two finalists (optional `finalScore: [{score},{score}]`; no BTC publisher exists yet, so nothing draws until one does). A value that is not a finite number is never drawn. The card and the printed sheet share it; a row with no format keeps the old behaviour.
+- **Organiser note:** a published payload may carry `organiserNote` (plain text, trimmed, 300 max), drawn as "Note from the organisers: ..." under the card and on the sheet. Set by SQL on the live Vol 3 row ("Final played as a 3-way, per the organisers."); a re-publish of that event would drop it. No organiser screen sets it yet.
+- **Not changed:** Vol 3 was published at podium scope, so its payload has no "Reached" field; the 3-way final is still recorded as a workaround (a proper 3-way final is on the wizard's later-stages list).
+- **Version:** patch (a fix plus a small display slot nobody sets from a screen).
+- **Reviews:** no reviewer agents run; the owner asked for a quick fix and release. Tests: new `resultsFacts.test.js` and two screen tests; `vitest src/marketing` 719 pass, eslint and prettier clean.
+
 ## Throwdown bracket preview, "Plan the event" · 4.34.0 · 2026-11-28
 
 **Status: released as 4.34.0 (PR #582, owner approved 28 Nov). No migration; nothing to push to the cloud.** A new card on the Throwdown setup screen, before the draw, shows how the bracket will play out for the roster: rounds, byes, who rests twice in a row, whether 3rd place is played, the final's size, and what redemption does.
@@ -878,18 +888,3 @@ Upgrading the CLI is now a deliberate one-line change in `.github/workflows/ci.y
   - `test-auditor`: 4 🔴 (all test gaps, each confirmed by reading and fixed; the auditor could not launch an independent checker and the mutations it named are each now caught): only 18 of the reserved words were tested (now the whole list, size pinned); the rollback block was a hand copy (now pinned by a unit test); the `service_role` check could pass on missing schema usage (usage granted in the test); the organisation-delete test had no committed link (now has one). Nits fixed: upper-case hash, frozen account facts, used-before-created, a real expired link, a vacuous-set guard on the function checks.
   - One full pass after the fixes: pgTAP (80 files), unit tests and lint pass.
 - **Design choices the spec left open:** handle on the account (not the identity); #0001 held by a sequence starting at 2 plus an explicit owner-only assignment behind a transaction setting; claim links treated as tenant data where it matters (frozen `org_id`) but kept in `app`, outside the `public` matrices.
-
-## Three more small fixes: docs-check test on Windows, Guess the Bean field error edge, header Escape · 2026-11-15
-
-**Task:** three open items, picked as small and unblocked. Branch `claude/small-fixes-2` (worktree `C:/Dev/seduh-wt-smalls`, off `origin/dev`), PR into `dev`. **Patch-level, no version bump** (set at release). No database, RPC or payload change.
-
-- **`tools/check-doc-budgets.test.js` passes on Windows.** Its `exists` fixture matched `/real.md`, but `brokenLinks` builds paths with `path.resolve`, which gives backslashes on Windows, so a real file was reported broken. The fixture now normalises separators. Test-only; the checker is unchanged. (Follow-up from the "Public header links" entry, 2026-11-14.)
-- **Guess the Bean fields show the error edge.** GTB does not load `components.css`, so `.gtb-input[aria-invalid='true']` in `src/community/guess-the-bean/shared.css` now copies the kit's 2px `--field-edge-error` edge, giving 1px back in the side padding so the field does not grow. 8.0:1 against the input fill. The `.form-field-error` message (with its glyph) stays the non-colour cue.
-- **The shared header's phone menu closes on Escape from the toggle.** It already closed on Escape inside the panel; now Escape on the toggle closes it too, with focus left on the toggle, as the landing nav does (`src/marketing/publicHeader.js`).
-- **Tests.** `publicHeader.test.js`: Escape on the toggle closes the menu and keeps focus there; other keys do not. `sharedStyles.test.js` (new): the GTB error edge equals the kit's (`components.css`), so the copy cannot drift, and the padding gives back 1px. Reverting either fix fails its test.
-- **Not done:** no browser run.
-- **Reviews:**
-  - `code-reviewer`: clean.
-  - `module-boundary-checker`: no 🔴. Two nits: the GTB test did not compare against the kit (fixed: now a parity test); `guess-the-bean/CLAUDE.md` "Own CSS" does not list the error-edge copy (left for the owner: CLAUDE.md files are not edited on a reviewer's request). 🟣 The toggle and menu logic is duplicated between `landingScreen.js` and `publicHeader.js` (pre-existing, not logged as a task).
-  - `test-auditor`: no 🔴. Nits: no focus assertion (fixed); the "2px" test name (gone with the parity rewrite).
-  - `ui-accessibility-reviewer`: no 🔴. One nit, fixed: the padding compensation is now asserted. 🟣 The normal `.gtb-input` edge is 2.09:1 (under 3:1); logged in `docs/backlog/guess-the-bean.md`.

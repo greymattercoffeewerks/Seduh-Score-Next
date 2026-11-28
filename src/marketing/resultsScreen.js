@@ -7,7 +7,6 @@
 // (results/index.html). Each event also links to its printable results sheet (resultsSheet.js,
 // /results/?sheet=<event id>).
 import { el, withSrExpansion } from '../core/dom.js';
-import { formatDuration, formatDurationLong } from '../core/duration.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { linkClaimedNames } from '../core/seduhDiscovery.js';
@@ -17,6 +16,7 @@ import { buildPublicHeader } from './publicHeader.js';
 import { buildScoringRecord } from './scoringRecord.js';
 import { buildCountryChip } from '../core/countryChip.js';
 import { buildResultsShareControl } from './resultsShare.js';
+import { highlightFactFor, organiserNoteFor } from './resultsFacts.js';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -181,12 +181,8 @@ function buildSheetLink(event, { withName = false } = {}) {
 }
 
 function buildLatestResult(event, client, chipFor) {
-  const timeSpan = el('span', { className: 'tabular-nums' }, [
-    ...withSrExpansion(
-      formatDuration(event.winningTimeSecs),
-      formatDurationLong(event.winningTimeSecs),
-    ),
-  ]);
+  const highlight = highlightFactFor(event);
+  const note = organiserNoteFor(event);
   // eventDate is nullable (resultsPublishing.js's own payload falls back to
   // null when the event has none recorded) — formatDate() itself throws on
   // null (Intl.DateTimeFormat.format rejects an Invalid Date), so it's only
@@ -216,20 +212,31 @@ function buildLatestResult(event, client, chipFor) {
           { className: 'results-latest-summary' },
           [
             el('p', { className: 'results-eyebrow', text: formatLabel(event.format) }),
-            el('ul', { className: 'results-fact-list' }, [
-              el('li', {}, [
-                el('b', { className: 'tabular-nums', text: String(event.competitors) }),
-                document.createTextNode(' competitors'),
-              ]),
-              el('li', {}, [
-                el('b', { className: 'tabular-nums', text: String(event.rounds) }),
-                document.createTextNode(' rounds'),
-              ]),
-              el('li', {}, [timeSpan, document.createTextNode(' winning time')]),
-              el('li', {}, [
-                document.createTextNode(`${formatShortDate(event.publishedAt)} result published`),
-              ]),
-            ]),
+            el(
+              'ul',
+              { className: 'results-fact-list' },
+              [
+                el('li', {}, [
+                  el('b', { className: 'tabular-nums', text: String(event.competitors) }),
+                  document.createTextNode(' competitors'),
+                ]),
+                el('li', {}, [
+                  el('b', { className: 'tabular-nums', text: String(event.rounds) }),
+                  document.createTextNode(' rounds'),
+                ]),
+                highlight
+                  ? el('li', {}, [
+                      el('span', { className: 'tabular-nums' }, [
+                        ...withSrExpansion(highlight.value, highlight.speakAs),
+                      ]),
+                      document.createTextNode(` ${highlight.label}`),
+                    ])
+                  : null,
+                el('li', {}, [
+                  document.createTextNode(`${formatShortDate(event.publishedAt)} result published`),
+                ]),
+              ].filter(Boolean),
+            ),
             buildSheetLink(event),
             buildResultsShareControl(event, { formatLabel, formatDate }),
           ].filter(Boolean),
@@ -240,8 +247,14 @@ function buildLatestResult(event, client, chipFor) {
           event.podium.map((entry) => podiumRow(entry, chipFor)),
         ),
       ]),
+      note
+        ? el('p', {
+            className: 'results-organiser-note',
+            text: `Note from the organisers: ${note}`,
+          })
+        : null,
       buildScoringRecord(event.eventId, { client, title: event.eventName }),
-    ],
+    ].filter(Boolean),
   );
 }
 
