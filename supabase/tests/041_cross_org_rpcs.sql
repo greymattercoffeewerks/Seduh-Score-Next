@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(108);
+select plan(112);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -136,6 +136,8 @@ insert into e1.rpc (name, sql, org_only) values
   ('my_entitlements', 'select public.my_entitlements(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('team_remove_member', 'select public.team_remove_member(e1.u(''@'',100), ''00000000-0000-0000-0000-000000000003''::uuid)', true),
   ('link_person_identity', 'select public.link_person_identity(e1.u(''@'',100), e1.u(''%'',17))', false),
+  ('list_unused_people', 'select * from public.list_unused_people(e1.u(''@'',100))', true),
+  ('remove_unused_people', 'select public.remove_unused_people(e1.u(''@'',100), array[e1.u(''%'',17)])', false),
   ('issue_seduh_claim_link', 'select public.issue_seduh_claim_link(e1.u(''%'',17))', false),
   ('revoke_seduh_claim_link', 'select public.revoke_seduh_claim_link(e1.u(''%'',17))', false),
   ('seduh_claim_statuses', 'select * from public.seduh_claim_statuses(e1.u(''@'',100), array[e1.u(''%'',17)])', false),
@@ -174,7 +176,7 @@ update e1.rpc set own_expect = case name
   when 'issue_seduh_claim_link'      then 'P0001: This person has no Seduh ID yet'
   when 'revoke_seduh_claim_link'     then 'P0001: There is no open claim link for this person'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 45, 'the matrix covers 45 RPCs');
+select is((select count(*)::int from e1.rpc), 47, 'the matrix covers 47 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
@@ -218,7 +220,7 @@ begin
      -- only the owner-only (org_only) functions are attacked by an organiser who is not an owner: for the others it is an ordinary call
      and not (c.kind = 'attack_nonowner' and not r.org_only)
      -- org_event_summaries is organisation-only but for any MEMBER (the organiser home), so a non-owner organiser is a normal caller
-     and not (c.kind = 'attack_nonowner' and r.name = 'org_event_summaries')
+     and not (c.kind = 'attack_nonowner' and r.name in ('org_event_summaries', 'list_unused_people'))
      and not (not r.org_arg and c.kind = 'attack'
               and (who = 'user_ab' or (who = 'user_a' and c.res = 'aaaa') or (who = 'user_b' and c.res = 'bbbb')));
 end $$;
@@ -237,7 +239,7 @@ reset role;
 -- the function's own guard speaking (and not an argument error, a missing row of the fixture, or success)
 create function e1.is_guard(code text, rpc text) returns boolean language sql immutable as $$
   select code ~ '^(42501|P0001): ' and code ~* ('(not found|does not belong|only an owner'
-    || case when rpc in ('link_person_identity', 'issue_seduh_claim_link', 'revoke_seduh_claim_link', 'seduh_claim_statuses') then '|row-level security policy for table "people"'
+    || case when rpc in ('link_person_identity', 'remove_unused_people', 'list_unused_people', 'issue_seduh_claim_link', 'revoke_seduh_claim_link', 'seduh_claim_statuses') then '|row-level security policy for table "people"'
                            when rpc = 'archive_event_status' then '|row-level security policy for table "archive_events"' else '' end || ')')
 $$;
 
@@ -313,7 +315,7 @@ select is(
         'admin_create_org(text,text,uuid,boolean)', 'admin_add_member(uuid,uuid,text,boolean)', 'admin_set_role(uuid,uuid,text)',
         'admin_grant_create(uuid,text,uuid,integer,timestamp with time zone,text,text)', 'admin_grant_extend(uuid,timestamp with time zone,text)',
         'admin_grant_revoke(uuid,text)', 'admin_list_grants(uuid)', 'admin_event_resnapshot(uuid,text)', 'admin_event_release(uuid,text)',
-        'admin_plan_org(uuid)', 'admin_payment_confirm(uuid,text,uuid,integer,timestamp with time zone,text)')),
+        'admin_plan_org(uuid)', 'admin_seduh_feed_approve(uuid)', 'admin_seduh_feed_reject(uuid)', 'admin_payment_confirm(uuid,text,uuid,integer,timestamp with time zone,text)')),
   'none',
   'every function or procedure a signed-in or anonymous caller can run that takes a uuid (an organisation, event, heat, match, stage, slot, entry, person or user id) is in this matrix or on the short, named exemption list: a new one fails here until it is added to e1.rpc');
 

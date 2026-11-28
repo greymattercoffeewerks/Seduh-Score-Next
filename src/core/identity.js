@@ -66,3 +66,28 @@ export async function listOrgPeople(orgId, client = getSupabase()) {
     })),
   };
 }
+
+// Tidying the roster. A person row belongs to the organisation, so deleting a test event leaves its names behind. The
+// database decides who is safe to remove (no entry on any event, no Seduh ID, no staff or affiliate role) and returns
+// only those, so the screen never has to work it out and cannot offer anyone it should not.
+export const TIDY_BATCH_LIMIT = 200;
+
+export async function listUnusedPeople(orgId, client = getSupabase()) {
+  const { data, error } = await client.rpc('list_unused_people', { p_org_id: orgId });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.person_id,
+    displayName: row.display_name,
+    cafe: row.cafe ?? null,
+  }));
+}
+
+// Returns how many were removed (the database may keep one that became used since the list was drawn).
+export async function removeUnusedPeople(orgId, personIds, client = getSupabase()) {
+  const { data, error } = await client.rpc('remove_unused_people', {
+    p_org_id: orgId,
+    p_person_ids: personIds,
+  });
+  if (error) throw error;
+  return Number(data ?? 0);
+}

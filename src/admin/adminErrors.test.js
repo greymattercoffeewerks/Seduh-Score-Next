@@ -59,6 +59,8 @@ const NOT_FOR_THE_CONSOLE = {
     'raised only to the database owner running the feed or its undo without result ids; never an admin console call',
   seduh_feed_mode_off:
     'raised only to the database owner running the feed while its mode is off; never an admin console call',
+  seduh_feed_console_off:
+    'raised by the console Approve while its owner switch is off; Approve has no button yet (plumbing only)',
   seduh_backfill_owner_only:
     'raised only to an API role calling the owner-run identity backfill; never an admin console call',
   // Archive tick box (T-ARC.3): the organiser's own RPC, never an admin console call.
@@ -186,6 +188,7 @@ const NOT_FOR_THE_CONSOLE = {
   already_disputed: 'Seduh ID not mine',
   not_undoable: 'Seduh ID not mine',
   too_many_disputes: 'Seduh ID not mine',
+  too_many_people: 'People screen tidy-up',
   bad_setting: 'Seduh ID own record',
   bad_path: 'Seduh ID photo',
   no_object: 'Seduh ID photo',

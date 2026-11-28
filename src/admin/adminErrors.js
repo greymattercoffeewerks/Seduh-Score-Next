@@ -55,6 +55,7 @@ export const ADMIN_ERROR_COPY = Object.freeze({
   snapshot_downgrade: 'An event’s plan only goes up. Its plan is already as high as it can be.',
   amount_required: 'Write the amount and reference of the payment.',
   amount_too_long: 'The payment note is too long (200 characters at most).',
+  feed_not_queued: 'That podium is no longer waiting. Refresh the list.',
   account_state_unknown:
     'We could not confirm whether the login was created. Look the email up before trying again.',
 });

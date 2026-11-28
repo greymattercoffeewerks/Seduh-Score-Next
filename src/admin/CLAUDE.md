@@ -205,7 +205,8 @@ One read-only function, `admin_seduh_id_counts()` (migration `20261031110000`, p
 integers: identities total, by status, by source, identities with no linked person (tombstones excluded, as the B4 list),
 people total, linked and blocked. The rules:
 
-- **Numbers only, on purpose.** No name, phone, id, email, lookup or per-organisation figure (a per-organisation count
+- **The queue (2026-11-28, `feedQueue.js`, migration `20261202120000`, pgTAP `098`).** Below the counts, "Waiting for review" lists the published podiums in the feed queue with their NAMES and places (owner amendment of D-A4: never a phone, a cafe or a person id; the view's column list is pinned by 098) and a Reject button (audited `seduh_feed.reject`; creates nothing). **Approve is built and NOT shown:** `admin_seduh_feed_approve` and the `p_via = 'admin'` path of `app.seduh_feed_apply` exist, but the database refuses them for everyone (`seduh_feed_console_off`) until the owner sets `app.seduh_feed_mode.console_actions` in SQL, and no screen calls `approveQueued`. Do not add the button, and do not set the switch, without the owner (they will harden the console first). The rest of this section describes the counts.
+- **Numbers only, on purpose (the counts).** No name, phone, id, email, lookup or per-organisation figure (a per-organisation count
   could identify who is in the directory), and no merge or unlink: those stay owner SQL. The only control is Refresh.
   Adding anything else is a D-A4 amendment, the owner's call. pgTAP 065 pins the column list and that no other admin
   function touches the identity tables; `readCounts` draws only the ten named keys and refuses a row that is not ten

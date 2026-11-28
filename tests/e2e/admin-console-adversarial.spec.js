@@ -74,6 +74,10 @@ const ADMIN_FUNCTIONS = {
   admin_list_keys: () => ({}),
   // T-ID.C3: the counts-only Seduh ID read (no arguments, integers back, nothing for anyone but an admin at aal2)
   admin_seduh_id_counts: () => ({}),
+  // The console's Seduh ID queue: a names view, Reject, and Approve (switched off; refused for everyone while the switch is off)
+  admin_seduh_feed_queue: () => ({}),
+  admin_seduh_feed_reject: (w) => ({ p_result_id: w.a.orgId }),
+  admin_seduh_feed_approve: (w) => ({ p_result_id: w.a.orgId }),
   // T-ARC.3: the counts-only archive pipeline read (no arguments, one boolean and whole numbers back, nothing for anyone but an admin at aal2)
   admin_archive_status: () => ({}),
   admin_plan_orgs: () => ({}),
