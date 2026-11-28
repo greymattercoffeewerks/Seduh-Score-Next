@@ -23,7 +23,7 @@ same direction `src/marketing/` already imports in, and `core/` has no reverse
 dependency on either. A tool may also import `src/community/toolChrome.js` and `communityTools.js` (the shared tool frame; the Random Selector first), which in turn reads `src/marketing/publicHeader.js`; that is the one allowed path from a tool into `marketing/` and `community/`, and it carries the header's `COUNTRY_PAGES_PUBLIC` switch. A tool here must never import from `src/formats/` — pulling in a
 format's UI classes (e.g. Cup Taster's `.screen-container` in `heatsScreen.css`) would tie a
 supposedly standalone tool to one format's presentation, so each tool keeps its own
-self-contained CSS instead.
+self-contained CSS instead. (One reasoned exception, 2026-11-28: the Throwdown Bracket Planner, which lives in `src/community/throwdown-planner/` and reads three pure Throwdown modules; see its `CLAUDE.md`. Nothing else may.)
 
 ## Tools
 

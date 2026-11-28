@@ -25,6 +25,7 @@ describe('the list of community tools', () => {
       'timer',
       'guess-the-bean',
       'brew-planner',
+      'throwdown-planner',
     ]);
     expect(otherCommunityTools('timer').map((tool) => tool.id)).not.toContain('timer');
     expect(otherCommunityTools('timer').map((tool) => tool.id)).not.toContain(
@@ -54,7 +55,7 @@ describe('the list of community tools', () => {
       toolName: 'Random Selector',
     });
     const stripCards = [...chrome.bottom.querySelectorAll('.ct-tool')];
-    expect(stripCards).toHaveLength(3);
+    expect(stripCards).toHaveLength(4);
     for (const card of stripCards) {
       const tool = COMMUNITY_TOOLS.find((t) => t.href === card.getAttribute('href'));
       expect(tool).toBeDefined();
@@ -92,7 +93,12 @@ describe('the community tool chrome', () => {
   it('leaves the current tool out of its own strip, and links the rest by their hub names', () => {
     const chrome = build({ toolId: 'timer' });
     const titles = [...chrome.bottom.querySelectorAll('.ct-tool-title')].map((n) => n.textContent);
-    expect(titles).toEqual(['Guess the Bean', 'Brew Planner', 'Random Selector']);
+    expect(titles).toEqual([
+      'Guess the Bean',
+      'Brew Planner',
+      'Random Selector',
+      'Throwdown Bracket Planner',
+    ]);
     expect(chrome.bottom.querySelector('.ct-tool-open').textContent).toBe('Open Guess the Bean →');
     expect(chrome.bottom.querySelector('.ct-strip-all').getAttribute('href')).toBe('/community/');
     expect(chrome.bottom.querySelector('h2').textContent).toBe('Running an event? These help too.');
@@ -150,6 +156,11 @@ describe('the tool entries that adopt the chrome', () => {
       'random-selector',
       'tools/random-selector/index.html',
       '/src/tools/random-selector/randomSelector.css',
+    ],
+    [
+      'throwdown-planner',
+      'tools/throwdown-planner/index.html',
+      '/src/community/throwdown-planner/throwdownPlanner.css',
     ],
     ['timer', 'tools/timer/index.html', '/src/tools/timer/timer.css'],
     ['brew-planner', 'tools/brew-planner/index.html', '/src/tools/brew-planner/brewPlanner.css'],

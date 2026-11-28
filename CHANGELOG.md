@@ -7,6 +7,16 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Throwdown Bracket Planner, a free Community tool · 4.35.0 · 2026-11-28
+
+**Status: PR into `dev`, not released.** The owner asked for the planner as a Community Tools entry (works with no event, saves nothing, open to anyone). `/tools/throwdown-planner/`, card 06 on the hub and in every tool's "More free community tools" strip. No migration.
+
+- **What it does.** Type 2 to 64 brewers, choose 3rd place and redemption (feed rounds, cap); it shows the summary, rounds, matches, byes, the Final's size, repeat-bye flags, a round-by-round list, and what flipping redemption or 3rd place would change. Same engine and words as the in-event planner, so the two cannot disagree.
+- **Boundary (owner to confirm).** `src/tools/` may not import `src/formats/`, so the tool lives in `src/community/throwdown-planner/` and reads exactly three pure Throwdown modules (`bracketPreview.js`, the word helpers of `bracketPreviewCard.js`, `redemption.js` constants); a test pins that list. The alternative, moving the engine into `core/`, would put Throwdown rules in `core/`.
+- **Also.** "1 Byes" now reads "1 Bye" in both planners. The strip tests in the Timer, Brew Planner, Random Selector and toolChrome tests count four other tools.
+- **Not done:** prerender and a Playwright smoke test for the new page (the other tools have them); saving or sharing a link.
+- **Reviews:** see the PR.
+
 ## Throwdown: the bracket planner moves to the event dashboard · 4.34.2 · 2026-11-28
 
 **Status: PR into `dev`, not released.** The owner could not find the "What will happen" planner (it sat between Setup and Draw on the Matches page). It is now on the event dashboard, under the Next step card, until the draw is made, with a link to the Matches page where the real setup is changed. The Matches page keeps its own copy.

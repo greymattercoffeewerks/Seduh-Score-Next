@@ -34,7 +34,12 @@ describe('mountBrewPlanner', () => {
     expect(root.querySelector('.public-header')).not.toBeNull();
     expect(root.querySelector('.ct-crumb-current').textContent).toBe('Brew Planner');
     const titles = [...root.querySelectorAll('.ct-tool-title')].map((n) => n.textContent);
-    expect(titles).toEqual(['Competition Timer', 'Guess the Bean', 'Random Selector']);
+    expect(titles).toEqual([
+      'Competition Timer',
+      'Guess the Bean',
+      'Random Selector',
+      'Throwdown Bracket Planner',
+    ]);
     const header = root.querySelector('.ct-header');
     buttonWithText(root, 'Cup Taster 2026 example').click();
     buttonWithText(root, 'Next').click();

@@ -80,12 +80,23 @@ function selectorInstrument() {
   );
 }
 
+function bracketInstrument() {
+  return icon(
+    [
+      { tag: 'path', d: 'M6 10h10v8H6zM6 30h10v8H6zM32 20h10v8H32z' },
+      { tag: 'path', d: 'M16 14h8v10M16 34h8V24M24 24h8' },
+    ],
+    'Knockout bracket',
+  );
+}
+
 const INSTRUMENTS = {
   timer: timerInstrument,
   'guess-the-bean': beanInstrument,
   'guess-the-bean-widget': widgetInstrument,
   'brew-planner': brewerInstrument,
   'random-selector': selectorInstrument,
+  'throwdown-planner': bracketInstrument,
 };
 
 function buildHero() {
