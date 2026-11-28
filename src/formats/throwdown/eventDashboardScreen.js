@@ -6,7 +6,7 @@
 // Lives here, not core/: the phases, the routes and the live publish are Throwdown's. Same shape as BTC's dashboard
 // (copied, not imported: a format never imports another format).
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el } from '../../core/dom.js';
+import { el, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { buildHomepageListingCard } from '../../core/homepageListingCard.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
@@ -25,6 +25,8 @@ import {
 } from './runSheet.js';
 import { matchLogCsv, matchLogFilename } from './recordsExport.js';
 import { publishThrowdownLive } from './liveSession.js';
+import { createBracketPreviewCard } from './bracketPreviewCard.js';
+import { redemptionForm } from './redemption.js';
 
 const TAKE_OVER_WAIT_MS = 8000;
 
@@ -70,6 +72,8 @@ export async function mountThrowdownEventDashboardScreen(
   let focusAfterRender = null;
   let data = null;
   let isLive = null;
+  // The planner's what-if (never saved); the same shape the Matches page keeps.
+  let plan = { open: false, entrants: null, thirdPlace: null, redemption: null };
 
   function renderLoading() {
     root.innerHTML = '';
@@ -160,6 +164,23 @@ export async function mountThrowdownEventDashboardScreen(
     ]);
   }
 
+  // The "What will happen" planner, on the dashboard until the draw is made (it is the first thing an organiser
+  // wants, and used to be only on the Matches page). It reads the SAVED setup; changing it is done on Matches.
+  function plannerCard() {
+    if (data.bracket.started) return null;
+    return createBracketPreviewCard({
+      rosterCount: data.entries.filter((e) => !e.withdrawn).length,
+      thirdPlace: data.settings.third_place,
+      redemption: redemptionForm(data.settings.modules?.redemption),
+      plan,
+      setupHint: '',
+      onChange: (patch) => {
+        plan = { ...plan, ...patch };
+        render();
+      },
+    });
+  }
+
   function render() {
     if (signal?.aborted) return;
     if (loadFailedMessage) {
@@ -171,6 +192,10 @@ export async function mountThrowdownEventDashboardScreen(
     const warnings = deriveThrowdownWarnings({ ...data, eventId });
     const links = throwdownLinks(eventId);
 
+    withFocusPreservation(root, () => paint(event, phases, warnings, links));
+  }
+
+  function paint(event, phases, warnings, links) {
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container td-event-dashboard-screen' });
 
@@ -194,6 +219,17 @@ export async function mountThrowdownEventDashboardScreen(
     const sheet = buildRunSheet(phases);
     const [nextCard, runSection] = [...sheet.children];
     container.appendChild(nextCard);
+    const planner = plannerCard();
+    if (planner) {
+      container.appendChild(planner);
+      container.appendChild(
+        el('p', { className: 'td-note td-plan-setup-link' }, [
+          document.createTextNode('Brewers, 3rd place and redemption are set on the '),
+          el('a', { text: 'Matches page', attrs: { href: links.matches } }),
+          document.createTextNode('.'),
+        ]),
+      );
+    }
 
     const liveCard = buildLiveCard({
       isLive,
