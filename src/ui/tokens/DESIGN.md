@@ -513,6 +513,28 @@ exists), cut-corner buttons (`.btn-bevel` on the primary only, as before), and a
 no `.btn-sm` and the concept's `.sm` is not added). All pairings above are in `consoleChrome.test.js`; the live preview has a
 "Console parts" section in paper and stage.
 
+## Audience match list: result rows and collapsible rounds (2026-11-27)
+
+From the Throwdown phone view, where the first pass (a one-line result with a score badge, 4.30.5) read as too condensed for a loud
+room at arm's length. Three parts in `vocabulary.css`, built by `core/vocabulary.js`, so Cup Taster, BTC and any later format's
+phone and projector views take them instead of drawing their own. Throwdown is the first consumer.
+
+- **`.result-row`** (`buildResultRow`): a decided match as a scoreboard. The winner is a band in the selected tint with a mono
+  "Winner" eyebrow, the name in display type and the winner's number big on the right; the loser is a plain row below with theirs.
+  Names wrap in full, never cut. The number is the winner's own count (never the bracket's side order, which is how "0 to 1" was
+  printed). A walkover or bye has no numbers: pass `note` and the word stands where they would, smaller (`data-word`). Colour is a cue
+  only: the word "Winner" and the numbers carry it.
+- **`.match-block`** (`buildMatchBlock`): a match with no result yet. One competitor per line, "vs" between, then a note in words
+  ("Being decided", "Judges scoring").
+- **`.round`** (`buildRound`): a collapsible section whose header tells one round, stage or day from the next. A native `<details>`
+  (keyboard, screen reader and find-in-page work with no script), the `<summary>` is the header: an `.eyebrow` ("Round 2 · Now"),
+  `.round-title`, a mono count ("2 of 4") and a drawn chevron. At least 44px tall (`--tap-target-min`), a hairline under it when
+  open. `onToggle` lets a screen that rebuilds on every live update remember what the person opened or closed. Roles only for
+  radius, selected tint for the winner band, flat (an edge and a tint), forced-colours keeps a border.
+
+Rule of thumb for any list of matches on a phone: the result is read first, so the name and the number are the two biggest things
+on it; everything else is quiet. Tested in `core/vocabulary.test.js` and `throwdown/surfaces.test.js`.
+
 ## Drift guard
 
 A second check covers the public pages (`src/marketing/*.css`, `src/community/communityHub.css`). It is a heuristic,

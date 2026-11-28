@@ -1,13 +1,15 @@
 # Status — read this first
 
-_As of 2026-11-27, app version 4.31.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-28, app version 4.33.0, nameplate Kiarong. One page on purpose (8 KB budget, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
 
-- **Left side menu (rail)** (4.31.0, on `main` 27 Nov): rail from 1024px, drawer below. Device check done by the owner, 27 Nov.
-- **Demo people** (4.31.0, on `main` 27 Nov): test events add 8 fake-phone people. Migration `20261130100000` not in the cloud yet (demo-people thread pushes it).
-- **BTC night dashboard, Phase 1** (4.30.0, minor) is draft PR #557 to `dev`: night switch, Needs you list, run strip, standings draft preview. Its Petrol tokens (4.29.1) are in a PR to `dev`.
+- **Throwdown redemption round (TD.3)** (4.33.0, live 27 Nov): losers drawn into groups and back into the bracket. Migration in the cloud.
+- **Share result to a story** (4.32.0, live): Results page Share button. Owed: phone check.
+- **Phone results** (4.31.1), **left side menu** (4.31.0, device check passed) and **demo people** (4.31.0, migration in the cloud) are live.
+- **In flight:** PR #580 demo data for Cup Taster and Throwdown test events (Load and Clear; its new migration `20261202100000` is NOT in the cloud, push only with the owner's OK); draft PR #582 Throwdown "What will happen" bracket preview on setup (no migration).
+- **BTC night dashboard, Phase 1** (4.30.0, live): night switch, Needs you list, run strip, standings draft preview.
 - **Petrol Figma review fixes** (4.29.0, minor: the audience freshness bar): stage muted text passes 4.5:1; a dropped connection keeps results on screen under a "Connection lost" bar; Timer Reset asks first. Owed: the owner's venue and TV check (CHANGELOG 4.29.0).
 - **Phases 0 to 6 done.** Cup Taster, BTC and Throwdown (TD.1 core knockout) are live formats; Liga Seduh is not started.
 - **Behind the Seduh** is a one-chapter reader at `/bts/`, live.
@@ -18,15 +20,14 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Organiser home** (`#/events` rebuild): live as 4.17.0; its migration is in the cloud. Owner's real-device check owed.
 - **Country pages** (4.10.2): live, data in the cloud. Board only: `noindex`, unlinked, `COUNTRY_PAGES_PUBLIC` false.
 - **Petrol Kaizen P4, P5 and P6** are live; tablet and iPad checks owed.
-- **Cloud database in sync (checked 2026-11-20):** all 128 migrations on `dev` are in the cloud project, none extra, including
-  `seduh_throwdown_profile` (4.24.0), pushed after #529 merged.
+- **Cloud database in sync (checked 2026-11-28):** every migration on `main` is in the cloud, the newest being
+  `td_redemption` and `load_demo_roster`.
 - **Random Selector redesign** released as **4.21.0**, shared chrome as **4.22.0**. Owed: the owner's 16:9 screen and tablet check (CHANGELOG 4.21.0).
-- **Throwdown scoresheet rounds** (Final and 3rd place decided by judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): released as **4.23.0** (#524, #525) for a real event on 27 Nov. Owed: the owner's test event on a tablet before then.
+- **Throwdown scoresheet rounds** (Final and 3rd place from judges' paper sheets typed in by a scorekeeper; scores never shown to the audience): **4.23.0** (#524, #525) for the 27 Nov event. Owed: the owner's tablet test event.
 - **Throwdown joins Seduh ID** (released as **4.24.0**, #527 to #529; CHANGELOG 4.24.0). Owed: the owner to confirm that "This isn't
   mine" on a Throwdown result also hides that event's matches; on 27 Nov, publish after the final and approve the feed queue.
-- **Throwdown vote cap** (4.25.1, on `dev`, not released): a match takes no more taps than judges, plus one tie-break vote when level. Migration in the cloud (CHANGELOG 4.25.1).
-- **Throwdown competitor Edit** (4.25.0) and **projector on the shared kit** (4.26.0): owner's tablet and TV checks owed.
-- **Throwdown dashboard, Phases B and C** (4.28.0, stacked on #544/#543): routed; votes on Matches.
+- **Throwdown vote cap** (4.25.1): a match takes no more taps than judges, plus one tie-break vote when level. In the cloud.
+- **Throwdown competitor Edit** (4.25.0), **projector on the shared kit** (4.26.0), **dashboard B and C** (4.28.0): tablet and TV checks owed.
 - **Throwdown undo and offline vote screen** (4.27.0): undo a confirmed match; the event screen survives a dropped connection. Migration in the cloud. Owed: the owner's tablet check before 27 Nov.
 - **Open, not merged** (check `CHANGELOG.md`): password recovery D-PW2 to D-PW8 not started. Organiser branding
   BR-E1 merged in #297 (2026-10-22) and is on `main`, but the database door (BR-B1) is KIV, so no brand shows.
@@ -42,7 +43,7 @@ picks the top 8 by points, ties by the sum of each team's two finish times, conf
 longer order the standings). Both round-2 methods (random without repeats, and by round-1 results) are to be built and
 selectable. Registration opens January 2027. Round 2's by-results method is strongest against weakest. Engine spec draft: [`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md`](docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md).
 
-**Organiser UX (five stages, per the approved mockup).** All five are live: S1 the shared core kit, S2 the BTC event dashboard as a run sheet (with the two BTC scores CSVs, 4.5.0), S3 the matches screen grouped by round (4.3.0), S4 the cut to the top 8 and its sign-off sheet (4.4.0) and S5 the copy pass (4.4.1). Still owed: S4's real-tablet and printed-PDF checks, and the owner's wording for B5 (the lock reasons in `cutData.js`; see CHANGELOG).
+**Organiser UX (five stages, per the approved mockup).** All five are live (S1 core kit, S2 run sheet with BTC scores CSVs, S3 matches by round, S4 the cut and sign-off sheet, S5 copy pass; 4.3.0 to 4.5.0). Still owed: S4's real-tablet and printed-PDF checks, and the owner's wording for B5 (the lock reasons in `cutData.js`; see CHANGELOG).
 
 ## Handover (2026-11-08)
 

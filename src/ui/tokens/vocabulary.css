@@ -503,6 +503,171 @@
   border-top: var(--border-hairline) dashed currentColor;
 }
 
+/* ---- .result-row, .match-block, .round: the audience's match list (2026-11-27) ----
+   Drawn first for the Throwdown phone view, built so Cup Taster, BTC and any later format can take them (core/vocabulary.js
+   buildResultRow, buildMatchBlock, buildRound).
+   <div class="result-row"><div class="result-row-line result-row-win">Winner name + score</div><div class="result-row-line
+   result-row-lose">Loser name + score</div></div>: the winner is the accent tint, the number is big, the loser is quiet.
+   <details class="card round"><summary class="round-head">eyebrow, title, count</summary><div class="round-body">…</div></details>:
+   a header that tells one round from the next, collapsible with no script. Roomy on purpose: a phone in a loud room is read
+   at arm's length. Names wrap in full. Flat: an edge and a tint. */
+.result-row {
+  overflow: hidden;
+  border: var(--border-hairline) solid var(--box-edge);
+  border-radius: var(--radius-box);
+}
+
+.result-row-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.result-row-win {
+  background: var(--selected-bg);
+  color: var(--selected-fg);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-snug);
+}
+
+.result-row-win .eyebrow {
+  display: block;
+  margin-block-end: var(--space-1);
+  color: inherit;
+}
+
+.result-row-lose {
+  color: var(--color-text-secondary);
+  line-height: var(--leading-snug);
+}
+
+.result-row-name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.result-row-score {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.result-row-score[data-word] {
+  font-size: var(--text-base);
+  letter-spacing: 0.02em;
+}
+
+.result-row-lose .result-row-score {
+  font-size: var(--text-lg);
+}
+
+.match-block {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-box);
+  line-height: var(--leading-snug);
+}
+
+.match-block p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.match-block-vs,
+.match-block-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.match-block-vs {
+  margin-block: var(--space-1);
+}
+
+.match-block-note {
+  margin-block-start: var(--space-2);
+}
+
+.round > .round-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: var(--tap-target-min);
+  cursor: pointer;
+  list-style: none;
+}
+
+.round > .round-head::-webkit-details-marker {
+  display: none;
+}
+
+.round-head-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.round-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-snug);
+}
+
+.round-count {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* The chevron: a drawn arrow, so it follows the text colour in both surfaces. It turns when the round opens. */
+.round-head::after {
+  content: '';
+  flex: none;
+  inline-size: 0.6em;
+  block-size: 0.6em;
+  margin-inline-start: var(--space-1);
+  border-inline-end: 2px solid currentColor;
+  border-block-end: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.round[open] > .round-head::after {
+  transform: rotate(-135deg);
+}
+
+.round-head:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.round[open] > .round-head {
+  padding-block-end: var(--space-3);
+  border-block-end: var(--border-hairline) solid var(--color-border);
+}
+
+.round-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block-start: var(--space-3);
+}
+
+@media (forced-colors: active) {
+  .result-row-win {
+    border-block-end: var(--border-hairline) solid CanvasText;
+  }
+}
+
 /* Forced colours drops the queue's edge and the runsheet's divider (backgrounds): keep the edge, give each cell a border. */
 @media (forced-colors: active) {
   .runsheet > li {

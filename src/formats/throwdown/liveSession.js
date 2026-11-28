@@ -9,7 +9,8 @@
 //
 // Payload: { eventName, phase: 'setup' | 'live' | 'complete', competitors, competitorNames: [name], judgedRounds,
 // rounds: [{ id, label, roundLabel, phase, matches: [{ id, number, sides: [{ name, votes, winner }], resultKind,
-// decided, judging? }] }], nowPlaying: [match], upNext: match | null, thenNext: match | null (the first two undecided
+// decided, judging?, pool? }] }] (`pool: true` marks a redemption group of 2 to 4 brewers; there are no such rounds, and no
+// such key, in an event without the redemption module), nowPlaying: [match], upNext: match | null, thenNext: match | null (the first two undecided
 // playable matches in BRACKET order, each with roundLabel / roundPhase / roundSize / role / number and, per side, the
 // `route` that brought the competitor there), recent: [match + roundLabel, roundPhase, role, confirmedAt],
 // stillIn: { of, names: [{ name, next? }] } | null, champion: { name, runnerUp, thirdPlace } | null }
@@ -37,6 +38,9 @@ function publicMatch(match, scoresheet, number) {
     decided: match.decided,
     resultKind: match.resultKind,
     ...(judging ? { judging: true } : {}),
+    // a redemption group (2 to 4 brewers, one winner): the surfaces draw it as a group, not a duel. Absent for a pair, so an
+    // event without the module has no such key anywhere in its payload.
+    ...(match.isPool ? { pool: true } : {}),
     sides: match.sides
       .filter((s) => s.entryId || !match.isBye)
       .map((s) => ({
@@ -76,7 +80,7 @@ function routeFor(entryId, round, bracketRounds, labels) {
     if (index < 0) continue;
     const match = r.matches[index];
     if (!match.decided) return null;
-    const place = `${shortRound(labels.get(r.id))} match ${index + 1}`;
+    const place = `${shortRound(labels.get(r.id))} ${r.phase === 'redemption' ? 'group' : 'match'} ${index + 1}`;
     if (match.resultKind === 'bye') return `Bye in ${place}`;
     return `${match.sides.find((s) => s.entryId === entryId)?.winner ? 'Won' : 'Lost'} ${place}`;
   }

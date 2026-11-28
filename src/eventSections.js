@@ -61,7 +61,9 @@ const FORMATS = {
       '/events/:eventId/throwdown/matches': 'matches',
       '/events/:eventId/throwdown/results': 'results',
     },
-    leaves: {},
+    // The Redemption page opens from the matches page only when a redemption round exists; it is no tab of its own, so an
+    // event without the module shows no trace of it in the bar.
+    leaves: { '/events/:eventId/throwdown/redemption': 'Redemption round' },
   },
 };
 

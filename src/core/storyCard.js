@@ -322,6 +322,7 @@ export async function renderStoryCard(
     qrUrl = null,
     loadQr = loadQrFactory,
     canvasFactory,
+    draw = drawStoryCard, // another card layout that takes the same (ctx, spec, assets), e.g. the results card
   } = {},
 ) {
   const canvas = canvasFactory ? canvasFactory() : document.createElement('canvas');
@@ -346,7 +347,7 @@ export async function renderStoryCard(
     photoUrl ? loadImage(photoUrl, { cors: true }) : null,
     qrUrl ? qrMatrixFor(qrUrl, loadQr) : null,
   ]);
-  drawStoryCard(ctx, spec, { theme, flag, photo, qr });
+  draw(ctx, spec, { theme, flag, photo, qr });
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('no picture'))), 'image/png');
   });

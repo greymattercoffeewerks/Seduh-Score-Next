@@ -530,6 +530,6 @@ schema change); no call site branches on a tier (D14); the 3rd place match is pl
 - **Draw is recorded, not verified.** The database stores the seed but cannot replay the browser shuffle, so "explain the draw" relies on `randomPairs(entries, seed)` re-run by a person. A recompute check at start is possible client-side only.
 - **Ledger scope (pre-existing class).** `processed_operations` lookups are global by id (all RPCs), not scoped to org and kind. Guessing a v4 id is infeasible; scope it in one migration for every RPC.
 - **Replay after the Per-event window closes** is reported as a dropped write (the window guard runs before the ledger check).
-- **Pool matches (TD.3):** the loser join in `app.td_advance` assumes pair matches; fix when pool rounds land.
+- **Pool matches (TD.3):** the loser join in `app.td_advance` assumed pair matches. **Fixed in TD.3 (4.33.0, released 2026-11-27, #579 and #583):** see CHANGELOG 4.33.0 and `src/formats/throwdown/CLAUDE.md`, "Redemption (TD.3)".
 - **Focus and live regions (accessibility nits fixed in TD.1):** a 360px and 16:9 browser pass and a screen-reader pass are still owed.
 - **Public results and the formatted report** are TD.2 (archive write and PDF). TD.1 ships an organiser-facing printable results page only.

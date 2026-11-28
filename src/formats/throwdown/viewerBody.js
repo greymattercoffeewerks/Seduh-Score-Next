@@ -3,87 +3,63 @@
 // and the bracket by round. Reads only the live payload (liveSession.js). The TEST banner is the shell's
 // (it is told isTest by the live row), so it is on this surface from the first publish.
 //
-// Words, never colour alone: the winner says "Wins", a walkover says "Walkover", a bye says "Bye". Names are set as
+// Words, never colour alone: the winner is labelled "Winner", a walkover says "Walkover", a bye says "Bye". Names are set as
 // text. A round that has not been earned does not appear (the payload never contains one).
 import { el } from '../../core/dom.js';
+import { buildMatchBlock, buildResultRow, buildRound } from '../../core/vocabulary.js';
 
 export function hasThrowdownPublicContent(payload) {
   return Boolean(payload && typeof payload === 'object' && (payload.eventName || payload.rounds));
 }
 
-function sideLine(match) {
-  if (match.resultKind === 'walkover') return 'Walkover';
-  if (match.resultKind === 'bye') return 'Bye';
-  const counts = match.sides.map((s) => s.votes);
-  return counts.every((n) => typeof n === 'number') ? counts.join(' to ') : null;
-}
-
-function matchItem(match) {
-  const winner = match.sides.find((s) => s.winner);
-  const line = el(
-    'p',
-    { className: 'td-phone-vs' },
-    match.sides
-      .flatMap((side, i) => [
-        i > 0 ? document.createTextNode(' vs ') : null,
-        el('span', {
-          className: 'td-phone-name',
-          text: side.name ?? 'To be decided',
-          attrs: side.winner ? { 'data-winner': 'true' } : {},
-        }),
-      ])
-      .filter(Boolean),
-  );
-  const detail = match.decided
-    ? `${winner ? `${winner.name} wins` : 'Decided'}${sideLine(match) ? ` · ${sideLine(match)}` : ''}`
-    : match.judging
-      ? 'Judges scoring'
-      : 'Being decided';
-  return el('li', { className: 'td-phone-match' }, [
-    line,
-    el('p', { className: 'td-phone-detail', text: detail }),
-  ]);
-}
-
-// A decided match in "Latest results": the winner is the headline, the score is a badge, the loser is one muted line
-// ("beat ..."), so a result reads at a glance. The score is winner first (the sides are listed in bracket order, which
-// is why the old line could say "0 to 1"). Words carry it as well as weight: "beat", and the badge says what it is.
-function resultItem(match) {
+// A match as the shared vocabulary draws it (core/vocabulary.js): decided with a winner is a scoreboard, anything else is
+// the "vs" block with its status in words. The score is winner first (the sides are listed in bracket order, which is why
+// the old line could say "0 to 1"). A walkover or a bye has no counts: the word stands where the numbers would.
+function matchNode(match) {
+  // a redemption group lists its brewers ("Group 2: A, B, C"): none is "versus" another, and every brewer's votes are said
+  if (match.pool) {
+    const winner = match.sides.find((s) => s.winner);
+    const counts = match.sides.map((s) => s.votes);
+    const split = counts.every((n) => typeof n === 'number')
+      ? ` · ${[...counts].sort((a, b) => b - a).join(' to ')}`
+      : '';
+    const note = match.decided
+      ? match.resultKind === 'walkover'
+        ? `${winner?.name ?? 'The winner'} wins · Walkover`
+        : `${winner ? `${winner.name} wins` : 'Decided'}${split}`
+      : match.judging
+        ? 'Judges scoring'
+        : 'Being decided';
+    const names = match.sides.map((s) => s.name ?? 'To be decided').join(', ');
+    return buildMatchBlock({ names: [`Group ${match.number}: ${names}`], note });
+  }
   const winner = match.sides.find((s) => s.winner);
   const loser = match.sides.find((s) => !s.winner);
-  if (!match.decided || !winner || !loser) return matchItem(match);
-  let badge = null;
-  if (match.resultKind === 'walkover') badge = { text: 'Walkover', label: 'Walkover' };
-  else if (match.resultKind === 'bye') badge = { text: 'Bye', label: 'Bye' };
-  else if (typeof winner.votes === 'number' && typeof loser.votes === 'number') {
-    badge = {
-      text: `${winner.votes}\u2013${loser.votes}`,
-      label: `${winner.votes} to ${loser.votes}`,
-    };
+  if (match.decided && winner) {
+    const note =
+      match.resultKind === 'walkover' ? 'Walkover' : match.resultKind === 'bye' ? 'Bye' : null;
+    const counted =
+      Boolean(loser) && typeof winner.votes === 'number' && typeof loser.votes === 'number';
+    return buildResultRow({
+      winner: { name: winner.name ?? 'To be decided', score: counted ? winner.votes : null },
+      loser: loser
+        ? { name: loser.name ?? 'To be decided', score: counted ? loser.votes : null }
+        : null,
+      note: counted ? null : note,
+    });
   }
-  return el('li', { className: 'td-phone-result' }, [
-    el(
-      'div',
-      { className: 'td-phone-result-top' },
-      [
-        el('p', {
-          className: 'td-phone-result-winner',
-          text: winner.name ?? 'To be decided',
-        }),
-        badge
-          ? el('span', {
-              className: 'td-phone-score',
-              text: badge.text,
-              attrs: { 'aria-label': badge.label },
-            })
-          : null,
-      ].filter(Boolean),
-    ),
-    el('p', {
-      className: 'td-phone-detail td-phone-result-loser',
-      text: `beat ${loser.name ?? 'To be decided'}`,
-    }),
-  ]);
+  return buildMatchBlock({
+    names: match.sides.map((s) => s.name ?? 'To be decided'),
+    note: match.decided ? 'Decided' : match.judging ? 'Judges scoring' : 'Being decided',
+  });
+}
+
+function matchList(matches) {
+  return el(
+    'ul',
+    { className: 'td-phone-list' },
+    matches.map((m) => el('li', {}, [matchNode(m)])),
+  );
 }
 
 function card(title, children) {
@@ -94,6 +70,7 @@ function card(title, children) {
 }
 
 export function createThrowdownViewerBody() {
+  const userOpen = new Map();
   function renderBody(container, payload) {
     const cards = [];
     if (payload.champion) {
@@ -124,24 +101,30 @@ export function createThrowdownViewerBody() {
       );
     }
     if (payload.recent?.length) {
-      cards.push(
-        card('Latest results', [
-          el('ul', { className: 'td-phone-list' }, payload.recent.map(resultItem)),
-        ]),
-      );
+      cards.push(card('Latest results', [matchList(payload.recent)]));
     }
     if (payload.nowPlaying?.length) {
-      cards.push(
-        card('Now playing', [
-          el('ul', { className: 'td-phone-list' }, payload.nowPlaying.map(matchItem)),
-        ]),
-      );
+      cards.push(card('Now playing', [matchList(payload.nowPlaying)]));
     }
-    for (const round of [...(payload.rounds ?? [])].reverse()) {
+    // The newest round is open, earlier ones are closed; a person's own open or close is kept across live updates
+    // (the shell rebuilds the body on every publish), keyed by the round's id.
+    const rounds = payload.rounds ?? [];
+    [...rounds].reverse().forEach((round, i) => {
+      const key = round.id ?? round.label;
+      const decided = round.matches.filter((m) => m.decided).length;
+      const done = decided === round.matches.length;
       cards.push(
-        card(round.label, [el('ul', { className: 'td-phone-list' }, round.matches.map(matchItem))]),
+        buildRound({
+          className: 'card td-phone-card',
+          eyebrow: `${round.label}${done ? ' \u00b7 Done' : ' \u00b7 Now'}`,
+          title: round.roundLabel ?? round.label,
+          count: `${decided} of ${round.matches.length} decided`,
+          open: userOpen.has(key) ? userOpen.get(key) : i === 0,
+          onToggle: (open) => userOpen.set(key, open),
+          children: [matchList(round.matches)],
+        }),
       );
-    }
+    });
     container.append(el('div', { className: 'td-phone' }, cards));
   }
   return { hasContent: hasThrowdownPublicContent, renderBody };

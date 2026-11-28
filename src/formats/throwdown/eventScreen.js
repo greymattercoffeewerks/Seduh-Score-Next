@@ -46,7 +46,15 @@ import {
   pendingSnapshot,
 } from './data.js';
 import { reopenState, reopenWords, matchesAwaitingUndo } from './reopen.js';
-import { tallyVotes, leadOf, canConfirm, voteState } from './votes.js';
+import { tallyVotes, leadOf, canConfirm, voteState, tiedSlotIds } from './votes.js';
+import {
+  MAX_FEED_ROUND,
+  PROBLEM_WORDS as REDEMPTION_PROBLEM_WORDS,
+  hasRedemptionRound,
+  redemptionForm,
+  redemptionModuleFromForm,
+  redemptionProblem,
+} from './redemption.js';
 import {
   randomPairs,
   normalisePairs,
@@ -56,7 +64,7 @@ import {
   assignSlot,
 } from './seeding.js';
 import { publishThrowdownLive } from './liveSession.js';
-import { describeThrowdownError, resultLine, matchTitle, ROLE_WORDS } from './words.js';
+import { describeThrowdownError, resultLine, matchTitle, listWords, ROLE_WORDS } from './words.js';
 import { presetKeys } from '../../core/scoresheet.js';
 import { ROUND_ROLES } from './roundRole.js';
 import { scoringContext, scoredView, cupsForMatch, auditRule } from './scoredMatch.js';
@@ -141,6 +149,7 @@ export async function mountThrowdownEventScreen(
         thirdPlace: data.settings.third_place,
         seedingMode: data.settings.seeding_mode,
         scoresheet: scoresheetForm(data.settings.modules?.scoresheet),
+        redemption: redemptionForm(data.settings.modules?.redemption),
       };
       state.pending = pending.matches;
       state.startQueued = pending.startQueued;
@@ -826,6 +835,7 @@ export async function mountThrowdownEventScreen(
         ]),
       );
     }
+    const redemptionBlock = redemptionSetupBlock(f.redemption);
     const blocks = [
       el('label', { className: 'td-choice' }, [document.createTextNode('Judges '), judges]),
       el('label', { className: 'td-choice' }, [
@@ -838,6 +848,7 @@ export async function mountThrowdownEventScreen(
         mode('manual', 'Manual draw (draw-a-number events)'),
       ]),
       ...sheetBlock,
+      ...redemptionBlock,
     ];
     return el(
       'section',
@@ -848,6 +859,71 @@ export async function mountThrowdownEventScreen(
         el('p', { className: 'td-note', text: 'Setup is locked as soon as Round 1 starts.' }),
       ],
     );
+  }
+
+  // The redemption module's setup: on/off, the group size, the cap on brewers who come back, and the feeding rounds. A
+  // module that is off draws nothing else and stores nothing (redemption.js redemptionModuleFromForm).
+  function redemptionSetupBlock(red) {
+    const toggle = el('input', {
+      attrs: { type: 'checkbox', 'data-focus-key': 'td-redemption-on' },
+    });
+    toggle.checked = red.on;
+    toggle.addEventListener('change', () => {
+      red.on = toggle.checked;
+      render();
+    });
+    const block = [
+      el('label', { className: 'td-choice' }, [
+        toggle,
+        document.createTextNode(
+          ' Redemption round (competitors who lose get a second chance in a group)',
+        ),
+      ]),
+    ];
+    if (!red.on) return block;
+    const cap = el('input', {
+      className: 'field-input',
+      attrs: {
+        type: 'number',
+        min: '0',
+        max: '99',
+        step: '1',
+        inputmode: 'numeric',
+        'data-focus-key': 'td-red-cap',
+      },
+    });
+    cap.value = String(red.cap);
+    cap.addEventListener('change', () => {
+      red.cap = cap.value === '' ? Number.NaN : Number(cap.value);
+    });
+    const rounds = Array.from({ length: MAX_FEED_ROUND }, (_, i) => i + 1).map((n) => {
+      const box = el('input', {
+        attrs: { type: 'checkbox', 'data-focus-key': `td-red-feed-${n}` },
+      });
+      box.checked = red.feed.includes(n);
+      box.addEventListener('change', () => {
+        red.feed = box.checked ? [...red.feed, n] : red.feed.filter((x) => x !== n);
+      });
+      return el('label', { className: 'td-choice' }, [
+        box,
+        document.createTextNode(` After Round ${n}`),
+      ]);
+    });
+    block.push(
+      el('label', { className: 'td-choice' }, [
+        document.createTextNode('At most this many come back (0 = no limit) '),
+        cap,
+      ]),
+      el('fieldset', { className: 'td-choice-group' }, [
+        el('legend', { text: 'Losers of these rounds are drawn into groups' }),
+        ...rounds,
+        el('p', {
+          className: 'td-note',
+          text: 'Losers are drawn at random into pairs (1 v 1; with an odd number, one group has three). Each group votes for one winner, who goes back into the bracket. A redemption round only follows a round that leaves more than four winners, and only with at least two brewers to draw. The same brewer can come back more than once.',
+        }),
+      ]),
+    );
+    return block;
   }
 
   function pairsTable(pairs) {
@@ -865,9 +941,10 @@ export async function mountThrowdownEventScreen(
   // The chosen modules as saved: nothing at all when the scoresheet toggle is off. The database copies the preset's lines.
   function modulesFromForm() {
     const sheet = state.form.scoresheet;
-    if (!sheet.on) return {};
+    const modules = redemptionModuleFromForm(state.form.redemption);
+    if (!sheet.on) return modules;
     const cups = Object.fromEntries(Object.entries(sheet.cups).filter(([, n]) => n > 0));
-    return { scoresheet: { preset: sheet.preset, cups } };
+    return { scoresheet: { preset: sheet.preset, cups }, ...modules };
   }
 
   function startDraw(mode, pairs, seed) {
@@ -882,6 +959,12 @@ export async function mountThrowdownEventScreen(
         tone: 'error',
         text: describeThrowdownError({ hint: 'td_scoresheet_invalid' }),
       };
+      render();
+      return Promise.resolve();
+    }
+    const redemptionIssue = redemptionProblem(state.form.redemption);
+    if (redemptionIssue) {
+      state.feedback = { tone: 'error', text: REDEMPTION_PROBLEM_WORDS[redemptionIssue] };
       render();
       return Promise.resolve();
     }
@@ -1109,6 +1192,8 @@ export async function mountThrowdownEventScreen(
     // judge has voted, taps still waiting to sync included, except for ONE tie-break vote when an even panel is level.
     // Undo frees a vote. The note below says why Vote is off; each Vote button points at it (aria-describedby).
     const cap = voteState(tallies, judges);
+    // the tie-break vote goes only to a brewer in the tie (a group of three or four can have one left out of it)
+    const tied = new Set(tiedSlotIds(tallies));
     const noteId = `td-vote-note-${match.id}`;
     const sides = match.sides.map((side, i) => {
       const count = tallies.find((t) => t.slotId === side.slotId)?.votes ?? 0;
@@ -1118,7 +1203,19 @@ export async function mountThrowdownEventScreen(
         judges,
       );
       const afterWords = after.tieBreakOpen
-        ? ' Level with every judge in: the tie-break judge casts one more vote.'
+        ? match.isPool
+          ? ` Level with every judge in: the tie-break judge casts one more vote, for ${listWords(
+              match.sides
+                .filter((s2) =>
+                  tiedSlotIds(
+                    tallies.map((t) =>
+                      t.slotId === side.slotId ? { ...t, votes: t.votes + 1 } : t,
+                    ),
+                  ).includes(s2.slotId),
+                )
+                .map((s2) => s2.name),
+            )}.`
+          : ' Level with every judge in: the tie-break judge casts one more vote.'
         : after.open
           ? ''
           : ' Every judge has voted.';
@@ -1137,7 +1234,11 @@ export async function mountThrowdownEventScreen(
           className: 'btn btn-primary tap-target td-vote',
           key: `td-vote-${match.id}-${i}`,
           ignoreBusy: true,
-          disabled: !cap.open || decisionQueued || state.deciding,
+          disabled:
+            !cap.open ||
+            decisionQueued ||
+            state.deciding ||
+            (cap.tieBreakOpen && !tied.has(side.slotId)),
         },
       );
       vote.setAttribute('aria-describedby', noteId);
@@ -1175,7 +1276,11 @@ export async function mountThrowdownEventScreen(
             ? `More taps than judges (${cap.total} for ${judges}). Taps past the limit will be refused when they sync; check the count then, before using Undo.`
             : `More votes than judges (${cap.total} for ${judges}). Use Undo to take back the extra votes.`
           : cap.tieBreakOpen
-            ? 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
+            ? match.isPool
+              ? `The votes are level and every judge has voted. The tie-break judge casts one more vote, for ${listWords(
+                  match.sides.filter((s) => tied.has(s.slotId)).map((s) => s.name),
+                )}.`
+              : 'The votes are level and every judge has voted. The tie-break judge casts one more vote.'
             : lead.level
               ? 'The votes are level. Take another vote before confirming.'
               : cap.tieBreakUsed
@@ -1484,13 +1589,22 @@ export async function mountThrowdownEventScreen(
           ]),
         );
         container.append(
-          bracketCard(),
-          el('a', {
-            className: 'btn btn-outline tap-target',
-            text: 'Results and match log',
-            attrs: { href: `#/events/${eventId}/throwdown/results` },
-          }),
-          competitorsCard(),
+          ...[
+            bracketCard(),
+            hasRedemptionRound(state.data.bracket)
+              ? el('a', {
+                  className: 'btn btn-outline tap-target',
+                  text: 'Redemption round: who is in',
+                  attrs: { href: `#/events/${eventId}/throwdown/redemption` },
+                })
+              : null,
+            el('a', {
+              className: 'btn btn-outline tap-target',
+              text: 'Results and match log',
+              attrs: { href: `#/events/${eventId}/throwdown/results` },
+            }),
+            competitorsCard(),
+          ].filter(Boolean),
         );
       }
       root.appendChild(container);

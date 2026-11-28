@@ -7,20 +7,21 @@ const demo = [
 ];
 
 describe('the module toggle mechanism', () => {
-  it('registers the scoresheet module, free and with no dependencies (the database holds the same registry)', () => {
-    expect(moduleKeys()).toEqual(['scoresheet']);
+  it('registers the scoresheet and redemption modules with no dependencies (the database holds the same registry)', () => {
+    expect(moduleKeys()).toEqual(['scoresheet', 'redemption']);
     expect(MODULES[0]).toMatchObject({ requires: [], entitlementKey: 'throwdown_scoresheet' });
-    expect(moduleProblems({ scoresheet: true })).toEqual([]);
+    expect(MODULES[1]).toMatchObject({ requires: [], entitlementKey: 'throwdown_redemption' });
+    expect(moduleProblems({ scoresheet: true, redemption: true })).toEqual([]);
   });
 
   it('refuses any module that is not registered, with a reason', () => {
-    expect(moduleProblems({ redemption: true })).toEqual([
-      { code: 'unknown', module: 'redemption' },
+    expect(moduleProblems({ lucky_loser: true })).toEqual([
+      { code: 'unknown', module: 'lucky_loser' },
     ]);
   });
 
   it('ignores a toggle that is off', () => {
-    expect(moduleProblems({ redemption: false })).toEqual([]);
+    expect(moduleProblems({ lucky_loser: false })).toEqual([]);
     expect(enabledModules({ redemption: false, x: true })).toEqual({ x: true });
   });
 

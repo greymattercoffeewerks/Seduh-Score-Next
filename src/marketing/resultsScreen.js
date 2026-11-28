@@ -16,6 +16,7 @@ import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
 import { buildScoringRecord } from './scoringRecord.js';
 import { buildCountryChip } from '../core/countryChip.js';
+import { buildResultsShareControl } from './resultsShare.js';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -210,24 +211,29 @@ function buildLatestResult(event, client, chipFor) {
         el('span', { className: 'results-latest-meta', text: metaParts.join(' · ') }),
       ]),
       el('div', { className: 'results-latest-card panel' }, [
-        el('div', { className: 'results-latest-summary' }, [
-          el('p', { className: 'results-eyebrow', text: formatLabel(event.format) }),
-          el('ul', { className: 'results-fact-list' }, [
-            el('li', {}, [
-              el('b', { className: 'tabular-nums', text: String(event.competitors) }),
-              document.createTextNode(' competitors'),
+        el(
+          'div',
+          { className: 'results-latest-summary' },
+          [
+            el('p', { className: 'results-eyebrow', text: formatLabel(event.format) }),
+            el('ul', { className: 'results-fact-list' }, [
+              el('li', {}, [
+                el('b', { className: 'tabular-nums', text: String(event.competitors) }),
+                document.createTextNode(' competitors'),
+              ]),
+              el('li', {}, [
+                el('b', { className: 'tabular-nums', text: String(event.rounds) }),
+                document.createTextNode(' rounds'),
+              ]),
+              el('li', {}, [timeSpan, document.createTextNode(' winning time')]),
+              el('li', {}, [
+                document.createTextNode(`${formatShortDate(event.publishedAt)} result published`),
+              ]),
             ]),
-            el('li', {}, [
-              el('b', { className: 'tabular-nums', text: String(event.rounds) }),
-              document.createTextNode(' rounds'),
-            ]),
-            el('li', {}, [timeSpan, document.createTextNode(' winning time')]),
-            el('li', {}, [
-              document.createTextNode(`${formatShortDate(event.publishedAt)} result published`),
-            ]),
-          ]),
-          buildSheetLink(event),
-        ]),
+            buildSheetLink(event),
+            buildResultsShareControl(event, { formatLabel, formatDate }),
+          ].filter(Boolean),
+        ),
         el(
           'ol',
           { className: 'results-podium' },
