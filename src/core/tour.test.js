@@ -97,6 +97,17 @@ describe('startTour', () => {
     expect(document.querySelector('[data-tour-action="skip"]').hidden).toBe(true);
   });
 
+  it('a step whose target vanishes while it shows still moves on to the right neighbours', () => {
+    page();
+    startTour({ id: 't', steps: STEPS, storage: memory() });
+    document.querySelector('[data-tour-action="next"]').click(); // A
+    document.querySelector('[data-tour="a"]').remove();
+    document.querySelector('[data-tour-action="next"]').click();
+    expect(tipText()).toBe('B'); // not back at Welcome
+    document.querySelector('[data-tour-action="back"]').click();
+    expect(tipText()).toBe('Welcome'); // A is gone, so back skips it
+  });
+
   it('Back returns, and is hidden on the first step', () => {
     page();
     startTour({ id: 't', steps: STEPS, storage: memory() });

@@ -248,10 +248,13 @@ export function startTour({
   function show(step) {
     current = step;
     const steps2 = list();
-    const at = Math.max(0, steps2.indexOf(step));
-    const last = at === steps2.length - 1;
-    count.textContent = steps2.length > 1 ? `Step ${at + 1} of ${steps2.length}` : '';
-    count.hidden = steps2.length <= 1;
+    const full = steps.indexOf(step);
+    const before = steps.slice(0, full).filter(applies).length; // steps that apply before this one
+    const at = before;
+    const total = steps2.length + (steps2.includes(step) ? 0 : 1);
+    const last = !steps.slice(full + 1).some(applies);
+    count.textContent = total > 1 ? `Step ${at + 1} of ${total}` : '';
+    count.hidden = total <= 1;
     title.textContent = step.title;
     body.textContent = step.body;
     backBtn.hidden = at === 0;
@@ -277,10 +280,12 @@ export function startTour({
     node.style.scrollMarginTop = prior;
   }
 
+  // Position is the step's place in the full list, not in the filtered one, so a step whose target vanished while it
+  // was showing still has a place: Next goes to the next step that applies after it, Back to the one before it.
   function move(delta) {
-    const steps2 = list();
-    const at = steps2.indexOf(current);
-    const nextStep = steps2[(at === -1 ? 0 : at) + delta];
+    const at = steps.indexOf(current);
+    const pool = delta > 0 ? steps.slice(at + 1) : steps.slice(0, Math.max(at, 0)).reverse();
+    const nextStep = pool.find(applies);
     if (!nextStep) {
       if (delta > 0) end('done');
       return;
