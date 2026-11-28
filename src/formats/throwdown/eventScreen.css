@@ -378,3 +378,50 @@
 .td-corrections li {
   overflow-wrap: anywhere;
 }
+
+/* the Redemption page: the roster of who is in, then a card per group (one column at 360px, wider groups sit side by side) */
+.td-red-roster,
+.td-red-groups,
+.td-red-brewers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.td-red-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-3);
+}
+
+.td-red-group {
+  border: var(--border-hairline) solid var(--color-border);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.td-red-group h4 {
+  margin: 0;
+}
+
+.td-red-brewer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.td-red-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* a group's winner is said in words ("Winner"), set bold; never colour alone */
+.td-red-winner {
+  font-weight: var(--font-weight-bold);
+}

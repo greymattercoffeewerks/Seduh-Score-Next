@@ -17,6 +17,29 @@ export const MATCH_LOG_COLUMNS = Object.freeze([
   { key: 'confirmedAt', label: 'Confirmed at' },
 ]);
 
+// A redemption group holds 2 to 4 brewers, so a log with one needs the extra columns (Competitor C and D, Votes C and D). An
+// event without a group keeps exactly the columns above: nothing about the module appears in its file.
+const WIDE_COLUMNS = Object.freeze([
+  { key: 'competitorA', label: 'Competitor A' },
+  { key: 'competitorB', label: 'Competitor B' },
+  { key: 'competitorC', label: 'Competitor C' },
+  { key: 'competitorD', label: 'Competitor D' },
+  { key: 'votesA', label: 'Votes A' },
+  { key: 'votesB', label: 'Votes B' },
+  { key: 'votesC', label: 'Votes C' },
+  { key: 'votesD', label: 'Votes D' },
+]);
+
+const isWide = (bracket) =>
+  bracket.rounds.some((round) => round.matches.some((match) => match.sides.length > 2));
+
+export function matchLogColumns(bracket) {
+  if (!isWide(bracket)) return MATCH_LOG_COLUMNS;
+  const base = MATCH_LOG_COLUMNS.filter((c) => !/^(competitor|votes)[AB]$/.test(c.key));
+  const at = base.findIndex((c) => c.key === 'resultKind');
+  return [...base.slice(0, at), ...WIDE_COLUMNS, ...base.slice(at)];
+}
+
 // Pure. Competitor names are typed by people. A spreadsheet runs a cell starting with = + - @ as a formula, so a
 // leading apostrophe keeps it text; a bare carriage return is not quoted by core/export.js, so it becomes a space.
 function safeText(value) {
@@ -27,9 +50,10 @@ function safeText(value) {
 // Pure. One row per match, rounds in the bracket's order (the 3rd place match last).
 export function matchLogRows(bracket) {
   const rows = [];
+  const wide = isWide(bracket);
   for (const round of bracket.rounds) {
     round.matches.forEach((match, index) => {
-      const [a, b] = match.sides;
+      const [a, b, c, d] = match.sides;
       // A walkover or bye is never a tally, and a scored match has no taps: those rows carry no vote counts.
       const tapped = match.resultKind === null || match.resultKind === 'votes';
       rows.push({
@@ -39,6 +63,14 @@ export function matchLogRows(bracket) {
         competitorB: safeText(b?.name),
         votesA: tapped ? (a?.votes ?? '') : '',
         votesB: tapped ? (b?.votes ?? '') : '',
+        ...(wide
+          ? {
+              competitorC: safeText(c?.name),
+              competitorD: safeText(d?.name),
+              votesC: tapped ? (c?.votes ?? '') : '',
+              votesD: tapped ? (d?.votes ?? '') : '',
+            }
+          : {}),
         resultKind: match.resultKind ?? '',
         winner: safeText(match.sides.find((s) => s.winner)?.name),
         confirmedAt: match.confirmedAt ? formatGeneratedAt(new Date(match.confirmedAt)) : '',
@@ -50,7 +82,11 @@ export function matchLogRows(bracket) {
 
 // Pure. The CSV text: a header row and one row per match.
 export function matchLogCsv(bracket) {
-  return buildCsv({ title: 'Matches', columns: MATCH_LOG_COLUMNS, rows: matchLogRows(bracket) });
+  return buildCsv({
+    title: 'Matches',
+    columns: matchLogColumns(bracket),
+    rows: matchLogRows(bracket),
+  });
 }
 
 // Pure. `<event-slug>-matches-<YYYY-MM-DD>.csv`, the same shape BTC's score files use.
