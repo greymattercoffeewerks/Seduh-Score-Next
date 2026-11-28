@@ -331,6 +331,12 @@ push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
 
 How it works: `CONVENTIONS.md`, "Migration workflow".
 
+**Playwright e2e runs on your machine first, in CI only at the release (2026-11-28).** CI runs the `Playwright e2e` job
+only on PRs into `main` and pushes to `main`; a feature PR into `dev` gets lint, unit tests, build and pgTAP, and the
+e2e job shows as skipped (a pass). So before reporting a PR ready, run the e2e suite locally (Docker running, then
+`npm run db:lock -- run -- npm run test:e2e`) and say in the PR's Testing section what it showed. Docs-only PRs skip
+the slow jobs. Windows steps: `docs/runbooks/local-e2e.md`.
+
 ---
 
 ## Architecture (map only — see scoped `CLAUDE.md` files for the "why")
