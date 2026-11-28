@@ -71,6 +71,7 @@ export function createBracketPreviewCard({
   redemption = null,
   plan,
   onChange,
+  setupHint = 'Change the real setup above.',
 }) {
   const entrants = plan.entrants ?? rosterCount;
   const third = plan.thirdPlace ?? thirdPlace;
@@ -207,7 +208,7 @@ export function createBracketPreviewCard({
     const panel = [
       el('p', {
         className: 'td-note',
-        text: 'A plan only: nothing here is saved. Change the real setup above.',
+        text: `A plan only: nothing here is saved.${setupHint ? ` ${setupHint}` : ''}`,
       }),
       el('label', { className: 'td-choice' }, [
         document.createTextNode('Brewers '),
