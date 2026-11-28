@@ -5,7 +5,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 
 ## Where we are
 
-- **Throwdown Bracket Planner** (4.35.0, PR to `dev`): free Community tool, card 06; reads three pure Throwdown modules (owner to confirm).
+- **Throwdown Bracket Planner** (4.35.0, PR to `dev`): free Community tool, card 06; reads three pure Throwdown modules; shared pure logic allowed (owner, 28 Nov).
 - **Throwdown bracket preview** (4.34.0, live; on the dashboard since 4.34.2): "Plan the event" card, redemption included. Owed: 360px check.
 - **Throwdown redemption (TD.3)** (4.33.0, live): migration in the cloud.
 - **Share result to a story** (4.32.0, live): Results page Share button. Owed: phone check.

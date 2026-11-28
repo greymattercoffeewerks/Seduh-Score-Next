@@ -20,10 +20,7 @@ note).
 A tool here MAY import from `src/core/` when a piece of it is genuinely format-agnostic
 engine logic (e.g. `core/countdown.js`, `core/dom.js`, `core/duration.js`, and `core/feedback.js` for the Petrol feedback ladder, e.g. the Timer's confirm-before-Reset) — that's the
 same direction `src/marketing/` already imports in, and `core/` has no reverse
-dependency on either. A tool may also import `src/community/toolChrome.js` and `communityTools.js` (the shared tool frame; the Random Selector first), which in turn reads `src/marketing/publicHeader.js`; that is the one allowed path from a tool into `marketing/` and `community/`, and it carries the header's `COUNTRY_PAGES_PUBLIC` switch. A tool here must never import from `src/formats/` — pulling in a
-format's UI classes (e.g. Cup Taster's `.screen-container` in `heatsScreen.css`) would tie a
-supposedly standalone tool to one format's presentation, so each tool keeps its own
-self-contained CSS instead. (One reasoned exception, 2026-11-28: the Throwdown Bracket Planner, which lives in `src/community/throwdown-planner/` and reads three pure Throwdown modules; see its `CLAUDE.md`. Nothing else may.)
+dependency on either. A tool may also import `src/community/toolChrome.js` and `communityTools.js` (the shared tool frame; the Random Selector first), which in turn reads `src/marketing/publicHeader.js`; that is the one allowed path from a tool into `marketing/` and `community/`, and it carries the header's `COUNTRY_PAGES_PUBLIC` switch. A tool here may import a format's **pure logic** module (owner, 2026-11-28): read-only calculation with no database, network, auth, storage or side effects, listed in `SHARED_PURE_MODULES` in `src/formats/pureLogicBoundary.test.js`, which also checks the module's whole import chain is pure. Never a format's data, RPC, outbox, live or screen code, and never its UI classes or CSS (that would tie a standalone tool to one format's presentation, so each tool keeps its own self-contained CSS). The server stays the only authority on scores and results; a shared module only predicts or explains. The first user is the Throwdown Bracket Planner (`src/community/throwdown-planner/CLAUDE.md`).
 
 ## Tools
 
