@@ -13,7 +13,6 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 // another format module, add it here in the same PR; it fails until its whole import chain is pure.
 
 const REPO = process.cwd();
-const SRC = join(REPO, 'src');
 
 // Modules outside a format may import. Each must stay pure; the second check below proves it.
 const SHARED_PURE_MODULES = [
