@@ -12,7 +12,14 @@
 import { getSupabase } from './supabaseClient.js';
 import { el } from './dom.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
-import { listOrgPeople, LINKED_LABEL, PEOPLE_LIST_LIMIT } from './identity.js';
+import {
+  listOrgPeople,
+  listUnusedPeople,
+  removeUnusedPeople,
+  LINKED_LABEL,
+  PEOPLE_LIST_LIMIT,
+} from './identity.js';
+import { confirmDialog } from './feedback.js';
 import {
   AFFILIATION_RELATIONSHIPS,
   listOpenAffiliations,
@@ -99,6 +106,7 @@ export async function mountPeopleScreen(
   let affiliations = [];
   let filter = '';
   let busy = false;
+  let busyText = 'Saving…';
   let loading = false;
   let loadFailedMessage = null;
   let pendingError = null;
@@ -110,6 +118,8 @@ export async function mountPeopleScreen(
   let claimStatuses = null;
   let claimCheckFailed = false;
   let issued = null;
+  // Tidy up: people who are in no event and have no Seduh ID or role. `tidy` is null until the organiser asks.
+  let tidy = null; // { items: [{id, displayName, cafe}], selected: Set<string> }
 
   async function loadClaimStatuses() {
     try {
@@ -471,7 +481,7 @@ export async function mountPeopleScreen(
       feedback.dataset.tone = 'error';
       pendingError = null;
     } else if (busy) {
-      feedback.textContent = 'Saving…';
+      feedback.textContent = busyText;
     } else if (pendingSuccess) {
       feedback.textContent = pendingSuccess;
       feedback.dataset.tone = 'success';
@@ -530,6 +540,7 @@ export async function mountPeopleScreen(
     }
     renderList();
     container.appendChild(listHost);
+    container.appendChild(renderTidy());
     container.appendChild(feedback);
     root.appendChild(container);
 
@@ -540,6 +551,151 @@ export async function mountPeopleScreen(
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
     }
+  }
+
+  function renderTidy() {
+    const section = el('section', {
+      className: 'people-tidy',
+      attrs: { 'aria-labelledby': 'people-tidy-heading' },
+    });
+    section.appendChild(
+      el('h2', { id: 'people-tidy-heading', text: 'Tidy up', attrs: { tabindex: '-1' } }),
+    );
+    if (!tidy) {
+      section.appendChild(
+        el('p', {
+          className: 'stage-meta',
+          text: 'Find people who are in no event, have no Seduh ID and are not staff or affiliates, such as names left behind after a test event was deleted.',
+        }),
+      );
+      const find = el('button', {
+        className: 'btn btn-outline tap-target',
+        id: 'people-tidy-find',
+        text: 'Find people not in any event',
+        attrs: { type: 'button' },
+      });
+      find.disabled = busy;
+      find.addEventListener('click', handleTidyFind);
+      section.appendChild(find);
+      return section;
+    }
+    if (tidy.items.length === 0) {
+      section.appendChild(
+        el('p', {
+          className: 'stage-meta',
+          id: 'people-tidy-none',
+          text: 'Nobody to tidy up.',
+          attrs: { tabindex: '-1' },
+        }),
+      );
+    } else {
+      section.appendChild(
+        el('p', {
+          className: 'stage-meta',
+          text: 'Tick the people to remove. Removing a person cannot be undone.',
+        }),
+      );
+      const list = el('ul', {
+        className: 'people-list',
+        attrs: { 'aria-label': 'People who can be removed' },
+      });
+      for (const item of tidy.items) {
+        const box = el('input', {
+          id: `people-tidy-${item.id}`,
+          attrs: { type: 'checkbox' },
+        });
+        box.checked = tidy.selected.has(item.id);
+        box.disabled = busy;
+        box.addEventListener('change', () => {
+          if (box.checked) tidy.selected.add(item.id);
+          else tidy.selected.delete(item.id);
+          focusAfterRender = `#${box.id}`;
+          render();
+        });
+        list.appendChild(
+          el('li', { className: 'people-tidy-item' }, [
+            el('label', { className: 'people-tidy-label tap-target', attrs: { for: box.id } }, [
+              box,
+              el('span', {
+                text: item.cafe ? `${item.displayName}, ${item.cafe}` : item.displayName,
+              }),
+            ]),
+          ]),
+        );
+      }
+      section.appendChild(list);
+      const n = tidy.selected.size;
+      const remove = el('button', {
+        className: 'btn btn-outline tap-target',
+        id: 'people-tidy-remove',
+        text: n === 0 ? 'Remove people' : `Remove ${n} ${n === 1 ? 'person' : 'people'}`,
+        attrs: { type: 'button' },
+      });
+      remove.disabled = busy || n === 0;
+      remove.addEventListener('click', handleTidyRemove);
+      section.appendChild(remove);
+    }
+    const close = el('button', {
+      className: 'btn btn-outline tap-target',
+      id: 'people-tidy-close',
+      text: 'Close',
+      attrs: { type: 'button' },
+    });
+    close.addEventListener('click', () => {
+      tidy = null;
+      focusAfterRender = '#people-tidy-find';
+      render();
+    });
+    section.appendChild(close);
+    return section;
+  }
+
+  async function handleTidyFind() {
+    if (busy) return;
+    busy = true;
+    busyText = 'Looking…';
+    render();
+    try {
+      tidy = { items: await listUnusedPeople(orgId, client), selected: new Set() };
+      focusAfterRender = tidy.items.length ? '#people-tidy-heading' : '#people-tidy-none';
+      pendingSuccess = tidy.items.length
+        ? `${tidy.items.length} ${tidy.items.length === 1 ? 'person' : 'people'} can be removed.`
+        : null;
+    } catch (err) {
+      pendingError = describeError(err);
+    }
+    busyText = 'Saving…';
+    busy = false;
+    render();
+  }
+
+  async function handleTidyRemove() {
+    if (busy || !tidy || tidy.selected.size === 0) return;
+    const ids = [...tidy.selected];
+    const ok = await confirmDialog({
+      title: `Remove ${ids.length} ${ids.length === 1 ? 'person' : 'people'}?`,
+      body: 'They are in no event and have no Seduh ID. This cannot be undone.',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
+    busy = true;
+    busyText = 'Removing…';
+    render();
+    try {
+      const removed = await removeUnusedPeople(orgId, ids, client);
+      tidy = null;
+      pendingSuccess = `Removed ${removed} ${removed === 1 ? 'person' : 'people'}.`;
+      try {
+        await loadPersisted();
+      } catch {
+        pendingSuccess += ' The screen could not refresh - reload to see the list.';
+      }
+    } catch (err) {
+      pendingError = describeError(err);
+    }
+    busyText = 'Saving…';
+    busy = false;
+    render();
   }
 
   // One write, then a fresh read. Focus lands on the status line so the outcome is spoken: the button

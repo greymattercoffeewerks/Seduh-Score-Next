@@ -186,6 +186,7 @@ const NOT_FOR_THE_CONSOLE = {
   already_disputed: 'Seduh ID not mine',
   not_undoable: 'Seduh ID not mine',
   too_many_disputes: 'Seduh ID not mine',
+  too_many_people: 'People screen tidy-up',
   bad_setting: 'Seduh ID own record',
   bad_path: 'Seduh ID photo',
   no_object: 'Seduh ID photo',

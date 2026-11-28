@@ -465,8 +465,8 @@ select is(
     where p.pronamespace = 'public'::regnamespace
       and 'p_org_id' = any (p.proargnames)
       and p.prosrc ~ 'app\.org_id_for_'),
-  25,
-  'twenty-five public RPCs take p_org_id and check it against a resolver (load_demo_roster, and the nineteen of T-TEN.B6, link_person_identity, T-ID.B2, stage_archive_payload, T-ARC.2, set_archive_listing, T-ARC.3, create_btc_round, Build B, and redraw_btc_round, Build B part 3)'
+  26,
+  'twenty-six public RPCs take p_org_id and check it against a resolver (remove_unused_people, load_demo_roster, and the nineteen of T-TEN.B6, link_person_identity, T-ID.B2, stage_archive_payload, T-ARC.2, set_archive_listing, T-ARC.3, create_btc_round, Build B, and redraw_btc_round, Build B part 3)'
 );
 select is(
   (select count(*)::int from pg_proc p
