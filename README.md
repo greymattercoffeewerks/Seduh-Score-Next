@@ -51,6 +51,7 @@ Only "RON 95" (Petrol V2) is owner-confirmed; the codenames are proposals.
 
 - [`src/ui/tokens/DESIGN.md`](src/ui/tokens/DESIGN.md): the current spec.
 - [`docs/design-system/PDS-CHANGELOG.md`](docs/design-system/PDS-CHANGELOG.md): the history and the naming scheme.
+- [`docs/design-system/FIGMA.md`](docs/design-system/FIGMA.md): the tokens as a Figma import (`npm run tokens:figma`).
 
 ## Stack
 
